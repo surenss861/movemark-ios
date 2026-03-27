@@ -18,9 +18,20 @@ app.route("/api/exports", exportsRouter);
 app.route("/api/webhooks", webhooksRouter);
 
 const port = Number(process.env.PORT ?? 3000);
+const host = "0.0.0.0";
 serve({
   fetch: app.fetch,
   port,
+  hostname: host,
+});
+console.log(`[movemark-api] listening on ${host}:${port}`);
+
+process.on("uncaughtException", (error) => {
+  console.error("[movemark-api] uncaughtException", error);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[movemark-api] unhandledRejection", reason);
 });
 
 export default app;
