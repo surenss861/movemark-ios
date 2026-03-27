@@ -1,0 +1,99 @@
+//
+//  PropertyStore+Selection.swift
+//  movemork
+//
+//  Which property is active; load / switch / clear; preview image for list.
+//
+
+import Foundation
+
+extension PropertyStore {
+
+    static func persistedActivePropertyIdKey(userId: UUID) -> String {
+        "MoveMark.activePropertyId.\(userId.uuidString)"
+    }
+
+    /// Resolve a hydrated property by id. For single-active-property flow, only the active property is hydrated; returns nil if id != currentProperty?.id.
+    func propertyRecord(for id: UUID) -> PropertyRecord? {
+        guard currentProperty?.id == id else { return nil }
+        return currentProperty
+    }
+
+    /// First evidence image URL for a property (inspection or maintenance). Use for vault card hero.
+    func previewImageURL(for propertyId: UUID) async -> URL? {
+        let files = try? await inspectionRepo.fetchEvidenceFiles(propertyId: propertyId)
+        guard let first = files?.first else { return nil }
+        let bucket = first.maintenanceIssueId != nil ? "maintenance-media" : "inspection-media"
+        return try? await inspectionRepo.signedURL(bucket: bucket, path: first.filePath)
+    }
+
+    /// Call on sign-out to prevent stale data from showing for a different user.
+    func clear() {
+        let was = currentProperty?.id.uuidString ?? "nil"
+        currentProperty = nil
+        properties = []
+        activePropertyId = nil
+        maintenanceLog = []
+        disputeDraft = DisputeDraft()
+        errorMessage = nil
+        hasCompletedInitialFetch = false
+        #if DEBUG
+        print("👋 PropertyStore.clear(); currentProperty was \(was)")
+        #endif
+    }
+
+    func fetchAll(userId: UUID) async {
+        isLoading = true
+        defer {
+            isLoading = false
+            hasCompletedInitialFetch = true
+        }
+
+        do {
+            let fetched = try await propertyRepo.fetchProperties(userId: userId)
+            properties = fetched
+            guard !fetched.isEmpty else {
+                currentProperty = nil
+                activePropertyId = nil
+                maintenanceLog = []
+                return
+            }
+
+            let savedId = UserDefaults.standard.string(forKey: Self.persistedActivePropertyIdKey(userId: userId))
+                .flatMap { UUID(uuidString: $0) }
+            let targetId = savedId.flatMap { id in fetched.first(where: { $0.id == id })?.id } ?? fetched[0].id
+            activePropertyId = targetId
+            UserDefaults.standard.set(targetId.uuidString, forKey: Self.persistedActivePropertyIdKey(userId: userId))
+
+            guard let row = fetched.first(where: { $0.id == targetId }) else {
+                currentProperty = nil
+                maintenanceLog = []
+                return
+            }
+
+            let (record, issues) = try await hydrateProperty(row, userId: userId)
+            currentProperty = record
+            maintenanceLog = issues
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+            currentProperty = nil
+        }
+    }
+
+    /// Switches the active property and hydrates it. Call after fetchAll has run so `properties` is populated.
+    func selectProperty(id: UUID, userId: UUID) async {
+        guard properties.contains(where: { $0.id == id }) else { return }
+        activePropertyId = id
+        UserDefaults.standard.set(id.uuidString, forKey: Self.persistedActivePropertyIdKey(userId: userId))
+        guard let row = properties.first(where: { $0.id == id }) else { return }
+        do {
+            let (record, issues) = try await hydrateProperty(row, userId: userId)
+            currentProperty = record
+            maintenanceLog = issues
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}

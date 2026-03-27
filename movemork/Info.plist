@@ -2,6 +2,37 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleDisplayName</key>
+	<string>MoveMark</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>movemark.auth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>movemark</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>MoveMark uses the camera to capture move-in and move-out proof photos for your rental.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>MoveMark uses your photo library so you can attach existing evidence photos and supporting images to property records, maintenance logs, and exports.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>MoveMark may save exported or captured images to your photo library when you choose to do so.</string>
+	<key>LegalPrivacyPolicyURL</key>
+	<string>https://silver-peripheral-2ef.notion.site/MoveMark-Privacy-Policy-32f38275720980658acbe9aafa4e331b</string>
+	<key>LegalTermsURL</key>
+	<string>https://silver-peripheral-2ef.notion.site/MoveMark-Terms-of-Service-32f382757209804aa569e43311b492b1</string>
+	<key>LegalSupportURL</key>
+	<string>https://silver-peripheral-2ef.notion.site/Contact-Support-32f38275720980248f36d19e1ea533d8</string>
+	<key>LegalAccountDeletionURL</key>
+	<string>https://silver-peripheral-2ef.notion.site/MoveMark-Account-Data-Deletion-32f3827572098020aa45d0bacc3d13a5</string>
+	<key>LegalSupportEmail</key>
+	<string>support@movemark.app</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

@@ -1,0 +1,521 @@
+//
+//  AccountView.swift
+//  movemork
+//
+//  MoveMark — Account: grouped rows, quiet cards, compact actions.
+//
+
+import SwiftUI
+
+struct AccountView: View {
+    @Environment(\.mmRootTabBarVisible) private var rootTabBarVisible
+    @Environment(\.openURL) private var openURL
+    @Environment(SessionManager.self) private var sessionManager
+    @Environment(PropertyStore.self) private var propertyStore
+    @Environment(SubscriptionManager.self) private var subscriptionManager
+
+    @State private var showEditName = false
+    @State private var showPaywall = false
+    @State private var resetMessage: String? = nil
+    @State private var resetError: String? = nil
+    @State private var isSendingReset = false
+
+    private var displayName: String {
+        let name = sessionManager.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "Add your name" : name
+    }
+
+    private var appVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
+        return "Version \(version) (\(build))"
+    }
+
+    private var privacyPolicyURL: URL? {
+        legalURL(forInfoKey: "LegalPrivacyPolicyURL")
+    }
+
+    private var termsURL: URL? {
+        legalURL(forInfoKey: "LegalTermsURL")
+    }
+
+    private var supportURL: URL? {
+        legalURL(forInfoKey: "LegalSupportURL")
+    }
+
+    private var accountDeletionURL: URL? {
+        legalURL(forInfoKey: "LegalAccountDeletionURL")
+    }
+
+    private var supportEmail: String {
+        (Bundle.main.object(forInfoDictionaryKey: "LegalSupportEmail") as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private var supportEmailURL: URL? {
+        guard !supportEmail.isEmpty else { return nil }
+        return URL(string: "mailto:\(supportEmail)")
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                MMEditorialHeader(
+                    eyebrow: "MoveMark",
+                    title: "Account",
+                    subtitle: "Manage your profile, security, and app settings."
+                )
+                profileCard
+                subscriptionCard
+                securityCard
+                legalCard
+                aboutCard
+
+                MMButton(
+                    title: "Sign out",
+                    action: {
+                        propertyStore.clear()
+                        Task { await sessionManager.signOut() }
+                    },
+                    kind: .secondary,
+                    size: .standard
+                )
+            }
+            .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
+            .padding(.top, 22)
+            .padding(
+                .bottom,
+                rootTabBarVisible
+                    ? MoveMarkTheme.Spacing.scrollTailRootTabChrome
+                    : MoveMarkTheme.Spacing.scrollTailFocusedFlow
+            )
+        }
+        .background(MoveMarkTheme.Colors.background.ignoresSafeArea())
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showPaywall) {
+            ProPaywallView(
+                reason: .extraProperty,
+                onClose: { showPaywall = false }
+            )
+        }
+        .sheet(isPresented: $showEditName) {
+            EditNameSheet(
+                currentName: sessionManager.firstName,
+                onSave: { newName in
+                    try await sessionManager.updateProfileFullName(newName)
+                }
+            )
+        }
+    }
+
+    private var subscriptionCard: some View {
+        MMCard(tone: .quiet, padding: 18, spacing: 14) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Subscription")
+                    .font(MoveMarkTheme.Typography.cardTitle)
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(subscriptionManager.hasPro ? "Pro" : "Free")
+                            .font(MoveMarkTheme.Typography.sectionTitle)
+                            .foregroundStyle(
+                                subscriptionManager.hasPro
+                                    ? MoveMarkTheme.Colors.primary
+                                    : MoveMarkTheme.Colors.textPrimary
+                            )
+
+                        Text(planSummaryText)
+                            .font(MoveMarkTheme.Typography.subheadline)
+                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer()
+
+                    if subscriptionManager.hasPro {
+                        MMPill(text: "Active", tone: .success)
+                    } else {
+                        MMPill(text: "Limited", tone: .warning)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    subscriptionBenefitRow(subscriptionManager.hasPro ? "Unlimited property vaults" : "1 property vault included")
+                    subscriptionBenefitRow(subscriptionManager.hasPro ? "Unlimited move-in and move-out exports" : subscriptionManager.remainingFreeMoveInExportsText())
+                    subscriptionBenefitRow(subscriptionManager.hasPro ? "Move-out exports included" : "Move-out exports require Pro")
+                    subscriptionBenefitRow(subscriptionManager.hasPro ? "Case builder included" : "Case builder requires Pro")
+                }
+
+                if subscriptionManager.hasPro {
+                    MMButton(
+                        title: subscriptionManager.isLoading ? "Refreshing…" : "Restore / refresh",
+                        action: {
+                            Task {
+                                do {
+                                    try await subscriptionManager.restorePurchases()
+                                    await subscriptionManager.refresh()
+                                } catch {}
+                            }
+                        },
+                        kind: .secondary,
+                        size: .standard,
+                        isDisabled: subscriptionManager.isLoading
+                    )
+                } else {
+                    MMButton(
+                        title: "Upgrade to Pro",
+                        action: { showPaywall = true },
+                        kind: .primary,
+                        size: .standard
+                    )
+                }
+            }
+        }
+    }
+
+    private var planSummaryText: String {
+        if subscriptionManager.hasPro {
+            return "Full renter protection access across every vault, export, and dispute workflow."
+        } else {
+            return "Start free, then upgrade when you need more exports, move-out proof, or dispute tools."
+        }
+    }
+
+    private func subscriptionBenefitRow(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(MoveMarkTheme.Colors.primary)
+                .padding(.top, 2)
+
+            Text(text)
+                .font(MoveMarkTheme.Typography.footnote)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+        }
+    }
+
+    private var profileCard: some View {
+        accountSection(title: "Profile") {
+            accountRow(
+                label: "Full name",
+                value: displayName,
+                emphasizeValue: displayName != "Add your name",
+                actionTitle: "Edit",
+                action: { showEditName = true }
+            )
+
+            Divider()
+                .background(MoveMarkTheme.Colors.divider.opacity(0.22))
+
+            infoRow(
+                label: "Email",
+                value: sessionManager.userEmail.isEmpty ? "—" : sessionManager.userEmail
+            )
+        }
+    }
+
+    private var securityCard: some View {
+        accountSection(title: "Security") {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Password")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+
+                        Text("Send a reset link to your email")
+                            .font(MoveMarkTheme.Typography.subheadline)
+                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.84))
+                    }
+
+                    Spacer()
+
+                    MMButton(
+                        title: isSendingReset ? "Sending…" : "Reset",
+                        action: { sendPasswordReset() },
+                        kind: .quiet,
+                        size: .compact,
+                        isDisabled: isSendingReset,
+                        expandsToFillWidth: false
+                    )
+                }
+
+                if let resetMessage {
+                    Text(resetMessage)
+                        .font(MoveMarkTheme.Typography.footnote)
+                        .foregroundStyle(MoveMarkTheme.Colors.primary)
+                }
+
+                if let resetError {
+                    MMErrorBanner(message: resetError)
+                }
+            }
+        }
+    }
+
+    private var aboutCard: some View {
+        accountSection(title: "About") {
+            VStack(alignment: .leading, spacing: 12) {
+                infoRow(
+                    label: "App version",
+                    value: appVersion
+                )
+
+                Text("MoveMark helps renters document proof and records. It does not provide legal advice.")
+                    .font(MoveMarkTheme.Typography.footnote)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var legalCard: some View {
+        accountSection(title: "Legal") {
+            VStack(alignment: .leading, spacing: 10) {
+                legalLinkRow(
+                    title: "Privacy Policy",
+                    subtitle: "How MoveMark collects, uses, and protects your data.",
+                    url: privacyPolicyURL
+                )
+
+                Divider()
+                    .background(MoveMarkTheme.Colors.divider.opacity(0.22))
+
+                legalLinkRow(
+                    title: "Terms of Service",
+                    subtitle: "Rules for subscriptions, user content, and service use.",
+                    url: termsURL
+                )
+
+                Divider()
+                    .background(MoveMarkTheme.Colors.divider.opacity(0.22))
+
+                legalLinkRow(
+                    title: "Contact Support",
+                    subtitle: "Get help with account, subscription, exports, or uploads.",
+                    url: supportURL ?? supportEmailURL
+                )
+
+                Divider()
+                    .background(MoveMarkTheme.Colors.divider.opacity(0.22))
+
+                legalLinkRow(
+                    title: "Account & Data Deletion",
+                    subtitle: "How to request account and associated data deletion.",
+                    url: accountDeletionURL
+                )
+            }
+        }
+    }
+
+    private func accountSection<Content: View>(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        MMCard(tone: .quiet, padding: 18, spacing: 14) {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(title)
+                    .font(MoveMarkTheme.Typography.cardTitle)
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+
+                content()
+            }
+        }
+    }
+
+    private func accountRow(
+        label: String,
+        value: String,
+        emphasizeValue: Bool = true,
+        actionTitle: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(label)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+
+                Text(value)
+                    .font(MoveMarkTheme.Typography.subheadlineMedium)
+                    .foregroundStyle(
+                        emphasizeValue
+                            ? MoveMarkTheme.Colors.textPrimary
+                            : MoveMarkTheme.Colors.textSecondary
+                    )
+            }
+
+            Spacer()
+
+            MMButton(
+                title: actionTitle,
+                action: action,
+                kind: .quiet,
+                size: .compact,
+                expandsToFillWidth: false
+            )
+        }
+    }
+
+    private func infoRow(label: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+
+            Spacer(minLength: 12)
+
+            Text(value)
+                .font(MoveMarkTheme.Typography.subheadline)
+                .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.92))
+                .multilineTextAlignment(.trailing)
+        }
+    }
+
+    private func legalLinkRow(title: String, subtitle: String, url: URL?) -> some View {
+        Button {
+            guard let url else { return }
+            openURL(url)
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(MoveMarkTheme.Typography.subheadlineMedium)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+
+                    Text(subtitle)
+                        .font(MoveMarkTheme.Typography.footnote)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(
+                        url == nil
+                            ? MoveMarkTheme.Colors.textSecondary.opacity(0.5)
+                            : MoveMarkTheme.Colors.primary
+                    )
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(url == nil)
+    }
+
+    private func legalURL(forInfoKey key: String) -> URL? {
+        guard
+            let value = Bundle.main.object(forInfoDictionaryKey: key) as? String,
+            let url = URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines)),
+            !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return nil
+        }
+        return url
+    }
+
+    private func sendPasswordReset() {
+        let email = sessionManager.userEmail
+        guard !email.isEmpty else {
+            resetError = "No email on file."
+            resetMessage = nil
+            return
+        }
+
+        resetError = nil
+        resetMessage = nil
+        isSendingReset = true
+
+        Task { @MainActor in
+            defer { isSendingReset = false }
+            do {
+                try await sessionManager.sendPasswordReset(email: email)
+                resetMessage = "Check your email for a link to reset your password."
+            } catch {
+                resetError = error.localizedDescription
+            }
+        }
+    }
+}
+
+private struct EditNameSheet: View {
+    let currentName: String
+    let onSave: (String) async throws -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var name: String
+    @State private var isSaving = false
+    @State private var errorMessage: String? = nil
+
+    private var trimmedName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    init(currentName: String, onSave: @escaping (String) async throws -> Void) {
+        self.currentName = currentName
+        self.onSave = onSave
+        _name = State(initialValue: currentName)
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                MMTextField(title: "Full name", placeholder: "Enter your full name", text: $name)
+
+                if let errorMessage {
+                    MMErrorBanner(message: errorMessage)
+                }
+            }
+            .padding()
+            .navigationTitle("Edit name")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        saveName()
+                    }
+                    .disabled(isSaving || trimmedName.isEmpty || trimmedName == currentName.trimmingCharacters(in: .whitespacesAndNewlines))
+                }
+            }
+        }
+    }
+
+    private func saveName() {
+        let nextName = trimmedName
+        guard !nextName.isEmpty else {
+            errorMessage = "Enter your full name."
+            return
+        }
+        errorMessage = nil
+        isSaving = true
+
+        Task { @MainActor in
+            defer { isSaving = false }
+            do {
+                try await onSave(nextName)
+                dismiss()
+            } catch {
+                errorMessage = userFacingNameError(from: error)
+            }
+        }
+    }
+
+    private func userFacingNameError(from error: Error) -> String {
+        let raw = error.localizedDescription.lowercased()
+        if raw.contains("not authenticated") || raw.contains("jwt") || raw.contains("session") {
+            return "Session expired. Please sign in again."
+        }
+        if raw.contains("duplicate") || raw.contains("violat") || raw.contains("constraint") {
+            return "Couldn’t update profile right now. Try again."
+        }
+        return error.localizedDescription
+    }
+}

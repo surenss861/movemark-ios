@@ -1,6 +1,7 @@
 {
   "images" : [
     {
+      "filename" : "photo.jpg",
       "idiom" : "universal",
       "scale" : "1x"
     },

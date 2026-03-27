@@ -2,31 +2,24 @@
 //  movemorkApp.swift
 //  movemork
 //
-//  Created by suren sureshkumar on 2026-03-11.
+//  MoveMark — Protect your deposit. Prove your case.
 //
 
 import SwiftUI
-import SwiftData
 
 @main
 struct movemorkApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    @State private var sessionManager = SessionManager()
+    @State private var propertyStore = PropertyStore()
+    @State private var subscriptionManager = SubscriptionManager()
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AppRouter()
+                .environment(sessionManager)
+                .environment(propertyStore)
+                .environment(subscriptionManager)
+                .preferredColorScheme(.dark)
         }
-        .modelContainer(sharedModelContainer)
     }
 }

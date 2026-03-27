@@ -1,0 +1,9 @@
+[build]
+builder = "RAILPACK"
+buildCommand = "cd movemark-api && npm run build"
+
+[deploy]
+startCommand = "cd movemark-api && npm run start"
+healthcheckPath = "/api/health"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

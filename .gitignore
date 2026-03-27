@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.DS_Store
+build.log
+*.xcresult
+*.log
+movemark-api/node_modules/
+movemark-api/dist/

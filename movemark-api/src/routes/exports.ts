@@ -1,0 +1,202 @@
+import { Hono } from "hono";
+import { requireUserIdFromBearer } from "../lib/auth.js";
+import { generateMoveInPdfBuffer } from "../lib/pdf.js";
+import { uploadExportToSupabaseStorage } from "../lib/storage.js";
+import { supabaseAdmin } from "../lib/supabase.js";
+import type {
+  ExportDownloadResponseBody,
+  ExportListItem,
+  ExportRequestBody,
+  ExportResponseBody,
+} from "../types/exports.js";
+
+export const exportsRouter = new Hono();
+
+exportsRouter.get("/", async (c) => {
+  try {
+    const userId = await requireUserIdFromBearer(c);
+    const { data, error } = await supabaseAdmin
+      .from("exports")
+      .select("id,user_id,property_id,export_type,status,requested_at,completed_at,file_path,created_at")
+      .eq("user_id", userId)
+      .order("requested_at", { ascending: false, nullsFirst: false });
+
+    if (error) {
+      return c.json({ error: `Failed to fetch exports: ${error.message}` }, 500);
+    }
+
+    const rows: ExportListItem[] = (data ?? []).map((row) => ({
+      id: row.id,
+      userId: row.user_id,
+      propertyId: row.property_id,
+      type: row.export_type,
+      status: row.status,
+      requestedAt: row.requested_at,
+      completedAt: row.completed_at,
+      filePath: row.file_path,
+      createdAt: row.created_at,
+    }));
+
+    return c.json(rows, 200);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unexpected server error";
+    const status = message === "Unauthorized" ? 401 : 500;
+    return c.json({ error: message }, status);
+  }
+});
+
+exportsRouter.get("/:id/download", async (c) => {
+  try {
+    const userId = await requireUserIdFromBearer(c);
+    const exportId = c.req.param("id");
+    if (!exportId) {
+      return c.json({ error: "Missing export id" }, 400);
+    }
+
+    const { data: row, error } = await supabaseAdmin
+      .from("exports")
+      .select("id,user_id,status,file_path")
+      .eq("id", exportId)
+      .eq("user_id", userId)
+      .single();
+
+    if (error || !row) {
+      return c.json({ error: "Export not found" }, 404);
+    }
+    if (row.status !== "completed") {
+      return c.json({ error: "Export is not ready yet" }, 409);
+    }
+    if (!row.file_path) {
+      return c.json({ error: "Export file path missing" }, 500);
+    }
+
+    const { data: signed, error: signedError } = await supabaseAdmin.storage
+      .from("exports")
+      .createSignedUrl(row.file_path, 60 * 15);
+
+    if (signedError || !signed?.signedUrl) {
+      return c.json({ error: `Failed to create signed URL: ${signedError?.message ?? "unknown error"}` }, 500);
+    }
+
+    const response: ExportDownloadResponseBody = {
+      exportId: row.id,
+      status: row.status,
+      downloadUrl: signed.signedUrl,
+      expiresInSeconds: 900,
+    };
+    return c.json(response, 200);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unexpected server error";
+    const status = message === "Unauthorized" ? 401 : 500;
+    return c.json({ error: message }, status);
+  }
+});
+
+exportsRouter.post("/move-in", async (c) => {
+  try {
+    const userId = await requireUserIdFromBearer(c);
+    const body = await c.req.json<ExportRequestBody>();
+
+    if (!body.propertyId || body.format !== "pdf") {
+      return c.json({ error: "Invalid request body" }, 400);
+    }
+
+    const { data: property, error: propertyError } = await supabaseAdmin
+      .from("properties")
+      .select("*")
+      .eq("id", body.propertyId)
+      .eq("user_id", userId)
+      .single();
+
+    if (propertyError || !property) {
+      return c.json({ error: "Property not found" }, 404);
+    }
+
+    const { data: rooms } = await supabaseAdmin
+      .from("rooms")
+      .select("*")
+      .eq("property_id", body.propertyId)
+      .order("created_at", { ascending: true });
+
+    const { data: inspection } = await supabaseAdmin
+      .from("inspections")
+      .select("*")
+      .eq("property_id", body.propertyId)
+      .eq("user_id", userId)
+      .eq("inspection_type", "move_in")
+      .maybeSingle();
+
+    let inspectionItems: Array<Record<string, unknown>> = [];
+    if (inspection?.id) {
+      const { data } = await supabaseAdmin
+        .from("inspection_items")
+        .select("*")
+        .eq("inspection_id", inspection.id)
+        .order("created_at", { ascending: true });
+
+      inspectionItems = data ?? [];
+    }
+
+    const { data: propertyDocuments } = await supabaseAdmin
+      .from("property_documents")
+      .select("*")
+      .eq("property_id", body.propertyId)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true });
+
+    const requestedAt = new Date().toISOString();
+
+    const { data: exportRow, error: exportInsertError } = await supabaseAdmin
+      .from("exports")
+      .insert({
+        user_id: userId,
+        property_id: body.propertyId,
+        export_type: "move_in_report",
+        status: "queued",
+        requested_at: requestedAt,
+      })
+      .select("*")
+      .single();
+
+    if (exportInsertError || !exportRow) {
+      return c.json({ error: "Failed to create export row" }, 500);
+    }
+
+    const pdfBuffer = await generateMoveInPdfBuffer({
+      property,
+      rooms: rooms ?? [],
+      inspection: inspection ?? null,
+      inspectionItems,
+      propertyDocuments: propertyDocuments ?? [],
+    });
+
+    const upload = await uploadExportToSupabaseStorage({
+      userId,
+      exportId: exportRow.id,
+      fileBuffer: pdfBuffer,
+    });
+
+    await supabaseAdmin
+      .from("exports")
+      .update({
+        status: "completed",
+        file_path: upload.path,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", exportRow.id);
+
+    const response: ExportResponseBody = {
+      exportId: exportRow.id,
+      status: "queued",
+      type: "move_in_report",
+      requestedAt,
+    };
+
+    return c.json(response, 200);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unexpected server error";
+    const status = message === "Unauthorized" ? 401 : 500;
+
+    return c.json({ error: message }, status);
+  }
+});
