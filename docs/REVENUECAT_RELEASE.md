@@ -1,5 +1,11 @@
 # RevenueCat API key (App Store public SDK)
 
+## If logs show `keyPrefix=appl_…` but you want Test Store
+
+`SubscriptionManager` logs **`keyPrefix=`** on refresh. **`appl_`** means the embedded key is the **App Store** SDK key; the SDK will request **App Store** product ids (e.g. `monthly_subscription`), not Test Store products.
+
+To use Test Store: Xcode → **MoveMark** target → **Build Settings** → set **`REVENUECAT_APP_STORE_PUBLIC_KEY`** to your RevenueCat **`test_…`** public key (same setting name; value is what changes). Clean build, reinstall. You want logs to show **`keyPrefix=test_…`**.
+
 ## Behavior
 
 - **Debug and Release** both use the same path: merged `Info.plist` key `RevenueCatPublicAPIKey`, populated from the target build setting `REVENUECAT_APP_STORE_PUBLIC_KEY` (see `movemork/Info.plist`).

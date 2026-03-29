@@ -29,10 +29,16 @@ exportsRouter.get("/", async (c) => {
       .from("exports")
       .select("id,user_id,property_id,export_type,status,requested_at,completed_at,file_path,created_at")
       .eq("user_id", userId)
-      .order("requested_at", { ascending: false, nullsFirst: false });
+      .order("requested_at", { ascending: false });
 
     if (error) {
-      console.error("[movemark-api:exports] list query", error);
+      console.error("[movemark-api:exports] list query failed", {
+        userId,
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
       return c.json({ error: "Failed to load exports" }, 500);
     }
 
