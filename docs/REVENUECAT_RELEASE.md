@@ -41,6 +41,16 @@ Attach **both** products to entitlement **`movemark_pro1`**. Order packages **ye
 
 **In code:** `SubscriptionManager` uses `movemark_pro1` only. `ProPaywallView` recognizes store product IDs **`monthly_subscription` / `yearly_subscription`** (App Store) and **`testmonthly` / `testyearly`** (Test Store mirror) for labels, default selection, and sorting.
 
+### Optional: force a specific offering id (debug)
+
+If RevenueCat’s **Current** offering is wrong but another id (e.g. a typo like `testdeault`) has the right packages, add to the app target **Info** (custom property) or build setting → merged plist:
+
+- **`RevenueCatOfferingOverride`** = exact offering identifier string  
+
+`SubscriptionManager.refresh()` will use that offering when present in `offerings.all`. Remove when `offerings.current` is correct.
+
+**Simulator:** RevenueCat warns unless a **StoreKit Configuration** file is attached to the scheme with the same product ids the SDK loads; use a **device** for clearer Test Store behavior.
+
 ## Before App Store archive
 
 1. Xcode → **MoveMark** target → **Build Settings** → search `REVENUECAT`.

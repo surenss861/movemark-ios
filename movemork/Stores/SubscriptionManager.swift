@@ -184,6 +184,17 @@ final class SubscriptionManager {
         return raw
     }
 
+    /// Optional plist key: force a specific offering id (e.g. `testdeault`) when it is Current in RC but you need to debug; omit for `offerings.current`.
+    private static func revenueCatOfferingIdentifierOverride() -> String? {
+        for key in ["RevenueCatOfferingOverride", "MoveMarkRevenueCatOfferingOverride"] {
+            guard let raw = Bundle.main.object(forInfoDictionaryKey: key) as? String else { continue }
+            let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if t.isEmpty || t.hasPrefix("$(") { continue }
+            return t
+        }
+        return nil
+    }
+
     /// Safe for logs: whether the key looks substituted, plus a short prefix (never log full keys).
     private static func keyDiagnosticPrefix(_ key: String) -> String {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -253,7 +264,7 @@ final class SubscriptionManager {
 
         do {
             subscriptionLog.notice(
-                "refresh start isConfigured=true entitlementID=\(self.proEntitlementID, privacy: .public)"
+                "refresh start isConfigured=true entitlementID=\(self.proEntitlementID, privacy: .public) keyPrefix=\(Self.keyDiagnosticPrefix(Self.resolvedRevenueCatPublicAPIKey), privacy: .public)"
             )
 
             let customerInfo = try await Purchases.shared.customerInfo()
@@ -263,24 +274,52 @@ final class SubscriptionManager {
             let offerings = try await Purchases.shared.offerings()
 
             hasPro = proActive
-            currentOffering = offerings.current
 
-            if let current = offerings.current {
+            let catalogIds = offerings.all.keys.sorted()
+            subscriptionLog.notice("offerings catalog ids=\(String(describing: catalogIds), privacy: .public) sdkCurrent=\(offerings.current?.identifier ?? "nil", privacy: .public)")
+
+            for oid in catalogIds {
+                guard let off = offerings.all[oid] else { continue }
+                let pids = off.availablePackages.map(\.storeProduct.productIdentifier)
+                let rcIds = off.availablePackages.map(\.identifier)
+                subscriptionLog.notice(
+                    "offering id=\(oid, privacy: .public) packageCount=\(off.availablePackages.count, privacy: .public) storeProductIDs=\(String(describing: pids), privacy: .public) rcPackageIDs=\(String(describing: rcIds), privacy: .public)"
+                )
+            }
+
+            let resolvedOffering: Offering? = {
+                if let oid = Self.revenueCatOfferingIdentifierOverride() {
+                    if let off = offerings.all[oid] {
+                        subscriptionLog.notice(
+                            "RevenueCatOfferingOverride using id=\(oid, privacy: .public) (sdk current=\(offerings.current?.identifier ?? "nil", privacy: .public))"
+                        )
+                        return off
+                    }
+                    subscriptionLog.error(
+                        "RevenueCatOfferingOverride id=\(oid, privacy: .public) missing from catalog keys=\(String(describing: catalogIds), privacy: .public)"
+                    )
+                }
+                return offerings.current
+            }()
+
+            currentOffering = resolvedOffering
+
+            if let current = resolvedOffering {
                 let packageIDs = current.availablePackages.map(\.storeProduct.productIdentifier)
                 let rcPackageIDs = current.availablePackages.map(\.identifier)
                 let count = current.availablePackages.count
                 subscriptionLog.notice(
-                    "refresh offerings OK current=\(current.identifier, privacy: .public) packageCount=\(count, privacy: .public) storeProductIDs=\(String(describing: packageIDs), privacy: .public) rcPackageIDs=\(String(describing: rcPackageIDs), privacy: .public)"
+                    "refresh resolved offering=\(current.identifier, privacy: .public) packageCount=\(count, privacy: .public) storeProductIDs=\(String(describing: packageIDs), privacy: .public) rcPackageIDs=\(String(describing: rcPackageIDs), privacy: .public)"
                 )
 
                 if current.availablePackages.isEmpty {
-                    subscriptionLog.notice("refresh offerings current has zero packages (check RevenueCat packages / ASC)")
+                    subscriptionLog.notice("refresh resolved offering has zero packages (check RevenueCat packages / StoreKit config on simulator)")
                     lastErrorMessage = "Plans aren’t available yet. Check your default offering and packages in RevenueCat."
                 } else {
                     lastErrorMessage = nil
                 }
             } else {
-                subscriptionLog.notice("refresh offerings OK current=nil (no default offering in RevenueCat)")
+                subscriptionLog.notice("refresh resolved offering=nil (no current offering in RevenueCat)")
                 lastErrorMessage = "No default subscription offering in RevenueCat. Set a current offering with packages."
             }
         } catch {

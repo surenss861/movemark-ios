@@ -1,4 +1,7 @@
 import Foundation
+import OSLog
+
+private let exportAPILog = Logger(subsystem: "movemark.movemork", category: "ExportAPI")
 
 enum ExportFormat: String, Codable {
     case pdf
@@ -34,6 +37,7 @@ struct MoveInExportResponse: Codable {
     }
 }
 
+/// Matches movemark-api JSON (`c.json` uses camelCase: userId, propertyId, …).
 struct ExportListItem: Codable, Identifiable {
     let id: UUID
     let userId: UUID
@@ -44,18 +48,6 @@ struct ExportListItem: Codable, Identifiable {
     let completedAt: String?
     let filePath: String?
     let createdAt: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case userId = "user_id"
-        case propertyId = "property_id"
-        case type
-        case status
-        case requestedAt = "requested_at"
-        case completedAt = "completed_at"
-        case filePath = "file_path"
-        case createdAt = "created_at"
-    }
 }
 
 struct ExportDownloadResponse: Codable {
@@ -146,7 +138,14 @@ final class ExportAPIClient {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidResponse
         }
+
+        let bodyPreview = String(data: data, encoding: .utf8).map { String($0.prefix(800)) } ?? "<binary>"
+        exportAPILog.notice(
+            "GET exports url=\(endpoint.absoluteString, privacy: .public) hasToken=\(!accessToken.isEmpty, privacy: .public) status=\(httpResponse.statusCode, privacy: .public)"
+        )
+
         guard 200..<300 ~= httpResponse.statusCode else {
+            exportAPILog.error("GET exports failure body=\(bodyPreview, privacy: .public)")
             let message = String(data: data, encoding: .utf8) ?? "Server error"
             throw APIClientError.serverError(message)
         }
@@ -154,6 +153,7 @@ final class ExportAPIClient {
         do {
             return try JSONDecoder().decode([ExportListItem].self, from: data)
         } catch {
+            exportAPILog.error("GET exports decode failed error=\(String(describing: error), privacy: .public) body=\(bodyPreview, privacy: .public)")
             throw APIClientError.decodingFailed
         }
     }
