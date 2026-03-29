@@ -39,6 +39,8 @@
 	</array>
 	<key>RevenueCatPublicAPIKey</key>
 	<string>$(REVENUECAT_APP_STORE_PUBLIC_KEY)</string>
+	<key>RevenueCatTestStorePublicAPIKey</key>
+	<string>$(REVENUECAT_TEST_STORE_PUBLIC_KEY)</string>
 	<key>MoveMarkAPIBaseURL</key>
 	<string>$(MoveMarkAPIBaseURL)</string>
 </dict>

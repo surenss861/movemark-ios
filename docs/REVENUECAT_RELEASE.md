@@ -2,9 +2,20 @@
 
 ## If logs show `keyPrefix=appl_…` but you want Test Store
 
-`SubscriptionManager` logs **`keyPrefix=`** on refresh. **`appl_`** means the embedded key is the **App Store** SDK key; the SDK will request **App Store** product ids (e.g. `monthly_subscription`), not Test Store products.
+`SubscriptionManager` logs **`keyPrefix=`** on refresh. **`appl_`** means the runtime picked the **App Store** key path.
 
-To use Test Store: Xcode → **MoveMark** target → **Build Settings** → set **`REVENUECAT_APP_STORE_PUBLIC_KEY`** to your RevenueCat **`test_…`** public key (same setting name; value is what changes). Clean build, reinstall. You want logs to show **`keyPrefix=test_…`**.
+### Preferred: separate Test Store key (keep `appl_…` in git)
+
+1. Xcode → **MoveMark** target → **Build Settings** → **User-Defined** (or search): set **`REVENUECAT_TEST_STORE_PUBLIC_KEY`** to your RevenueCat **`test_…`** public SDK key.  
+   - Leave **`REVENUECAT_APP_STORE_PUBLIC_KEY`** as **`appl_…`** for App Store / production.  
+2. **Debug** and **Release** both include the setting (repo default is empty `""` → Test key ignored → falls back to **`appl_…`**).  
+3. Merged **Info.plist** includes **`RevenueCatTestStorePublicAPIKey`** = `$(REVENUECAT_TEST_STORE_PUBLIC_KEY)`.  
+4. When **Test Store is allowed** (Debug, or Release with `REVENUECAT_ALLOW_TEST_STORE_KEY`), the app uses the test key **first** (then env **`REVENUECAT_TEST_STORE_PUBLIC_KEY`** on the run scheme if set).  
+5. Clean build, reinstall — logs should show **`keyPrefix=test_…`**.
+
+### Alternate: replace the App Store setting
+
+Set **`REVENUECAT_APP_STORE_PUBLIC_KEY`** to **`test_…`** only if you are fine committing or local-overriding the primary key.
 
 ## Behavior
 

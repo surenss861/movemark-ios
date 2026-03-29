@@ -39,4 +39,4 @@ The route uses the **service role** (bypasses RLS). A **500** means PostgREST re
 
 Typical causes: **`exports` table or column missing** in the linked Supabase project (migrate schema), wrong **`SUPABASE_URL`**, or invalid **`SUPABASE_SERVICE_ROLE_KEY`**.
 
-The list route orders by **`created_at`** and does not require **`requested_at`** (some DBs never had that column).
+Run Supabase migration **`20260328000001_exports_requested_completed_at.sql`** (adds **`requested_at`** / **`completed_at`** on **`exports`**) **before** deploying an API build that selects those columns. Until then, list used **`created_at`** only; current API expects the new columns after migration.

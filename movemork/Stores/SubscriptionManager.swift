@@ -104,8 +104,17 @@ final class SubscriptionManager {
         startCustomerInfoListenerIfNeeded()
     }
 
-    /// App Store public SDK key (`appl_…`) from merged Info.plist `RevenueCatPublicAPIKey` → `$(REVENUECAT_APP_STORE_PUBLIC_KEY)`, or scheme env `REVENUECAT_PUBLIC_API_KEY`.
+    /// When Test Store is allowed (Debug or `REVENUECAT_ALLOW_TEST_STORE_KEY`), prefers `REVENUECAT_TEST_STORE_PUBLIC_KEY` / `RevenueCatTestStorePublicAPIKey` so you can keep `appl_…` in `REVENUECAT_APP_STORE_PUBLIC_KEY` for App Store archives.
     private static var resolvedRevenueCatPublicAPIKey: String {
+        if allowsRevenueCatTestStoreKey {
+            let envTest = ProcessInfo.processInfo.environment["REVENUECAT_TEST_STORE_PUBLIC_KEY"]?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !envTest.isEmpty, !envTest.hasPrefix("$(") { return envTest }
+
+            let plistTest = revenueCatTestStoreAPIKeyFromBundle()
+            if !plistTest.isEmpty { return plistTest }
+        }
+
         let fromPlist = revenueCatPublicAPIKeyFromBundle()
         if !fromPlist.isEmpty { return fromPlist }
 
@@ -114,7 +123,20 @@ final class SubscriptionManager {
         return fromEnv
     }
 
-    /// Runtime key is **always** `RevenueCatPublicAPIKey` (not the Xcode setting name `REVENUECAT_APP_STORE_PUBLIC_KEY`).
+    private static func revenueCatTestStoreAPIKeyFromBundle() -> String {
+        let key = "RevenueCatTestStorePublicAPIKey"
+        if let s = Bundle.main.object(forInfoDictionaryKey: key) as? String {
+            let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty, !t.hasPrefix("$(") { return t }
+        }
+        if let s = Bundle.main.infoDictionary?[key] as? String {
+            let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty, !t.hasPrefix("$(") { return t }
+        }
+        return ""
+    }
+
+    /// Runtime App Store key: `RevenueCatPublicAPIKey` ← `$(REVENUECAT_APP_STORE_PUBLIC_KEY)`.
     private static func revenueCatPublicAPIKeyFromBundle() -> String {
         let key = "RevenueCatPublicAPIKey"
         if let s = Bundle.main.object(forInfoDictionaryKey: key) as? String {
@@ -140,8 +162,11 @@ final class SubscriptionManager {
         if trimmed.hasPrefix("test_") && !allowsRevenueCatTestStoreKey {
             return "Test Store keys only work in Debug or builds with REVENUECAT_ALLOW_TEST_STORE_KEY. Use appl_… for App Store / default Release."
         }
-        if !trimmed.hasPrefix("appl_") {
-            return "Invalid subscription key. Use the App Store public key from RevenueCat (appl_…)."
+        if trimmed.hasPrefix("test_") && allowsRevenueCatTestStoreKey {
+            return "Subscriptions couldn’t start. Check REVENUECAT_TEST_STORE_PUBLIC_KEY or RevenueCat Test Store setup."
+        }
+        if !trimmed.hasPrefix("appl_") && !(trimmed.hasPrefix("test_") && allowsRevenueCatTestStoreKey) {
+            return "Invalid subscription key. Use appl_… or (when allowed) test_… from RevenueCat."
         }
         return "Subscriptions couldn’t start. Check the RevenueCat App Store key in Xcode."
     }

@@ -27,7 +27,7 @@ exportsRouter.get("/", async (c) => {
     const userId = await requireUserIdFromBearer(c);
     const { data, error } = await supabaseAdmin
       .from("exports")
-      .select("id,user_id,property_id,export_type,status,completed_at,file_path,created_at")
+      .select("id,user_id,property_id,export_type,status,requested_at,completed_at,file_path,created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
 
@@ -48,8 +48,7 @@ exportsRouter.get("/", async (c) => {
       propertyId: row.property_id,
       type: row.export_type,
       status: row.status,
-      // DB may not have requested_at; client uses created_at for ordering — expose same for requestedAt.
-      requestedAt: row.created_at ?? null,
+      requestedAt: row.requested_at ?? row.created_at ?? null,
       completedAt: row.completed_at ?? null,
       filePath: row.file_path,
       createdAt: row.created_at,
@@ -159,6 +158,8 @@ exportsRouter.post("/move-in", async (c) => {
       .eq("user_id", userId)
       .order("created_at", { ascending: true });
 
+    const requestedAt = new Date().toISOString();
+
     const { data: exportRow, error: exportInsertError } = await supabaseAdmin
       .from("exports")
       .insert({
@@ -166,6 +167,7 @@ exportsRouter.post("/move-in", async (c) => {
         property_id: body.propertyId,
         export_type: "move_in_report",
         status: "queued",
+        requested_at: requestedAt,
       })
       .select("*")
       .single();
@@ -202,14 +204,14 @@ exportsRouter.post("/move-in", async (c) => {
       return c.json({ error: "Failed to complete export" }, 500);
     }
 
-    const requestedAt =
-      (exportRow.created_at as string | undefined) ?? new Date().toISOString();
-
     const response: ExportResponseBody = {
       exportId: exportRow.id,
       status: "completed",
       type: "move_in_report",
-      requestedAt,
+      requestedAt:
+        (exportRow.requested_at as string | undefined) ??
+        (exportRow.created_at as string | undefined) ??
+        requestedAt,
     };
 
     return c.json(response, 200);
