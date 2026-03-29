@@ -25,6 +25,17 @@ final class SubscriptionManager {
     private var hasStartedCustomerInfoListener = false
     private var lastKnownAppUserID: String? = nil
 
+    /// Test Store keys (`test_…`) are allowed in Debug, or in Release when the target defines `REVENUECAT_ALLOW_TEST_STORE_KEY` (internal TestFlight only — remove before App Store).
+    private static var allowsRevenueCatTestStoreKey: Bool {
+        #if DEBUG
+        true
+        #elseif REVENUECAT_ALLOW_TEST_STORE_KEY
+        true
+        #else
+        false
+        #endif
+    }
+
     private let freeMoveInExportCountKey = "MoveMark.freeMoveInExportCount"
 
     var freeMoveInExportCount: Int {
@@ -81,8 +92,9 @@ final class SubscriptionManager {
             Purchases.configure(with: builder.build())
             #if !DEBUG
             // TestFlight / App Store: verify embedded key in Console (category Subscription) without logging the full secret.
+            let keyKind = apiKey.hasPrefix("test_") ? "Test Store" : "App Store"
             subscriptionLog.notice(
-                "RevenueCat configured (App Store key prefix \(Self.keyDiagnosticPrefix(apiKey), privacy: .public))"
+                "RevenueCat configured (\(keyKind, privacy: .public) key prefix \(Self.keyDiagnosticPrefix(apiKey), privacy: .public))"
             )
             #endif
         }
@@ -125,8 +137,8 @@ final class SubscriptionManager {
         if trimmed.contains("REPLACE") {
             return "Replace the RevenueCat placeholder key in build settings with your App Store public key (appl_…)."
         }
-        if trimmed.hasPrefix("test_") {
-            return "Use the App Store public SDK key (appl_…), not a Test Store key, in build settings."
+        if trimmed.hasPrefix("test_") && !allowsRevenueCatTestStoreKey {
+            return "Test Store keys only work in Debug or builds with REVENUECAT_ALLOW_TEST_STORE_KEY. Use appl_… for App Store / default Release."
         }
         if !trimmed.hasPrefix("appl_") {
             return "Invalid subscription key. Use the App Store public key from RevenueCat (appl_…)."
@@ -138,7 +150,7 @@ final class SubscriptionManager {
         guard !key.isEmpty else { return false }
         if key.contains("REPLACE") { return false }
         if key.hasPrefix("$(") { return false }
-        if key.hasPrefix("test_") { return false }
+        if key.hasPrefix("test_") { return allowsRevenueCatTestStoreKey }
         if !key.hasPrefix("appl_") { return false }
         return true
     }
