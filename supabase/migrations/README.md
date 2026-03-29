@@ -23,6 +23,17 @@ Run these in order (by filename). Use Supabase Dashboard SQL editor or `supabase
 | `20260312000006_rls_enable.sql` | Enable RLS on all tables |
 | `20260312000007_rls_policies_direct.sql` | RLS policies for tables with direct `user_id` |
 | `20260312000008_rls_policies_indirect.sql` | RLS policies for rooms, inspection_items, evidence_files, issue_tags, inspection_item_tags, dispute_evidence_links |
+| `20260328000001_exports_requested_completed_at.sql` | Adds `exports.requested_at` and `exports.completed_at` (idempotent) |
+
+## Apply one migration when `db push` history diverges
+
+If `supabase db push` complains that remote migration versions are missing locally, you can still run a single file against the **linked** project:
+
+```bash
+npx supabase@latest db query --linked -f supabase/migrations/20260328000001_exports_requested_completed_at.sql --yes
+```
+
+Or: `./scripts/apply-exports-requested-completed-at.sh`
 
 ## If policies already exist
 
