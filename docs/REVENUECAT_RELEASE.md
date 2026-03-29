@@ -48,6 +48,20 @@ Use the **same entitlement identifier as production** so `hasPro` works without 
 | **Offering** | Any identifier (e.g. **`default`** or **`testdefault`**) — see below |
 | **Packages** | e.g. **`src_annual`** → **`testyearly`**, **`src_monthly`** → **`testmonthly`** (identifiers are up to you) |
 
+### If purchases work but Pro never unlocks (entitlement mismatch)
+
+The app only treats **`movemark_pro1`** as Pro (`SubscriptionManager`). If RevenueCat grants a different entitlement after purchase, **`hasPro` stays false**.
+
+**Symptom in logs:** `entitlements active=[test] … checking=movemark_pro1 isActive=false` — purchases activate **`test`**, not **`movemark_pro1`**.
+
+**Fix in RevenueCat (keep app code on `movemark_pro1`):**
+
+1. Open entitlement **`test`** and **remove** **`testmonthly`** / **`testyearly`** from it (or delete the **`test`** entitlement if unused).
+2. Attach **`testmonthly`** and **`testyearly`** **only** to **`movemark_pro1`**.
+3. Optional: clear sandbox / test customer state in RevenueCat, reinstall app, purchase again.
+
+**Success logs:** `active=[movemark_pro1]` and `isActive=true` for **`checking=movemark_pro1`**.
+
 ### Mark the Test Store offering as **Current** (required)
 
 The SDK uses **`offerings.current`** only. RevenueCat returns whichever offering you set as the **current** offering in the dashboard — **not** “the one named `default`” by magic.
