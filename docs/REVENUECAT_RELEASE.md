@@ -6,9 +6,10 @@
 
 ### Preferred: separate Test Store key (keep `appl_…` in git)
 
-1. Xcode → **MoveMark** target → **Build Settings** → **User-Defined** (or search): set **`REVENUECAT_TEST_STORE_PUBLIC_KEY`** to your RevenueCat **`test_…`** public SDK key.  
+1. Select the **MoveMark app target** (not the project root) → **Build Settings** → search **`REVENUECAT_TEST_STORE_PUBLIC_KEY`** → set your RevenueCat **`test_…`** public SDK key under **both** **Debug** and **Release** columns.  
+   - If you only set it at **project** level or for one configuration, logs will still show **`keyPrefix=appl_…`**.  
    - Leave **`REVENUECAT_APP_STORE_PUBLIC_KEY`** as **`appl_…`** for App Store / production.  
-2. **Debug** and **Release** both include the setting (repo default is empty `""` → Test key ignored → falls back to **`appl_…`**).  
+2. Repo default is empty `""` → Test key ignored → falls back to **`appl_…`**. After setting the test key, **Clean Build Folder**, delete the app, reinstall.  
 3. Merged **Info.plist** includes **`RevenueCatTestStorePublicAPIKey`** = `$(REVENUECAT_TEST_STORE_PUBLIC_KEY)`.  
 4. When **Test Store is allowed** (Debug, or Release with `REVENUECAT_ALLOW_TEST_STORE_KEY`), the app uses the test key **first** (then env **`REVENUECAT_TEST_STORE_PUBLIC_KEY`** on the run scheme if set).  
 5. Clean build, reinstall — logs should show **`keyPrefix=test_…`**.

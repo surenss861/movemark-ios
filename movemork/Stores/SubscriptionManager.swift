@@ -74,6 +74,19 @@ final class SubscriptionManager {
 
         if !Purchases.isConfigured {
             let apiKey = Self.resolvedRevenueCatPublicAPIKey
+
+            if Self.allowsRevenueCatTestStoreKey, apiKey.hasPrefix("appl_") {
+                let envT = ProcessInfo.processInfo.environment["REVENUECAT_TEST_STORE_PUBLIC_KEY"]?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let envUsable = !envT.isEmpty && !envT.hasPrefix("$(")
+                let plistT = Self.revenueCatTestStoreAPIKeyFromBundle()
+                if !envUsable && plistT.isEmpty {
+                    subscriptionLog.notice(
+                        "RevenueCat: Test Store allowed but no test key — set user-defined REVENUECAT_TEST_STORE_PUBLIC_KEY on the MoveMark app target for Debug and Release (not only the project), then Clean Build Folder. Using appl_… fallback."
+                    )
+                }
+            }
+
             guard Self.isValidRevenueCatPublicKey(apiKey) else {
                 lastErrorMessage = Self.userFacingRevenueCatKeyError(resolvedKey: apiKey)
                 subscriptionLog.error(
