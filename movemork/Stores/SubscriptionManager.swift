@@ -25,7 +25,7 @@ final class SubscriptionManager {
     private var hasStartedCustomerInfoListener = false
     private var lastKnownAppUserID: String? = nil
 
-    /// Test Store keys (`test_…`) are allowed in Debug, or in Release when the target defines `REVENUECAT_ALLOW_TEST_STORE_KEY` (internal TestFlight only — remove before App Store).
+    /// Test Store keys (`test_…`) are allowed in Debug, or in Release when `REVENUECAT_ALLOW_TEST_STORE_KEY` is set (project Release includes it for TestFlight; remove for hardened App Store-only Release).
     private static var allowsRevenueCatTestStoreKey: Bool {
         #if DEBUG
         true
