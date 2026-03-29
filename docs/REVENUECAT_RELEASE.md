@@ -60,7 +60,9 @@ The app only treats **`movemark_pro1`** as Pro (`SubscriptionManager`). If Reven
 2. Attach **`testmonthly`** and **`testyearly`** **only** to **`movemark_pro1`**.
 3. Optional: clear sandbox / test customer state in RevenueCat, reinstall app, purchase again.
 
-**Success logs:** `active=[movemark_pro1]` and `isActive=true` for **`checking=movemark_pro1`**.
+**Success logs:** `active=[movemark_pro1]` and `hasPro=true`, or **`matched=movemark_pro1`**.
+
+**In-app bridge:** When Test Store is allowed (Debug or `REVENUECAT_ALLOW_TEST_STORE_KEY`), `SubscriptionManager` also treats entitlement **`test`** as Pro if **`movemark_pro1`** is not active — so mis-mapped Test Store products still unlock until you fix the dashboard.
 
 ### Mark the Test Store offering as **Current** (required)
 

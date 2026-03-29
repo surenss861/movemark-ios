@@ -3,7 +3,7 @@
 //  movemork
 //
 //  Single source of truth for Pro / paywalled features. Do not duplicate entitlement logic elsewhere.
-//  `hasPro` follows RevenueCat entitlement id `movemark_pro1` (Product catalog → Entitlements).
+//  `hasPro` follows `movemark_pro1`, and when Test Store is allowed also `test` (dashboard bridge).
 //
 
 import Foundation
@@ -21,7 +21,11 @@ final class SubscriptionManager {
     var lastErrorMessage: String? = nil
     var currentOffering: Offering? = nil
 
+    /// Canonical RevenueCat entitlement (App Store + aligned Test Store).
     private let proEntitlementID = "movemark_pro1"
+    /// Some Test Store dashboards grant `test` before products attach to `movemark_pro1`; honored only when Test Store SDK use is allowed.
+    private static let testStoreProEntitlementFallbackID = "test"
+
     private var hasStartedCustomerInfoListener = false
     private var lastKnownAppUserID: String? = nil
 
@@ -149,11 +153,28 @@ final class SubscriptionManager {
         return ""
     }
 
-    private static func logEntitlementSnapshot(_ customerInfo: CustomerInfo, checking entitlementID: String, isPro: Bool) {
+    private static func hasActiveProEntitlement(_ customerInfo: CustomerInfo) -> Bool {
+        if customerInfo.entitlements["movemark_pro1"]?.isActive == true { return true }
+        if allowsRevenueCatTestStoreKey,
+           customerInfo.entitlements[testStoreProEntitlementFallbackID]?.isActive == true {
+            return true
+        }
+        return false
+    }
+
+    private static func logEntitlementSnapshot(_ customerInfo: CustomerInfo, primaryEntitlementID: String, hasPro: Bool) {
         let activeKeys = customerInfo.entitlements.active.keys.sorted()
         let allKeys = customerInfo.entitlements.all.keys.sorted()
+        let matched: String = {
+            if customerInfo.entitlements["movemark_pro1"]?.isActive == true { return "movemark_pro1" }
+            if allowsRevenueCatTestStoreKey,
+               customerInfo.entitlements[testStoreProEntitlementFallbackID]?.isActive == true {
+                return "\(testStoreProEntitlementFallbackID) (Test Store fallback)"
+            }
+            return "—"
+        }()
         subscriptionLog.notice(
-            "entitlements active=[\(activeKeys.joined(separator: ","), privacy: .public)] all=[\(allKeys.joined(separator: ","), privacy: .public)] checking=\(entitlementID, privacy: .public) isActive=\(isPro, privacy: .public)"
+            "entitlements active=[\(activeKeys.joined(separator: ","), privacy: .public)] all=[\(allKeys.joined(separator: ","), privacy: .public)] primary=\(primaryEntitlementID, privacy: .public) matched=\(matched, privacy: .public) hasPro=\(hasPro, privacy: .public)"
         )
     }
 
@@ -257,7 +278,7 @@ final class SubscriptionManager {
 
         Task { @MainActor in
             for await customerInfo in Purchases.shared.customerInfoStream {
-                hasPro = customerInfo.entitlements[proEntitlementID]?.isActive == true
+                hasPro = Self.hasActiveProEntitlement(customerInfo)
             }
         }
     }
@@ -276,11 +297,11 @@ final class SubscriptionManager {
             if let normalizedID {
                 // Always log in when we have an app user ID so CustomerInfo stays aligned after dashboard/offering changes.
                 let result = try await Purchases.shared.logIn(normalizedID)
-                hasPro = result.customerInfo.entitlements[proEntitlementID]?.isActive == true
+                hasPro = Self.hasActiveProEntitlement(result.customerInfo)
                 lastKnownAppUserID = normalizedID
             } else if lastKnownAppUserID != nil {
                 let customerInfo = try await Purchases.shared.logOut()
-                hasPro = customerInfo.entitlements[proEntitlementID]?.isActive == true
+                hasPro = Self.hasActiveProEntitlement(customerInfo)
                 lastKnownAppUserID = nil
             }
 
@@ -314,9 +335,9 @@ final class SubscriptionManager {
             )
 
             let customerInfo = try await Purchases.shared.customerInfo()
-            let proActive = customerInfo.entitlements[proEntitlementID]?.isActive == true
+            let proActive = Self.hasActiveProEntitlement(customerInfo)
             subscriptionLog.notice("refresh customerInfo OK hasPro=\(proActive, privacy: .public)")
-            Self.logEntitlementSnapshot(customerInfo, checking: proEntitlementID, isPro: proActive)
+            Self.logEntitlementSnapshot(customerInfo, primaryEntitlementID: proEntitlementID, hasPro: proActive)
 
             let offerings = try await Purchases.shared.offerings()
 
@@ -391,7 +412,7 @@ final class SubscriptionManager {
         defer { isLoading = false }
 
         let result = try await Purchases.shared.purchase(package: package)
-        hasPro = result.customerInfo.entitlements[proEntitlementID]?.isActive == true
+        hasPro = Self.hasActiveProEntitlement(result.customerInfo)
         lastErrorMessage = nil
         await refresh(showLoading: false)
     }
@@ -409,7 +430,7 @@ final class SubscriptionManager {
         defer { isLoading = false }
 
         let customerInfo = try await Purchases.shared.restorePurchases()
-        hasPro = customerInfo.entitlements[proEntitlementID]?.isActive == true
+        hasPro = Self.hasActiveProEntitlement(customerInfo)
         lastErrorMessage = nil
         await refresh(showLoading: false)
     }
