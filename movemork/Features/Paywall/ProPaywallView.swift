@@ -16,22 +16,25 @@ struct ProPaywallView: View {
     @State private var localErrorMessage: String? = nil
     @State private var selectedPackageID: String? = nil
 
+    /// App Store product IDs — must match App Store Connect and RevenueCat packages exactly.
+    private static let monthlyProductIDs = ["monthly_subscription"]
+    private static let yearlyProductIDs = ["yearly_subscription"]
+
     var body: some View {
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .top) {
                 MoveMarkTheme.Colors.background
                     .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 18) {
                         header
                         benefitsCard
                         pricingCard
-                        restoreBlock
                     }
                     .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                    .padding(.top, 18)
-                    .padding(.bottom, 32)
+                    .padding(.top, 14)
+                    .padding(.bottom, 36)
                 }
             }
             .task {
@@ -41,40 +44,56 @@ struct ProPaywallView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Close") { onClose() }
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    Button(action: onClose) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.white.opacity(0.05))
+                                .frame(width: 42, height: 42)
+
+                            Image(systemName: "xmark")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.86))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close")
                 }
             }
         }
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("MoveMark Pro")
                 .font(.system(size: 11, weight: .bold))
-                .tracking(1.1)
+                .tracking(1.2)
                 .foregroundStyle(MoveMarkTheme.Colors.accent)
 
             Text(reason.headline)
-                .font(MoveMarkTheme.Typography.screenTitle)
+                .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
 
             Text(reason.subheadline)
-                .font(MoveMarkTheme.Typography.body)
+                .font(MoveMarkTheme.Typography.subheadline)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(.top, 10)
     }
 
     private var benefitsCard: some View {
         MMCard {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 14) {
                 Text(benefitsTitle)
                     .font(MoveMarkTheme.Typography.cardTitle)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                ForEach(Array(benefits.enumerated()), id: \.offset) { _, item in
-                    benefitRow(item.title, item.subtitle)
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(Array(benefits.enumerated()), id: \.offset) { _, item in
+                        benefitRow(item.title, item.subtitle)
+                    }
                 }
             }
         }
@@ -82,70 +101,199 @@ struct ProPaywallView: View {
 
     private var pricingCard: some View {
         MMCard {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text(reason == .moveOutExport ? "Choose your protection plan" : "Choose your plan")
                     .font(MoveMarkTheme.Typography.cardTitle)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                if !displayPackages.isEmpty {
-                    VStack(spacing: 12) {
-                        ForEach(displayPackages, id: \.identifier) { package in
-                            pricingOption(package)
-                        }
-                    }
-                } else {
-                    Text("Loading plans…")
-                        .font(MoveMarkTheme.Typography.subheadline)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                }
+                plansLoadSection
+                    .padding(.top, 12)
 
-                if let localErrorMessage {
-                    MMErrorBanner(message: localErrorMessage)
-                } else if let error = subscriptionManager.lastErrorMessage {
-                    MMErrorBanner(message: error)
+                if let local = localErrorMessage {
+                    MMErrorBanner(message: paywallBannerMessage(local))
+                        .padding(.top, 14)
+                } else if let err = subscriptionManager.lastErrorMessage {
+                    MMErrorBanner(message: paywallBannerMessage(err))
+                        .padding(.top, 14)
                 }
 
                 if let selectedPackage {
                     ZStack {
                         MMButton(
-                            title: subscriptionManager.isLoading ? "Starting…" : reason.ctaTitle,
+                            title: subscriptionManager.isLoading ? "Starting…" : continuePurchaseTitle(for: selectedPackage),
                             action: { startPurchase(selectedPackage) },
                             kind: .primary,
                             size: .hero,
                             isDisabled: subscriptionManager.isLoading
                         )
-                        .opacity(subscriptionManager.isLoading ? 0.65 : 1)
+                        .opacity(subscriptionManager.isLoading ? 0.7 : 1)
 
                         if subscriptionManager.isLoading {
-                            ProgressView().tint(.white)
+                            ProgressView()
+                                .tint(.white)
                         }
+                    }
+                    .padding(.top, 16)
+                }
+
+                Button {
+                    restorePurchases()
+                } label: {
+                    Text("Restore purchases")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.92))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .disabled(subscriptionManager.isLoading)
+                .padding(.top, 18)
+
+                Text("Auto-renews until cancelled. Manage or cancel in Settings › Apple ID › Subscriptions.")
+                    .font(MoveMarkTheme.Typography.caption)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.82))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 18)
+            }
+        }
+    }
+
+    private var isPlansLoadingIndicatorShowing: Bool {
+        subscriptionManager.isLoading &&
+            displayPackages.isEmpty &&
+            subscriptionManager.lastErrorMessage == nil &&
+            localErrorMessage == nil
+    }
+
+    @ViewBuilder
+    private var plansLoadSection: some View {
+        if !displayPackages.isEmpty {
+            VStack(spacing: 12) {
+                ForEach(displayPackages, id: \.identifier) { package in
+                    pricingOption(package)
+                }
+            }
+        } else if isPlansLoadingIndicatorShowing {
+            HStack(spacing: 12) {
+                ProgressView()
+                    .tint(MoveMarkTheme.Colors.primary)
+
+                Text("Loading plans…")
+                    .font(MoveMarkTheme.Typography.subheadline)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 8)
+        } else {
+            placeholderPlanRows()
+        }
+    }
+
+    private func placeholderPlanRows() -> some View {
+        VStack(spacing: 12) {
+            placeholderPlanRow(
+                title: "Yearly",
+                subtitle: "Best value when you stay a full lease term",
+                isBestValue: true
+            )
+
+            placeholderPlanRow(
+                title: "Monthly",
+                subtitle: "Full Pro access, billed monthly",
+                isBestValue: false
+            )
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Plans unavailable. Yearly and Monthly placeholders shown.")
+    }
+
+    private func placeholderPlanRow(title: String, subtitle: String, isBestValue: Bool) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(title)
+                        .font(MoveMarkTheme.Typography.subheadlineMedium)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.82))
+
+                    if isBestValue {
+                        Text("Best value")
+                            .font(MoveMarkTheme.Typography.caption)
+                            .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.88))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(MoveMarkTheme.Colors.primary.opacity(0.18))
+                            .clipShape(Capsule())
                     }
                 }
 
-                Text("Subscriptions renew automatically unless cancelled. Restore purchases anytime.")
-                    .font(MoveMarkTheme.Typography.caption)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                Text("—")
+                    .font(MoveMarkTheme.Typography.subheadline)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.58))
+
+                Text(subtitle)
+                    .font(MoveMarkTheme.Typography.footnote)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.74))
             }
+
+            Spacer(minLength: 8)
+
+            Circle()
+                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.78), lineWidth: 1)
+                .frame(width: 22, height: 22)
+                .padding(.top, 2)
+        }
+        .padding(14)
+        .background(MoveMarkTheme.Colors.fieldFill.opacity(0.96))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.82), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .allowsHitTesting(false)
+    }
+
+    private func paywallBannerMessage(_ raw: String) -> String {
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.count > 200 {
+            return "Plans aren’t available right now. Try again later."
+        }
+        return t
+    }
+
+    private func continuePurchaseTitle(for package: Package) -> String {
+        switch planKind(for: package) {
+        case .monthly:
+            return "Continue with Monthly"
+        case .yearly:
+            return "Continue with Yearly"
+        case .other:
+            return reason.ctaTitle
         }
     }
 
-    private var restoreBlock: some View {
-        VStack(spacing: 10) {
-            Button {
-                restorePurchases()
-            } label: {
-                Text("Restore purchases")
-                    .font(MoveMarkTheme.Typography.subheadlineMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.primary)
-            }
-            .buttonStyle(.plain)
-            .disabled(subscriptionManager.isLoading)
-        }
-        .frame(maxWidth: .infinity)
+    private enum PlanKind {
+        case monthly, yearly, other
     }
 
-    /// Annual first (best value), then monthly — matches common RevenueCat offerings with custom display names.
+    private func planKind(for package: Package) -> PlanKind {
+        let pid = package.storeProduct.productIdentifier
+        if Self.yearlyProductIDs.contains(pid) || Self.infersAnnualBilling(package) { return .yearly }
+        if Self.monthlyProductIDs.contains(pid) || Self.infersMonthlyBilling(package) { return .monthly }
+        return .other
+    }
+
+    private func planDisplayTitle(for package: Package) -> String {
+        switch planKind(for: package) {
+        case .monthly:
+            return "Monthly"
+        case .yearly:
+            return "Yearly"
+        case .other:
+            let t = package.storeProduct.localizedTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            return t.isEmpty ? "Pro" : t
+        }
+    }
+
     private var displayPackages: [Package] {
         let raw = subscriptionManager.currentOffering?.availablePackages ?? []
         return Self.sortedPackagesForDisplay(raw)
@@ -154,14 +302,18 @@ struct ProPaywallView: View {
     private static func sortedPackagesForDisplay(_ packages: [Package]) -> [Package] {
         packages.sorted { lhs, rhs in
             func rank(_ p: Package) -> Int {
+                let pid = p.storeProduct.productIdentifier
+                if yearlyProductIDs.contains(pid) { return 0 }
+                if monthlyProductIDs.contains(pid) { return 1 }
                 if p.packageType == .annual { return 0 }
                 if p.packageType == .monthly { return 1 }
                 if Self.infersAnnualBilling(p) { return 0 }
                 if Self.infersMonthlyBilling(p) { return 1 }
                 return 2
             }
-            let d = rank(lhs) - rank(rhs)
-            if d != 0 { return d < 0 }
+
+            let delta = rank(lhs) - rank(rhs)
+            if delta != 0 { return delta < 0 }
             return lhs.identifier < rhs.identifier
         }
     }
@@ -185,7 +337,9 @@ struct ProPaywallView: View {
             return explicit
         }
 
-        return packages.first(where: { $0.packageType == .annual })
+        return packages.first(where: { Self.yearlyProductIDs.contains($0.storeProduct.productIdentifier) })
+            ?? packages.first(where: { Self.monthlyProductIDs.contains($0.storeProduct.productIdentifier) })
+            ?? packages.first(where: { $0.packageType == .annual })
             ?? packages.first(where: { Self.infersAnnualBilling($0) })
             ?? packages.first(where: { $0.packageType == .monthly })
             ?? packages.first(where: { Self.infersMonthlyBilling($0) })
@@ -195,34 +349,40 @@ struct ProPaywallView: View {
     private func pricingOption(_ package: Package) -> some View {
         let isSelected = selectedPackage?.identifier == package.identifier
         let product = package.storeProduct
+        let isYearly = package.packageType == .annual || Self.infersAnnualBilling(package)
+        let strokeWidth: CGFloat = (isSelected && isYearly) ? 1.8 : 1
 
         return Button {
             selectedPackageID = package.identifier
         } label: {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
-                        Text(priceCaption(for: package, product: product))
+                        Text(planDisplayTitle(for: package))
                             .font(MoveMarkTheme.Typography.subheadlineMedium)
                             .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                        if package.packageType == .annual || Self.infersAnnualBilling(package) {
+                        if isYearly {
                             Text("Best value")
                                 .font(MoveMarkTheme.Typography.caption)
                                 .foregroundStyle(MoveMarkTheme.Colors.primary)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(MoveMarkTheme.Colors.primary.opacity(0.12))
+                                .background(MoveMarkTheme.Colors.primary.opacity(0.16))
                                 .clipShape(Capsule())
                         }
                     }
+
+                    Text(priceCaption(for: package, product: product))
+                        .font(MoveMarkTheme.Typography.subheadline)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.95))
 
                     Text(planSubtitle(for: package))
                         .font(MoveMarkTheme.Typography.footnote)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 }
 
-                Spacer()
+                Spacer(minLength: 8)
 
                 Circle()
                     .stroke(
@@ -235,14 +395,17 @@ struct ProPaywallView: View {
                             .padding(4)
                     )
                     .frame(width: 22, height: 22)
+                    .padding(.top, 2)
             }
             .padding(14)
             .background(MoveMarkTheme.Colors.fieldFill)
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(
-                        isSelected ? MoveMarkTheme.Colors.primary.opacity(0.7) : MoveMarkTheme.Colors.panelStroke,
-                        lineWidth: 1
+                        isSelected
+                            ? MoveMarkTheme.Colors.primary.opacity(isYearly ? 0.95 : 0.75)
+                            : MoveMarkTheme.Colors.panelStroke,
+                        lineWidth: strokeWidth
                     )
             )
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -286,79 +449,27 @@ struct ProPaywallView: View {
         switch reason {
         case .extraProperty:
             return [
-                (
-                    "More property vaults",
-                    "Protect more than one rental with separate proof trails and records."
-                ),
-                (
-                    "Unlimited exports",
-                    "Generate updated reports whenever you need to save, share, or send proof."
-                ),
-                (
-                    "Case builder included",
-                    "Turn your captured evidence into a clearer, stronger dispute workflow."
-                ),
-                (
-                    "Full renter protection access",
-                    "Unlock premium tools across your rental timeline."
-                )
+                ("More property vaults", "Separate proof trails for each rental."),
+                ("Unlimited exports", "Save, share, or send proof PDFs anytime."),
+                ("Case builder included", "Stronger dispute workflow from your evidence."),
             ]
         case .unlimitedExports:
             return [
-                (
-                    "Unlimited move-in exports",
-                    "Keep generating fresh baseline reports as your documentation grows."
-                ),
-                (
-                    "Move-out exports included",
-                    "Export before-and-after records when deposit disputes are most likely."
-                ),
-                (
-                    "Case builder included",
-                    "Use exports and captured proof together in a stronger dispute flow."
-                ),
-                (
-                    "More than one vault",
-                    "Upgrade once and keep protection across multiple rentals."
-                )
+                ("Unlimited move-in exports", "Fresh baseline reports as docs grow."),
+                ("Move-out exports", "Before-and-after records for deposit disputes."),
+                ("Case builder included", "Exports plus proof in one flow."),
             ]
         case .disputePacket:
             return [
-                (
-                    "Case builder included",
-                    "Organize your proof into a stronger renter defense workflow."
-                ),
-                (
-                    "Unlimited exports",
-                    "Generate the reports and supporting files your case may need."
-                ),
-                (
-                    "Move-out protection included",
-                    "Use before-and-after proof where deposit disputes usually happen."
-                ),
-                (
-                    "More property coverage",
-                    "Keep every rental and evidence trail organized in one account."
-                )
+                ("Case builder", "Organize proof into a clearer defense."),
+                ("Unlimited exports", "Reports and files your case may need."),
+                ("Move-out protection", "Proof where disputes usually hit."),
             ]
         case .moveOutExport:
             return [
-                (
-                    "Move-out exports included",
-                    "Export your before-and-after proof when deposit risk becomes real."
-                ),
-                (
-                    "Unlimited exports",
-                    "Regenerate reports whenever more photos, notes, or documents are added."
-                ),
-                (
-                    "Case builder included",
-                    "Use your move-out proof inside a stronger dispute workflow."
-                ),
-                (
-                    "More property vaults",
-                    "Keep the same protection system for future rentals too."
-                )
+                ("Move-out exports", "Before-and-after proof when risk is real."),
+                ("Unlimited exports", "Update reports as you add evidence."),
+                ("Case builder", "Move-out proof inside a stronger workflow."),
             ]
         }
     }
@@ -368,7 +479,6 @@ struct ProPaywallView: View {
         return "\(product.localizedPriceString) / \(period)"
     }
 
-    /// Human period for price line; avoids "$9.99 / plan" when RevenueCat uses custom package types.
     private func periodLabel(for package: Package) -> String {
         switch package.packageType {
         case .monthly:
@@ -391,16 +501,16 @@ struct ProPaywallView: View {
             return "billing period"
         }
 
-        let v = sub.value
+        let value = sub.value
         switch sub.unit {
         case .day:
-            return v == 1 ? "day" : "\(v) days"
+            return value == 1 ? "day" : "\(value) days"
         case .week:
-            return v == 1 ? "week" : "\(v) weeks"
+            return value == 1 ? "week" : "\(value) weeks"
         case .month:
-            return v == 1 ? "month" : "\(v) months"
+            return value == 1 ? "month" : "\(value) months"
         case .year:
-            return v == 1 ? "year" : "\(v) years"
+            return value == 1 ? "year" : "\(value) years"
         @unknown default:
             return "billing period"
         }
@@ -452,16 +562,28 @@ struct ProPaywallView: View {
     }
 
     private func userFacingPaywallError(from error: Error) -> String {
+        let ns = error as NSError
+        if ns.domain == "MoveMark.Subscription" {
+            return paywallBannerMessage(ns.localizedDescription)
+        }
+
         let raw = error.localizedDescription.lowercased()
+
         if raw.contains("cancel") {
             return "Purchase cancelled."
         }
-        if raw.contains("not configured") || raw.contains("api key") {
-            return "Subscriptions unavailable right now. Try again later."
-        }
+
         if raw.contains("network") || raw.contains("offline") || raw.contains("internet") {
             return "No connection. Check your internet and try again."
         }
+
+        if raw.contains("metadata")
+            || (raw.contains("product") && raw.contains("unavailable"))
+            || raw.contains("configuration")
+            || (raw.contains("store") && raw.contains("problem")) {
+            return "Plans aren’t available right now. Try again later."
+        }
+
         return "Purchase didn’t go through. Try again."
     }
 }

@@ -406,7 +406,7 @@ struct RoomListView: View {
                 }
 
                 lastErrorFromExport = false
-                errorMessage = "Move-in export queued. Check Exports for progress."
+                errorMessage = "Move-in export is ready. Open Exports to download."
                 MMHaptics.success()
             } catch {
                 errorMessage = userFacingExportError(from: error)
@@ -426,7 +426,7 @@ struct RoomListView: View {
         if raw.contains("property not found") {
             return "Couldn’t queue export for this property. Refresh and try again."
         }
-        return "Couldn’t queue move-in export. Try again."
+        return "Couldn’t complete move-in export. Try again."
     }
 }
 

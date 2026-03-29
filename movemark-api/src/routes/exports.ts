@@ -1,5 +1,7 @@
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { requireUserIdFromBearer } from "../lib/auth.js";
+import { env } from "../lib/env.js";
 import { generateMoveInPdfBuffer } from "../lib/pdf.js";
 import { uploadExportToSupabaseStorage } from "../lib/storage.js";
 import { supabaseAdmin } from "../lib/supabase.js";
@@ -9,6 +11,14 @@ import type {
   ExportRequestBody,
   ExportResponseBody,
 } from "../types/exports.js";
+
+function handleExportsError(c: Context, error: unknown, logLabel: string) {
+  if (error instanceof Error && error.message === "Unauthorized") {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  console.error(`[movemark-api:exports] ${logLabel}`, error);
+  return c.json({ error: "Unexpected server error" }, 500);
+}
 
 export const exportsRouter = new Hono();
 
@@ -22,7 +32,8 @@ exportsRouter.get("/", async (c) => {
       .order("requested_at", { ascending: false, nullsFirst: false });
 
     if (error) {
-      return c.json({ error: `Failed to fetch exports: ${error.message}` }, 500);
+      console.error("[movemark-api:exports] list query", error);
+      return c.json({ error: "Failed to load exports" }, 500);
     }
 
     const rows: ExportListItem[] = (data ?? []).map((row) => ({
@@ -39,9 +50,7 @@ exportsRouter.get("/", async (c) => {
 
     return c.json(rows, 200);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unexpected server error";
-    const status = message === "Unauthorized" ? 401 : 500;
-    return c.json({ error: message }, status);
+    return handleExportsError(c, error, "GET /");
   }
 });
 
@@ -71,11 +80,12 @@ exportsRouter.get("/:id/download", async (c) => {
     }
 
     const { data: signed, error: signedError } = await supabaseAdmin.storage
-      .from("exports")
+      .from(env.EXPORT_BUCKET_NAME)
       .createSignedUrl(row.file_path, 60 * 15);
 
     if (signedError || !signed?.signedUrl) {
-      return c.json({ error: `Failed to create signed URL: ${signedError?.message ?? "unknown error"}` }, 500);
+      console.error("[movemark-api:exports] signed URL", signedError);
+      return c.json({ error: "Failed to prepare download" }, 500);
     }
 
     const response: ExportDownloadResponseBody = {
@@ -86,9 +96,7 @@ exportsRouter.get("/:id/download", async (c) => {
     };
     return c.json(response, 200);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unexpected server error";
-    const status = message === "Unauthorized" ? 401 : 500;
-    return c.json({ error: message }, status);
+    return handleExportsError(c, error, "GET /:id/download");
   }
 });
 
@@ -176,7 +184,7 @@ exportsRouter.post("/move-in", async (c) => {
       fileBuffer: pdfBuffer,
     });
 
-    await supabaseAdmin
+    const { error: updateError } = await supabaseAdmin
       .from("exports")
       .update({
         status: "completed",
@@ -185,18 +193,20 @@ exportsRouter.post("/move-in", async (c) => {
       })
       .eq("id", exportRow.id);
 
+    if (updateError) {
+      console.error("[movemark-api:exports] move-in finalize", updateError);
+      return c.json({ error: "Failed to complete export" }, 500);
+    }
+
     const response: ExportResponseBody = {
       exportId: exportRow.id,
-      status: "queued",
+      status: "completed",
       type: "move_in_report",
       requestedAt,
     };
 
     return c.json(response, 200);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unexpected server error";
-    const status = message === "Unauthorized" ? 401 : 500;
-
-    return c.json({ error: message }, status);
+    return handleExportsError(c, error, "POST /move-in");
   }
 });

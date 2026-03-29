@@ -5,7 +5,7 @@ export type ExportRequestBody = {
 
 export type ExportResponseBody = {
   exportId: string;
-  status: "queued";
+  status: "completed";
   type: "move_in_report";
   requestedAt: string;
 };

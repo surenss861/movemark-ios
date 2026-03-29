@@ -29,13 +29,13 @@ enum PaywallReason: Equatable {
     var subheadline: String {
         switch self {
         case .extraProperty:
-            return "Track multiple rentals, keep every proof trail organized, and manage more than one property."
+            return "Track multiple rentals and keep each proof trail organized."
         case .unlimitedExports:
-            return "Export more than your included free report and keep generating professional proof PDFs when you need them."
+            return "Generate professional proof PDFs whenever you need them."
         case .disputePacket:
-            return "Build a stronger renter case with dispute-ready proof, structured evidence, and premium export tools."
+            return "Stronger dispute-ready proof and premium export tools."
         case .moveOutExport:
-            return "Move-out is where deposit disputes usually happen. Upgrade to export your move-out proof and protect your side."
+            return "Export move-out proof when deposit risk is real."
         }
     }
 

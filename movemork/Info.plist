@@ -37,5 +37,7 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<key>RevenueCatPublicAPIKey</key>
+	<string>$(REVENUECAT_APP_STORE_PUBLIC_KEY)</string>
 </dict>
 </plist>

@@ -5,12 +5,12 @@ export async function requireUserIdFromBearer(c: Context): Promise<string> {
   const authHeader = c.req.header("Authorization");
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new Error("Missing or invalid Authorization header");
+    throw new Error("Unauthorized");
   }
 
   const token = authHeader.replace("Bearer ", "").trim();
   if (!token) {
-    throw new Error("Missing bearer token");
+    throw new Error("Unauthorized");
   }
 
   const { data, error } = await supabaseAdmin.auth.getUser(token);

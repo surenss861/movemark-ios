@@ -3,12 +3,15 @@
 //  movemork
 //
 //  Single source of truth for Pro / paywalled features. Do not duplicate entitlement logic elsewhere.
-//  `hasPro` follows RevenueCat entitlement id `movemark_pro` only (dashboard must map products to it).
+//  `hasPro` follows RevenueCat entitlement id `movemark_pro1` (Product catalog → Entitlements).
 //
 
 import Foundation
 import Observation
+import OSLog
 import RevenueCat
+
+private let subscriptionLog = Logger(subsystem: "movemark.movemork", category: "Subscription")
 
 @MainActor
 @Observable
@@ -18,7 +21,7 @@ final class SubscriptionManager {
     var lastErrorMessage: String? = nil
     var currentOffering: Offering? = nil
 
-    private let proEntitlementID = "movemark_pro"
+    private let proEntitlementID = "movemark_pro1"
     private var hasStartedCustomerInfoListener = false
     private var lastKnownAppUserID: String? = nil
 
@@ -61,11 +64,10 @@ final class SubscriptionManager {
         if !Purchases.isConfigured {
             let apiKey = Self.resolvedRevenueCatPublicAPIKey
             guard Self.isValidRevenueCatPublicKey(apiKey) else {
-                lastErrorMessage =
-                    "Release build: set User-Defined setting REVENUECAT_APP_STORE_PUBLIC_KEY to your RevenueCat App Store public SDK key (appl_…). See docs/REVENUECAT_RELEASE.md."
-                #if !DEBUG
-                print("MoveMark: RevenueCat API key missing or invalid for Release. TestFlight needs appl_… from RevenueCat → API keys → App Store.")
-                #endif
+                lastErrorMessage = Self.userFacingRevenueCatKeyError(resolvedKey: apiKey)
+                subscriptionLog.error(
+                    "RevenueCat API key missing or invalid. Prefix: \(Self.keyDiagnosticPrefix(apiKey), privacy: .public) plistKey=RevenueCatPublicAPIKey"
+                )
                 return
             }
 
@@ -77,6 +79,12 @@ final class SubscriptionManager {
             }
 
             Purchases.configure(with: builder.build())
+            #if !DEBUG
+            // TestFlight / App Store: verify embedded key in Console (category Subscription) without logging the full secret.
+            subscriptionLog.notice(
+                "RevenueCat configured (App Store key prefix \(Self.keyDiagnosticPrefix(apiKey), privacy: .public))"
+            )
+            #endif
         }
 
         // Never touch Purchases.shared before configure — that crashes at runtime.
@@ -84,34 +92,93 @@ final class SubscriptionManager {
         startCustomerInfoListenerIfNeeded()
     }
 
-    /// Debug: RevenueCat **Test Store** key (simulator / local). Release: **App Store public SDK** key from Info.plist (injected at build time).
+    /// App Store public SDK key (`appl_…`) from merged Info.plist `RevenueCatPublicAPIKey` → `$(REVENUECAT_APP_STORE_PUBLIC_KEY)`, or scheme env `REVENUECAT_PUBLIC_API_KEY`.
     private static var resolvedRevenueCatPublicAPIKey: String {
-        #if DEBUG
-        "test_rLVyLbkyJnzJsUyYSfldfttiiWQ"
-        #else
-        // Populated from target Release build setting → INFOPLIST_KEY_RevenueCatPublicAPIKey → merged Info.plist.
-        let fromPlist = (Bundle.main.object(forInfoDictionaryKey: "RevenueCatPublicAPIKey") as? String)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
+        let fromPlist = revenueCatPublicAPIKeyFromBundle()
         if !fromPlist.isEmpty { return fromPlist }
 
-        // Optional: Xcode Scheme → Run/Archive → Environment Variables (CI or local overrides).
         let fromEnv = ProcessInfo.processInfo.environment["REVENUECAT_PUBLIC_API_KEY"]?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return fromEnv
-        #endif
+    }
+
+    /// Runtime key is **always** `RevenueCatPublicAPIKey` (not the Xcode setting name `REVENUECAT_APP_STORE_PUBLIC_KEY`).
+    private static func revenueCatPublicAPIKeyFromBundle() -> String {
+        let key = "RevenueCatPublicAPIKey"
+        if let s = Bundle.main.object(forInfoDictionaryKey: key) as? String {
+            return s.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let s = Bundle.main.infoDictionary?[key] as? String {
+            return s.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return ""
+    }
+
+    private static func userFacingRevenueCatKeyError(resolvedKey: String) -> String {
+        let trimmed = resolvedKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return "Subscription setup is incomplete. Rebuild the app with a valid RevenueCat App Store key (appl_…)."
+        }
+        if trimmed.hasPrefix("$(") {
+            return "Subscription key didn’t embed in this build. Clean build, re-archive, and try again."
+        }
+        if trimmed.contains("REPLACE") {
+            return "Replace the RevenueCat placeholder key in build settings with your App Store public key (appl_…)."
+        }
+        if trimmed.hasPrefix("test_") {
+            return "Use the App Store public SDK key (appl_…), not a Test Store key, in build settings."
+        }
+        if !trimmed.hasPrefix("appl_") {
+            return "Invalid subscription key. Use the App Store public key from RevenueCat (appl_…)."
+        }
+        return "Subscriptions couldn’t start. Check the RevenueCat App Store key in Xcode."
     }
 
     private static func isValidRevenueCatPublicKey(_ key: String) -> Bool {
         guard !key.isEmpty else { return false }
         if key.contains("REPLACE") { return false }
         if key.hasPrefix("$(") { return false }
-        #if !DEBUG
-        // TestFlight / App Store builds must use the Apple public SDK key, not the Test Store key.
         if key.hasPrefix("test_") { return false }
         if !key.hasPrefix("appl_") { return false }
-        #endif
         return true
+    }
+
+    /// Maps RevenueCat / StoreKit errors to short paywall-safe copy (details go to logs).
+    private static func userFacingRevenueCatOperationError(_ error: Error) -> String {
+        let raw = error.localizedDescription
+        let lower = raw.lowercased()
+
+        if lower.contains("missing app store connect api credentials")
+            || (lower.contains("app store connect") && lower.contains("credential") && lower.contains("missing")) {
+            return "Plans aren’t loading. Finish App Store Connect API setup in RevenueCat, then try again."
+        }
+
+        if lower.contains("could not fetch") && lower.contains("app store connect") {
+            return "Plans couldn’t load. Check RevenueCat and App Store Connect, then try again."
+        }
+
+        if lower.contains("missing_metadata") || lower.contains("missing metadata") {
+            return "Plans aren’t ready in App Store Connect yet. Complete subscription metadata, then try again."
+        }
+
+        if lower.contains("not found") && (lower.contains("app store") || lower.contains("product")) {
+            return "Plans aren’t available. Remove stale products in RevenueCat and match App Store Connect IDs."
+        }
+
+        if raw.count > 160 {
+            return "Plans couldn’t load. Try again later."
+        }
+
+        return raw
+    }
+
+    /// Safe for logs: whether the key looks substituted, plus a short prefix (never log full keys).
+    private static func keyDiagnosticPrefix(_ key: String) -> String {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return "(empty)" }
+        if trimmed.hasPrefix("$(") { return "(unexpanded $(…) — check Info.plist RevenueCatPublicAPIKey / REVENUECAT_APP_STORE_PUBLIC_KEY)" }
+        let prefix = String(trimmed.prefix(6))
+        return "\(prefix)…"
     }
 
     private func startCustomerInfoListenerIfNeeded() {
@@ -150,7 +217,7 @@ final class SubscriptionManager {
 
             await refresh()
         } catch {
-            lastErrorMessage = error.localizedDescription
+            lastErrorMessage = Self.userFacingRevenueCatOperationError(error)
         }
     }
 
@@ -158,7 +225,7 @@ final class SubscriptionManager {
     func refresh(showLoading: Bool = true) async {
         guard Purchases.isConfigured else {
             if lastErrorMessage == nil {
-                lastErrorMessage = "Subscriptions unavailable until RevenueCat is configured."
+                lastErrorMessage = "Subscription options aren’t available until the app finishes setup."
             }
             return
         }
@@ -178,9 +245,26 @@ final class SubscriptionManager {
 
             hasPro = customerInfo.entitlements[proEntitlementID]?.isActive == true
             currentOffering = offerings.current
-            lastErrorMessage = nil
+
+            if let current = offerings.current {
+                let packageIDs = current.availablePackages.map(\.storeProduct.productIdentifier)
+                let rcPackageIDs = current.availablePackages.map(\.identifier)
+                subscriptionLog.debug(
+                    "offerings.current=\(current.identifier, privacy: .public) storeProductIDs=\(String(describing: packageIDs), privacy: .public) revenueCatPackageIDs=\(String(describing: rcPackageIDs), privacy: .public)"
+                )
+
+                if current.availablePackages.isEmpty {
+                    lastErrorMessage = "Plans aren’t available yet. Check your default offering and packages in RevenueCat."
+                } else {
+                    lastErrorMessage = nil
+                }
+            } else {
+                subscriptionLog.debug("offerings.current=nil (no default offering)")
+                lastErrorMessage = "No default subscription offering in RevenueCat. Set a current offering with packages."
+            }
         } catch {
-            lastErrorMessage = error.localizedDescription
+            lastErrorMessage = Self.userFacingRevenueCatOperationError(error)
+            subscriptionLog.error("RevenueCat refresh failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
