@@ -2,8 +2,11 @@
 
 ## Endpoints
 
+- `GET /` — service identity JSON
 - `GET /api/health`
-- `POST /api/exports/move-in`
+- `GET /api/exports` — requires `Authorization: Bearer <Supabase access token>`
+- `POST /api/exports/move-in` — same auth; body `{ "propertyId": "<uuid>", "format": "pdf" }`
+- `GET /api/exports/:id/download` — same auth; signed URL when export is `completed`
 - `POST /api/webhooks/revenuecat`
 
 ## Required Railway variables
@@ -24,6 +27,6 @@ npm run dev
 
 ## Notes
 
-- `POST /api/exports/move-in` currently generates a simple text-based PDF placeholder buffer for pipeline validation.
-- It writes export records to `exports` table and uploads files to Supabase Storage.
-- Contract returns `status: queued` for client compatibility, even though processing is synchronous in v1.
+- `POST /api/exports/move-in` runs **synchronously**: insert row (`queued` in DB briefly), generate PDF, upload to Storage, then finalize the row to `completed`.
+- Successful JSON response uses **`status: "completed"`** (matches DB and client contract).
+- Rows still use internal statuses (`queued`, `completed`, etc.) for list/download; download returns **404** if the export belongs to another user.
