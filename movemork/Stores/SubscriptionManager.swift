@@ -149,6 +149,14 @@ final class SubscriptionManager {
         return ""
     }
 
+    private static func logEntitlementSnapshot(_ customerInfo: CustomerInfo, checking entitlementID: String, isPro: Bool) {
+        let activeKeys = customerInfo.entitlements.active.keys.sorted()
+        let allKeys = customerInfo.entitlements.all.keys.sorted()
+        subscriptionLog.notice(
+            "entitlements active=[\(activeKeys.joined(separator: ","), privacy: .public)] all=[\(allKeys.joined(separator: ","), privacy: .public)] checking=\(entitlementID, privacy: .public) isActive=\(isPro, privacy: .public)"
+        )
+    }
+
     /// Runtime App Store key: `RevenueCatPublicAPIKey` ← `$(REVENUECAT_APP_STORE_PUBLIC_KEY)`.
     private static func revenueCatPublicAPIKeyFromBundle() -> String {
         let key = "RevenueCatPublicAPIKey"
@@ -308,6 +316,7 @@ final class SubscriptionManager {
             let customerInfo = try await Purchases.shared.customerInfo()
             let proActive = customerInfo.entitlements[proEntitlementID]?.isActive == true
             subscriptionLog.notice("refresh customerInfo OK hasPro=\(proActive, privacy: .public)")
+            Self.logEntitlementSnapshot(customerInfo, checking: proEntitlementID, isPro: proActive)
 
             let offerings = try await Purchases.shared.offerings()
 
