@@ -38,3 +38,5 @@ The route uses the **service role** (bypasses RLS). A **500** means PostgREST re
 `[movemark-api:exports] list query failed` with `message`, `code`, `details`, `hint`.
 
 Typical causes: **`exports` table or column missing** in the linked Supabase project (migrate schema), wrong **`SUPABASE_URL`**, or invalid **`SUPABASE_SERVICE_ROLE_KEY`**.
+
+The list route orders by **`created_at`** and does not require **`requested_at`** (some DBs never had that column).
