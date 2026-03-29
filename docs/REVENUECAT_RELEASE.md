@@ -19,6 +19,21 @@
 4. **TestFlight:** **Release** already includes `REVENUECAT_ALLOW_TEST_STORE_KEY` in the Xcode project; set `REVENUECAT_APP_STORE_PUBLIC_KEY` to **`test_…`** and archive. Before a **production App Store** submission, switch the build setting to **`appl_…`** and remove `REVENUECAT_ALLOW_TEST_STORE_KEY` from the MoveMark target **Release** config if you want Release to reject Test Store keys entirely.
 5. Switch back to **`appl_…`** when validating real StoreKit / shipping to the App Store.
 
+## Test Store mirror (aligned with the app)
+
+Use the **same entitlement identifier as production** so `hasPro` works without code forks:
+
+| RevenueCat (Test Store) | Value |
+|-------------------------|--------|
+| **Entitlement** | **`movemark_pro1`** (not `test` — the app never checks `test`) |
+| **Products** | **`testmonthly`**, **`testyearly`** |
+| **Offering** | `default` (current) |
+| **Packages** | Annual/yearly package → **`testyearly`**; Monthly package → **`testmonthly`** |
+
+Attach **both** products to entitlement **`movemark_pro1`**. Order packages **yearly first, monthly second** in the offering so the paywall matches “best value” ordering (the app also sorts yearly ahead when it can infer plan kind).
+
+**In code:** `SubscriptionManager` uses `movemark_pro1` only. `ProPaywallView` recognizes store product IDs **`monthly_subscription` / `yearly_subscription`** (App Store) and **`testmonthly` / `testyearly`** (Test Store mirror) for labels, default selection, and sorting.
+
 ## Before App Store archive
 
 1. Xcode → **MoveMark** target → **Build Settings** → search `REVENUECAT`.

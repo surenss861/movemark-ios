@@ -16,9 +16,9 @@ struct ProPaywallView: View {
     @State private var localErrorMessage: String? = nil
     @State private var selectedPackageID: String? = nil
 
-    /// App Store product IDs — must match App Store Connect and RevenueCat packages exactly.
-    private static let monthlyProductIDs = ["monthly_subscription"]
-    private static let yearlyProductIDs = ["yearly_subscription"]
+    /// Store product IDs — must match RevenueCat package products (App Store: monthly/yearly_subscription; Test Store mirror: testmonthly/testyearly).
+    private static let monthlyProductIDs = ["monthly_subscription", "testmonthly"]
+    private static let yearlyProductIDs = ["yearly_subscription", "testyearly"]
 
     var body: some View {
         NavigationStack {
