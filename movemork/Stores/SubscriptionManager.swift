@@ -240,31 +240,43 @@ final class SubscriptionManager {
         }
 
         do {
+            subscriptionLog.notice(
+                "refresh start isConfigured=true entitlementID=\(self.proEntitlementID, privacy: .public)"
+            )
+
             let customerInfo = try await Purchases.shared.customerInfo()
+            let proActive = customerInfo.entitlements[proEntitlementID]?.isActive == true
+            subscriptionLog.notice("refresh customerInfo OK hasPro=\(proActive, privacy: .public)")
+
             let offerings = try await Purchases.shared.offerings()
 
-            hasPro = customerInfo.entitlements[proEntitlementID]?.isActive == true
+            hasPro = proActive
             currentOffering = offerings.current
 
             if let current = offerings.current {
                 let packageIDs = current.availablePackages.map(\.storeProduct.productIdentifier)
                 let rcPackageIDs = current.availablePackages.map(\.identifier)
-                subscriptionLog.debug(
-                    "offerings.current=\(current.identifier, privacy: .public) storeProductIDs=\(String(describing: packageIDs), privacy: .public) revenueCatPackageIDs=\(String(describing: rcPackageIDs), privacy: .public)"
+                let count = current.availablePackages.count
+                subscriptionLog.notice(
+                    "refresh offerings OK current=\(current.identifier, privacy: .public) packageCount=\(count, privacy: .public) storeProductIDs=\(String(describing: packageIDs), privacy: .public) rcPackageIDs=\(String(describing: rcPackageIDs), privacy: .public)"
                 )
 
                 if current.availablePackages.isEmpty {
+                    subscriptionLog.notice("refresh offerings current has zero packages (check RevenueCat packages / ASC)")
                     lastErrorMessage = "Plans aren’t available yet. Check your default offering and packages in RevenueCat."
                 } else {
                     lastErrorMessage = nil
                 }
             } else {
-                subscriptionLog.debug("offerings.current=nil (no default offering)")
+                subscriptionLog.notice("refresh offerings OK current=nil (no default offering in RevenueCat)")
                 lastErrorMessage = "No default subscription offering in RevenueCat. Set a current offering with packages."
             }
         } catch {
             lastErrorMessage = Self.userFacingRevenueCatOperationError(error)
-            subscriptionLog.error("RevenueCat refresh failed: \(error.localizedDescription, privacy: .public)")
+            let ns = error as NSError
+            subscriptionLog.error(
+                "RevenueCat refresh failed domain=\(ns.domain, privacy: .public) code=\(ns.code, privacy: .public) description=\(ns.localizedDescription, privacy: .public)"
+            )
         }
     }
 
