@@ -27,8 +27,15 @@ Use the **same entitlement identifier as production** so `hasPro` works without 
 |-------------------------|--------|
 | **Entitlement** | **`movemark_pro1`** (not `test` — the app never checks `test`) |
 | **Products** | **`testmonthly`**, **`testyearly`** |
-| **Offering** | `default` (current) |
-| **Packages** | Annual/yearly package → **`testyearly`**; Monthly package → **`testmonthly`** |
+| **Offering** | Any identifier (e.g. **`default`** or **`testdefault`**) — see below |
+| **Packages** | e.g. **`src_annual`** → **`testyearly`**, **`src_monthly`** → **`testmonthly`** (identifiers are up to you) |
+
+### Mark the Test Store offering as **Current** (required)
+
+The SDK uses **`offerings.current`** only. RevenueCat returns whichever offering you set as the **current** offering in the dashboard — **not** “the one named `default`” by magic.
+
+- If your Test Store offering is named **`testdefault`**, you **must** set **`testdefault` as Current** while testing with the **`test_…`** key. Otherwise the paywall will still load a different offering (or none).
+- **Alternative (not implemented in the app):** fetch a specific offering by id, e.g. `offerings["testdefault"]`, and keep production’s current offering separate — more work; prefer making the Test offering **Current** for speed.
 
 Attach **both** products to entitlement **`movemark_pro1`**. Order packages **yearly first, monthly second** in the offering so the paywall matches “best value” ordering (the app also sorts yearly ahead when it can infer plan kind).
 
