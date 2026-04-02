@@ -257,6 +257,18 @@ struct MaintenanceLogView: View {
         }
     }
 
+    /// After a successful save, reconcile with the server without surfacing refresh failures as “save failed.”
+    private func reloadIssuesSilentlyAfterSave() async {
+        guard let property = propertyStore.currentProperty else { return }
+        do {
+            issues = try await maintenanceRepo.fetchIssues(propertyId: property.id)
+        } catch {
+            #if DEBUG
+            print("MoveMark: maintenance list refresh after save failed:", error.localizedDescription)
+            #endif
+        }
+    }
+
     private func loadPhotos(_ items: [PhotosPickerItem]) {
         Task { @MainActor in
             var images: [UIImage] = []
@@ -315,7 +327,7 @@ struct MaintenanceLogView: View {
             defer { isSubmitting = false }
 
             do {
-                try await propertyStore.addMaintenance(
+                let inserted = try await propertyStore.addMaintenance(
                     record,
                     photos: photoData,
                     propertyId: property.id,
@@ -328,7 +340,8 @@ struct MaintenanceLogView: View {
                 selectedPhotos = []
                 loadedImages = []
 
-                await loadIssues()
+                issues.insert(inserted, at: 0)
+                await reloadIssuesSilentlyAfterSave()
             } catch {
                 errorMessage = userFacingMaintenanceError(from: error)
             }

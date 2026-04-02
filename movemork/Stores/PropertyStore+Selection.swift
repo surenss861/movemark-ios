@@ -81,6 +81,25 @@ extension PropertyStore {
         }
     }
 
+    /// Re-hydrates the active property after a successful save. Does **not** clear `currentProperty` on failure (avoids false “save failed” when refresh/preview steps flake).
+    func refreshActivePropertyHydration(userId: UUID) async {
+        guard let activeId = activePropertyId,
+              let row = properties.first(where: { $0.id == activeId }) else {
+            await fetchAll(userId: userId)
+            return
+        }
+        do {
+            let (record, issues) = try await hydrateProperty(row, userId: userId)
+            currentProperty = record
+            maintenanceLog = issues
+            errorMessage = nil
+        } catch {
+            #if DEBUG
+            print("MoveMark: refreshActivePropertyHydration failed (keeping local state):", error.localizedDescription)
+            #endif
+        }
+    }
+
     /// Switches the active property and hydrates it. Call after fetchAll has run so `properties` is populated.
     func selectProperty(id: UUID, userId: UUID) async {
         guard properties.contains(where: { $0.id == id }) else { return }

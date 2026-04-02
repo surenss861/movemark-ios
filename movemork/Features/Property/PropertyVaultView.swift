@@ -756,22 +756,19 @@ struct PropertyVaultView: View {
         lastKnownExportReady = newExportReady
     }
 
-    private func bucket(for docType: String) -> String {
-        switch docType {
-        case "lease": return "leases"
-        case "deposit-receipt": return "deposit-receipts"
-        case "listing-screenshot": return "listing-screenshots"
-        case "cleaning_receipt", "utility_record", "move_out_invoice", "other": return "documents"
-        default: return "documents"
-        }
-    }
-
     private func docRow(for documentType: String) -> PropertyDocumentRow? {
-        documentRows.first { $0.documentType == documentType }
+        let keys = Set(DocumentRepository.documentTypeQueryKeys(documentType))
+        return documentRows.first { keys.contains($0.documentType) }
     }
 
     private func hasDoc(_ type: VaultDocumentType) -> Bool {
-        property.vaultDocuments.contains(type.rawValue)
+        let keys = DocumentRepository.documentTypeQueryKeys(type.rawValue)
+        return keys.contains { property.vaultDocuments.contains($0) }
+    }
+
+    private func hasVaultDocMatching(_ docType: String) -> Bool {
+        let keys = DocumentRepository.documentTypeQueryKeys(docType)
+        return keys.contains { property.vaultDocuments.contains($0) }
     }
 
     private func startUpload(for docType: VaultDocumentType) {
@@ -799,7 +796,10 @@ struct PropertyVaultView: View {
             return
         }
         do {
-            let url = try await documentRepo.signedURL(bucket: bucket(for: type.rawValue), path: row.filePath)
+            let url = try await documentRepo.signedURL(
+                bucket: DocumentRepository.storageBucket(forDocumentType: row.documentType),
+                path: row.filePath
+            )
             await MainActor.run {
                 UIApplication.shared.open(url)
             }
@@ -840,7 +840,8 @@ struct PropertyVaultView: View {
         Task { @MainActor in
             defer { isUploading = false }
             do {
-                if property.vaultDocuments.contains(docType) {
+                let canonicalType = DocumentRepository.normalizedDocumentType(docType)
+                if hasVaultDocMatching(docType) {
                     try await documentRepo.deleteDocuments(propertyId: property.id, documentType: docType)
                 }
                 guard let data = try await item.loadTransferable(type: Data.self) else { return }
@@ -851,15 +852,15 @@ struct PropertyVaultView: View {
                     compressed = data
                 }
                 let fileName = "\(UUID()).jpg"
-                let path = "\(userId)/\(property.id)/\(docType)/\(fileName)"
-                let targetBucket = bucket(for: docType)
+                let path = "\(userId)/\(property.id)/\(canonicalType)/\(fileName)"
+                let targetBucket = DocumentRepository.storageBucket(forDocumentType: canonicalType)
                 _ = try await documentRepo.uploadDocument(data: compressed, bucket: targetBucket, path: path)
 
                 let row = PropertyDocumentRow(
                     id: UUID(),
                     propertyId: property.id,
                     userId: userId,
-                    documentType: docType,
+                    documentType: canonicalType,
                     filePath: path,
                     fileName: fileName,
                     uploadedAt: nil,
@@ -869,7 +870,7 @@ struct PropertyVaultView: View {
                 await propertyStore.refreshDocuments(propertyId: property.id)
                 await loadDocumentRows()
 
-                if let type = VaultDocumentType(rawValue: docType) {
+                if let type = VaultDocumentType(rawValue: canonicalType) {
                     evaluateWorkflowFeedback(
                         documentName: type.displayTitle,
                         documentType: type
@@ -895,22 +896,23 @@ struct PropertyVaultView: View {
         Task { @MainActor in
             defer { isUploading = false }
             do {
-                if property.vaultDocuments.contains(docType) {
+                let canonicalType = DocumentRepository.normalizedDocumentType(docType)
+                if hasVaultDocMatching(docType) {
                     try await documentRepo.deleteDocuments(propertyId: property.id, documentType: docType)
                 }
                 guard url.startAccessingSecurityScopedResource() else { return }
                 defer { url.stopAccessingSecurityScopedResource() }
                 let data = try Data(contentsOf: url)
                 let fileName = url.lastPathComponent
-                let path = "\(userId)/\(property.id)/\(docType)/\(UUID().uuidString)-\(fileName)"
-                let targetBucket = bucket(for: docType)
+                let path = "\(userId)/\(property.id)/\(canonicalType)/\(UUID().uuidString)-\(fileName)"
+                let targetBucket = DocumentRepository.storageBucket(forDocumentType: canonicalType)
                 _ = try await documentRepo.uploadDocument(data: data, bucket: targetBucket, path: path)
 
                 let row = PropertyDocumentRow(
                     id: UUID(),
                     propertyId: property.id,
                     userId: userId,
-                    documentType: docType,
+                    documentType: canonicalType,
                     filePath: path,
                     fileName: fileName,
                     uploadedAt: nil,
@@ -920,7 +922,7 @@ struct PropertyVaultView: View {
                 await propertyStore.refreshDocuments(propertyId: property.id)
                 await loadDocumentRows()
 
-                if let type = VaultDocumentType(rawValue: docType) {
+                if let type = VaultDocumentType(rawValue: canonicalType) {
                     evaluateWorkflowFeedback(
                         documentName: type.displayTitle,
                         documentType: type

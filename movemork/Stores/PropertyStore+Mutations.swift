@@ -170,7 +170,14 @@ extension PropertyStore {
             try? await inspectionRepo.insertItemTags(inspectionItemId: itemId, tagNames: evidence.issueTags)
         }
 
-        await fetchAll(userId: userId)
+        applyOptimisticMoveInEvidence(
+            roomID: roomID,
+            itemId: itemId,
+            evidence: evidence,
+            photoCount: photos.count,
+            propertyId: propertyId
+        )
+        await refreshActivePropertyHydration(userId: userId)
     }
 
     func addMoveOutEvidence(to roomID: UUID, evidence: EvidenceRecord, photos: [Data], propertyId: UUID, userId: UUID) async throws {
@@ -208,12 +215,20 @@ extension PropertyStore {
             )
         }
 
-        await fetchAll(userId: userId)
+        applyOptimisticMoveOutEvidence(
+            roomID: roomID,
+            itemId: itemId,
+            evidence: evidence,
+            photoCount: photos.count,
+            propertyId: propertyId
+        )
+        await refreshActivePropertyHydration(userId: userId)
     }
 
     func deleteEvidence(entryId: UUID, propertyId: UUID, userId: UUID) async throws {
         try await inspectionRepo.deleteInspectionItem(id: entryId)
-        await fetchAll(userId: userId)
+        applyOptimisticDeleteEvidence(entryId: entryId, propertyId: propertyId)
+        await refreshActivePropertyHydration(userId: userId)
     }
 
     func updateEvidence(entryId: UUID, title: String, notes: String, tags: [String], condition: RoomRecord.ConditionRating, propertyId: UUID, userId: UUID) async throws {
@@ -230,7 +245,7 @@ extension PropertyStore {
         if !tags.isEmpty {
             try? await inspectionRepo.insertItemTags(inspectionItemId: entryId, tagNames: tags)
         }
-        await fetchAll(userId: userId)
+        await refreshActivePropertyHydration(userId: userId)
     }
 
     func appendPhotosToEvidence(entryId: UUID, roomId: UUID, photos: [Data], propertyId: UUID, userId: UUID, isMoveOut: Bool) async throws {
@@ -242,10 +257,17 @@ extension PropertyStore {
             isMoveOut: isMoveOut,
             photos: photos
         )
-        await fetchAll(userId: userId)
+        applyOptimisticAppendPhotos(
+            entryId: entryId,
+            roomId: roomId,
+            addedCount: photos.count,
+            propertyId: propertyId
+        )
+        await refreshActivePropertyHydration(userId: userId)
     }
 
-    func addMaintenance(_ record: MaintenanceRecord, photos: [Data], propertyId: UUID, userId: UUID) async throws {
+    @discardableResult
+    func addMaintenance(_ record: MaintenanceRecord, photos: [Data], propertyId: UUID, userId: UUID) async throws -> MaintenanceIssueRow {
         let now = ISO8601DateFormatter().string(from: record.createdAt)
         let row = MaintenanceIssueRow(
             id: record.id,
@@ -278,7 +300,22 @@ extension PropertyStore {
             )
         }
 
+        if currentProperty?.id == propertyId {
+            let created = ISO8601DateFormatter().date(from: inserted.dateReported ?? inserted.dateDiscovered ?? "") ?? Date()
+            let newEntry = MaintenanceRecord(
+                id: inserted.id,
+                title: inserted.title,
+                category: inserted.category ?? "General",
+                details: inserted.description ?? "",
+                status: .open,
+                createdAt: created,
+                landlordResponse: "",
+                photoCount: photos.count
+            )
+            maintenanceLog.insert(newEntry, at: 0)
+        }
         await refreshMaintenance(propertyId: propertyId)
+        return inserted
     }
 
     /// Refreshes maintenance log from DB (e.g. after creating or updating an issue).
@@ -301,5 +338,84 @@ extension PropertyStore {
         } catch {
             // Non-fatal; list may have already refreshed in the view
         }
+    }
+
+    private func applyOptimisticMoveInEvidence(
+        roomID: UUID,
+        itemId: UUID,
+        evidence: EvidenceRecord,
+        photoCount: Int,
+        propertyId: UUID
+    ) {
+        guard var prop = currentProperty, prop.id == propertyId,
+              let rIdx = prop.rooms.firstIndex(where: { $0.id == roomID }) else { return }
+        let newRec = EvidenceRecord(
+            id: itemId,
+            title: evidence.title,
+            notes: evidence.notes,
+            issueTags: evidence.issueTags,
+            condition: evidence.condition,
+            createdAt: Date(),
+            photoCount: photoCount,
+            photos: [],
+            stage: .moveIn
+        )
+        prop.rooms[rIdx].evidence.insert(newRec, at: 0)
+        currentProperty = prop
+    }
+
+    private func applyOptimisticMoveOutEvidence(
+        roomID: UUID,
+        itemId: UUID,
+        evidence: EvidenceRecord,
+        photoCount: Int,
+        propertyId: UUID
+    ) {
+        guard var prop = currentProperty, prop.id == propertyId,
+              let rIdx = prop.rooms.firstIndex(where: { $0.id == roomID }) else { return }
+        let newRec = EvidenceRecord(
+            id: itemId,
+            title: evidence.title,
+            notes: evidence.notes,
+            issueTags: evidence.issueTags,
+            condition: evidence.condition,
+            createdAt: Date(),
+            photoCount: photoCount,
+            photos: [],
+            stage: .moveOut
+        )
+        prop.rooms[rIdx].moveOutEvidence.insert(newRec, at: 0)
+        currentProperty = prop
+    }
+
+    private func applyOptimisticAppendPhotos(
+        entryId: UUID,
+        roomId: UUID,
+        addedCount: Int,
+        propertyId: UUID
+    ) {
+        guard var prop = currentProperty, prop.id == propertyId,
+              let rIdx = prop.rooms.firstIndex(where: { $0.id == roomId }) else { return }
+        var room = prop.rooms[rIdx]
+        if let eIdx = room.evidence.firstIndex(where: { $0.id == entryId }) {
+            room.evidence[eIdx].photoCount += addedCount
+            prop.rooms[rIdx] = room
+            currentProperty = prop
+            return
+        }
+        if let eIdx = room.moveOutEvidence.firstIndex(where: { $0.id == entryId }) {
+            room.moveOutEvidence[eIdx].photoCount += addedCount
+            prop.rooms[rIdx] = room
+            currentProperty = prop
+        }
+    }
+
+    private func applyOptimisticDeleteEvidence(entryId: UUID, propertyId: UUID) {
+        guard var prop = currentProperty, prop.id == propertyId else { return }
+        for i in prop.rooms.indices {
+            prop.rooms[i].evidence.removeAll { $0.id == entryId }
+            prop.rooms[i].moveOutEvidence.removeAll { $0.id == entryId }
+        }
+        currentProperty = prop
     }
 }

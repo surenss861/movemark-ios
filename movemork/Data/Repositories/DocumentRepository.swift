@@ -9,11 +9,11 @@
 import Foundation
 import Supabase
 
-/// Supporting document types; raw values match DB document_type and storage.
+/// Supporting document types; raw values match `property_documents.document_type` CHECK / DB enums (snake_case).
 enum VaultDocumentType: String, CaseIterable {
     case lease = "lease"
-    case depositReceipt = "deposit-receipt"
-    case listingScreenshot = "listing-screenshot"
+    case depositReceipt = "deposit_receipt"
+    case listingScreenshot = "listing_screenshot"
     case cleaningReceipt = "cleaning_receipt"
     case utilityProof = "utility_record"
     case moveOutInvoice = "move_out_invoice"
@@ -60,12 +60,36 @@ struct PropertyDocumentRow: Codable, Identifiable {
 
 struct DocumentRepository {
 
-    /// Bucket name for a given document type (matches storage layout).
+    /// Canonical `document_type` for DB + storage path segments (legacy app builds used kebab-case for two types).
+    static func normalizedDocumentType(_ raw: String) -> String {
+        switch raw {
+        case "deposit-receipt": return "deposit_receipt"
+        case "listing-screenshot": return "listing_screenshot"
+        default: return raw
+        }
+    }
+
+    /// All `document_type` values to match when querying or deleting (current + legacy).
+    static func documentTypeQueryKeys(_ raw: String) -> [String] {
+        let n = normalizedDocumentType(raw)
+        var keys: Set<String> = [n, raw]
+        if n == "deposit_receipt" { keys.insert("deposit-receipt") }
+        if n == "listing_screenshot" { keys.insert("listing-screenshot") }
+        return Array(keys)
+    }
+
+    /// Storage bucket for a document type string (may be legacy hyphenated).
+    static func storageBucket(forDocumentType raw: String) -> String {
+        bucket(for: normalizedDocumentType(raw))
+    }
+
+    /// Bucket name for a normalized document type.
     private static func bucket(for documentType: String) -> String {
-        switch documentType {
+        let t = normalizedDocumentType(documentType)
+        switch t {
         case "lease": return "leases"
-        case "deposit-receipt": return "deposit-receipts"
-        case "listing-screenshot": return "listing-screenshots"
+        case "deposit_receipt": return "deposit-receipts"
+        case "listing_screenshot": return "listing-screenshots"
         case "cleaning_receipt", "utility_record", "move_out_invoice", "other": return "documents"
         default: return "documents"
         }
@@ -96,14 +120,19 @@ struct DocumentRepository {
             .value
     }
 
-    /// Fetch documents for a property and optional document type filter.
+    /// Fetch documents for a property and optional document type filter (includes legacy type spellings).
     func fetchDocuments(propertyId: UUID, documentType: String) async throws -> [PropertyDocumentRow] {
         var query = supabase
             .from("property_documents")
             .select()
             .eq("property_id", value: propertyId)
         if !documentType.isEmpty {
-            query = query.eq("document_type", value: documentType)
+            let keys = Self.documentTypeQueryKeys(documentType)
+            if keys.count == 1 {
+                query = query.eq("document_type", value: keys[0])
+            } else {
+                query = query.in("document_type", values: keys)
+            }
         }
         return try await query
             .order("uploaded_at", ascending: false)
@@ -155,20 +184,26 @@ struct DocumentRepository {
             .execute()
     }
 
-    /// Deletes all document rows for the given property and type; removes each file from storage first (e.g. before replace).
+    /// Deletes all document rows for the given property and type (canonical or legacy spelling).
     func deleteDocuments(propertyId: UUID, documentType: String) async throws {
-        let rows: [PropertyDocumentRow] = try await fetchDocuments(propertyId: propertyId, documentType: documentType)
-        for row in rows {
-            for bucketName in Self.bucketCandidates(for: documentType) {
+        let keys = Self.documentTypeQueryKeys(documentType)
+        let rows = try await fetchDocuments(propertyId: propertyId, documentType: documentType)
+        var seen = Set<UUID>()
+        for row in rows where seen.insert(row.id).inserted {
+            for bucketName in Self.bucketCandidates(for: row.documentType) {
                 try? await removeFromStorage(bucket: bucketName, path: row.filePath)
             }
         }
-        try await supabase
+        var del = supabase
             .from("property_documents")
             .delete()
             .eq("property_id", value: propertyId)
-            .eq("document_type", value: documentType)
-            .execute()
+        if keys.count == 1 {
+            del = del.eq("document_type", value: keys[0])
+        } else {
+            del = del.in("document_type", values: keys)
+        }
+        try await del.execute()
     }
 
     func signedURL(bucket: String, path: String) async throws -> URL {

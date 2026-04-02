@@ -123,7 +123,9 @@ extension PropertyStore {
 
     func uploadedSupportingRecordCount(for property: PropertyRecord) -> Int {
         let uploaded = Set(property.vaultDocuments)
-        return Self.requiredVaultDocumentTypes.filter { uploaded.contains($0.rawValue) }.count
+        return Self.requiredVaultDocumentTypes.filter { type in
+            DocumentRepository.documentTypeQueryKeys(type.rawValue).contains { uploaded.contains($0) }
+        }.count
     }
 
     func missingSupportingRecordCount(for property: PropertyRecord) -> Int {
@@ -167,7 +169,9 @@ extension PropertyStore {
         if let room = nextRoomToCapture(for: property), room.evidence.isEmpty {
             return .captureRoom(roomID: room.id, roomName: room.name)
         }
-        if let missingDoc = Self.requiredVaultDocumentTypes.first(where: { !property.vaultDocuments.contains($0.rawValue) }) {
+        if let missingDoc = Self.requiredVaultDocumentTypes.first(where: { type in
+            !DocumentRepository.documentTypeQueryKeys(type.rawValue).contains { property.vaultDocuments.contains($0) }
+        }) {
             return .uploadDocument(missingDoc)
         }
         let issues = openIssueCount(for: property)

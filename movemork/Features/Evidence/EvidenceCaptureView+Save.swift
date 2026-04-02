@@ -77,8 +77,8 @@ extension EvidenceCaptureView {
                 selectedItems = []
                 loadedImages = []
                 successMessage = moveOutMode
-                    ? "Move-out proof saved to your vault."
-                    : "Proof saved to your vault."
+                    ? "Move-out proof saved. Thumbnails may take a moment to appear."
+                    : "Proof saved. Thumbnails may take a moment to appear."
 
                 MMHaptics.success()
 
