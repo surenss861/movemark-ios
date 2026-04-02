@@ -26,8 +26,8 @@ Run these in order (by filename). Use Supabase Dashboard SQL editor or `supabase
 | `20260328000001_exports_requested_completed_at.sql` | Adds `exports.requested_at` and `exports.completed_at` (idempotent) |
 | `20260329000001_storage_buckets_and_policies.sql` | Creates Storage buckets (`inspection-media`, `maintenance-media`, `exports`, vault doc buckets, `documents`) + RLS on `storage.objects` (own `{user_id}/…` prefix) |
 | `20260402000001_table_rls_evidence_docs_maintenance.sql` | Targeted table RLS (guarded if tables missing); prefer `20260402000003` for full app hardening |
-| `20260402000003_full_app_rls_hardening.sql` | Full RLS for all user-owned paths: `properties`, `rooms`, `inspections`, `inspection_items`, `inspection_item_tags`, `evidence_files`, `maintenance_issues`, `property_documents`, move-out + dispute + `exports` |
-| `20260402000004_app_query_indexes.sql` | Indexes for common filters (`property_documents`, `evidence_files`, `inspection_items`, `maintenance_issues`, `exports`) |
+| `20260402000003_full_app_rls_hardening.sql` | Full RLS for user-owned paths; **skips** any table that does not exist (`to_regclass` + `NOTICE`). Safe on empty DBs — but the app still needs the real schema on the linked project |
+| `20260402000004_app_query_indexes.sql` | Same guard pattern: creates indexes only when each target table exists |
 
 ## When `db push` says “Remote migration versions not found in local migrations directory”
 
@@ -59,7 +59,9 @@ Older partial migration (skips missing tables via `to_regclass`):
 npx supabase@latest db query --linked -f supabase/migrations/20260402000001_table_rls_evidence_docs_maintenance.sql --yes
 ```
 
-Or paste SQL into **Supabase Dashboard → SQL Editor → Run**. `20260402000003` assumes the full MoveMark `public` schema exists (same as the iOS app). If a run fails with “relation … does not exist”, link the CLI to the project that actually hosts the app data.
+Or paste SQL into **Supabase Dashboard → SQL Editor → Run**.
+
+**If every table was skipped** (only `NOTICE movemark rls: skipped public.properties…` in the logs): your database has **no MoveMark tables**. Run SQL against the **same** Supabase project as the app (`supabase link` → pick that project’s ref), or restore schema first (`db pull` from production, or your original schema migration). RLS migrations do not create `properties` or other tables.
 
 **Repair migration history (then use `db push` again):** only if you accept reconciling history—**back up first**. The CLI suggested marking remote-only versions as reverted:
 
