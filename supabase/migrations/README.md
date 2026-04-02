@@ -52,6 +52,8 @@ npx supabase@latest db query --linked -f supabase/migrations/20260402000001_tabl
 
 Or paste the contents of that file into **Supabase Dashboard → SQL Editor → Run**.
 
+The migration uses `to_regclass(...)` guards: if a table is missing (e.g. `inspection_items`), that section is skipped and Postgres emits a **NOTICE**. Room/move-out flows still need **`public.inspection_items`** to exist—if it never appears, pull schema from the canonical project or add the table before expecting those saves to work.
+
 **Repair migration history (then use `db push` again):** only if you accept reconciling history—**back up first**. The CLI suggested marking remote-only versions as reverted:
 
 ```bash
