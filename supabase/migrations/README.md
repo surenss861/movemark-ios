@@ -25,6 +25,7 @@ Run these in order (by filename). Use Supabase Dashboard SQL editor or `supabase
 | `20260312000008_rls_policies_indirect.sql` | RLS policies for rooms, inspection_items, evidence_files, issue_tags, inspection_item_tags, dispute_evidence_links |
 | `20260328000001_exports_requested_completed_at.sql` | Adds `exports.requested_at` and `exports.completed_at` (idempotent) |
 | `20260329000001_storage_buckets_and_policies.sql` | Creates Storage buckets (`inspection-media`, `maintenance-media`, `exports`, vault doc buckets, `documents`) + RLS on `storage.objects` (own `{user_id}/…` prefix) |
+| `20260402000001_table_rls_evidence_docs_maintenance.sql` | Table RLS for `inspection_items`, `evidence_files`, `property_documents`, `maintenance_issues` (room evidence / lease / maintenance writes) |
 
 ## When `db push` says “Remote migration versions not found in local migrations directory”
 
@@ -41,6 +42,12 @@ Or:
 
 ```bash
 npx supabase@latest db query --linked -f supabase/migrations/20260329000001_storage_buckets_and_policies.sql --yes
+```
+
+Table RLS (after storage buckets), if room save still hits RLS errors:
+
+```bash
+npx supabase@latest db query --linked -f supabase/migrations/20260402000001_table_rls_evidence_docs_maintenance.sql --yes
 ```
 
 Or paste the contents of that file into **Supabase Dashboard → SQL Editor → Run**.
