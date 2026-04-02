@@ -24,6 +24,35 @@ Run these in order (by filename). Use Supabase Dashboard SQL editor or `supabase
 | `20260312000007_rls_policies_direct.sql` | RLS policies for tables with direct `user_id` |
 | `20260312000008_rls_policies_indirect.sql` | RLS policies for rooms, inspection_items, evidence_files, issue_tags, inspection_item_tags, dispute_evidence_links |
 | `20260328000001_exports_requested_completed_at.sql` | Adds `exports.requested_at` and `exports.completed_at` (idempotent) |
+| `20260329000001_storage_buckets_and_policies.sql` | Creates Storage buckets (`inspection-media`, `maintenance-media`, `exports`, vault doc buckets, `documents`) + RLS on `storage.objects` (own `{user_id}/…` prefix) |
+
+## When `db push` says “Remote migration versions not found in local migrations directory”
+
+The linked database’s `supabase_migrations.schema_migrations` lists versions (e.g. `20260306164304`, `20260306164335`, …) that **are not** files in this repo. The CLI refuses to `db push` until local and remote history agree.
+
+**Unblock uploads (storage) without fixing history:** run the storage migration SQL against the linked project (does not rely on `db push`):
+
+```bash
+cd movemork
+./scripts/apply-storage-buckets-and-policies.sh
+```
+
+Or:
+
+```bash
+npx supabase@latest db query --linked -f supabase/migrations/20260329000001_storage_buckets_and_policies.sql --yes
+```
+
+Or paste the contents of that file into **Supabase Dashboard → SQL Editor → Run**.
+
+**Repair migration history (then use `db push` again):** only if you accept reconciling history—**back up first**. The CLI suggested marking remote-only versions as reverted:
+
+```bash
+npx supabase@latest migration repair --status reverted 20260306164304 20260306164335 20260310095112 20260311210715
+npx supabase@latest db push --yes
+```
+
+If the remote schema was built outside this repo, prefer **`supabase db pull`** (or re-baseline migrations) so local files match production; see [Supabase migration docs](https://supabase.com/docs/guides/cli/managing-environments).
 
 ## Apply one migration when `db push` history diverges
 
@@ -33,7 +62,13 @@ If `supabase db push` complains that remote migration versions are missing local
 npx supabase@latest db query --linked -f supabase/migrations/20260328000001_exports_requested_completed_at.sql --yes
 ```
 
-Or: `./scripts/apply-exports-requested-completed-at.sh`
+Same pattern for storage:
+
+```bash
+npx supabase@latest db query --linked -f supabase/migrations/20260329000001_storage_buckets_and_policies.sql --yes
+```
+
+Or: `./scripts/apply-exports-requested-completed-at.sh` · `./scripts/apply-storage-buckets-and-policies.sh`
 
 ## If policies already exist
 
