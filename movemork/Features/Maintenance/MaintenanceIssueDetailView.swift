@@ -274,7 +274,7 @@ struct MaintenanceIssueDetailView: View {
                         inspectionItemId: nil,
                         maintenanceIssueId: issue.id,
                         filePath: path,
-                        fileType: "image/jpeg",
+                        fileType: "image",
                         capturedAt: Date()
                     )
                 }

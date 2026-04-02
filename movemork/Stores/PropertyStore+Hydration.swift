@@ -40,17 +40,22 @@ extension PropertyStore {
         let moveInTagNames = try await inspectionRepo.fetchItemTagNames(inspectionItemIds: moveInItems.map(\.id))
         let moveOutTagNames = try await inspectionRepo.fetchItemTagNames(inspectionItemIds: moveOutItems.map(\.id))
 
-        var moveInPhotoCountByItem: [UUID: Int] = [:]
-        for file in moveInFiles {
-            if let itemId = file.inspectionItemId {
-                moveInPhotoCountByItem[itemId, default: 0] += 1
-            }
+        let moveInFilesSorted = moveInFiles.sorted {
+            ($0.createdAt ?? $0.capturedAt ?? "") < ($1.createdAt ?? $1.capturedAt ?? "")
         }
-        var moveOutPhotoCountByItem: [UUID: Int] = [:]
-        for file in moveOutFiles {
-            if let itemId = file.inspectionItemId {
-                moveOutPhotoCountByItem[itemId, default: 0] += 1
-            }
+        let moveOutFilesSorted = moveOutFiles.sorted {
+            ($0.createdAt ?? $0.capturedAt ?? "") < ($1.createdAt ?? $1.capturedAt ?? "")
+        }
+
+        var moveInPhotosByItem: [UUID: [EvidencePhoto]] = [:]
+        for file in moveInFilesSorted {
+            guard let itemId = file.inspectionItemId else { continue }
+            moveInPhotosByItem[itemId, default: []].append(EvidencePhoto(id: file.id, filePath: file.filePath))
+        }
+        var moveOutPhotosByItem: [UUID: [EvidencePhoto]] = [:]
+        for file in moveOutFilesSorted {
+            guard let itemId = file.inspectionItemId else { continue }
+            moveOutPhotosByItem[itemId, default: []].append(EvidencePhoto(id: file.id, filePath: file.filePath))
         }
 
         let isoDate = ISO8601DateFormatter()
@@ -60,6 +65,7 @@ extension PropertyStore {
                 .sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
             record.evidence = moveInForRoom.map { item in
                 let (title, notes) = Self.parseInspectionNotes(item.notes, defaultTitle: "Move-in capture")
+                let photos = moveInPhotosByItem[item.id] ?? []
                 return EvidenceRecord(
                     id: item.id,
                     title: title,
@@ -67,7 +73,8 @@ extension PropertyStore {
                     issueTags: moveInTagNames[item.id] ?? [],
                     condition: Self.conditionFromInt(item.conditionRating),
                     createdAt: isoDate.date(from: item.createdAt ?? "") ?? Date(),
-                    photoCount: moveInPhotoCountByItem[item.id] ?? 0,
+                    photoCount: photos.count,
+                    photos: photos,
                     stage: .moveIn
                 )
             }
@@ -75,6 +82,7 @@ extension PropertyStore {
                 .sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
             record.moveOutEvidence = moveOutForRoom.map { item in
                 let (title, notes) = Self.parseInspectionNotes(item.notes, defaultTitle: "Move-out capture")
+                let photos = moveOutPhotosByItem[item.id] ?? []
                 return EvidenceRecord(
                     id: item.id,
                     title: title,
@@ -82,7 +90,8 @@ extension PropertyStore {
                     issueTags: moveOutTagNames[item.id] ?? [],
                     condition: Self.conditionFromInt(item.conditionRating),
                     createdAt: isoDate.date(from: item.createdAt ?? "") ?? Date(),
-                    photoCount: moveOutPhotoCountByItem[item.id] ?? 0,
+                    photoCount: photos.count,
+                    photos: photos,
                     stage: .moveOut
                 )
             }

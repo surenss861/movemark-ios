@@ -7,6 +7,7 @@
 
 import SwiftUI
 import PhotosUI
+import UIKit
 
 /// Fixed issue tags for the picker; must match seeded rows in `issue_tags`. Curated set for cleaner UI.
 fileprivate let fixedIssueTags = [
@@ -75,6 +76,7 @@ struct EvidenceCaptureView: View {
                         existingEntries: existingEntries,
                         roomID: roomID,
                         selectedCondition: selectedCondition,
+                        loadedImages: loadedImages,
                         loadedImageCount: loadedImages.count,
                         moveOutMode: moveOutMode
                     )

@@ -161,7 +161,7 @@ extension PropertyStore {
                 inspectionItemId: itemId,
                 maintenanceIssueId: nil,
                 filePath: path,
-                fileType: "image/jpeg",
+                fileType: "image",
                 capturedAt: Date()
             )
         }
@@ -203,7 +203,7 @@ extension PropertyStore {
                 inspectionItemId: itemId,
                 maintenanceIssueId: nil,
                 filePath: path,
-                fileType: "image/jpeg",
+                fileType: "image",
                 capturedAt: Date()
             )
         }
@@ -273,7 +273,7 @@ extension PropertyStore {
                 inspectionItemId: nil,
                 maintenanceIssueId: inserted.id,
                 filePath: path,
-                fileType: "image/jpeg",
+                fileType: "image",
                 capturedAt: Date()
             )
         }

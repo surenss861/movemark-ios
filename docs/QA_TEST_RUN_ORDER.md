@@ -2,6 +2,8 @@
 
 **One executable sequence.** Run in order. Stop at first failure; fix; re-run from that step. Sign off each phase before moving to the next.
 
+**Product certification (phases P1–P9, paywall out of scope, shared tracker):** [FEATURE_CERTIFICATION.md](./FEATURE_CERTIFICATION.md) and [FEATURE_CERT_TRACKER.csv](./FEATURE_CERT_TRACKER.csv).
+
 Current app shape: **signed-in root = bottom nav (Vaults | Exports | Account)**. Vaults tab = property list; tap property → Property Vault (Proof vault); from there: Walkthrough, Maintenance, Move-out, Dispute builder, Exports.
 
 ---

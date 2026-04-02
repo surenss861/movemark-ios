@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct EvidenceCaptureHero: View {
     let roomName: String
@@ -13,6 +14,8 @@ struct EvidenceCaptureHero: View {
     let existingEntries: [EvidenceRecord]
     let roomID: UUID
     let selectedCondition: RoomRecord.ConditionRating
+    /// In-memory picks before save (real thumbnails in hero strip when non-empty).
+    let loadedImages: [UIImage]
     let loadedImageCount: Int
     let moveOutMode: Bool
 
@@ -114,7 +117,11 @@ struct EvidenceCaptureHero: View {
                 }
 
                 if !existingEntries.isEmpty || loadedImageCount > 0 {
-                    PhotoStripView(count: existingEntries.first?.photoCount ?? max(loadedImageCount, 1))
+                    if !loadedImages.isEmpty {
+                        PhotoStripView(images: loadedImages)
+                    } else {
+                        PhotoStripView(placeholderCount: existingEntries.first?.photoCount ?? max(loadedImageCount, 1))
+                    }
                 }
 
                 if let first = existingEntries.first, !first.issueTags.isEmpty {

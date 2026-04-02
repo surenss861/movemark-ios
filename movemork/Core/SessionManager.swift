@@ -300,8 +300,8 @@ final class SessionManager {
         authPhase = .signedIn
     }
 
-    /// Updates the profile full name in DB and local state.
-    func updateProfileFullName(_ name: String) async throws {
+    /// Updates local name immediately; Supabase upsert runs in a fire-and-forget task (not awaited by callers).
+    func updateProfileFullName(_ name: String) throws {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw AuthError.validation("Enter your full name.")
@@ -309,12 +309,34 @@ final class SessionManager {
         guard let uid = userId else {
             throw AuthError.validation("Not authenticated.")
         }
-        try await supabase
-            .from("profiles")
-            .update(ProfileFullNameUpdate(fullName: trimmed))
-            .eq("id", value: uid)
-            .execute()
+
+        let emailForSync: String? = userEmail.isEmpty ? nil : userEmail
+
         firstName = trimmed
+
+        Task { @MainActor [weak self] in
+            await self?.persistProfileFullNameToSupabase(uid: uid, fullName: trimmed, email: emailForSync)
+        }
+    }
+
+    /// Fire-and-forget profile name sync (upsert). Errors do not propagate to callers.
+    private func persistProfileFullNameToSupabase(uid: UUID, fullName: String, email: String?) async {
+        #if DEBUG
+        print("updateProfileFullName remote sync start")
+        #endif
+        do {
+            try await supabase
+                .from("profiles")
+                .upsert(ProfileUpsert(id: uid, email: email, fullName: fullName))
+                .execute()
+            #if DEBUG
+            print("updateProfileFullName remote sync OK")
+            #endif
+        } catch {
+            #if DEBUG
+            print("updateProfileFullName remote sync failed: \(error.localizedDescription)")
+            #endif
+        }
     }
 
     /// Sends a password reset email to the given address (e.g. current user's email).
@@ -388,9 +410,23 @@ private struct OnboardingUpdate: Codable {
     }
 }
 
-private struct ProfileFullNameUpdate: Codable {
+private struct ProfileUpsert: Encodable {
+    let id: UUID
+    let email: String?
     let fullName: String
+
     enum CodingKeys: String, CodingKey {
+        case id
+        case email
         case fullName = "full_name"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(fullName, forKey: .fullName)
+        if let email, !email.isEmpty {
+            try container.encode(email, forKey: .email)
+        }
     }
 }

@@ -87,7 +87,7 @@ struct EvidenceCaptureMediaModule: View {
                             }
 
                             VStack(alignment: .leading, spacing: 8) {
-                                PhotoStripView(count: loadedImages.count)
+                                PhotoStripView(images: loadedImages)
                             }
                             .padding(10)
                             .background(MoveMarkTheme.Colors.fieldFill.opacity(0.62))

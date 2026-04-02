@@ -36,6 +36,7 @@ extension EvidenceCaptureView {
             issueTags: Array(selectedTags),
             condition: selectedCondition,
             photoCount: loadedImages.count,
+            photos: [],
             stage: moveOutMode ? .moveOut : .moveIn
         )
 
@@ -94,6 +95,9 @@ extension EvidenceCaptureView {
                     }
                 }
             } catch {
+                #if DEBUG
+                print("ROOM SAVE FAILED:", error.localizedDescription)
+                #endif
                 errorMessage = userFacingEvidenceError(from: error)
             }
         }

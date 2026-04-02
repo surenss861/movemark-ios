@@ -103,7 +103,7 @@ struct AccountView: View {
             EditNameSheet(
                 currentName: sessionManager.firstName,
                 onSave: { newName in
-                    try await sessionManager.updateProfileFullName(newName)
+                    try sessionManager.updateProfileFullName(newName)
                 }
             )
         }
@@ -444,7 +444,7 @@ struct AccountView: View {
 
 private struct EditNameSheet: View {
     let currentName: String
-    let onSave: (String) async throws -> Void
+    let onSave: (String) throws -> Void
     @Environment(\.dismiss) private var dismiss
 
     @State private var name: String
@@ -455,7 +455,7 @@ private struct EditNameSheet: View {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    init(currentName: String, onSave: @escaping (String) async throws -> Void) {
+    init(currentName: String, onSave: @escaping (String) throws -> Void) {
         self.currentName = currentName
         self.onSave = onSave
         _name = State(initialValue: currentName)
@@ -496,15 +496,13 @@ private struct EditNameSheet: View {
         }
         errorMessage = nil
         isSaving = true
+        defer { isSaving = false }
 
-        Task { @MainActor in
-            defer { isSaving = false }
-            do {
-                try await onSave(nextName)
-                dismiss()
-            } catch {
-                errorMessage = userFacingNameError(from: error)
-            }
+        do {
+            try onSave(nextName)
+            dismiss()
+        } catch {
+            errorMessage = userFacingNameError(from: error)
         }
     }
 
@@ -515,6 +513,9 @@ private struct EditNameSheet: View {
         }
         if raw.contains("duplicate") || raw.contains("violat") || raw.contains("constraint") {
             return "Couldn’t update profile right now. Try again."
+        }
+        if raw.contains("permission") || raw.contains("policy") || raw.contains("row-level") {
+            return "Your profile couldn’t be updated. Please try again."
         }
         return error.localizedDescription
     }

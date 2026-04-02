@@ -8,6 +8,7 @@
 import Foundation
 import Supabase
 
+/// Full row for reads (`select`). Do not use for `upsert` — only send columns that exist on `public.inspections`.
 struct InspectionRow: Codable, Identifiable {
     let id: UUID
     let propertyId: UUID
@@ -27,6 +28,21 @@ struct InspectionRow: Codable, Identifiable {
         case completedAt = "completed_at"
         case overallNotes = "overall_notes"
         case createdAt = "created_at"
+    }
+}
+
+/// Insert-only payload for `inspections`. Do not send a random `id` on conflict updates — that breaks `inspection_items.inspection_id` FKs.
+private struct InspectionInsertRow: Encodable {
+    let id: UUID
+    let propertyId: UUID
+    let userId: UUID
+    let inspectionType: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case propertyId = "property_id"
+        case userId = "user_id"
+        case inspectionType = "inspection_type"
     }
 }
 
@@ -99,23 +115,53 @@ struct InspectionRepository {
         }
     }
 
+    /// Returns the stable `inspections.id` for `(property_id, user_id, inspection_type)`.
+    /// Select-then-insert avoids upserting a new random `id` onto an existing row, which violates `inspection_items_inspection_id_fkey`.
     func upsertInspection(propertyId: UUID, userId: UUID, type: String) async throws -> UUID {
-        let row = InspectionRow(
-            id: UUID(),
-            propertyId: propertyId,
-            userId: userId,
-            inspectionType: normalizedInspectionType(type)
-        )
+        let normalizedType = normalizedInspectionType(type)
 
-        let result: InspectionRow = try await supabase
+        let existing: [InspectionRow] = try await supabase
             .from("inspections")
-            .upsert(row, onConflict: "property_id,user_id,inspection_type")
+            .select()
+            .eq("property_id", value: propertyId)
+            .eq("user_id", value: userId)
+            .eq("inspection_type", value: normalizedType)
+            .limit(1)
+            .execute()
+            .value
+
+        if let id = existing.first?.id {
+            #if DEBUG
+            print("upsertInspection reuse existing id:", id)
+            #endif
+            return id
+        }
+
+        #if DEBUG
+        print("upsertInspection inserting new row type=\(normalizedType) propertyId=\(propertyId)")
+        #endif
+
+        let newId = UUID()
+        let inserted: InspectionRow = try await supabase
+            .from("inspections")
+            .insert(
+                InspectionInsertRow(
+                    id: newId,
+                    propertyId: propertyId,
+                    userId: userId,
+                    inspectionType: normalizedType
+                )
+            )
             .select()
             .single()
             .execute()
             .value
 
-        return result.id
+        #if DEBUG
+        print("upsertInspection inserted new id:", inserted.id)
+        #endif
+
+        return inserted.id
     }
 
     func insertInspectionItem(inspectionId: UUID, roomId: UUID, notes: String, conditionRating: Int) async throws -> UUID {
@@ -337,7 +383,7 @@ struct InspectionRepository {
                 inspectionItemId: inspectionItemId,
                 maintenanceIssueId: nil,
                 filePath: path,
-                fileType: "image/jpeg",
+                fileType: "image",
                 capturedAt: Date()
             )
         }
