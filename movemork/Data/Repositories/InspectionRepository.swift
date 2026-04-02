@@ -3,6 +3,7 @@
 //  movemork
 //
 //  MoveMark — Inspection, evidence, and photo data access.
+//  Evidence uploads use `{userId}/{propertyId}/move-in|move-out/{roomId}/...` under `inspection-media` (matches storage RLS).
 //
 
 import Foundation

@@ -469,27 +469,14 @@ struct MoveOutFoundationView: View {
     }
 
     private func userFacingMoveOutError(from error: Error) -> String {
-        let raw = error.localizedDescription.lowercased()
-        if raw.contains("not authenticated") || raw.contains("jwt") || raw.contains("session") {
-            return "Session expired. Please sign in again."
-        }
-        if raw.contains("network") || raw.contains("offline") || raw.contains("internet") {
-            return "No connection. Check your internet and try again."
-        }
-        return "Couldn’t update move-out checklist. Try again."
+        UserFacingDatabaseError.message(from: error, fallback: "Couldn’t update move-out checklist. Try again.")
     }
 
     private func userFacingMoveOutExportError(from error: Error) -> String {
-        let raw = error.localizedDescription.lowercased()
-        if raw.contains("not authenticated") || raw.contains("jwt") || raw.contains("session") {
-            return "Session expired. Please sign in again."
-        }
-        if raw.contains("bucket") || raw.contains("storage") || raw.contains("not found") {
+        let lower = error.localizedDescription.lowercased()
+        if lower.contains("bucket") || lower.contains("storage") || (lower.contains("not found") && (lower.contains("object") || lower.contains("bucket"))) {
             return "Export storage is unavailable right now. Try again soon."
         }
-        if raw.contains("network") || raw.contains("offline") || raw.contains("internet") {
-            return "No connection. Check your internet and try again."
-        }
-        return "Couldn’t export move-out report. Try again."
+        return UserFacingDatabaseError.message(from: error, fallback: "Couldn’t export move-out report. Try again.")
     }
 }

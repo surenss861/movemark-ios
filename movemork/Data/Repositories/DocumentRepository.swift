@@ -3,6 +3,7 @@
 //  movemork
 //
 //  MoveMark — Property document data access.
+//  Storage paths must stay under `{userId}/{propertyId}/...` so `storage.objects` RLS (auth.uid() prefix) matches uploads.
 //
 
 import Foundation

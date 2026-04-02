@@ -25,7 +25,9 @@ Run these in order (by filename). Use Supabase Dashboard SQL editor or `supabase
 | `20260312000008_rls_policies_indirect.sql` | RLS policies for rooms, inspection_items, evidence_files, issue_tags, inspection_item_tags, dispute_evidence_links |
 | `20260328000001_exports_requested_completed_at.sql` | Adds `exports.requested_at` and `exports.completed_at` (idempotent) |
 | `20260329000001_storage_buckets_and_policies.sql` | Creates Storage buckets (`inspection-media`, `maintenance-media`, `exports`, vault doc buckets, `documents`) + RLS on `storage.objects` (own `{user_id}/…` prefix) |
-| `20260402000001_table_rls_evidence_docs_maintenance.sql` | Table RLS for `inspection_items`, `evidence_files`, `property_documents`, `maintenance_issues` (room evidence / lease / maintenance writes) |
+| `20260402000001_table_rls_evidence_docs_maintenance.sql` | Targeted table RLS (guarded if tables missing); prefer `20260402000003` for full app hardening |
+| `20260402000003_full_app_rls_hardening.sql` | Full RLS for all user-owned paths: `properties`, `rooms`, `inspections`, `inspection_items`, `inspection_item_tags`, `evidence_files`, `maintenance_issues`, `property_documents`, move-out + dispute + `exports` |
+| `20260402000004_app_query_indexes.sql` | Indexes for common filters (`property_documents`, `evidence_files`, `inspection_items`, `maintenance_issues`, `exports`) |
 
 ## When `db push` says “Remote migration versions not found in local migrations directory”
 
@@ -44,15 +46,20 @@ Or:
 npx supabase@latest db query --linked -f supabase/migrations/20260329000001_storage_buckets_and_policies.sql --yes
 ```
 
-Table RLS (after storage buckets), if room save still hits RLS errors:
+Full table RLS (recommended after storage buckets):
+
+```bash
+npx supabase@latest db query --linked -f supabase/migrations/20260402000003_full_app_rls_hardening.sql --yes
+npx supabase@latest db query --linked -f supabase/migrations/20260402000004_app_query_indexes.sql --yes
+```
+
+Older partial migration (skips missing tables via `to_regclass`):
 
 ```bash
 npx supabase@latest db query --linked -f supabase/migrations/20260402000001_table_rls_evidence_docs_maintenance.sql --yes
 ```
 
-Or paste the contents of that file into **Supabase Dashboard → SQL Editor → Run**.
-
-The migration uses `to_regclass(...)` guards: if a table is missing (e.g. `inspection_items`), that section is skipped and Postgres emits a **NOTICE**. Room/move-out flows still need **`public.inspection_items`** to exist—if it never appears, pull schema from the canonical project or add the table before expecting those saves to work.
+Or paste SQL into **Supabase Dashboard → SQL Editor → Run**. `20260402000003` assumes the full MoveMark `public` schema exists (same as the iOS app). If a run fails with “relation … does not exist”, link the CLI to the project that actually hosts the app data.
 
 **Repair migration history (then use `db push` again):** only if you accept reconciling history—**back up first**. The CLI suggested marking remote-only versions as reverted:
 

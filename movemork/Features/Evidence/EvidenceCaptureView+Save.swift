@@ -191,19 +191,6 @@ extension EvidenceCaptureView {
     }
 
     private func userFacingEvidenceError(from error: Error) -> String {
-        let raw = error.localizedDescription.lowercased()
-        if raw.contains("not authenticated") || raw.contains("jwt") || raw.contains("session") {
-            return "Session expired. Please sign in again."
-        }
-        if raw.contains("inspection") || raw.contains("type_check") || raw.contains("constraint") {
-            return "Couldn’t save proof right now. Try again."
-        }
-        if raw.contains("bucket") || raw.contains("storage") || raw.contains("not found") {
-            return "Upload storage is unavailable right now. Try again soon."
-        }
-        if raw.contains("network") || raw.contains("offline") || raw.contains("internet") {
-            return "No connection. Check your internet and try again."
-        }
-        return "Couldn’t save proof. Try again."
+        UserFacingDatabaseError.message(from: error, fallback: "Couldn’t save proof. Try again.")
     }
 }

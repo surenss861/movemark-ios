@@ -3,6 +3,7 @@
 //  movemork
 //
 //  MoveMark — Maintenance issue data access.
+//  Attachment paths use `{userId}/{propertyId}/{issueId}/...` for `maintenance-media` RLS.
 //
 
 import Foundation

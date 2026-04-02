@@ -936,17 +936,11 @@ struct PropertyVaultView: View {
     }
 
     private func userFacingDocumentError(from error: Error) -> String {
-        let message = error.localizedDescription.lowercased()
-        if message.contains("bucket") || message.contains("not found") || message.contains("storage") {
+        let lower = error.localizedDescription.lowercased()
+        if lower.contains("bucket") || lower.contains("storage") || (lower.contains("not found") && (lower.contains("object") || lower.contains("bucket"))) {
             return "Upload unavailable. Supporting records aren’t available right now. Try again soon."
         }
-        if message.contains("jwt") || message.contains("not authenticated") || message.contains("session") {
-            return "Session expired. Please sign in again."
-        }
-        if message.contains("network") || message.contains("offline") || message.contains("internet") {
-            return "No connection. Check your internet and try again."
-        }
-        return "Couldn’t upload supporting record. Try again."
+        return UserFacingDatabaseError.message(from: error, fallback: "Couldn’t upload supporting record. Try again.")
     }
 }
 

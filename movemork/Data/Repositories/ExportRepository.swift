@@ -3,6 +3,7 @@
 //  movemork
 //
 //  MoveMark — Export record and file storage access.
+//  PDFs upload to `exports` under `{userId}/{propertyId}/...` (matches storage RLS). Formal packet rows may store HTTPS URLs instead.
 //
 
 import Foundation

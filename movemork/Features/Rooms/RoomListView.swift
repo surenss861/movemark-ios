@@ -416,17 +416,11 @@ struct RoomListView: View {
     }
 
     private func userFacingExportError(from error: Error) -> String {
-        let raw = error.localizedDescription.lowercased()
-        if raw.contains("not authenticated") || raw.contains("jwt") || raw.contains("session") {
-            return "Session expired. Please sign in again."
-        }
-        if raw.contains("network") || raw.contains("offline") || raw.contains("internet") {
-            return "No connection. Check your internet and try again."
-        }
-        if raw.contains("property not found") {
+        let lower = error.localizedDescription.lowercased()
+        if lower.contains("property not found") {
             return "Couldn’t queue export for this property. Refresh and try again."
         }
-        return "Couldn’t complete move-in export. Try again."
+        return UserFacingDatabaseError.message(from: error, fallback: "Couldn’t complete move-in export. Try again.")
     }
 }
 
