@@ -9,15 +9,24 @@ import SwiftUI
 import NukeUI
 
 struct VaultCoverBackground: View {
+    let propertyId: UUID
     let imageURL: URL?
     let fallbackStyle: VaultFallbackStyle
     let isPressed: Bool
     var isEmphasized: Bool = false
+    /// Mint fresh signed URLs and reload Nuke when the cover image fails (e.g. expired token).
+    var onPreviewReloadRequested: (() -> Void)? = nil
 
     var body: some View {
         Group {
             if let url = imageURL {
                 LazyImage(url: url, resizingMode: .aspectFill)
+                    .onFailure { _ in
+                        Task {
+                            await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
+                            await MainActor.run { onPreviewReloadRequested?() }
+                        }
+                    }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 VaultCoverFallback(style: fallbackStyle, isPressed: isPressed, isEmphasized: isEmphasized)

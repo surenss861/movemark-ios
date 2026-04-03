@@ -19,7 +19,8 @@ struct EditPropertyView: View {
     @State private var city: String
     @State private var region: String
     @State private var postalCode: String
-    @State private var country: String
+    @State private var selectedCountryOption: String
+    @State private var customCountry: String
     @State private var moveInDate: Date
     @State private var leaseStartDate: Date
     @State private var leaseEndDate: Date
@@ -40,7 +41,15 @@ struct EditPropertyView: View {
         _city = State(initialValue: property.city)
         _region = State(initialValue: property.provinceState)
         _postalCode = State(initialValue: property.postalCode)
-        _country = State(initialValue: property.country.isEmpty ? "CA" : property.country)
+        let storedCountry = property.country.isEmpty ? "CA" : property.country
+        let fixedOptions = ["CA", "US", "GB", "AU", "NZ"]
+        if fixedOptions.contains(storedCountry) {
+            _selectedCountryOption = State(initialValue: storedCountry)
+            _customCountry = State(initialValue: "")
+        } else {
+            _selectedCountryOption = State(initialValue: "Other")
+            _customCountry = State(initialValue: storedCountry)
+        }
         _moveInDate = State(initialValue: property.moveInDate)
         _leaseStartDate = State(initialValue: property.leaseStartDate ?? property.moveInDate)
         _leaseEndDate = State(initialValue: property.leaseEndDate)
@@ -51,6 +60,12 @@ struct EditPropertyView: View {
         _rentAmount = State(initialValue: property.rentAmount.filter { $0.isNumber || $0 == "." })
     }
 
+    private var countryValue: String {
+        selectedCountryOption == "Other" ? customCountry : selectedCountryOption
+    }
+
+    private let supportedCountries = ["CA", "US", "GB", "AU", "NZ"]
+
     private var input: CreatePropertyInput {
         CreatePropertyInput(
             name: name,
@@ -59,7 +74,7 @@ struct EditPropertyView: View {
             city: city,
             region: region,
             postalCode: postalCode,
-            country: country,
+            country: countryValue,
             moveInDate: moveInDate,
             leaseStartDate: leaseStartDate,
             leaseEndDate: leaseEndDate,
@@ -137,11 +152,8 @@ struct EditPropertyView: View {
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                             MMTextField(title: "Name", placeholder: "Property manager or landlord", text: $landlordName)
-                            MMTextField(title: "Email", placeholder: "Optional", text: $landlordEmail)
-                                .keyboardType(.emailAddress)
-                                .textInputAutocapitalization(.never)
-                            MMTextField(title: "Phone", placeholder: "Optional", text: $landlordPhone)
-                                .keyboardType(.phonePad)
+                            MMTextField(title: "Email", placeholder: "Optional", text: $landlordEmail, keyboardType: .emailAddress)
+                            MMTextField(title: "Phone", placeholder: "Optional", text: $landlordPhone, keyboardType: .phonePad)
                         }
                     }
 
@@ -150,10 +162,8 @@ struct EditPropertyView: View {
                             Text("Financials")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(title: "Deposit amount", placeholder: "e.g. 1500", text: $depositAmount)
-                                .keyboardType(.decimalPad)
-                            MMTextField(title: "Rent amount (optional)", placeholder: "e.g. 2200", text: $rentAmount)
-                                .keyboardType(.decimalPad)
+                            MMTextField(title: "Deposit amount", placeholder: "e.g. 1500", text: $depositAmount, keyboardType: .decimalPad)
+                            MMTextField(title: "Rent amount (optional)", placeholder: "e.g. 2200", text: $rentAmount, keyboardType: .decimalPad)
                         }
                     }
 
@@ -162,8 +172,17 @@ struct EditPropertyView: View {
                             Text("Location")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(title: "Country code", placeholder: "CA, US, etc.", text: $country)
-                                .textInputAutocapitalization(.characters)
+                            Picker("Country", selection: $selectedCountryOption) {
+                                ForEach(supportedCountries + ["Other"], id: \.self) { option in
+                                    Text(option).tag(option)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                            if selectedCountryOption == "Other" {
+                                MMTextField(title: "Country code", placeholder: "e.g. FR, DE", text: $customCountry)
+                                    .textInputAutocapitalization(.characters)
+                            }
                         }
                     }
 
@@ -201,7 +220,7 @@ struct EditPropertyView: View {
             return
         }
         guard let userId = sessionManager.userId else {
-            errorMessage = "Not signed in."
+            errorMessage = MoveMarkFlowMessage.notSignedInShort
             return
         }
         if isLoading { return }
@@ -215,19 +234,8 @@ struct EditPropertyView: View {
                 try await propertyStore.updateProperty(propertyId: property.id, input: input, userId: userId)
                 dismiss()
             } catch {
-                errorMessage = userFacingPropertyError(from: error)
+                errorMessage = MoveMarkFlowMessage.propertyUpdateFailed(error)
             }
         }
-    }
-
-    private func userFacingPropertyError(from error: Error) -> String {
-        let raw = error.localizedDescription.lowercased()
-        if raw.contains("not authenticated") || raw.contains("jwt") || raw.contains("session") {
-            return "Session expired. Please sign in again."
-        }
-        if raw.contains("violat") || raw.contains("constraint") {
-            return "Couldn’t update property details. Please check your fields and try again."
-        }
-        return "Couldn’t update property details. Try again."
     }
 }

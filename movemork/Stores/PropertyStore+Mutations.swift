@@ -23,8 +23,10 @@ extension PropertyStore {
     }
 
     /// Refreshes vault document types for the current property (e.g. after upload). Call after adding a document.
-    func refreshDocuments(propertyId: UUID) async {
-        guard currentProperty?.id == propertyId else { return }
+    /// - Returns: `false` if the metadata refresh failed (upload may still have succeeded).
+    @discardableResult
+    func refreshDocuments(propertyId: UUID) async -> Bool {
+        guard currentProperty?.id == propertyId else { return true }
         do {
             let rows = try await documentRepo.fetchDocuments(propertyId: propertyId)
             let vaultDocTypes = Array(Set(rows.map(\.documentType)))
@@ -32,9 +34,46 @@ extension PropertyStore {
                 prop.vaultDocuments = vaultDocTypes
                 currentProperty = prop
             }
+            return true
         } catch {
-            // Non-fatal; Vault may have already updated from local state
+            return false
         }
+    }
+
+    /// After a confirmed `property_documents` insert, ensures `vaultDocuments` lists this type when a full refetch failed or lagged (keeps “View” / readiness in sync without relaunch).
+    func ensureVaultDocumentTypePresent(propertyId: UUID, documentType: String) {
+        guard var prop = currentProperty, prop.id == propertyId else { return }
+        let keys = Set(DocumentRepository.documentTypeQueryKeys(documentType))
+        if prop.vaultDocuments.contains(where: { keys.contains($0) }) { return }
+        prop.vaultDocuments.append(DocumentRepository.normalizedDocumentType(documentType))
+        currentProperty = prop
+    }
+
+    private func buildPropertyRow(id: UUID, input: CreatePropertyInput, userId: UUID, createdAt: String?) -> PropertyRow {
+        let dbDate = Self.dbDateFormatter
+        let deposit = Double(input.depositAmount.trimmingCharacters(in: .whitespacesAndNewlines)).map { $0 >= 0 ? $0 : nil } ?? nil
+        let rent = Double(input.rentAmount.trimmingCharacters(in: .whitespacesAndNewlines)).map { $0 >= 0 ? $0 : nil } ?? nil
+        let countryVal = input.country.trimmingCharacters(in: .whitespacesAndNewlines)
+        return PropertyRow(
+            id: id,
+            userId: userId,
+            title: input.titleValue,
+            addressLine1: input.addressLine1.trimmingCharacters(in: .whitespacesAndNewlines),
+            addressLine2: input.unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : input.unit.trimmingCharacters(in: .whitespacesAndNewlines),
+            city: input.city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Unknown" : input.city.trimmingCharacters(in: .whitespacesAndNewlines),
+            provinceState: input.region.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Unknown" : input.region.trimmingCharacters(in: .whitespacesAndNewlines),
+            postalCode: input.postalCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "00000" : input.postalCode.trimmingCharacters(in: .whitespacesAndNewlines),
+            country: countryVal.isEmpty ? "CA" : countryVal,
+            landlordName: input.landlordName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : input.landlordName.trimmingCharacters(in: .whitespacesAndNewlines),
+            landlordEmail: input.landlordEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : input.landlordEmail.trimmingCharacters(in: .whitespacesAndNewlines),
+            landlordPhone: input.landlordPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : input.landlordPhone.trimmingCharacters(in: .whitespacesAndNewlines),
+            depositAmount: deposit,
+            rentAmount: rent,
+            moveInDate: dbDate.string(from: input.moveInDate),
+            leaseStart: dbDate.string(from: input.leaseStartDate),
+            leaseEnd: dbDate.string(from: input.leaseEndDate),
+            createdAt: createdAt
+        )
     }
 
     /// Creates a property from the locked input contract, inserts default rooms, then refreshes store.
@@ -45,31 +84,7 @@ extension PropertyStore {
         print("🏪 input.titleValue: \(input.titleValue), addressLine1: \(input.addressLine1)")
         #endif
 
-        let iso = ISO8601DateFormatter()
-        let dbDate = Self.dbDateFormatter
-        let deposit = Double(input.depositAmount.trimmingCharacters(in: .whitespacesAndNewlines)).map { $0 >= 0 ? $0 : nil } ?? nil
-        let rent = Double(input.rentAmount.trimmingCharacters(in: .whitespacesAndNewlines)).map { $0 >= 0 ? $0 : nil } ?? nil
-        let countryVal = input.country.trimmingCharacters(in: .whitespacesAndNewlines)
-        let row = PropertyRow(
-            id: UUID(),
-            userId: userId,
-            title: input.titleValue,
-            addressLine1: input.addressLine1.trimmingCharacters(in: .whitespacesAndNewlines),
-            addressLine2: input.unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : input.unit.trimmingCharacters(in: .whitespacesAndNewlines),
-            city: input.city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Unknown" : input.city.trimmingCharacters(in: .whitespacesAndNewlines),
-            provinceState: input.region.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Unknown" : input.region.trimmingCharacters(in: .whitespacesAndNewlines),
-            postalCode: input.postalCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "00000" : input.postalCode.trimmingCharacters(in: .whitespacesAndNewlines),
-            country: countryVal.isEmpty ? "CA" : countryVal,
-            landlordName: input.landlordName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : input.landlordName.trimmingCharacters(in: .whitespacesAndNewlines),
-            landlordEmail: input.landlordEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : input.landlordEmail.trimmingCharacters(in: .whitespacesAndNewlines),
-            landlordPhone: input.landlordPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : input.landlordPhone.trimmingCharacters(in: .whitespacesAndNewlines),
-            depositAmount: deposit,
-            rentAmount: rent,
-            moveInDate: dbDate.string(from: input.moveInDate),
-            leaseStart: dbDate.string(from: input.leaseStartDate),
-            leaseEnd: dbDate.string(from: input.leaseEndDate),
-            createdAt: nil
-        )
+        let row = buildPropertyRow(id: UUID(), input: input, userId: userId, createdAt: nil)
 
         let created = try await propertyRepo.createProperty(row)
         try await propertyRepo.insertDefaultRooms(propertyId: created.id, userId: userId)
@@ -80,30 +95,7 @@ extension PropertyStore {
 
     /// Updates the property in DB and refreshes store (properties list + active property).
     func updateProperty(propertyId: UUID, input: CreatePropertyInput, userId: UUID) async throws {
-        let dbDate = Self.dbDateFormatter
-        let deposit = Double(input.depositAmount.trimmingCharacters(in: .whitespacesAndNewlines)).map { $0 >= 0 ? $0 : nil } ?? nil
-        let rent = Double(input.rentAmount.trimmingCharacters(in: .whitespacesAndNewlines)).map { $0 >= 0 ? $0 : nil } ?? nil
-        let countryVal = input.country.trimmingCharacters(in: .whitespacesAndNewlines)
-        let row = PropertyRow(
-            id: propertyId,
-            userId: userId,
-            title: input.titleValue,
-            addressLine1: input.addressLine1.trimmingCharacters(in: .whitespacesAndNewlines),
-            addressLine2: input.unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : input.unit.trimmingCharacters(in: .whitespacesAndNewlines),
-            city: input.city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Unknown" : input.city.trimmingCharacters(in: .whitespacesAndNewlines),
-            provinceState: input.region.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Unknown" : input.region.trimmingCharacters(in: .whitespacesAndNewlines),
-            postalCode: input.postalCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "00000" : input.postalCode.trimmingCharacters(in: .whitespacesAndNewlines),
-            country: countryVal.isEmpty ? "CA" : countryVal,
-            landlordName: input.landlordName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : input.landlordName.trimmingCharacters(in: .whitespacesAndNewlines),
-            landlordEmail: input.landlordEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : input.landlordEmail.trimmingCharacters(in: .whitespacesAndNewlines),
-            landlordPhone: input.landlordPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : input.landlordPhone.trimmingCharacters(in: .whitespacesAndNewlines),
-            depositAmount: deposit,
-            rentAmount: rent,
-            moveInDate: dbDate.string(from: input.moveInDate),
-            leaseStart: dbDate.string(from: input.leaseStartDate),
-            leaseEnd: dbDate.string(from: input.leaseEndDate),
-            createdAt: nil
-        )
+        let row = buildPropertyRow(id: propertyId, input: input, userId: userId, createdAt: nil)
         try await propertyRepo.updateProperty(row)
         await fetchAll(userId: userId)
     }
@@ -131,7 +123,7 @@ extension PropertyStore {
         await fetchAll(userId: userId)
     }
 
-    func addEvidence(to roomID: UUID, evidence: EvidenceRecord, photos: [Data], propertyId: UUID, userId: UUID) async throws {
+    func addEvidence(to roomID: UUID, evidence: EvidenceRecord, photos: [Data], propertyId: UUID, userId: UUID) async throws -> PropertyMutationOutcome {
         let inspectionId = try await inspectionRepo.upsertInspection(
             propertyId: propertyId,
             userId: userId,
@@ -143,6 +135,7 @@ extension PropertyStore {
         case .excellent: conditionInt = 5
         case .good: conditionInt = 4
         case .fair: conditionInt = 3
+        case .belowFair: conditionInt = 2
         case .poor: conditionInt = 1
         }
 
@@ -153,10 +146,12 @@ extension PropertyStore {
             conditionRating: conditionInt
         )
 
+        var savedPhotos: [EvidencePhoto] = []
+        savedPhotos.reserveCapacity(photos.count)
         for photoData in photos {
             let path = "\(userId)/\(propertyId)/move-in/\(roomID)/\(UUID()).jpg"
             _ = try await inspectionRepo.uploadPhoto(data: photoData, path: path)
-            try await inspectionRepo.insertEvidenceFile(
+            let fileId = try await inspectionRepo.insertEvidenceFile(
                 propertyId: propertyId,
                 inspectionItemId: itemId,
                 maintenanceIssueId: nil,
@@ -164,10 +159,13 @@ extension PropertyStore {
                 fileType: "image",
                 capturedAt: Date()
             )
+            savedPhotos.append(EvidencePhoto(id: fileId, filePath: path))
         }
 
+        await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
+
         if !evidence.issueTags.isEmpty {
-            try? await inspectionRepo.insertItemTags(inspectionItemId: itemId, tagNames: evidence.issueTags)
+            try await inspectionRepo.insertItemTags(inspectionItemId: itemId, tagNames: evidence.issueTags)
         }
 
         applyOptimisticMoveInEvidence(
@@ -177,10 +175,19 @@ extension PropertyStore {
             photoCount: photos.count,
             propertyId: propertyId
         )
-        await refreshActivePropertyHydration(userId: userId)
+        let ok = await refreshActivePropertyHydration(userId: userId)
+        reconcileInspectionEvidencePhotos(
+            itemId: itemId,
+            roomID: roomID,
+            propertyId: propertyId,
+            isMoveOut: false,
+            fallbackPhotos: savedPhotos,
+            minimumPhotoCount: photos.count
+        )
+        return PropertyMutationOutcome(hydrationRefreshFailed: !ok)
     }
 
-    func addMoveOutEvidence(to roomID: UUID, evidence: EvidenceRecord, photos: [Data], propertyId: UUID, userId: UUID) async throws {
+    func addMoveOutEvidence(to roomID: UUID, evidence: EvidenceRecord, photos: [Data], propertyId: UUID, userId: UUID) async throws -> PropertyMutationOutcome {
         let inspectionId = try await inspectionRepo.upsertInspection(
             propertyId: propertyId,
             userId: userId,
@@ -192,6 +199,7 @@ extension PropertyStore {
         case .excellent: conditionInt = 5
         case .good: conditionInt = 4
         case .fair: conditionInt = 3
+        case .belowFair: conditionInt = 2
         case .poor: conditionInt = 1
         }
 
@@ -202,10 +210,12 @@ extension PropertyStore {
             conditionRating: conditionInt
         )
 
+        var savedPhotos: [EvidencePhoto] = []
+        savedPhotos.reserveCapacity(photos.count)
         for photoData in photos {
             let path = "\(userId)/\(propertyId)/move-out/\(roomID)/\(UUID()).jpg"
             _ = try await inspectionRepo.uploadPhoto(data: photoData, path: path)
-            try await inspectionRepo.insertEvidenceFile(
+            let fileId = try await inspectionRepo.insertEvidenceFile(
                 propertyId: propertyId,
                 inspectionItemId: itemId,
                 maintenanceIssueId: nil,
@@ -213,7 +223,10 @@ extension PropertyStore {
                 fileType: "image",
                 capturedAt: Date()
             )
+            savedPhotos.append(EvidencePhoto(id: fileId, filePath: path))
         }
+
+        await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
 
         applyOptimisticMoveOutEvidence(
             roomID: roomID,
@@ -222,34 +235,55 @@ extension PropertyStore {
             photoCount: photos.count,
             propertyId: propertyId
         )
-        await refreshActivePropertyHydration(userId: userId)
+        let ok = await refreshActivePropertyHydration(userId: userId)
+        reconcileInspectionEvidencePhotos(
+            itemId: itemId,
+            roomID: roomID,
+            propertyId: propertyId,
+            isMoveOut: true,
+            fallbackPhotos: savedPhotos,
+            minimumPhotoCount: photos.count
+        )
+        return PropertyMutationOutcome(hydrationRefreshFailed: !ok)
     }
 
-    func deleteEvidence(entryId: UUID, propertyId: UUID, userId: UUID) async throws {
+    func deleteEvidence(entryId: UUID, propertyId: UUID, userId: UUID) async throws -> PropertyMutationOutcome {
         try await inspectionRepo.deleteInspectionItem(id: entryId)
+        await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
         applyOptimisticDeleteEvidence(entryId: entryId, propertyId: propertyId)
-        await refreshActivePropertyHydration(userId: userId)
+        let ok = await refreshActivePropertyHydration(userId: userId)
+        return PropertyMutationOutcome(hydrationRefreshFailed: !ok)
     }
 
-    func updateEvidence(entryId: UUID, title: String, notes: String, tags: [String], condition: RoomRecord.ConditionRating, propertyId: UUID, userId: UUID) async throws {
+    func updateEvidence(entryId: UUID, title: String, notes: String, tags: [String], condition: RoomRecord.ConditionRating, propertyId: UUID, userId: UUID) async throws -> PropertyMutationOutcome {
         let conditionInt: Int
         switch condition {
         case .excellent: conditionInt = 5
         case .good: conditionInt = 4
         case .fair: conditionInt = 3
+        case .belowFair: conditionInt = 2
         case .poor: conditionInt = 1
         }
         let notesValue = "\(title)\n\(notes)"
         try await inspectionRepo.updateInspectionItem(id: entryId, notes: notesValue, conditionRating: conditionInt)
         try await inspectionRepo.deleteItemTagsForInspectionItem(inspectionItemId: entryId)
         if !tags.isEmpty {
-            try? await inspectionRepo.insertItemTags(inspectionItemId: entryId, tagNames: tags)
+            try await inspectionRepo.insertItemTags(inspectionItemId: entryId, tagNames: tags)
         }
-        await refreshActivePropertyHydration(userId: userId)
+        let ok = await refreshActivePropertyHydration(userId: userId)
+        return PropertyMutationOutcome(hydrationRefreshFailed: !ok)
     }
 
-    func appendPhotosToEvidence(entryId: UUID, roomId: UUID, photos: [Data], propertyId: UUID, userId: UUID, isMoveOut: Bool) async throws {
-        try await inspectionRepo.appendPhotosToInspectionItem(
+    func appendPhotosToEvidence(entryId: UUID, roomId: UUID, photos: [Data], propertyId: UUID, userId: UUID, isMoveOut: Bool) async throws -> PropertyMutationOutcome {
+        let priorTotal: Int = {
+            guard let prop = currentProperty, prop.id == propertyId,
+                  let room = prop.rooms.first(where: { $0.id == roomId }) else { return 0 }
+            let list = isMoveOut ? room.moveOutEvidence : room.evidence
+            return list.first(where: { $0.id == entryId })?.photoCount ?? 0
+        }()
+        let expectedTotal = priorTotal + photos.count
+
+        let addedPhotos = try await inspectionRepo.appendPhotosToInspectionItem(
             inspectionItemId: entryId,
             roomId: roomId,
             propertyId: propertyId,
@@ -263,11 +297,20 @@ extension PropertyStore {
             addedCount: photos.count,
             propertyId: propertyId
         )
-        await refreshActivePropertyHydration(userId: userId)
+        let ok = await refreshActivePropertyHydration(userId: userId)
+        reconcileInspectionEvidencePhotos(
+            itemId: entryId,
+            roomID: roomId,
+            propertyId: propertyId,
+            isMoveOut: isMoveOut,
+            fallbackPhotos: addedPhotos,
+            minimumPhotoCount: expectedTotal
+        )
+        return PropertyMutationOutcome(hydrationRefreshFailed: !ok)
     }
 
     @discardableResult
-    func addMaintenance(_ record: MaintenanceRecord, photos: [Data], propertyId: UUID, userId: UUID) async throws -> MaintenanceIssueRow {
+    func addMaintenance(_ record: MaintenanceRecord, photos: [Data], propertyId: UUID, userId: UUID) async throws -> MaintenanceSubmitOutcome {
         let now = ISO8601DateFormatter().string(from: record.createdAt)
         let row = MaintenanceIssueRow(
             id: record.id,
@@ -314,13 +357,15 @@ extension PropertyStore {
             )
             maintenanceLog.insert(newEntry, at: 0)
         }
-        await refreshMaintenance(propertyId: propertyId)
-        return inserted
+        let listOK = await refreshMaintenance(propertyId: propertyId)
+        return MaintenanceSubmitOutcome(inserted: inserted, listRefreshFailed: !listOK)
     }
 
     /// Refreshes maintenance log from DB (e.g. after creating or updating an issue).
-    func refreshMaintenance(propertyId: UUID) async {
-        guard currentProperty?.id == propertyId else { return }
+    /// - Returns: `false` if the fetch failed; does **not** clear existing `maintenanceLog` so post-save state isn’t wiped.
+    @discardableResult
+    func refreshMaintenance(propertyId: UUID) async -> Bool {
+        guard currentProperty?.id == propertyId else { return true }
         do {
             let rows = try await maintenanceRepo.fetchIssues(propertyId: propertyId)
             maintenanceLog = rows.map { row in
@@ -335,8 +380,9 @@ extension PropertyStore {
                     photoCount: 0
                 )
             }
+            return true
         } catch {
-            // Non-fatal; list may have already refreshed in the view
+            return false
         }
     }
 
@@ -417,5 +463,54 @@ extension PropertyStore {
             prop.rooms[i].moveOutEvidence.removeAll { $0.id == entryId }
         }
         currentProperty = prop
+    }
+
+    /// If hydration returns fewer `evidence_files` than we just wrote (transient read lag or refresh failure), merge known `(id, path)` so thumbnails and counts match reality without relaunch.
+    private func reconcileInspectionEvidencePhotos(
+        itemId: UUID,
+        roomID: UUID,
+        propertyId: UUID,
+        isMoveOut: Bool,
+        fallbackPhotos: [EvidencePhoto],
+        minimumPhotoCount: Int
+    ) {
+        guard var prop = currentProperty, prop.id == propertyId,
+              let rIdx = prop.rooms.firstIndex(where: { $0.id == roomID }) else { return }
+        var room = prop.rooms[rIdx]
+        if isMoveOut {
+            guard let eIdx = room.moveOutEvidence.firstIndex(where: { $0.id == itemId }) else { return }
+            room.moveOutEvidence[eIdx] = Self.mergedEvidenceWithFallbackPhotos(
+                room.moveOutEvidence[eIdx],
+                fallbackPhotos: fallbackPhotos,
+                minimumPhotoCount: minimumPhotoCount
+            )
+        } else {
+            guard let eIdx = room.evidence.firstIndex(where: { $0.id == itemId }) else { return }
+            room.evidence[eIdx] = Self.mergedEvidenceWithFallbackPhotos(
+                room.evidence[eIdx],
+                fallbackPhotos: fallbackPhotos,
+                minimumPhotoCount: minimumPhotoCount
+            )
+        }
+        prop.rooms[rIdx] = room
+        currentProperty = prop
+    }
+
+    private static func mergedEvidenceWithFallbackPhotos(
+        _ entry: EvidenceRecord,
+        fallbackPhotos: [EvidencePhoto],
+        minimumPhotoCount: Int
+    ) -> EvidenceRecord {
+        var entry = entry
+        if entry.photos.count >= minimumPhotoCount { return entry }
+        var seenPaths = Set(entry.photos.map(\.filePath))
+        var merged = entry.photos
+        for p in fallbackPhotos where !seenPaths.contains(p.filePath) {
+            merged.append(p)
+            seenPaths.insert(p.filePath)
+        }
+        entry.photos = merged
+        entry.photoCount = max(entry.photoCount, merged.count, minimumPhotoCount)
+        return entry
     }
 }

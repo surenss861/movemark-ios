@@ -13,6 +13,8 @@ extension PropertyStore {
         .lease, .depositReceipt, .listingScreenshot, .cleaningReceipt, .utilityProof, .moveOutInvoice, .other
     ]
 
+    static let moveInRequiredDocumentTypes: [VaultDocumentType] = [.lease, .depositReceipt, .listingScreenshot]
+
     enum PropertyNextAction: Equatable {
         case captureRoom(roomID: UUID, roomName: String)
         case uploadDocument(VaultDocumentType)
@@ -114,6 +116,10 @@ extension PropertyStore {
         }
     }
 
+    /// Returns the count of non-resolved maintenance issues for the given property.
+    /// **Limitation:** Only the currently active (hydrated) property returns a live count.
+    /// Non-active properties always return 0 because the maintenance log is only loaded
+    /// for `currentProperty`. Callers should not rely on this for non-active properties.
     func openIssueCount(for property: PropertyRecord) -> Int {
         if currentProperty?.id == property.id {
             return maintenanceLog.filter { $0.status != .resolved }.count
@@ -123,13 +129,13 @@ extension PropertyStore {
 
     func uploadedSupportingRecordCount(for property: PropertyRecord) -> Int {
         let uploaded = Set(property.vaultDocuments)
-        return Self.requiredVaultDocumentTypes.filter { type in
+        return Self.moveInRequiredDocumentTypes.filter { type in
             DocumentRepository.documentTypeQueryKeys(type.rawValue).contains { uploaded.contains($0) }
         }.count
     }
 
     func missingSupportingRecordCount(for property: PropertyRecord) -> Int {
-        max(Self.requiredVaultDocumentTypes.count - uploadedSupportingRecordCount(for: property), 0)
+        max(Self.moveInRequiredDocumentTypes.count - uploadedSupportingRecordCount(for: property), 0)
     }
 
     func roomsCompletionProgress(for property: PropertyRecord) -> Double {
@@ -150,7 +156,7 @@ extension PropertyStore {
         }()
 
         let documentScore: Double = {
-            let totalDocs = Self.requiredVaultDocumentTypes.count
+            let totalDocs = Self.moveInRequiredDocumentTypes.count
             guard totalDocs > 0 else { return 0 }
             let uploaded = uploadedSupportingRecordCount(for: property)
             return Double(uploaded) / Double(totalDocs) * 20
@@ -169,7 +175,7 @@ extension PropertyStore {
         if let room = nextRoomToCapture(for: property), room.evidence.isEmpty {
             return .captureRoom(roomID: room.id, roomName: room.name)
         }
-        if let missingDoc = Self.requiredVaultDocumentTypes.first(where: { type in
+        if let missingDoc = Self.moveInRequiredDocumentTypes.first(where: { type in
             !DocumentRepository.documentTypeQueryKeys(type.rawValue).contains { property.vaultDocuments.contains($0) }
         }) {
             return .uploadDocument(missingDoc)

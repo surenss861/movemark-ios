@@ -25,11 +25,22 @@ export const exportsRouter = new Hono();
 exportsRouter.get("/", async (c) => {
   try {
     const userId = await requireUserIdFromBearer(c);
-    const { data, error } = await supabaseAdmin
+    const propertyIdFilter = c.req.query("propertyId")?.trim();
+
+    if (!propertyIdFilter) {
+      return c.json({ error: "propertyId query parameter is required" }, 400);
+    }
+
+    let query = supabaseAdmin
       .from("exports")
       .select("id,user_id,property_id,export_type,status,requested_at,completed_at,file_path,created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
+      .eq("user_id", userId);
+
+    if (propertyIdFilter) {
+      query = query.eq("property_id", propertyIdFilter);
+    }
+
+    const { data, error } = await query.order("created_at", { ascending: false });
 
     if (error) {
       console.error("[movemark-api:exports] list query failed", {
@@ -151,6 +162,53 @@ exportsRouter.post("/move-in", async (c) => {
       inspectionItems = data ?? [];
     }
 
+    const itemIds = inspectionItems
+      .map((row) => row["id"] as string | undefined)
+      .filter((id): id is string => Boolean(id));
+
+    const photoCountByItem = new Map<string, number>();
+    const tagNamesByItem = new Map<string, string[]>();
+
+    if (itemIds.length > 0) {
+      const { data: evidenceRows } = await supabaseAdmin
+        .from("evidence_files")
+        .select("inspection_item_id")
+        .eq("property_id", body.propertyId)
+        .in("inspection_item_id", itemIds);
+
+      for (const er of evidenceRows ?? []) {
+        const iid = er.inspection_item_id as string | undefined;
+        if (!iid) continue;
+        photoCountByItem.set(iid, (photoCountByItem.get(iid) ?? 0) + 1);
+      }
+
+      const { data: tagLinks } = await supabaseAdmin
+        .from("inspection_item_tags")
+        .select("inspection_item_id, issue_tags(name)")
+        .in("inspection_item_id", itemIds);
+
+      for (const link of tagLinks ?? []) {
+        const iid = link.inspection_item_id as string | undefined;
+        if (!iid) continue;
+        const rel = link.issue_tags as { name?: string } | null;
+        const name = rel?.name?.trim();
+        if (!name) continue;
+        const list = tagNamesByItem.get(iid) ?? [];
+        list.push(name);
+        tagNamesByItem.set(iid, list);
+      }
+    }
+
+    const inspectionItemsForPdf = inspectionItems.map((row) => {
+      const id = row["id"] as string | undefined;
+      if (!id) return row;
+      return {
+        ...row,
+        pdf_photo_count: photoCountByItem.get(id) ?? 0,
+        pdf_issue_tag_names: tagNamesByItem.get(id) ?? [],
+      };
+    });
+
     const { data: propertyDocuments } = await supabaseAdmin
       .from("property_documents")
       .select("*")
@@ -180,7 +238,7 @@ exportsRouter.post("/move-in", async (c) => {
       property,
       rooms: rooms ?? [],
       inspection: inspection ?? null,
-      inspectionItems,
+      inspectionItems: inspectionItemsForPdf,
       propertyDocuments: propertyDocuments ?? [],
     });
 

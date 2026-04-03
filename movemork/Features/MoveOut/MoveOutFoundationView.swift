@@ -367,10 +367,19 @@ struct MoveOutFoundationView: View {
             Toggle(isOn: Binding(
                 get: { checklist[keyPath: keyPath] },
                 set: { newValue in
-                    var updated = checklist
+                    guard let before = self.checklist else { return }
+                    var updated = before
                     updated[keyPath: keyPath] = newValue
                     self.checklist = updated
-                    Task { await saveChecklist(updated) }
+                    Task { @MainActor in
+                        do {
+                            try await checklistRepo.upsertChecklist(updated)
+                        } catch {
+                            self.checklist = before
+                            errorMessage = MoveMarkFlowMessage.moveOutChecklistSaveFailed(error)
+                            lastErrorFromExport = false
+                        }
+                    }
                 }
             )) {
                 Text(title)
@@ -407,16 +416,7 @@ struct MoveOutFoundationView: View {
                 checklist = created
             }
         } catch {
-            errorMessage = userFacingMoveOutError(from: error)
-            lastErrorFromExport = false
-        }
-    }
-
-    private func saveChecklist(_ row: MoveOutChecklistRow) async {
-        do {
-            try await checklistRepo.upsertChecklist(row)
-        } catch {
-            errorMessage = userFacingMoveOutError(from: error)
+            errorMessage = MoveMarkFlowMessage.moveOutChecklistSaveFailed(error)
             lastErrorFromExport = false
         }
     }
@@ -462,21 +462,10 @@ struct MoveOutFoundationView: View {
                 showShareSheet = true
                 MMHaptics.success()
             } catch {
-                errorMessage = userFacingMoveOutExportError(from: error)
+                errorMessage = MoveMarkFlowMessage.moveOutReportExportFailed(error)
                 lastErrorFromExport = true
             }
         }
     }
 
-    private func userFacingMoveOutError(from error: Error) -> String {
-        UserFacingDatabaseError.message(from: error, fallback: "Couldn’t update move-out checklist. Try again.")
-    }
-
-    private func userFacingMoveOutExportError(from error: Error) -> String {
-        let lower = error.localizedDescription.lowercased()
-        if lower.contains("bucket") || lower.contains("storage") || (lower.contains("not found") && (lower.contains("object") || lower.contains("bucket"))) {
-            return "Export storage is unavailable right now. Try again soon."
-        }
-        return UserFacingDatabaseError.message(from: error, fallback: "Couldn’t export move-out report. Try again.")
-    }
 }

@@ -10,7 +10,7 @@ import PhotosUI
 
 struct EvidenceCaptureMediaModule: View {
     @Binding var selectedItems: [PhotosPickerItem]
-    @Binding var showCamera: Bool
+    var onOpenCamera: () -> Void
 
     let loadedImages: [UIImage]
     let isUploading: Bool
@@ -27,7 +27,7 @@ struct EvidenceCaptureMediaModule: View {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 10) {
                         Button {
-                            showCamera = true
+                            onOpenCamera()
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "camera.fill")

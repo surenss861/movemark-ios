@@ -29,6 +29,7 @@ extension PropertyStore {
 
     /// Call on sign-out to prevent stale data from showing for a different user.
     func clear() {
+        Task { await MoveMarkSignedURLCache.shared.removeAll() }
         let was = currentProperty?.id.uuidString ?? "nil"
         currentProperty = nil
         properties = []
@@ -76,27 +77,32 @@ extension PropertyStore {
             maintenanceLog = issues
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = MoveMarkFlowMessage.propertyListLoadFailed(error)
             currentProperty = nil
+            maintenanceLog = []
         }
     }
 
     /// Re-hydrates the active property after a successful save. Does **not** clear `currentProperty` on failure (avoids false “save failed” when refresh/preview steps flake).
-    func refreshActivePropertyHydration(userId: UUID) async {
+    /// - Returns: `true` if hydration succeeded; `false` if the reload failed (local optimistic state is preserved).
+    @discardableResult
+    func refreshActivePropertyHydration(userId: UUID) async -> Bool {
         guard let activeId = activePropertyId,
               let row = properties.first(where: { $0.id == activeId }) else {
             await fetchAll(userId: userId)
-            return
+            return errorMessage == nil
         }
         do {
             let (record, issues) = try await hydrateProperty(row, userId: userId)
             currentProperty = record
             maintenanceLog = issues
             errorMessage = nil
+            return true
         } catch {
             #if DEBUG
             print("MoveMark: refreshActivePropertyHydration failed (keeping local state):", error.localizedDescription)
             #endif
+            return false
         }
     }
 
@@ -112,7 +118,8 @@ extension PropertyStore {
             maintenanceLog = issues
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = MoveMarkFlowMessage.propertySwitchLoadFailed(error)
+            maintenanceLog = []
         }
     }
 }

@@ -6,12 +6,14 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct MMTextField: View {
     let title: String
     let placeholder: String
     @Binding var text: String
     var isSecure: Bool = false
+    var keyboardType: UIKeyboardType = .default
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -26,7 +28,7 @@ struct MMTextField: View {
                     TextField(placeholder, text: $text)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                        .keyboardType(title.lowercased().contains("email") ? .emailAddress : .default)
+                        .keyboardType(keyboardType)
                 }
             }
             .font(MoveMarkTheme.Typography.body)

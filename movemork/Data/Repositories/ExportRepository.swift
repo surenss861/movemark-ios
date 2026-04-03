@@ -36,9 +36,11 @@ struct ExportRepository {
     }
 
     func signedURL(filePath: String) async throws -> URL {
-        try await supabase.storage
-            .from("exports")
-            .createSignedURL(path: filePath, expiresIn: 3600)
+        try await MoveMarkSignedURLCache.shared.url(bucket: "exports", path: filePath) {
+            try await supabase.storage
+                .from("exports")
+                .createSignedURL(path: filePath, expiresIn: 3600)
+        }
     }
 
     /// Verifies that an export row's file_path points to a usable file.
@@ -58,7 +60,7 @@ struct ExportRepository {
             _ = try await signedURL(filePath: path)
             return .ready
         } catch {
-            return .verificationFailed(error.localizedDescription)
+            return .verificationFailed(MoveMarkFlowMessage.exportFileVerificationFailed(error))
         }
     }
 }

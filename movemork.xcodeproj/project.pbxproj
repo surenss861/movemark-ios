@@ -38,6 +38,7 @@
 		2152E07D2F621A5100EDA905 /* MoveMark.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MoveMark.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2152E08E2F621A5300EDA905 /* movemorkTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = movemorkTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2152E0982F621A5300EDA905 /* movemorkUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = movemorkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		21F1E0202F71000000B50C10 /* MoveMarkApp.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = MoveMarkApp.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -107,6 +108,7 @@
 		2152E0742F621A5100EDA905 = {
 			isa = PBXGroup;
 			children = (
+				21F1E0202F71000000B50C10 /* MoveMarkApp.xcconfig */,
 				2152E07F2F621A5100EDA905 /* movemork */,
 				2152E0912F621A5300EDA905 /* movemorkTests */,
 				2152E09B2F621A5300EDA905 /* movemorkUITests */,
@@ -316,6 +318,7 @@
 /* Begin XCBuildConfiguration section */
 		2152E0A22F621A5300EDA905 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 21F1E0202F71000000B50C10 /* MoveMarkApp.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -355,6 +358,7 @@
 		};
 		2152E0A32F621A5300EDA905 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 21F1E0202F71000000B50C10 /* MoveMarkApp.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -381,9 +385,7 @@
 				PRODUCT_NAME = MoveMark;
 				REVENUECAT_APP_STORE_PUBLIC_KEY = appl_kabnpGBtlwWXwazHQeBsoxKiqSE;
 				REVENUECAT_TEST_STORE_PUBLIC_KEY = "";
-				"REVENUECAT_TEST_STORE_PUBLIC_KEY[arch=*]" = test_rLVyLbkyJnzJsUyYSfldfttiiWQ;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = REVENUECAT_ALLOW_TEST_STORE_KEY;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;

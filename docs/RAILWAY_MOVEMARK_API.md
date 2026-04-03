@@ -16,6 +16,7 @@
 - `EXPORT_BUCKET_NAME` (use `exports` if using Supabase Storage bucket `exports`)
 - `REVENUECAT_WEBHOOK_SECRET` (optional but recommended)
 - `APP_ENV=production`
+- `CORS_ALLOWED_ORIGINS` — comma-separated browser origins (e.g. `https://admin.example.com,http://localhost:5173`). Omit or leave empty to deny cross-origin browser access; the native iOS app does not rely on CORS.
 
 ## Local run
 

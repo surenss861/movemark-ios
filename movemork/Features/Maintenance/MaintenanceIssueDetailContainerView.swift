@@ -45,15 +45,15 @@ struct MaintenanceIssueDetailContainerView: View {
 
     private func loadIssue() async {
         guard let property = propertyStore.currentProperty else {
-            loadError = "No property"
+            loadError = MoveMarkFlowMessage.noActiveProperty
             return
         }
         do {
             let issues = try await repo.fetchIssues(propertyId: property.id)
             issue = issues.first(where: { $0.id == issueID })
-            if issue == nil { loadError = "Issue not found" }
+            if issue == nil { loadError = MoveMarkFlowMessage.maintenanceIssueNotFound }
         } catch {
-            loadError = error.localizedDescription
+            loadError = MoveMarkFlowMessage.maintenanceIssueLookupFailed(error)
         }
     }
 }

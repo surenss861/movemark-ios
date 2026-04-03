@@ -22,6 +22,7 @@ struct MaintenanceLogView: View {
     @State private var isLoading = false
     @State private var isSubmitting = false
     @State private var errorMessage: String? = nil
+    @State private var softNotice: String? = nil
 
     private let maintenanceRepo = MaintenanceRepository()
 
@@ -42,6 +43,18 @@ struct MaintenanceLogView: View {
                     header
 
                     composerCard
+
+                    if let softNotice, errorMessage == nil {
+                        MMCard(tone: .quiet, padding: 14, spacing: 8) {
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: "info.circle.fill")
+                                    .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.9))
+                                Text(softNotice)
+                                    .font(MoveMarkTheme.Typography.subheadline)
+                                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                            }
+                        }
+                    }
 
                     if let errorMessage {
                         MMErrorBanner(
@@ -89,8 +102,8 @@ struct MaintenanceLogView: View {
                 .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
             }
         }
-        .task { await loadIssues() }
-        .onAppear { Task { await loadIssues() } }
+        // Single load entry point (avoid pairing `.task` + `.onAppear` — duplicate fetches).
+        .task(id: propertyStore.currentProperty?.id) { await loadIssues() }
         .navigationTitle("Maintenance")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -253,7 +266,7 @@ struct MaintenanceLogView: View {
         do {
             issues = try await maintenanceRepo.fetchIssues(propertyId: property.id)
         } catch {
-            errorMessage = userFacingMaintenanceError(from: error)
+            errorMessage = MoveMarkFlowMessage.maintenanceListLoadFailed(error)
         }
     }
 
@@ -298,7 +311,7 @@ struct MaintenanceLogView: View {
     private func addIncident() {
         guard let property = propertyStore.currentProperty,
               let userId = sessionManager.userId else {
-            errorMessage = "No property or not authenticated."
+            errorMessage = MoveMarkFlowMessage.noPropertyOrAuth
             return
         }
 
@@ -311,6 +324,7 @@ struct MaintenanceLogView: View {
 
         isSubmitting = true
         errorMessage = nil
+        softNotice = nil
 
         let record = MaintenanceRecord(
             title: trimmedTitle,
@@ -327,7 +341,7 @@ struct MaintenanceLogView: View {
             defer { isSubmitting = false }
 
             do {
-                let inserted = try await propertyStore.addMaintenance(
+                let outcome = try await propertyStore.addMaintenance(
                     record,
                     photos: photoData,
                     propertyId: property.id,
@@ -340,19 +354,14 @@ struct MaintenanceLogView: View {
                 selectedPhotos = []
                 loadedImages = []
 
-                issues.insert(inserted, at: 0)
+                issues.insert(outcome.inserted, at: 0)
                 await reloadIssuesSilentlyAfterSave()
+                if outcome.listRefreshFailed {
+                    softNotice = MoveMarkFlowMessage.incidentSavedRefreshStale
+                }
             } catch {
-                errorMessage = userFacingMaintenanceError(from: error)
+                errorMessage = MoveMarkFlowMessage.maintenanceComposerFailed(error)
             }
         }
-    }
-
-    private func userFacingMaintenanceError(from error: Error) -> String {
-        let lower = error.localizedDescription.lowercased()
-        if lower.contains("bucket") || lower.contains("storage") || (lower.contains("not found") && (lower.contains("object") || lower.contains("bucket"))) {
-            return "Photo upload is unavailable right now. Try again soon."
-        }
-        return UserFacingDatabaseError.message(from: error, fallback: "Couldn’t save maintenance record. Try again.")
     }
 }

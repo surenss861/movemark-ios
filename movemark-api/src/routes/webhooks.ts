@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { env } from "../lib/env.js";
+import { constantTimeTokenEquals } from "../lib/webhookAuth.js";
 import type { RevenueCatWebhookEvent } from "../types/revenuecat.js";
 
 export const webhooksRouter = new Hono();
@@ -11,7 +12,7 @@ webhooksRouter.post("/revenuecat", async (c) => {
 
     if (expected) {
       const token = authHeader.replace("Bearer ", "").trim();
-      if (!token || token !== expected) {
+      if (!token || !constantTimeTokenEquals(token, expected)) {
         return c.json({ error: "Invalid webhook auth" }, 401);
       }
     }

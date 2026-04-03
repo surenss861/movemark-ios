@@ -6,15 +6,16 @@
 //
 
 import SwiftUI
+import Nuke
+import NukeUI
 
 struct EvidenceSavedProofSection: View {
     let existingEntries: [EvidenceRecord]
     let moveOutMode: Bool
+    let inspectionRepo: InspectionRepository
     let onEdit: (EvidenceRecord) -> Void
     let onAddPhotos: (EvidenceRecord) -> Void
     let onDelete: (EvidenceRecord) -> Void
-
-    private let inspectionRepo = InspectionRepository()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -125,6 +126,7 @@ struct EvidenceSavedProofSection: View {
 private struct PhotoPreviewItem: Identifiable {
     let id: UUID
     let url: URL
+    let filePath: String
 }
 
 private struct SavedProofPhotoThumbnails: View {
@@ -132,13 +134,20 @@ private struct SavedProofPhotoThumbnails: View {
     let inspectionRepo: InspectionRepository
 
     @State private var previewURLs: [UUID: URL] = [:]
+    @State private var signedURLFailedIds: Set<UUID> = []
+    @State private var imageRenderFailedIds: Set<UUID> = []
+    @State private var renderNonce: [UUID: Int] = [:]
     @State private var previewItem: PhotoPreviewItem?
+
+    private var photosFingerprint: String {
+        evidence.photos.map { "\($0.id.uuidString)|\($0.filePath)" }.joined(separator: ";")
+    }
 
     var body: some View {
         Group {
             if evidence.photos.isEmpty {
                 if evidence.photoCount > 0 {
-                    Text("Photos loading…")
+                    Text("Photos are still syncing…")
                         .font(MoveMarkTheme.Typography.footnote)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 }
@@ -160,15 +169,22 @@ private struct SavedProofPhotoThumbnails: View {
                 }
             }
         }
-        .task(id: evidence.id) {
+        .task(id: photosFingerprint) {
+            signedURLFailedIds = []
+            imageRenderFailedIds = []
+            renderNonce = [:]
+            previewURLs = [:]
             await loadThumbs()
         }
         .onChange(of: evidence.photos.count) { _, _ in
+            signedURLFailedIds = []
+            imageRenderFailedIds = []
+            renderNonce = [:]
             previewURLs = [:]
             Task { await loadThumbs() }
         }
         .fullScreenCover(item: $previewItem) { item in
-            PhotoPreviewFullScreen(url: item.url) {
+            PhotoPreviewFullScreen(initialURL: item.url, filePath: item.filePath) {
                 previewItem = nil
             }
         }
@@ -177,34 +193,41 @@ private struct SavedProofPhotoThumbnails: View {
     @ViewBuilder
     private func thumbnailCell(_ photo: EvidencePhoto) -> some View {
         Group {
-            if let url = previewURLs[photo.id] {
+            if signedURLFailedIds.contains(photo.id) {
                 Button {
-                    previewItem = PhotoPreviewItem(id: photo.id, url: url)
+                    Task { await retrySignedURL(for: photo) }
                 } label: {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        case .failure:
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.white.opacity(0.08))
-                                .overlay {
-                                    Image(systemName: "photo")
-                                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                                }
-                        case .empty:
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.white.opacity(0.08))
-                                .overlay { ProgressView() }
-                        @unknown default:
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.white.opacity(0.08))
-                        }
-                    }
+                    thumbPlaceholder(systemName: "arrow.clockwise", caption: MoveMarkFlowMessage.proofPreviewTapRetry)
                 }
                 .buttonStyle(.plain)
+            } else if imageRenderFailedIds.contains(photo.id), let url = previewURLs[photo.id] {
+                Button {
+                    Task { await retryImageRender(for: photo, url: url) }
+                } label: {
+                    thumbPlaceholder(systemName: "arrow.clockwise", caption: MoveMarkFlowMessage.proofPreviewTapRetry)
+                }
+                .buttonStyle(.plain)
+            } else if let url = previewURLs[photo.id] {
+                let nonce = renderNonce[photo.id, default: 0]
+                Button {
+                    previewItem = PhotoPreviewItem(id: photo.id, url: url, filePath: photo.filePath)
+                } label: {
+                    LazyImage(url: url, resizingMode: .aspectFill)
+                        .onFailure { _ in
+                            Task { @MainActor in
+                                imageRenderFailedIds.insert(photo.id)
+                            }
+                        }
+                        .onSuccess { _ in
+                            Task { @MainActor in
+                                imageRenderFailedIds.remove(photo.id)
+                            }
+                        }
+                        .frame(width: 72, height: 72)
+                        .clipped()
+                }
+                .buttonStyle(.plain)
+                .id("\(photo.id.uuidString)-\(nonce)")
             } else {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color.white.opacity(0.08))
@@ -215,46 +238,142 @@ private struct SavedProofPhotoThumbnails: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
+    private func thumbPlaceholder(systemName: String, caption: String) -> some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(Color.white.opacity(0.08))
+            .overlay {
+                VStack(spacing: 4) {
+                    Image(systemName: systemName)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(MoveMarkTheme.Colors.primary)
+                    Text(caption)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(3)
+                        .minimumScaleFactor(0.85)
+                }
+                .padding(4)
+            }
+    }
+
     private func loadThumbs() async {
         for photo in evidence.photos.prefix(4) {
-            if previewURLs[photo.id] != nil { continue }
-            if let url = try? await inspectionRepo.signedURL(bucket: "inspection-media", path: photo.filePath) {
-                await MainActor.run {
-                    previewURLs[photo.id] = url
-                }
+            await resolveSignedURL(for: photo)
+        }
+    }
+
+    private func resolveSignedURL(for photo: EvidencePhoto) async {
+        do {
+            let url = try await inspectionRepo.signedURL(bucket: "inspection-media", path: photo.filePath)
+            await MainActor.run {
+                previewURLs[photo.id] = url
+                signedURLFailedIds.remove(photo.id)
+            }
+        } catch {
+            await MainActor.run {
+                signedURLFailedIds.insert(photo.id)
+                previewURLs.removeValue(forKey: photo.id)
             }
         }
+    }
+
+    private func retrySignedURL(for photo: EvidencePhoto) async {
+        await MoveMarkSignedURLCache.shared.invalidate(bucket: "inspection-media", path: photo.filePath)
+        await MainActor.run {
+            signedURLFailedIds.remove(photo.id)
+            imageRenderFailedIds.remove(photo.id)
+        }
+        await resolveSignedURL(for: photo)
+    }
+
+    private func retryImageRender(for photo: EvidencePhoto, url: URL) async {
+        _ = url
+        await MoveMarkSignedURLCache.shared.invalidate(bucket: "inspection-media", path: photo.filePath)
+        await MainActor.run {
+            imageRenderFailedIds.remove(photo.id)
+            renderNonce[photo.id, default: 0] += 1
+        }
+        await resolveSignedURL(for: photo)
     }
 }
 
 private struct PhotoPreviewFullScreen: View {
-    let url: URL
+    let filePath: String
     let onClose: () -> Void
+
+    @State private var imageURL: URL
+    @State private var reloadGeneration = 0
+    @State private var didAutoRetry = false
+    @State private var showHardFailure = false
+    @State private var isRefreshingURL = false
+
+    private let inspectionRepo = InspectionRepository()
+
+    init(initialURL: URL, filePath: String, onClose: @escaping () -> Void) {
+        self.filePath = filePath
+        self.onClose = onClose
+        _imageURL = State(initialValue: initialURL)
+    }
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                case .failure:
-                    VStack(spacing: 12) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.largeTitle)
-                        Text("Couldn’t load image")
-                            .foregroundStyle(.white.opacity(0.8))
+            if showHardFailure {
+                VStack(spacing: 14) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.largeTitle)
+                        .foregroundStyle(.white.opacity(0.9))
+                    Text("Couldn’t load image")
+                        .font(MoveMarkTheme.Typography.sectionTitle)
+                        .foregroundStyle(.white.opacity(0.9))
+                    Text("The preview link may have expired.")
+                        .font(MoveMarkTheme.Typography.footnote)
+                        .foregroundStyle(.white.opacity(0.55))
+                        .multilineTextAlignment(.center)
+                    Button {
+                        Task { await manualRetry() }
+                    } label: {
+                        Text("Try again")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(MoveMarkTheme.Colors.primary)
                     }
-                case .empty:
-                    ProgressView()
-                        .tint(.white)
-                @unknown default:
-                    EmptyView()
+                    .padding(.top, 4)
                 }
+                .padding(.horizontal, 32)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if isRefreshingURL {
+                ProgressView()
+                    .tint(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                // Custom builder avoids Nuke's default gray `Rectangle` placeholder on the black chrome.
+                Group {
+                    LazyImage(url: imageURL) { state in
+                        ZStack {
+                            Color.black
+                            if let container = state.imageContainer {
+                                SwiftUI.Image(uiImage: container.image)
+                                    .resizable()
+                                    .interpolation(.high)
+                                    .scaledToFit()
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            } else if state.error != nil {
+                                Color.clear
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            } else {
+                                ProgressView()
+                                    .tint(.white)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .onFailure { _ in
+                        handleImageLoadFailure()
+                    }
+                }
+                .id(reloadGeneration)
             }
 
             VStack {
@@ -271,6 +390,58 @@ private struct PhotoPreviewFullScreen: View {
                     .padding()
                 }
                 Spacer()
+            }
+        }
+    }
+
+    private func handleImageLoadFailure() {
+        Task { @MainActor in
+            guard !showHardFailure else { return }
+            if isRefreshingURL { return }
+
+            if !didAutoRetry {
+                didAutoRetry = true
+                isRefreshingURL = true
+                Task {
+                    await MoveMarkSignedURLCache.shared.invalidate(bucket: "inspection-media", path: filePath)
+                    do {
+                        let newURL = try await inspectionRepo.signedURL(bucket: "inspection-media", path: filePath)
+                        await MainActor.run {
+                            imageURL = newURL
+                            reloadGeneration += 1
+                            isRefreshingURL = false
+                        }
+                    } catch {
+                        await MainActor.run {
+                            showHardFailure = true
+                            isRefreshingURL = false
+                        }
+                    }
+                }
+            } else {
+                showHardFailure = true
+            }
+        }
+    }
+
+    private func manualRetry() async {
+        await MainActor.run {
+            showHardFailure = false
+            didAutoRetry = false
+            isRefreshingURL = true
+        }
+        await MoveMarkSignedURLCache.shared.invalidate(bucket: "inspection-media", path: filePath)
+        do {
+            let newURL = try await inspectionRepo.signedURL(bucket: "inspection-media", path: filePath)
+            await MainActor.run {
+                imageURL = newURL
+                reloadGeneration += 1
+                isRefreshingURL = false
+            }
+        } catch {
+            await MainActor.run {
+                showHardFailure = true
+                isRefreshingURL = false
             }
         }
     }

@@ -18,7 +18,8 @@ struct NewPropertyView: View {
     @State private var city = ""
     @State private var region = ""
     @State private var postalCode = ""
-    @State private var country = "CA"
+    @State private var selectedCountryOption = "CA"
+    @State private var customCountry = ""
     @State private var moveInDate = Date()
     @State private var leaseStartDate = Date()
     @State private var leaseEndDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
@@ -31,6 +32,12 @@ struct NewPropertyView: View {
     @State private var errorMessage = ""
     @State private var isLoading = false
 
+    private var countryValue: String {
+        selectedCountryOption == "Other" ? customCountry : selectedCountryOption
+    }
+
+    private let supportedCountries = ["CA", "US", "GB", "AU", "NZ"]
+
     private var input: CreatePropertyInput {
         CreatePropertyInput(
             name: name,
@@ -39,7 +46,7 @@ struct NewPropertyView: View {
             city: city,
             region: region,
             postalCode: postalCode,
-            country: country,
+            country: countryValue,
             moveInDate: moveInDate,
             leaseStartDate: leaseStartDate,
             leaseEndDate: leaseEndDate,
@@ -122,11 +129,8 @@ struct NewPropertyView: View {
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                             MMTextField(title: "Name", placeholder: "Property manager or landlord", text: $landlordName)
-                            MMTextField(title: "Email", placeholder: "Optional", text: $landlordEmail)
-                                .keyboardType(.emailAddress)
-                                .textInputAutocapitalization(.never)
-                            MMTextField(title: "Phone", placeholder: "Optional", text: $landlordPhone)
-                                .keyboardType(.phonePad)
+                            MMTextField(title: "Email", placeholder: "Optional", text: $landlordEmail, keyboardType: .emailAddress)
+                            MMTextField(title: "Phone", placeholder: "Optional", text: $landlordPhone, keyboardType: .phonePad)
                         }
                     }
 
@@ -136,10 +140,8 @@ struct NewPropertyView: View {
                             Text("Financials")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(title: "Deposit amount", placeholder: "e.g. 1500", text: $depositAmount)
-                                .keyboardType(.decimalPad)
-                            MMTextField(title: "Rent amount (optional)", placeholder: "e.g. 2200", text: $rentAmount)
-                                .keyboardType(.decimalPad)
+                            MMTextField(title: "Deposit amount", placeholder: "e.g. 1500", text: $depositAmount, keyboardType: .decimalPad)
+                            MMTextField(title: "Rent amount (optional)", placeholder: "e.g. 2200", text: $rentAmount, keyboardType: .decimalPad)
                         }
                     }
 
@@ -149,8 +151,17 @@ struct NewPropertyView: View {
                             Text("Location")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(title: "Country code", placeholder: "CA, US, etc.", text: $country)
-                                .textInputAutocapitalization(.characters)
+                            Picker("Country", selection: $selectedCountryOption) {
+                                ForEach(supportedCountries + ["Other"], id: \.self) { option in
+                                    Text(option).tag(option)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                            if selectedCountryOption == "Other" {
+                                MMTextField(title: "Country code", placeholder: "e.g. FR, DE", text: $customCountry)
+                                    .textInputAutocapitalization(.characters)
+                            }
                         }
                     }
 
@@ -188,16 +199,18 @@ struct NewPropertyView: View {
     }
 
     private func submit() {
+        #if DEBUG
         print("🟢 Submit tapped")
         print("🧪 validationError: \(input.validationError ?? "nil")")
         print("👤 userId: \(sessionManager.userId?.uuidString ?? "nil")")
+        #endif
 
         if let msg = input.validationError {
             errorMessage = msg
             return
         }
         guard let userId = sessionManager.userId else {
-            errorMessage = "Not signed in. Please sign in and try again."
+            errorMessage = MoveMarkFlowMessage.notSignedInPropertyForm
             return
         }
         if isLoading { return }
@@ -211,25 +224,8 @@ struct NewPropertyView: View {
                 try await propertyStore.createProperty(input: input, userId: userId)
                 dismiss()
             } catch {
-                errorMessage = userFacingPropertyCreateError(from: error)
+                errorMessage = MoveMarkFlowMessage.propertyCreateFailed(error)
             }
         }
-    }
-
-    private func userFacingPropertyCreateError(from error: Error) -> String {
-        let raw = error.localizedDescription.lowercased()
-        if raw.contains("not authenticated") || raw.contains("jwt") || raw.contains("session") {
-            return "Session expired. Please sign in again."
-        }
-        if raw.contains("duplicate") || raw.contains("already exists") {
-            return "A property with these details already exists."
-        }
-        if raw.contains("constraint") || raw.contains("violat") {
-            return "Couldn’t create property vault. Please check your details and try again."
-        }
-        if raw.contains("network") || raw.contains("offline") || raw.contains("internet") {
-            return "No connection. Check your internet and try again."
-        }
-        return "Couldn’t create property vault. Try again."
     }
 }

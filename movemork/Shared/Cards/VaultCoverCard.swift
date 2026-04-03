@@ -13,6 +13,7 @@ struct VaultCoverCard: View {
     @Binding var expandedVaultId: UUID?
     var namespace: Namespace.ID? = nil
     let onTap: () -> Void
+    var onPreviewImageFailure: (() -> Void)? = nil
 
     private let nonFeaturedCornerRadius: CGFloat = 22
     private let featuredCornerRadius: CGFloat = 24
@@ -47,6 +48,7 @@ struct VaultCoverCard: View {
                 }
             }
             .frame(height: totalHeight)
+            .animation(MMMotion.expand, value: totalHeight)
             .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(
@@ -162,10 +164,12 @@ struct VaultCoverCard: View {
     @ViewBuilder
     private func backgroundLayer(isPressed: Bool) -> some View {
         let background = VaultCoverBackground(
+            propertyId: model.id,
             imageURL: model.previewImageURL,
             fallbackStyle: model.fallbackStyle,
             isPressed: isPressed,
-            isEmphasized: model.isEmphasized
+            isEmphasized: model.isEmphasized,
+            onPreviewReloadRequested: onPreviewImageFailure
         )
         if let ns = namespace {
             background

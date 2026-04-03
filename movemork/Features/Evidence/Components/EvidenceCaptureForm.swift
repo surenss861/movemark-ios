@@ -14,7 +14,6 @@ struct EvidenceCaptureForm: View {
     @Binding var selectedTags: Set<String>
     @Binding var selectedCondition: RoomRecord.ConditionRating
     @Binding var selectedItems: [PhotosPickerItem]
-    @Binding var showCamera: Bool
 
     let loadedImages: [UIImage]
     let isUploading: Bool
@@ -99,13 +98,9 @@ struct EvidenceCaptureForm: View {
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.68))
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(Array(stride(from: 0, to: fixedIssueTags.count, by: 3)), id: \.self) { start in
-                    HStack(spacing: 8) {
-                        ForEach(Array(fixedIssueTags.dropFirst(start).prefix(3)), id: \.self) { tag in
-                            tagChip(tag)
-                        }
-                    }
+            FlowLayout(spacing: 8) {
+                ForEach(fixedIssueTags, id: \.self) { tag in
+                    tagChip(tag)
                 }
             }
         }

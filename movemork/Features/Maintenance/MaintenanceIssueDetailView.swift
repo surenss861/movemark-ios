@@ -7,6 +7,7 @@
 
 import SwiftUI
 import PhotosUI
+import NukeUI
 
 struct MaintenanceIssueDetailView: View {
     @State private var issue: MaintenanceIssueRow
@@ -15,7 +16,10 @@ struct MaintenanceIssueDetailView: View {
     @State private var isSavingFollowUp = false
     @State private var isUploadingPhotos = false
     @State private var evidenceURLs: [URL] = []
+    @State private var evidenceFileCount = 0
+    @State private var isLoadingEvidence = false
     @State private var errorMessage: String? = nil
+    @State private var softNotice: String? = nil
     @State private var retryAction: (() -> Void)? = nil
     @State private var isResolving = false
 
@@ -38,13 +42,25 @@ struct MaintenanceIssueDetailView: View {
 
                     timelineCard
 
-                    if !evidenceURLs.isEmpty {
+                    if evidenceFileCount > 0 {
                         evidenceCard
                     }
 
                     followUpCard
 
                     resolveCard
+
+                    if let softNotice, errorMessage == nil {
+                        MMCard(tone: .quiet, padding: 14, spacing: 8) {
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: "info.circle.fill")
+                                    .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.9))
+                                Text(softNotice)
+                                    .font(MoveMarkTheme.Typography.subheadline)
+                                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                            }
+                        }
+                    }
 
                     if let errorMessage {
                         MMErrorBanner(
@@ -124,20 +140,32 @@ struct MaintenanceIssueDetailView: View {
             VStack(alignment: .leading, spacing: 14) {
                 SectionLabel(text: "Evidence")
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(evidenceURLs, id: \.absoluteString) { url in
-                            AsyncImage(url: url) { image in
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 120, height: 120)
-                                    .clipped()
-                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            } placeholder: {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(MoveMarkTheme.Colors.fieldFill)
-                                    .frame(width: 120, height: 120)
+                if isLoadingEvidence {
+                    ProgressView()
+                        .tint(MoveMarkTheme.Colors.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else if evidenceURLs.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Couldn’t load photo previews. Your files may still be saved.")
+                            .font(MoveMarkTheme.Typography.subheadline)
+                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        MMButton(
+                            title: "Retry previews",
+                            action: { Task { await loadEvidence() } },
+                            kind: .secondary,
+                            size: .compact,
+                            expandsToFillWidth: false
+                        )
+                    }
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(evidenceURLs, id: \.absoluteString) { url in
+                                MaintenanceEvidenceThumbnail(url: url, propertyId: issue.propertyId) {
+                                    Task { await loadEvidence() }
+                                }
                             }
                         }
                     }
@@ -239,18 +267,51 @@ struct MaintenanceIssueDetailView: View {
     }
 
     private func loadEvidence() async {
+        softNotice = nil
+        isLoadingEvidence = true
+        defer { isLoadingEvidence = false }
         do {
             let files = try await inspectionRepo.fetchEvidenceFilesByMaintenanceIssue(issueId: issue.id)
-            var urls: [URL] = []
-            for file in files {
-                if let url = try? await inspectionRepo.signedURL(bucket: "maintenance-media", path: file.filePath) {
-                    urls.append(url)
-                }
+            evidenceFileCount = files.count
+            guard !files.isEmpty else {
+                evidenceURLs = []
+                return
             }
-            evidenceURLs = urls
+            evidenceURLs = try await fetchEvidencePreviewURLs(files: files)
         } catch {
-            errorMessage = userFacingMaintenanceDetailError(from: error)
+            errorMessage = MoveMarkFlowMessage.maintenanceEvidenceLoadFailed(error)
             retryAction = { Task { await loadEvidence() } }
+        }
+    }
+
+    private func fetchEvidencePreviewURLs(files: [EvidenceFileRow]) async throws -> [URL] {
+        var urls: [URL] = []
+        var lastError: Error?
+        for file in files {
+            do {
+                let u = try await inspectionRepo.signedURL(bucket: "maintenance-media", path: file.filePath)
+                urls.append(u)
+            } catch {
+                lastError = error
+            }
+        }
+        if urls.isEmpty, let lastError { throw lastError }
+        return urls
+    }
+
+    /// Reload previews after upload; returns `false` if the list couldn’t be refreshed (photos may still be saved).
+    private func reloadEvidencePreviewURLs() async -> Bool {
+        do {
+            let files = try await inspectionRepo.fetchEvidenceFilesByMaintenanceIssue(issueId: issue.id)
+            evidenceFileCount = files.count
+            guard !files.isEmpty else {
+                evidenceURLs = []
+                return true
+            }
+            evidenceURLs = try await fetchEvidencePreviewURLs(files: files)
+            return true
+        } catch {
+            return false
         }
     }
 
@@ -259,16 +320,23 @@ struct MaintenanceIssueDetailView: View {
 
         isUploadingPhotos = true
         errorMessage = nil
+        softNotice = nil
         retryAction = nil
 
         Task { @MainActor in
             defer { isUploadingPhotos = false }
 
-            do {
-                for item in items {
-                    guard let data = try await item.loadTransferable(type: Data.self) else { continue }
-                    let path = "\(issue.userId)/\(issue.propertyId)/\(issue.id)/\(UUID().uuidString).jpg"
+            for item in items {
+                guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+                let path = "\(issue.userId)/\(issue.propertyId)/\(issue.id)/\(UUID().uuidString).jpg"
+                do {
                     _ = try await maintenanceRepo.uploadAttachment(data: data, path: path)
+                } catch {
+                    errorMessage = MoveMarkFlowMessage.maintenancePhotoUploadFailed(error)
+                    retryAction = { uploadPhotos(items) }
+                    return
+                }
+                do {
                     try await inspectionRepo.insertEvidenceFile(
                         propertyId: issue.propertyId,
                         inspectionItemId: nil,
@@ -277,12 +345,16 @@ struct MaintenanceIssueDetailView: View {
                         fileType: "image",
                         capturedAt: Date()
                     )
+                } catch {
+                    errorMessage = MoveMarkFlowMessage.maintenancePhotoRecordFailed(error)
+                    retryAction = { uploadPhotos(items) }
+                    return
                 }
-                selectedPhotos = []
-                await loadEvidence()
-            } catch {
-                errorMessage = userFacingMaintenanceDetailError(from: error)
-                retryAction = { uploadPhotos(items) }
+            }
+            selectedPhotos = []
+            let previewsOK = await reloadEvidencePreviewURLs()
+            if !previewsOK {
+                softNotice = MoveMarkFlowMessage.maintenanceEvidencePreviewHint
             }
         }
     }
@@ -305,7 +377,7 @@ struct MaintenanceIssueDetailView: View {
                 issue = updated
                 followUpNote = ""
             } catch {
-                errorMessage = userFacingMaintenanceDetailError(from: error)
+                errorMessage = MoveMarkFlowMessage.maintenanceFollowUpFailed(error)
                 retryAction = { saveFollowUp() }
             }
         }
@@ -328,17 +400,30 @@ struct MaintenanceIssueDetailView: View {
                 issue = updated
                 MMHaptics.success()
             } catch {
-                errorMessage = userFacingMaintenanceDetailError(from: error)
+                errorMessage = MoveMarkFlowMessage.maintenanceResolveFailed(error)
                 retryAction = { markResolved() }
             }
         }
     }
+}
 
-    private func userFacingMaintenanceDetailError(from error: Error) -> String {
-        let lower = error.localizedDescription.lowercased()
-        if lower.contains("bucket") || lower.contains("storage") || (lower.contains("not found") && (lower.contains("object") || lower.contains("bucket"))) {
-            return "Photo upload is unavailable right now. Try again soon."
-        }
-        return UserFacingDatabaseError.message(from: error, fallback: "Couldn’t update maintenance issue. Try again.")
+// MARK: - Maintenance evidence thumbnail (signed URL / Nuke retry)
+
+private struct MaintenanceEvidenceThumbnail: View {
+    let url: URL
+    let propertyId: UUID
+    let onSignedURLExpired: () -> Void
+
+    var body: some View {
+        LazyImage(url: url, resizingMode: .aspectFill)
+            .onFailure { _ in
+                Task {
+                    await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
+                    await MainActor.run { onSignedURLExpired() }
+                }
+            }
+            .frame(width: 120, height: 120)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }

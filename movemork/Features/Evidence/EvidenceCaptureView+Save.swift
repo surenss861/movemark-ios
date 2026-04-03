@@ -10,12 +10,12 @@ import SwiftUI
 extension EvidenceCaptureView {
     func saveEvidence() {
         guard let property = propertyStore.currentProperty else {
-            errorMessage = "No active property loaded."
+            errorMessage = MoveMarkFlowMessage.noActiveProperty
             return
         }
 
         guard let userId = sessionManager.userId else {
-            errorMessage = "You need to sign in again."
+            errorMessage = MoveMarkFlowMessage.signInRequired
             return
         }
 
@@ -46,16 +46,21 @@ extension EvidenceCaptureView {
             defer { isUploading = false }
 
             do {
+                let outcome: PropertyMutationOutcome
                 if moveOutMode {
-                    try await propertyStore.addMoveOutEvidence(
+                    let hadZeroMoveOutEvidenceBefore = (room?.moveOutEvidence.isEmpty == true)
+                    outcome = try await propertyStore.addMoveOutEvidence(
                         to: roomID,
                         evidence: evidence,
                         photos: photoData,
                         propertyId: property.id,
                         userId: userId
                     )
+                    if hadZeroMoveOutEvidenceBefore {
+                        propertyStore.pendingVaultFeedback = .roomCompleted(roomName: roomName)
+                    }
                 } else {
-                    try await propertyStore.addEvidence(
+                    outcome = try await propertyStore.addEvidence(
                         to: roomID,
                         evidence: evidence,
                         photos: photoData,
@@ -76,9 +81,13 @@ extension EvidenceCaptureView {
                 selectedCondition = .good
                 selectedItems = []
                 loadedImages = []
-                successMessage = moveOutMode
+                var msg = moveOutMode
                     ? "Move-out proof saved. Thumbnails may take a moment to appear."
                     : "Proof saved. Thumbnails may take a moment to appear."
+                if outcome.hydrationRefreshFailed {
+                    msg += MoveMarkFlowMessage.proofHydrationHint
+                }
+                successMessage = msg
 
                 MMHaptics.success()
 
@@ -98,32 +107,34 @@ extension EvidenceCaptureView {
                 #if DEBUG
                 print("ROOM SAVE FAILED:", error.localizedDescription)
                 #endif
-                errorMessage = userFacingEvidenceError(from: error)
+                errorMessage = MoveMarkFlowMessage.proofSaveFailed(error)
             }
         }
     }
 
     func deleteEntry(_ entryId: UUID) async {
         guard let property = propertyStore.currentProperty else {
-            errorMessage = "No active property loaded."
+            errorMessage = MoveMarkFlowMessage.noActiveProperty
             return
         }
 
         guard let userId = sessionManager.userId else {
-            errorMessage = "You need to sign in again."
+            errorMessage = MoveMarkFlowMessage.signInRequired
             return
         }
 
         do {
-            try await propertyStore.deleteEvidence(
+            let outcome = try await propertyStore.deleteEvidence(
                 entryId: entryId,
                 propertyId: property.id,
                 userId: userId
             )
-            successMessage = "Entry removed."
+            var msg = "Entry removed."
+            if outcome.hydrationRefreshFailed { msg += MoveMarkFlowMessage.proofHydrationHint }
+            successMessage = msg
             MMHaptics.success()
         } catch {
-            errorMessage = userFacingEvidenceError(from: error)
+            errorMessage = MoveMarkFlowMessage.proofDeleteFailed(error)
         }
     }
 
@@ -135,17 +146,17 @@ extension EvidenceCaptureView {
         condition: RoomRecord.ConditionRating
     ) async {
         guard let property = propertyStore.currentProperty else {
-            errorMessage = "No active property loaded."
+            errorMessage = MoveMarkFlowMessage.noActiveProperty
             return
         }
 
         guard let userId = sessionManager.userId else {
-            errorMessage = "You need to sign in again."
+            errorMessage = MoveMarkFlowMessage.signInRequired
             return
         }
 
         do {
-            try await propertyStore.updateEvidence(
+            let outcome = try await propertyStore.updateEvidence(
                 entryId: entryId,
                 title: title,
                 notes: notes,
@@ -154,10 +165,12 @@ extension EvidenceCaptureView {
                 propertyId: property.id,
                 userId: userId
             )
-            successMessage = "Entry updated."
+            var msg = "Entry updated."
+            if outcome.hydrationRefreshFailed { msg += MoveMarkFlowMessage.proofHydrationHint }
+            successMessage = msg
             MMHaptics.success()
         } catch {
-            errorMessage = userFacingEvidenceError(from: error)
+            errorMessage = MoveMarkFlowMessage.proofUpdateFailed(error)
         }
     }
 
@@ -165,17 +178,17 @@ extension EvidenceCaptureView {
         guard !photoData.isEmpty else { return }
 
         guard let property = propertyStore.currentProperty else {
-            errorMessage = "No active property loaded."
+            errorMessage = MoveMarkFlowMessage.noActiveProperty
             return
         }
 
         guard let userId = sessionManager.userId else {
-            errorMessage = "You need to sign in again."
+            errorMessage = MoveMarkFlowMessage.signInRequired
             return
         }
 
         do {
-            try await propertyStore.appendPhotosToEvidence(
+            let outcome = try await propertyStore.appendPhotosToEvidence(
                 entryId: entryId,
                 roomId: roomID,
                 photos: photoData,
@@ -183,14 +196,12 @@ extension EvidenceCaptureView {
                 userId: userId,
                 isMoveOut: moveOutMode
             )
-            successMessage = "Photos added to entry."
+            var msg = "Photos added to entry."
+            if outcome.hydrationRefreshFailed { msg += MoveMarkFlowMessage.proofHydrationHint }
+            successMessage = msg
             MMHaptics.success()
         } catch {
-            errorMessage = userFacingEvidenceError(from: error)
+            errorMessage = MoveMarkFlowMessage.proofAppendPhotosFailed(error)
         }
-    }
-
-    private func userFacingEvidenceError(from error: Error) -> String {
-        UserFacingDatabaseError.message(from: error, fallback: "Couldn’t save proof. Try again.")
     }
 }

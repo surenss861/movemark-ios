@@ -3,7 +3,7 @@
 //  movemork
 //
 //  Single source of truth for Pro / paywalled features. Do not duplicate entitlement logic elsewhere.
-//  `hasPro` follows `movemark_pro1`, and when Test Store is allowed also `test` (dashboard bridge).
+//  `hasPro` follows `movemark_pro1`; in Debug only, entitlement `test` is also accepted as a Test Store dashboard bridge.
 //
 
 import Foundation
@@ -29,7 +29,8 @@ final class SubscriptionManager {
     private var hasStartedCustomerInfoListener = false
     private var lastKnownAppUserID: String? = nil
 
-    /// Test Store keys (`test_…`) are allowed in Debug, or in Release when `REVENUECAT_ALLOW_TEST_STORE_KEY` is set (project Release includes it for TestFlight; remove for hardened App Store-only Release).
+    /// Test Store keys (`test_…`) and the `test` entitlement bridge are **Debug-only**. Release / TestFlight / App Store always use `appl_…` and `movemark_pro1` only.
+    /// To experiment with Test Store in a custom Release-like configuration, add Swift flag `REVENUECAT_ALLOW_TEST_STORE_KEY` to that configuration only (not shipped App Store archives).
     private static var allowsRevenueCatTestStoreKey: Bool {
         #if DEBUG
         true
@@ -40,32 +41,56 @@ final class SubscriptionManager {
         #endif
     }
 
-    private let freeMoveInExportCountKey = "MoveMark.freeMoveInExportCount"
+    /// Pre–per-user builds stored the count under this key; migrated once per signed-in user.
+    private static let legacyFreeMoveInExportCountKey = "MoveMark.freeMoveInExportCount"
 
-    var freeMoveInExportCount: Int {
-        UserDefaults.standard.integer(forKey: freeMoveInExportCountKey)
+    private static func freeMoveInExportCountKey(userId: UUID) -> String {
+        "MoveMark.freeMoveInExportCount.\(userId.uuidString)"
     }
 
-    func incrementFreeMoveInExportCount() {
-        let next = freeMoveInExportCount + 1
-        UserDefaults.standard.set(next, forKey: freeMoveInExportCountKey)
+    /// Copies legacy global counter into a per-user key the first time we read for that user.
+    private static func migrateLegacyFreeExportCountIfNeeded(userId: UUID) {
+        let key = freeMoveInExportCountKey(userId: userId)
+        guard UserDefaults.standard.object(forKey: key) == nil else { return }
+        let legacy = UserDefaults.standard.integer(forKey: legacyFreeMoveInExportCountKey)
+        UserDefaults.standard.set(legacy, forKey: key)
+        UserDefaults.standard.removeObject(forKey: legacyFreeMoveInExportCountKey)
     }
 
-    func canExportMoveIn() -> Bool {
-        hasPro || freeMoveInExportCount < 1
+    func freeMoveInExportCount(forUser userId: UUID?) -> Int {
+        guard let userId else { return 0 }
+        Self.migrateLegacyFreeExportCountIfNeeded(userId: userId)
+        return UserDefaults.standard.integer(forKey: Self.freeMoveInExportCountKey(userId: userId))
     }
 
-    func remainingFreeMoveInExportsText() -> String {
+    func incrementFreeMoveInExportCount(forUser userId: UUID) {
+        Self.migrateLegacyFreeExportCountIfNeeded(userId: userId)
+        let key = Self.freeMoveInExportCountKey(userId: userId)
+        let next = UserDefaults.standard.integer(forKey: key) + 1
+        UserDefaults.standard.set(next, forKey: key)
+    }
+
+    func canExportMoveIn(forUser userId: UUID?) -> Bool {
+        if hasPro { return true }
+        guard let userId else { return false }
+        return freeMoveInExportCount(forUser: userId) < 1
+    }
+
+    func remainingFreeMoveInExportsText(forUser userId: UUID?) -> String {
         if hasPro {
             return "Unlimited move-in exports with Pro"
         }
 
-        let remaining = max(0, 1 - freeMoveInExportCount)
+        guard let userId else {
+            return "Sign in to use your free move-in export"
+        }
+
+        let count = freeMoveInExportCount(forUser: userId)
+        let remaining = max(0, 1 - count)
         if remaining == 1 {
             return "1 free move-in export remaining"
-        } else {
-            return "Free move-in export used"
         }
+        return "Free move-in export used"
     }
 
     func configure(appUserID: String? = nil) {
@@ -251,8 +276,9 @@ final class SubscriptionManager {
         return raw
     }
 
-    /// Optional plist key: force a specific offering id (e.g. `testdeault`) when it is Current in RC but you need to debug; omit for `offerings.current`.
+    /// Debug-only plist override for a specific offering id. Ignored in Release so TestFlight/App Store always use `offerings.current` from the dashboard.
     private static func revenueCatOfferingIdentifierOverride() -> String? {
+        #if DEBUG
         for key in ["RevenueCatOfferingOverride", "MoveMarkRevenueCatOfferingOverride"] {
             guard let raw = Bundle.main.object(forInfoDictionaryKey: key) as? String else { continue }
             let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -260,6 +286,9 @@ final class SubscriptionManager {
             return t
         }
         return nil
+        #else
+        return nil
+        #endif
     }
 
     /// Safe for logs: whether the key looks substituted, plus a short prefix (never log full keys).
@@ -337,12 +366,15 @@ final class SubscriptionManager {
             let customerInfo = try await Purchases.shared.customerInfo()
             let proActive = Self.hasActiveProEntitlement(customerInfo)
             subscriptionLog.notice("refresh customerInfo OK hasPro=\(proActive, privacy: .public)")
+            #if DEBUG
             Self.logEntitlementSnapshot(customerInfo, primaryEntitlementID: proEntitlementID, hasPro: proActive)
+            #endif
 
             let offerings = try await Purchases.shared.offerings()
 
             hasPro = proActive
 
+            #if DEBUG
             let catalogIds = offerings.all.keys.sorted()
             subscriptionLog.notice("offerings catalog ids=\(String(describing: catalogIds), privacy: .public) sdkCurrent=\(offerings.current?.identifier ?? "nil", privacy: .public)")
 
@@ -354,6 +386,7 @@ final class SubscriptionManager {
                     "offering id=\(oid, privacy: .public) packageCount=\(off.availablePackages.count, privacy: .public) storeProductIDs=\(String(describing: pids), privacy: .public) rcPackageIDs=\(String(describing: rcIds), privacy: .public)"
                 )
             }
+            #endif
 
             let resolvedOffering: Offering? = {
                 if let oid = Self.revenueCatOfferingIdentifierOverride() {
@@ -364,7 +397,7 @@ final class SubscriptionManager {
                         return off
                     }
                     subscriptionLog.error(
-                        "RevenueCatOfferingOverride id=\(oid, privacy: .public) missing from catalog keys=\(String(describing: catalogIds), privacy: .public)"
+                        "RevenueCatOfferingOverride id=\(oid, privacy: .public) missing from catalog keys=\(String(describing: offerings.all.keys.sorted()), privacy: .public)"
                     )
                 }
                 return offerings.current
@@ -373,12 +406,18 @@ final class SubscriptionManager {
             currentOffering = resolvedOffering
 
             if let current = resolvedOffering {
+                let count = current.availablePackages.count
+                #if DEBUG
                 let packageIDs = current.availablePackages.map(\.storeProduct.productIdentifier)
                 let rcPackageIDs = current.availablePackages.map(\.identifier)
-                let count = current.availablePackages.count
                 subscriptionLog.notice(
                     "refresh resolved offering=\(current.identifier, privacy: .public) packageCount=\(count, privacy: .public) storeProductIDs=\(String(describing: packageIDs), privacy: .public) rcPackageIDs=\(String(describing: rcPackageIDs), privacy: .public)"
                 )
+                #else
+                subscriptionLog.notice(
+                    "refresh resolved offering=\(current.identifier, privacy: .public) packageCount=\(count, privacy: .public)"
+                )
+                #endif
 
                 if current.availablePackages.isEmpty {
                     subscriptionLog.notice("refresh resolved offering has zero packages (check RevenueCat packages / StoreKit config on simulator)")

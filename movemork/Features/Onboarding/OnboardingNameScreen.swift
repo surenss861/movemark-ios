@@ -108,19 +108,8 @@ struct OnboardingNameScreen: View {
             do {
                 try await sessionManager.completeOnboarding(firstName: firstName)
             } catch {
-                errorMessage = userFacingOnboardingError(from: error)
+                errorMessage = MoveMarkFlowMessage.onboardingProfileSaveFailed(error)
             }
         }
-    }
-
-    private func userFacingOnboardingError(from error: Error) -> String {
-        let raw = error.localizedDescription.lowercased()
-        if raw.contains("not authenticated") || raw.contains("jwt") || raw.contains("session") {
-            return "Session expired. Please sign in again."
-        }
-        if raw.contains("network") || raw.contains("offline") || raw.contains("internet") {
-            return "No connection. Check your internet and try again."
-        }
-        return error.localizedDescription
     }
 }

@@ -18,6 +18,7 @@ struct ExportHistoryView: View {
     @State private var exports: [ExportRow] = []
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
+    @State private var successBanner: String? = nil
     @State private var shareItems: [Any] = []
     @State private var showShareSheet = false
     @State private var verificationStatus: [UUID: ExportVerificationStatus] = [:]
@@ -32,6 +33,10 @@ struct ExportHistoryView: View {
         return value
     }
 
+    private var hasActiveVault: Bool {
+        propertyStore.currentProperty != nil
+    }
+
     var body: some View {
         ZStack {
             MoveMarkTheme.Colors.background.ignoresSafeArea()
@@ -39,6 +44,18 @@ struct ExportHistoryView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     header
+
+                    if let successBanner {
+                        MMCard(tone: .quiet, padding: 14, spacing: 8) {
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(MoveMarkTheme.Colors.primary)
+                                Text(successBanner)
+                                    .font(MoveMarkTheme.Typography.subheadline)
+                                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                            }
+                        }
+                    }
 
                     if let errorMessage {
                         MMErrorBanner(
@@ -48,7 +65,9 @@ struct ExportHistoryView: View {
                         )
                     }
 
-                    if exports.isEmpty && !isLoading {
+                    if !hasActiveVault && !isLoading {
+                        noVaultSelectedState
+                    } else if exports.isEmpty && !isLoading {
                         emptyState
                     } else {
                         VStack(alignment: .leading, spacing: 18) {
@@ -83,8 +102,26 @@ struct ExportHistoryView: View {
                 ShareSheet(activityItems: shareItems)
             }
         }
-        .task {
+        .task(id: propertyStore.currentProperty?.id) {
             await loadExports()
+        }
+    }
+
+    private func canShareExport(_ status: ExportVerificationStatus) -> Bool {
+        switch status {
+        case .serverFailed, .queued, .processing, .verifying, .missingPath, .invalidURL:
+            return false
+        case .ready, .unknown, .verificationFailed:
+            return true
+        }
+    }
+
+    private func shouldShowVerifyButton(for status: ExportVerificationStatus) -> Bool {
+        switch status {
+        case .ready, .serverFailed:
+            return false
+        case .unknown, .queued, .processing, .verifying, .missingPath, .invalidURL, .verificationFailed:
+            return true
         }
     }
 
@@ -94,6 +131,35 @@ struct ExportHistoryView: View {
             title: "Exports",
             subtitle: "Reports and packets for your current vault."
         )
+    }
+
+    private var noVaultSelectedState: some View {
+        MMCard(tone: .quiet, padding: 18, spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
+                exportArtifactPreview
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Choose a vault to see exports")
+                        .font(MoveMarkTheme.Typography.cardTitle)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+
+                    Text("Exports are tied to the property you have open. Open a vault from the home list, then return here.")
+                        .font(MoveMarkTheme.Typography.subheadline)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if showOpenVaultsCTA {
+                    MMButton(
+                        title: "Open a vault",
+                        action: { onOpenVaults?() },
+                        kind: .secondary,
+                        size: .standard
+                    )
+                    .padding(.top, 2)
+                }
+            }
+        }
     }
 
     private var emptyState: some View {
@@ -246,6 +312,13 @@ struct ExportHistoryView: View {
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.78))
                         .lineLimit(1)
 
+                    if status == .serverFailed {
+                        Text(MoveMarkFlowMessage.exportServerFailedHint)
+                            .font(MoveMarkTheme.Typography.caption)
+                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
                     if case .verificationFailed(let msg) = status, !msg.isEmpty {
                         Text(msg)
                             .font(MoveMarkTheme.Typography.caption)
@@ -262,10 +335,11 @@ struct ExportHistoryView: View {
                         action: { share(row) },
                         kind: .secondary,
                         size: .compact,
+                        isDisabled: !canShareExport(status),
                         expandsToFillWidth: false
                     )
 
-                    if status == .unknown || status.isProblem {
+                    if shouldShowVerifyButton(for: status) {
                         MMButton(
                             title: status == .verifying ? "Verifying…" : "Verify",
                             action: { verify(row) },
@@ -360,7 +434,29 @@ struct ExportHistoryView: View {
                 .font(MoveMarkTheme.Typography.caption)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
 
-        case .missingPath, .invalidURL, .verificationFailed:
+        case .queued:
+            HStack(spacing: 4) {
+                Image(systemName: "tray.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+
+                Text(status.displayLabel)
+                    .font(MoveMarkTheme.Typography.caption)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+            }
+
+        case .processing:
+            HStack(spacing: 4) {
+                Image(systemName: "clock.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+
+                Text(status.displayLabel)
+                    .font(MoveMarkTheme.Typography.caption)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+            }
+
+        case .missingPath, .invalidURL, .verificationFailed, .serverFailed:
             HStack(spacing: 4) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 11))
@@ -381,8 +477,24 @@ struct ExportHistoryView: View {
                 let client = try makeAPIClient()
                 _ = try await client.fetchDownloadURL(exportId: row.id.uuidString, accessToken: accessToken)
                 verificationStatus[row.id] = .ready
+            } catch let api as APIClientError {
+                if case .exportNotReady = api {
+                    verificationStatus[row.id] = .processing
+                } else {
+                    verificationStatus[row.id] = .verificationFailed(
+                        MoveMarkFlowMessage.exportOrAPIFailed(
+                            api,
+                            fallback: "Verification failed. Try again."
+                        )
+                    )
+                }
             } catch {
-                verificationStatus[row.id] = .verificationFailed(error.localizedDescription)
+                verificationStatus[row.id] = .verificationFailed(
+                    MoveMarkFlowMessage.exportOrAPIFailed(
+                        error,
+                        fallback: "Verification failed. Try again."
+                    )
+                )
             }
         }
     }
@@ -401,6 +513,7 @@ struct ExportHistoryView: View {
     private func loadExports() async {
         isLoading = true
         errorMessage = nil
+        successBanner = nil
         defer { isLoading = false }
 
         await MainActor.run {
@@ -409,37 +522,62 @@ struct ExportHistoryView: View {
 
         guard let apiClient = try? makeAPIClient() else {
             errorMessage = "API base URL is missing. Set MoveMarkAPIBaseURL in build settings."
+            exports = []
+            return
+        }
+
+        guard let currentPropertyId = propertyStore.currentProperty?.id else {
+            exports = []
+            errorMessage = nil
             return
         }
 
         do {
             let token = try await currentAccessToken()
-            let items = try await apiClient.fetchExports(accessToken: token)
-            let filtered: [ExportListItem]
-            if let currentPropertyID = propertyStore.currentProperty?.id {
-                filtered = items.filter { $0.propertyId == currentPropertyID }
-            } else {
-                filtered = items
-            }
+            let items = try await apiClient.fetchExports(accessToken: token, propertyId: currentPropertyId)
 
-            exports = filtered.map {
+            var nextVerification: [UUID: ExportVerificationStatus] = [:]
+            for item in items {
+                switch item.status {
+                case .queued:
+                    nextVerification[item.id] = .queued
+                case .processing:
+                    nextVerification[item.id] = .processing
+                case .failed:
+                    nextVerification[item.id] = .serverFailed
+                case .completed:
+                    let fp = (item.filePath ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                    if fp.isEmpty {
+                        nextVerification[item.id] = .missingPath
+                    }
+                }
+            }
+            let rows = items.map { item in
                 ExportRow(
-                    id: $0.id,
+                    id: item.id,
                     disputeId: nil,
-                    propertyId: $0.propertyId,
-                    userId: $0.userId,
-                    exportType: $0.type,
-                    filePath: $0.filePath,
-                    createdAt: $0.requestedAt ?? $0.createdAt
+                    propertyId: item.propertyId,
+                    userId: item.userId,
+                    exportType: item.type,
+                    filePath: item.filePath,
+                    createdAt: item.requestedAt ?? item.createdAt
                 )
             }
+            exports = rows
+            verificationStatus = nextVerification
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(
+                error,
+                fallback: "Couldn’t load exports. Try again."
+            )
+            exports = []
         }
     }
 
     private func share(_ row: ExportRow) {
         Task { @MainActor in
+            errorMessage = nil
+            successBanner = nil
             do {
                 let accessToken = try await currentAccessToken()
                 let client = try makeAPIClient()
@@ -449,11 +587,28 @@ struct ExportHistoryView: View {
                 }
                 shareItems = [url]
                 showShareSheet = true
-                errorMessage = nil
                 verificationStatus[row.id] = .ready
+                successBanner = "Download link ready — use Share to save or send."
+            } catch let api as APIClientError {
+                if case .exportNotReady = api {
+                    verificationStatus[row.id] = .processing
+                    successBanner = nil
+                    errorMessage = nil
+                } else {
+                    let mapped = MoveMarkFlowMessage.exportOrAPIFailed(
+                        api,
+                        fallback: "Couldn’t prepare download. Try again."
+                    )
+                    verificationStatus[row.id] = .verificationFailed(mapped)
+                    errorMessage = mapped
+                }
             } catch {
-                verificationStatus[row.id] = .verificationFailed(error.localizedDescription)
-                errorMessage = error.localizedDescription
+                let mapped = MoveMarkFlowMessage.exportOrAPIFailed(
+                    error,
+                    fallback: "Couldn’t prepare download. Try again."
+                )
+                verificationStatus[row.id] = .verificationFailed(mapped)
+                errorMessage = mapped
             }
         }
     }

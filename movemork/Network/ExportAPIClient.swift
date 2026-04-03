@@ -63,6 +63,8 @@ enum APIClientError: LocalizedError {
     case invalidResponse
     case serverError(String)
     case decodingFailed
+    /// Server returned 409 — export row exists but file is not ready yet.
+    case exportNotReady
 
     var errorDescription: String? {
         switch self {
@@ -76,6 +78,8 @@ enum APIClientError: LocalizedError {
             return message
         case .decodingFailed:
             return "Failed to decode server response."
+        case .exportNotReady:
+            return "Export is still processing."
         }
     }
 }
@@ -83,6 +87,7 @@ enum APIClientError: LocalizedError {
 final class ExportAPIClient {
     private let session: URLSession
     private let baseURL: URL
+    private static let decoder = JSONDecoder()
 
     init(baseURLString: String, session: URLSession = .shared) throws {
         guard let url = URL(string: baseURLString) else {
@@ -118,19 +123,25 @@ final class ExportAPIClient {
         }
 
         do {
-            return try JSONDecoder().decode(MoveInExportResponse.self, from: data)
+            return try Self.decoder.decode(MoveInExportResponse.self, from: data)
         } catch {
             throw APIClientError.decodingFailed
         }
     }
 
-    func fetchExports(accessToken: String) async throws -> [ExportListItem] {
+    func fetchExports(accessToken: String, propertyId: UUID) async throws -> [ExportListItem] {
         guard !accessToken.isEmpty else {
             throw APIClientError.missingAuthToken
         }
 
-        let endpoint = baseURL.appendingPathComponent("api/exports")
-        var request = URLRequest(url: endpoint)
+        var url = baseURL.appendingPathComponent("api/exports")
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "propertyId", value: propertyId.uuidString)]
+        guard let resolved = components?.url else {
+            throw APIClientError.invalidBaseURL
+        }
+        url = resolved
+        var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
@@ -141,7 +152,7 @@ final class ExportAPIClient {
 
         let bodyPreview = String(data: data, encoding: .utf8).map { String($0.prefix(800)) } ?? "<binary>"
         exportAPILog.notice(
-            "GET exports url=\(endpoint.absoluteString, privacy: .public) hasToken=\(!accessToken.isEmpty, privacy: .public) status=\(httpResponse.statusCode, privacy: .public)"
+            "GET exports url=\(url.absoluteString, privacy: .public) hasToken=\(!accessToken.isEmpty, privacy: .public) status=\(httpResponse.statusCode, privacy: .public)"
         )
 
         guard 200..<300 ~= httpResponse.statusCode else {
@@ -151,7 +162,7 @@ final class ExportAPIClient {
         }
 
         do {
-            return try JSONDecoder().decode([ExportListItem].self, from: data)
+            return try Self.decoder.decode([ExportListItem].self, from: data)
         } catch {
             exportAPILog.error("GET exports decode failed error=\(String(describing: error), privacy: .public) body=\(bodyPreview, privacy: .public)")
             throw APIClientError.decodingFailed
@@ -172,13 +183,16 @@ final class ExportAPIClient {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidResponse
         }
+        if httpResponse.statusCode == 409 {
+            throw APIClientError.exportNotReady
+        }
         guard 200..<300 ~= httpResponse.statusCode else {
             let message = String(data: data, encoding: .utf8) ?? "Server error"
             throw APIClientError.serverError(message)
         }
 
         do {
-            return try JSONDecoder().decode(ExportDownloadResponse.self, from: data)
+            return try Self.decoder.decode(ExportDownloadResponse.self, from: data)
         } catch {
             throw APIClientError.decodingFailed
         }

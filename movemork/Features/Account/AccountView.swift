@@ -143,7 +143,11 @@ struct AccountView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     subscriptionBenefitRow(subscriptionManager.hasPro ? "Unlimited property vaults" : "1 property vault included")
-                    subscriptionBenefitRow(subscriptionManager.hasPro ? "Unlimited move-in and move-out exports" : subscriptionManager.remainingFreeMoveInExportsText())
+                    subscriptionBenefitRow(
+                        subscriptionManager.hasPro
+                            ? "Unlimited move-in and move-out exports"
+                            : subscriptionManager.remainingFreeMoveInExportsText(forUser: sessionManager.userId)
+                    )
                     subscriptionBenefitRow(subscriptionManager.hasPro ? "Move-out exports included" : "Move-out exports require Pro")
                     subscriptionBenefitRow(subscriptionManager.hasPro ? "Case builder included" : "Case builder requires Pro")
                 }
@@ -436,7 +440,7 @@ struct AccountView: View {
                 try await sessionManager.sendPasswordReset(email: email)
                 resetMessage = "Check your email for a link to reset your password."
             } catch {
-                resetError = error.localizedDescription
+                resetError = MoveMarkFlowMessage.accountPasswordResetFailed(error)
             }
         }
     }
@@ -502,21 +506,7 @@ private struct EditNameSheet: View {
             try onSave(nextName)
             dismiss()
         } catch {
-            errorMessage = userFacingNameError(from: error)
+            errorMessage = MoveMarkFlowMessage.accountProfileUpdateFailed(error)
         }
-    }
-
-    private func userFacingNameError(from error: Error) -> String {
-        let raw = error.localizedDescription.lowercased()
-        if raw.contains("not authenticated") || raw.contains("jwt") || raw.contains("session") {
-            return "Session expired. Please sign in again."
-        }
-        if raw.contains("duplicate") || raw.contains("violat") || raw.contains("constraint") {
-            return "Couldn’t update profile right now. Try again."
-        }
-        if raw.contains("permission") || raw.contains("policy") || raw.contains("row-level") {
-            return "Your profile couldn’t be updated. Please try again."
-        }
-        return error.localizedDescription
     }
 }

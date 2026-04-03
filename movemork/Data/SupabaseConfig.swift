@@ -4,28 +4,37 @@
 //
 //  MoveMark — Supabase singleton client.
 //
-//  If you see "Invalid API key" on sign-up/sign-in:
-//  - Use the anon (public) key only — never the service_role key.
-//  - URL and key must be from the same project.
-//  - Get fresh values: Supabase Dashboard → Project Settings → API
-//    → Project URL and anon public key.
+//  Configure via `Config/Secrets.xcconfig` (gitignored; copy from Secrets.xcconfig.example),
+//  which sets `SUPABASE_URL` and `SUPABASE_ANON_KEY` for Info.plist substitution.
+//  Do not commit production secrets in Swift source or project.pbxproj.
 //
-//  Initial session / bootstrap:
-//  - `emitLocalSessionAsInitialSession: true` below opts into stable local-session-as-initial behavior.
-//  - SessionManager treats `.initialSession` only until first resolution, then ignores duplicate emissions.
-//  See: https://github.com/supabase/supabase-swift/pull/822
+//  OAuth: add `movemark://auth-callback` in Supabase Dashboard → Auth → Redirect URLs.
 //
 
 import Foundation
 import Supabase
 
-/// OAuth callback for Supabase auth (Google / Apple).
-/// Add this exact URL in Supabase Dashboard → Auth → URL Configuration → Redirect URLs.
 let supabaseOAuthRedirectURL = URL(string: "movemark://auth-callback")!
 
+private func loadSupabaseConfig() -> (url: URL, anonKey: String) {
+    let urlString = (Bundle.main.object(forInfoDictionaryKey: "SupabaseURL") as? String)?
+        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let key = (Bundle.main.object(forInfoDictionaryKey: "SupabaseAnonKey") as? String)?
+        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+    guard let url = URL(string: urlString), !urlString.isEmpty, !key.isEmpty else {
+        fatalError(
+            "SupabaseURL / SupabaseAnonKey missing or empty. Set SUPABASE_URL and SUPABASE_ANON_KEY in the app target’s Build Settings (same pattern as MoveMarkAPIBaseURL)."
+        )
+    }
+    return (url, key)
+}
+
+private let supabaseConfig = loadSupabaseConfig()
+
 let supabase = SupabaseClient(
-    supabaseURL: URL(string: "https://cxegmojxcstxinhuexjj.supabase.co")!,
-    supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN4ZWdtb2p4Y3N0eGluaHVleGpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MTUxMTIsImV4cCI6MjA4ODM5MTExMn0.VKLuYWh9DIROf2BmEucS08e5lAMGPp9L_byHrdkfra8",
+    supabaseURL: supabaseConfig.url,
+    supabaseKey: supabaseConfig.anonKey,
     options: SupabaseClientOptions(
         auth: .init(
             redirectToURL: supabaseOAuthRedirectURL,

@@ -1,6 +1,9 @@
 **/xcuserdata/
 **/xcuserdatad/
 
+# Supabase anon key + URL (copy from Config/Secrets.xcconfig.example)
+Config/Secrets.xcconfig
+
 node_modules/
 dist/
 .DS_Store

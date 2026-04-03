@@ -12,6 +12,7 @@ struct VaultRootView: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(PropertyStore.self) private var propertyStore
     @Environment(\.vaultTransitionNamespace) private var vaultNamespace
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(SubscriptionManager.self) private var subscriptionManager
 
     @State private var showAddProperty = false
@@ -107,7 +108,10 @@ struct VaultRootView: View {
                             expansion: row.id == featuredPropertyId ? expansionContent(for: row) : nil,
                             expandedVaultId: $expandedVaultId,
                             namespace: vaultNamespace,
-                            onTap: { openVaultDetail(for: row) }
+                            onTap: { openVaultDetail(for: row) },
+                            onPreviewImageFailure: {
+                                Task { await loadPreviewURLs() }
+                            }
                         )
                         .opacity(hasAnimatedIn ? 1 : 0)
                         .offset(y: hasAnimatedIn ? 0 : 18)
@@ -126,7 +130,14 @@ struct VaultRootView: View {
             .background(MoveMarkTheme.Colors.background.ignoresSafeArea())
             .task {
                 await loadPreviewURLs()
+            }
+            .task(id: featuredPropertyId) {
                 await ensureFeaturedPropertyLoaded()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    Task { await loadPreviewURLs() }
+                }
             }
             .onAppear {
                 guard !hasAnimatedIn else { return }

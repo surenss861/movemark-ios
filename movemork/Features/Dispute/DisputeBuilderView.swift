@@ -181,7 +181,7 @@ struct DisputeBuilderView: View {
                 .pickerStyle(.segmented)
 
                 MMTextField(title: "Case title", placeholder: "Deposit dispute", text: $title)
-                MMTextField(title: "Amount in question", placeholder: "2400", text: $amountInQuestion)
+                MMTextField(title: "Amount in question", placeholder: "2400", text: $amountInQuestion, keyboardType: .decimalPad)
                 MMTextField(
                     title: "Summary",
                     placeholder: "Describe what happened and what you need to defend",
@@ -224,8 +224,8 @@ struct DisputeBuilderView: View {
                     rows: evidenceFiles.map { file in
                         SelectionRowData(
                             id: file.id,
-                            title: file.filePath.components(separatedBy: "/").last ?? "Photo",
-                            subtitle: "Evidence file"
+                            title: evidencePhotoRowTitle(for: file),
+                            subtitle: evidencePhotoRowSubtitle(for: file)
                         )
                     },
                     selectedIDs: Binding(
@@ -258,8 +258,8 @@ struct DisputeBuilderView: View {
                     rows: documents.map { doc in
                         SelectionRowData(
                             id: doc.id,
-                            title: doc.fileName,
-                            subtitle: doc.documentType
+                            title: documentRowTitle(doc),
+                            subtitle: documentRowSubtitle(doc)
                         )
                     },
                     selectedIDs: Binding(
@@ -396,7 +396,7 @@ struct DisputeBuilderView: View {
             maintenanceIssues = try await maintenanceTask
             documents = try await documentsTask
         } catch {
-            errorMessage = userFacingDisputeError(from: error)
+            errorMessage = MoveMarkFlowMessage.disputeEvidenceLoadFailed(error)
             retryAction = { Task { await loadEvidenceData() } }
         }
     }
@@ -450,7 +450,10 @@ struct DisputeBuilderView: View {
                 successMessage = "Draft saved."
                 MMHaptics.success()
             } catch {
-                errorMessage = userFacingDisputeError(from: error)
+                errorMessage = MoveMarkFlowMessage.disputeOperationFailed(
+                    error,
+                    fallback: "Couldn’t save draft. Try again."
+                )
                 retryAction = { saveDraft() }
             }
         }
@@ -503,7 +506,10 @@ struct DisputeBuilderView: View {
                 successMessage = "Simple PDF exported."
                 MMHaptics.success()
             } catch {
-                errorMessage = userFacingDisputeError(from: error)
+                errorMessage = MoveMarkFlowMessage.disputeOperationFailed(
+                    error,
+                    fallback: "Couldn’t export PDF. Try again."
+                )
                 retryAction = { exportSimplePDF() }
             }
         }
@@ -518,7 +524,7 @@ struct DisputeBuilderView: View {
         }
         guard let property = propertyStore.currentProperty,
               let userId = sessionManager.userId else {
-            errorMessage = "No property or not authenticated."
+            errorMessage = MoveMarkFlowMessage.noPropertyOrAuth
             retryAction = nil
             return
         }
@@ -556,18 +562,13 @@ struct DisputeBuilderView: View {
                 successMessage = "Formal packet generated."
                 MMHaptics.success()
             } catch {
-                errorMessage = userFacingDisputeError(from: error)
+                errorMessage = MoveMarkFlowMessage.disputeOperationFailed(
+                    error,
+                    fallback: "Couldn’t generate formal packet. Try again."
+                )
                 retryAction = { generateFormalPacket() }
             }
         }
-    }
-
-    private func userFacingDisputeError(from error: Error) -> String {
-        let lower = error.localizedDescription.lowercased()
-        if lower.contains("bucket") || lower.contains("storage") || (lower.contains("not found") && (lower.contains("object") || lower.contains("bucket"))) {
-            return "Export storage is unavailable right now. Try again soon."
-        }
-        return UserFacingDatabaseError.message(from: error, fallback: "Couldn’t update dispute packet. Try again.")
     }
 
     private func mapDisputeType(_ type: DisputeDraft.DisputeType) -> String {
@@ -593,13 +594,13 @@ struct DisputeBuilderView: View {
         }
     }
 
-    private static var dbDateFormatter: DateFormatter {
+    private static let dbDateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd"
         return f
-    }
+    }()
 
     private static func parseDBDate(_ value: String?) -> Date? {
         guard let value, !value.isEmpty else { return nil }
@@ -630,6 +631,75 @@ struct DisputeBuilderView: View {
         } catch {
             // Non-fatal; user can start fresh
         }
+    }
+
+    private func evidencePhotoRowTitle(for file: EvidenceFileRow) -> String {
+        if let mid = file.maintenanceIssueId,
+           let issue = maintenanceIssues.first(where: { $0.id == mid }) {
+            return "\(issue.title) · maintenance photo"
+        }
+        guard let property = propertyStore.currentProperty else {
+            return friendlyFileName(file.filePath)
+        }
+        for room in property.rooms {
+            if let rec = room.evidence.first(where: { $0.photos.contains(where: { $0.id == file.id }) }) {
+                return "\(room.name) · \(rec.title)"
+            }
+            if let rec = room.moveOutEvidence.first(where: { $0.photos.contains(where: { $0.id == file.id }) }) {
+                return "\(room.name) · \(rec.title) (move-out)"
+            }
+        }
+        return friendlyFileName(file.filePath)
+    }
+
+    private func evidencePhotoRowSubtitle(for file: EvidenceFileRow) -> String {
+        if file.maintenanceIssueId != nil {
+            if let issue = maintenanceIssues.first(where: { $0.id == file.maintenanceIssueId }) {
+                let cat = issue.category?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return cat.isEmpty ? "Maintenance issue" : cat
+            }
+            return "Maintenance issue"
+        }
+        guard let property = propertyStore.currentProperty else {
+            return evidenceCapturedLabel(for: file)
+        }
+        for room in property.rooms {
+            if room.evidence.contains(where: { $0.photos.contains(where: { $0.id == file.id }) }) {
+                return "Move-in · \(evidenceCapturedLabel(for: file))"
+            }
+            if room.moveOutEvidence.contains(where: { $0.photos.contains(where: { $0.id == file.id }) }) {
+                return "Move-out · \(evidenceCapturedLabel(for: file))"
+            }
+        }
+        return evidenceCapturedLabel(for: file)
+    }
+
+    private func evidenceCapturedLabel(for file: EvidenceFileRow) -> String {
+        let raw = file.capturedAt ?? file.createdAt ?? ""
+        guard !raw.isEmpty, let date = ISO8601DateFormatter().date(from: raw) else {
+            return "Room photo"
+        }
+        return date.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    private func friendlyFileName(_ path: String) -> String {
+        let name = path.components(separatedBy: "/").last ?? path
+        return name.isEmpty ? "Photo" : name
+    }
+
+    private func documentRowTitle(_ doc: PropertyDocumentRow) -> String {
+        let name = doc.fileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty { return name }
+        return friendlyFileName(doc.filePath)
+    }
+
+    private func documentRowSubtitle(_ doc: PropertyDocumentRow) -> String {
+        let norm = DocumentRepository.normalizedDocumentType(doc.documentType)
+        if let type = VaultDocumentType(rawValue: norm) {
+            return type.displayTitle
+        }
+        if norm.isEmpty { return "Supporting document" }
+        return norm.replacingOccurrences(of: "_", with: " ").capitalized
     }
 }
 

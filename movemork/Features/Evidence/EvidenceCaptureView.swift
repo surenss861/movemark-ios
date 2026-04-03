@@ -8,6 +8,7 @@
 import SwiftUI
 import PhotosUI
 import UIKit
+import AVFoundation
 
 /// Fixed issue tags for the picker; must match seeded rows in `issue_tags`. Curated set for cleaner UI.
 fileprivate let fixedIssueTags = [
@@ -25,6 +26,7 @@ struct EvidenceCaptureView: View {
 
     let roomID: UUID
     let roomName: String
+    private let inspectionRepo = InspectionRepository()
     /// When true, show/save move-out proof; otherwise move-in.
     var moveOutMode: Bool = false
 
@@ -46,6 +48,7 @@ struct EvidenceCaptureView: View {
     @State var isAppendingPhotos = false
     @State var didJustSave = false
     @State var wasDocumentedOnLoad = false
+    @State private var showCameraPermissionAlert = false
 
     var room: RoomRecord? {
         propertyStore.currentProperty?.rooms.first(where: { $0.id == roomID })
@@ -84,7 +87,7 @@ struct EvidenceCaptureView: View {
 
                     EvidenceCaptureMediaModule(
                         selectedItems: $selectedItems,
-                        showCamera: $showCamera,
+                        onOpenCamera: { presentCameraIfAllowed() },
                         loadedImages: loadedImages,
                         isUploading: isUploading,
                         moveOutMode: moveOutMode
@@ -97,7 +100,6 @@ struct EvidenceCaptureView: View {
                         selectedTags: $selectedTags,
                         selectedCondition: $selectedCondition,
                         selectedItems: $selectedItems,
-                        showCamera: $showCamera,
                         loadedImages: loadedImages,
                         isUploading: isUploading,
                         errorMessage: errorMessage,
@@ -111,6 +113,7 @@ struct EvidenceCaptureView: View {
                     EvidenceSavedProofSection(
                         existingEntries: existingEntries,
                         moveOutMode: moveOutMode,
+                        inspectionRepo: inspectionRepo,
                         onEdit: { editingEntry = $0 },
                         onAddPhotos: { appendPhotosEntry = $0 },
                         onDelete: { deleteConfirmEntry = $0 }
@@ -169,6 +172,14 @@ struct EvidenceCaptureView: View {
                 onDismiss: { appendPhotosEntry = nil }
             )
         }
+        .alert("Camera Access Required", isPresented: $showCameraPermissionAlert) {
+            Button("Open Settings") {
+                UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Enable camera access for MoveMark in Settings to take photos.")
+        }
         .confirmationDialog("Delete this proof entry?", isPresented: Binding(get: { deleteConfirmEntry != nil }, set: { if !$0 { deleteConfirmEntry = nil } })) {
             Button("Delete", role: .destructive) {
                 if let entry = deleteConfirmEntry {
@@ -187,6 +198,31 @@ struct EvidenceCaptureView: View {
         .toolbar(.hidden, for: .tabBar)
         .onAppear {
             wasDocumentedOnLoad = isRoomCurrentlyDocumented
+        }
+    }
+
+    private func presentCameraIfAllowed() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            errorMessage = "Camera isn’t available on this device."
+            return
+        }
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            showCamera = true
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                Task { @MainActor in
+                    if granted {
+                        showCamera = true
+                    } else {
+                        showCameraPermissionAlert = true
+                    }
+                }
+            }
+        case .denied, .restricted:
+            showCameraPermissionAlert = true
+        @unknown default:
+            errorMessage = "Camera isn’t available right now."
         }
     }
 

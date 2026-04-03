@@ -19,6 +19,7 @@ struct PropertyVaultView: View {
 
     @State private var isUploading = false
     @State private var uploadError: String? = nil
+    @State private var uploadSoftNotice: String? = nil
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     @State private var showFilePicker = false
     @State private var pendingFileDocType = ""
@@ -257,7 +258,7 @@ struct PropertyVaultView: View {
             case .success(let url):
                 handleFileSelection(url: url, docType: pendingFileDocType)
             case .failure(let error):
-                uploadError = userFacingDocumentError(from: error)
+                uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
             }
         }
     }
@@ -339,6 +340,18 @@ struct PropertyVaultView: View {
                     retryTitle: MMCopy.tryAgain,
                     onRetry: retryDocumentUpload
                 )
+            }
+
+            if let uploadSoftNotice, uploadError == nil {
+                MMCard(tone: .quiet, padding: 14, spacing: 8) {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.9))
+                        Text(uploadSoftNotice)
+                            .font(MoveMarkTheme.Typography.subheadline)
+                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                    }
+                }
             }
 
             if let previewErrorMessage {
@@ -789,10 +802,29 @@ struct PropertyVaultView: View {
         }
     }
 
+    /// Re-fetch rows after upload without wiping the list on failure (avoids “everything disappeared” after a successful upload).
+    private func refreshDocumentRowsAfterMutation() async -> Bool {
+        do {
+            documentRows = try await documentRepo.fetchDocuments(propertyId: property.id)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// If the refetch omits a row we just inserted (read-after-write lag) or failed, merge the known-good row so preview / View work immediately.
+    private func reconcileDocumentRows(anchoring expected: PropertyDocumentRow) {
+        if documentRows.contains(where: { $0.id == expected.id }) { return }
+        let slotKeys = Set(DocumentRepository.documentTypeQueryKeys(expected.documentType))
+        let withoutSlot = documentRows.filter { !slotKeys.contains($0.documentType) }
+        documentRows = [expected] + withoutSlot
+    }
+
     private func previewDocument(type: VaultDocumentType) async {
         previewErrorMessage = nil
+        uploadError = nil
         guard let row = docRow(for: type.rawValue) else {
-            previewErrorMessage = "Document not found."
+            previewErrorMessage = MoveMarkFlowMessage.documentPreviewMissing
             return
         }
         do {
@@ -804,21 +836,26 @@ struct PropertyVaultView: View {
                 UIApplication.shared.open(url)
             }
         } catch {
-            previewErrorMessage = "Could not open document."
+            previewErrorMessage = MoveMarkFlowMessage.documentPreviewFailed(error)
         }
     }
 
     private func confirmDeleteDocument(type: String) async {
         do {
             try await documentRepo.deleteDocuments(propertyId: property.id, documentType: type)
-            await propertyStore.refreshDocuments(propertyId: property.id)
-            await loadDocumentRows()
+            let metaOK = await propertyStore.refreshDocuments(propertyId: property.id)
+            let rowsOK = await refreshDocumentRowsAfterMutation()
+            uploadSoftNotice = nil
+            if !metaOK || !rowsOK {
+                uploadSoftNotice = MoveMarkFlowMessage.documentVaultRefreshHint
+            }
         } catch {
-            uploadError = userFacingDocumentError(from: error)
+            uploadError = MoveMarkFlowMessage.documentDeleteFailed(error)
         }
     }
 
     private func retryDocumentUpload() {
+        uploadSoftNotice = nil
         if let docType = lastFailedPhotoDocType, let item = selectedPhotoItem {
             uploadError = nil
             handlePhotoSelection(item: item, docType: docType)
@@ -834,115 +871,164 @@ struct PropertyVaultView: View {
     private func handlePhotoSelection(item: PhotosPickerItem, docType: String) {
         guard let userId = sessionManager.userId else { return }
         uploadError = nil
+        uploadSoftNotice = nil
+        previewErrorMessage = nil
         lastFailedPhotoDocType = docType
         isUploading = true
 
         Task { @MainActor in
             defer { isUploading = false }
+            let canonicalType = DocumentRepository.normalizedDocumentType(docType)
             do {
-                let canonicalType = DocumentRepository.normalizedDocumentType(docType)
                 if hasVaultDocMatching(docType) {
                     try await documentRepo.deleteDocuments(propertyId: property.id, documentType: docType)
                 }
-                guard let data = try await item.loadTransferable(type: Data.self) else { return }
-                let compressed: Data
-                if let image = UIImage(data: data) {
-                    compressed = image.jpegData(compressionQuality: 0.82) ?? data
-                } else {
-                    compressed = data
-                }
-                let fileName = "\(UUID()).jpg"
-                let path = "\(userId)/\(property.id)/\(canonicalType)/\(fileName)"
-                let targetBucket = DocumentRepository.storageBucket(forDocumentType: canonicalType)
-                _ = try await documentRepo.uploadDocument(data: compressed, bucket: targetBucket, path: path)
-
-                let row = PropertyDocumentRow(
-                    id: UUID(),
-                    propertyId: property.id,
-                    userId: userId,
-                    documentType: canonicalType,
-                    filePath: path,
-                    fileName: fileName,
-                    uploadedAt: nil,
-                    metadata: nil
-                )
-                try await documentRepo.insertDocumentRecord(row)
-                await propertyStore.refreshDocuments(propertyId: property.id)
-                await loadDocumentRows()
-
-                if let type = VaultDocumentType(rawValue: canonicalType) {
-                    evaluateWorkflowFeedback(
-                        documentName: type.displayTitle,
-                        documentType: type
-                    )
-                } else {
-                    evaluateWorkflowFeedback(documentName: "Document")
-                }
-
-                lastFailedPhotoDocType = nil
-                selectedPhotoItem = nil
             } catch {
-                uploadError = userFacingDocumentError(from: error)
+                uploadError = MoveMarkFlowMessage.documentDeleteFailed(error)
+                return
             }
+
+            guard let data = try? await item.loadTransferable(type: Data.self) else {
+                uploadError = MoveMarkFlowMessage.documentImageReadFailed
+                return
+            }
+            let compressed: Data
+            if let image = UIImage(data: data) {
+                compressed = image.jpegData(compressionQuality: 0.82) ?? data
+            } else {
+                compressed = data
+            }
+            let fileName = "\(UUID()).jpg"
+            let path = "\(userId)/\(property.id)/\(canonicalType)/\(fileName)"
+            let targetBucket = DocumentRepository.storageBucket(forDocumentType: canonicalType)
+
+            do {
+                _ = try await documentRepo.uploadDocument(data: compressed, bucket: targetBucket, path: path)
+            } catch {
+                uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
+                return
+            }
+
+            let row = PropertyDocumentRow(
+                id: UUID(),
+                propertyId: property.id,
+                userId: userId,
+                documentType: canonicalType,
+                filePath: path,
+                fileName: fileName,
+                uploadedAt: nil,
+                metadata: nil
+            )
+            do {
+                try await documentRepo.insertDocumentRecord(row)
+            } catch {
+                await documentRepo.removeStaleUpload(documentType: canonicalType, path: path)
+                uploadError = MoveMarkFlowMessage.documentRecordCreateFailed(error)
+                return
+            }
+
+            let metaOK = await propertyStore.refreshDocuments(propertyId: property.id)
+            let rowsOK = await refreshDocumentRowsAfterMutation()
+            reconcileDocumentRows(anchoring: row)
+            propertyStore.ensureVaultDocumentTypePresent(propertyId: property.id, documentType: canonicalType)
+            if !metaOK || !rowsOK {
+                uploadSoftNotice = MoveMarkFlowMessage.documentVaultRefreshHint
+            }
+
+            if let type = VaultDocumentType(rawValue: canonicalType) {
+                evaluateWorkflowFeedback(
+                    documentName: type.displayTitle,
+                    documentType: type
+                )
+            } else {
+                evaluateWorkflowFeedback(documentName: "Document")
+            }
+
+            lastFailedPhotoDocType = nil
+            selectedPhotoItem = nil
         }
     }
 
     private func handleFileSelection(url: URL, docType: String) {
         guard let userId = sessionManager.userId else { return }
         uploadError = nil
+        uploadSoftNotice = nil
+        previewErrorMessage = nil
         lastFailedFileDocType = nil
         isUploading = true
 
         Task { @MainActor in
             defer { isUploading = false }
+            let canonicalType = DocumentRepository.normalizedDocumentType(docType)
             do {
-                let canonicalType = DocumentRepository.normalizedDocumentType(docType)
                 if hasVaultDocMatching(docType) {
                     try await documentRepo.deleteDocuments(propertyId: property.id, documentType: docType)
                 }
-                guard url.startAccessingSecurityScopedResource() else { return }
-                defer { url.stopAccessingSecurityScopedResource() }
-                let data = try Data(contentsOf: url)
-                let fileName = url.lastPathComponent
-                let path = "\(userId)/\(property.id)/\(canonicalType)/\(UUID().uuidString)-\(fileName)"
-                let targetBucket = DocumentRepository.storageBucket(forDocumentType: canonicalType)
-                _ = try await documentRepo.uploadDocument(data: data, bucket: targetBucket, path: path)
-
-                let row = PropertyDocumentRow(
-                    id: UUID(),
-                    propertyId: property.id,
-                    userId: userId,
-                    documentType: canonicalType,
-                    filePath: path,
-                    fileName: fileName,
-                    uploadedAt: nil,
-                    metadata: nil
-                )
-                try await documentRepo.insertDocumentRecord(row)
-                await propertyStore.refreshDocuments(propertyId: property.id)
-                await loadDocumentRows()
-
-                if let type = VaultDocumentType(rawValue: canonicalType) {
-                    evaluateWorkflowFeedback(
-                        documentName: type.displayTitle,
-                        documentType: type
-                    )
-                } else {
-                    evaluateWorkflowFeedback(documentName: "Document")
-                }
             } catch {
-                uploadError = userFacingDocumentError(from: error)
+                uploadError = MoveMarkFlowMessage.documentDeleteFailed(error)
                 lastFailedFileDocType = docType
+                return
+            }
+
+            guard url.startAccessingSecurityScopedResource() else { return }
+            defer { url.stopAccessingSecurityScopedResource() }
+            let data: Data
+            do {
+                data = try Data(contentsOf: url)
+            } catch {
+                uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
+                lastFailedFileDocType = docType
+                return
+            }
+
+            let fileName = url.lastPathComponent
+            let path = "\(userId)/\(property.id)/\(canonicalType)/\(UUID().uuidString)-\(fileName)"
+            let targetBucket = DocumentRepository.storageBucket(forDocumentType: canonicalType)
+
+            do {
+                _ = try await documentRepo.uploadDocument(data: data, bucket: targetBucket, path: path)
+            } catch {
+                uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
+                lastFailedFileDocType = docType
+                return
+            }
+
+            let row = PropertyDocumentRow(
+                id: UUID(),
+                propertyId: property.id,
+                userId: userId,
+                documentType: canonicalType,
+                filePath: path,
+                fileName: fileName,
+                uploadedAt: nil,
+                metadata: nil
+            )
+            do {
+                try await documentRepo.insertDocumentRecord(row)
+            } catch {
+                await documentRepo.removeStaleUpload(documentType: canonicalType, path: path)
+                uploadError = MoveMarkFlowMessage.documentRecordCreateFailed(error)
+                lastFailedFileDocType = docType
+                return
+            }
+
+            let metaOK = await propertyStore.refreshDocuments(propertyId: property.id)
+            let rowsOK = await refreshDocumentRowsAfterMutation()
+            reconcileDocumentRows(anchoring: row)
+            propertyStore.ensureVaultDocumentTypePresent(propertyId: property.id, documentType: canonicalType)
+            if !metaOK || !rowsOK {
+                uploadSoftNotice = MoveMarkFlowMessage.documentVaultRefreshHint
+            }
+
+            if let type = VaultDocumentType(rawValue: canonicalType) {
+                evaluateWorkflowFeedback(
+                    documentName: type.displayTitle,
+                    documentType: type
+                )
+            } else {
+                evaluateWorkflowFeedback(documentName: "Document")
             }
         }
-    }
-
-    private func userFacingDocumentError(from error: Error) -> String {
-        let lower = error.localizedDescription.lowercased()
-        if lower.contains("bucket") || lower.contains("storage") || (lower.contains("not found") && (lower.contains("object") || lower.contains("bucket"))) {
-            return "Upload unavailable. Supporting records aren’t available right now. Try again soon."
-        }
-        return UserFacingDatabaseError.message(from: error, fallback: "Couldn’t upload supporting record. Try again.")
     }
 }
 

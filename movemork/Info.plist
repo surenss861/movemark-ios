@@ -43,5 +43,9 @@
 	<string>$(REVENUECAT_TEST_STORE_PUBLIC_KEY)</string>
 	<key>MoveMarkAPIBaseURL</key>
 	<string>$(MoveMarkAPIBaseURL)</string>
+	<key>SupabaseURL</key>
+	<string>$(SUPABASE_URL)</string>
+	<key>SupabaseAnonKey</key>
+	<string>$(SUPABASE_ANON_KEY)</string>
 </dict>
 </plist>

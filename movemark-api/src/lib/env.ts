@@ -1,3 +1,12 @@
+/** Comma-separated browser origins allowed for CORS (e.g. `https://app.example.com,http://localhost:5173`). */
+export function corsAllowedOrigins(): string[] {
+  const raw = process.env.CORS_ALLOWED_ORIGINS ?? "";
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export const env = {
   SUPABASE_URL: process.env.SUPABASE_URL ?? "",
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",

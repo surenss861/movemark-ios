@@ -22,6 +22,7 @@ struct AuthContainerView: View {
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var errorMessage = ""
+    @State private var infoMessage = ""
     @State private var isLoading = false
     @State private var hasAcceptedLegal = false
 
@@ -132,7 +133,7 @@ struct AuthContainerView: View {
     private var authPanel: some View {
         MMCard(tone: .elevated, padding: 22, spacing: 18) {
             VStack(alignment: .leading, spacing: 18) {
-                MMTextField(title: "Email", placeholder: "you@example.com", text: $email)
+                MMTextField(title: "Email", placeholder: "you@example.com", text: $email, keyboardType: .emailAddress)
 
                 MMTextField(
                     title: "Password",
@@ -153,10 +154,23 @@ struct AuthContainerView: View {
                 if mode == .signIn {
                     HStack {
                         Spacer()
-                        Text("Forgot password?")
-                            .font(MoveMarkTheme.Typography.footnote)
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
+                        Button {
+                            Task { @MainActor in
+                                await requestPasswordReset()
+                            }
+                        } label: {
+                            Text("Forgot password?")
+                                .font(MoveMarkTheme.Typography.footnote)
+                                .foregroundStyle(MoveMarkTheme.Colors.primary)
+                        }
+                        .buttonStyle(.plain)
                     }
+                }
+
+                if !infoMessage.isEmpty {
+                    Text(infoMessage)
+                        .font(MoveMarkTheme.Typography.footnote)
+                        .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.95))
                 }
 
                 if !errorMessage.isEmpty {
@@ -199,7 +213,9 @@ struct AuthContainerView: View {
                 withAnimation(.easeInOut(duration: 0.22)) {
                     mode = mode == .signIn ? .signUp : .signIn
                     errorMessage = ""
+                    infoMessage = ""
                     if mode == .signIn {
+                        confirmPassword = ""
                         hasAcceptedLegal = false
                     }
                 }
@@ -216,6 +232,21 @@ struct AuthContainerView: View {
         .padding(.top, 6)
     }
 
+    private func requestPasswordReset() async {
+        guard mode == .signIn else { return }
+        guard !isLoading else { return }
+        isLoading = true
+        errorMessage = ""
+        infoMessage = ""
+        defer { isLoading = false }
+        do {
+            try await sessionManager.sendPasswordReset(email: email)
+            infoMessage = "If an account exists for that email, you’ll get a reset link shortly."
+        } catch {
+            errorMessage = MoveMarkFlowMessage.authOperationFailed(error)
+        }
+    }
+
     private func submit() {
         guard !isLoading else { return }
         if mode == .signUp && !hasAcceptedLegal {
@@ -224,6 +255,7 @@ struct AuthContainerView: View {
         }
         isLoading = true
         errorMessage = ""
+        infoMessage = ""
 
         Task { @MainActor in
             defer { isLoading = false }
@@ -235,7 +267,7 @@ struct AuthContainerView: View {
                     try await sessionManager.signUp(email: email, password: password, confirmPassword: confirmPassword)
                 }
             } catch {
-                errorMessage = userFacingAuthError(from: error)
+                errorMessage = MoveMarkFlowMessage.authOperationFailed(error)
             }
         }
     }
@@ -326,20 +358,4 @@ struct AuthContainerView: View {
         return URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    private func userFacingAuthError(from error: Error) -> String {
-        let raw = error.localizedDescription.lowercased()
-        if raw.contains("invalid login") || raw.contains("invalid credentials") {
-            return "Couldn’t sign in. Check your email and password."
-        }
-        if raw.contains("email not confirmed") {
-            return "Please confirm your email, then try again."
-        }
-        if raw.contains("already registered") || raw.contains("already been registered") {
-            return "This email already has an account. Sign in instead."
-        }
-        if raw.contains("network") || raw.contains("offline") || raw.contains("internet") {
-            return "No connection. Check your internet and try again."
-        }
-        return error.localizedDescription
-    }
 }

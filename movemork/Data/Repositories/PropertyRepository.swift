@@ -78,12 +78,14 @@ struct PropertyRepository {
     }
 
     func createProperty(_ row: PropertyRow) async throws -> PropertyRow {
+        #if DEBUG
         if let encoded = try? JSONEncoder().encode(row),
            let json = String(data: encoded, encoding: .utf8) {
             print("📦 Property insert payload (JSON): \(json)")
         } else {
             print("📦 Property insert payload: \(row)")
         }
+        #endif
         do {
             let created: PropertyRow = try await supabase
                 .from("properties")
@@ -92,10 +94,14 @@ struct PropertyRepository {
                 .single()
                 .execute()
                 .value
+            #if DEBUG
             print("✅ Property created: \(created.id)")
+            #endif
             return created
         } catch {
+            #if DEBUG
             print("❌ createProperty failed: \(error)")
+            #endif
             throw error
         }
     }

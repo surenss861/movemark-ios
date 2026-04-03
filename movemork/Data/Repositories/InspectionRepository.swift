@@ -185,7 +185,8 @@ struct InspectionRepository {
         return result.id
     }
 
-    func insertEvidenceFile(propertyId: UUID, inspectionItemId: UUID?, maintenanceIssueId: UUID?, filePath: String, fileType: String, capturedAt: Date) async throws {
+    @discardableResult
+    func insertEvidenceFile(propertyId: UUID, inspectionItemId: UUID?, maintenanceIssueId: UUID?, filePath: String, fileType: String, capturedAt: Date) async throws -> UUID {
         let row = EvidenceFileRow(
             id: UUID(),
             propertyId: propertyId,
@@ -196,10 +197,14 @@ struct InspectionRepository {
             capturedAt: ISO8601DateFormatter().string(from: capturedAt)
         )
 
-        try await supabase
+        let inserted: EvidenceFileRow = try await supabase
             .from("evidence_files")
             .insert(row)
+            .select()
+            .single()
             .execute()
+            .value
+        return inserted.id
     }
 
     func fetchEvidenceFiles(propertyId: UUID) async throws -> [EvidenceFileRow] {
@@ -368,18 +373,22 @@ struct InspectionRepository {
     }
 
     func signedURL(bucket: String, path: String) async throws -> URL {
-        try await supabase.storage
-            .from(bucket)
-            .createSignedURL(path: path, expiresIn: 3600)
+        try await MoveMarkSignedURLCache.shared.url(bucket: bucket, path: path) {
+            try await supabase.storage
+                .from(bucket)
+                .createSignedURL(path: path, expiresIn: 86400)
+        }
     }
 
     /// Appends photos to an existing inspection item (move-in or move-out). Uploads to storage and inserts evidence_files.
-    func appendPhotosToInspectionItem(inspectionItemId: UUID, roomId: UUID, propertyId: UUID, userId: UUID, isMoveOut: Bool, photos: [Data]) async throws {
+    func appendPhotosToInspectionItem(inspectionItemId: UUID, roomId: UUID, propertyId: UUID, userId: UUID, isMoveOut: Bool, photos: [Data]) async throws -> [EvidencePhoto] {
         let folder = isMoveOut ? "move-out" : "move-in"
+        var added: [EvidencePhoto] = []
+        added.reserveCapacity(photos.count)
         for photoData in photos {
             let path = "\(userId)/\(propertyId)/\(folder)/\(roomId)/\(UUID()).jpg"
             _ = try await uploadPhoto(data: photoData, path: path)
-            try await insertEvidenceFile(
+            let fileId = try await insertEvidenceFile(
                 propertyId: propertyId,
                 inspectionItemId: inspectionItemId,
                 maintenanceIssueId: nil,
@@ -387,6 +396,9 @@ struct InspectionRepository {
                 fileType: "image",
                 capturedAt: Date()
             )
+            added.append(EvidencePhoto(id: fileId, filePath: path))
         }
+        await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
+        return added
     }
 }

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serve } from "@hono/node-server";
-import { assertEnv } from "./lib/env.js";
+import { assertEnv, corsAllowedOrigins } from "./lib/env.js";
 import { exportsRouter } from "./routes/exports.js";
 import { webhooksRouter } from "./routes/webhooks.js";
 
@@ -9,7 +9,20 @@ assertEnv();
 
 const app = new Hono();
 
-app.use("*", cors());
+/** Browser cross-origin only; native apps typically omit `Origin` and do not rely on CORS. Never use `*`. */
+const allowedOrigins = corsAllowedOrigins();
+app.use(
+  "*",
+  cors({
+    origin: (origin) => {
+      if (!origin) return null;
+      if (allowedOrigins.length === 0) return null;
+      return allowedOrigins.includes(origin) ? origin : null;
+    },
+    allowHeaders: ["Authorization", "Content-Type"],
+    allowMethods: ["GET", "POST", "OPTIONS"],
+  })
+);
 
 app.get("/", (c) => c.json({ ok: true, service: "movemark-api" }));
 app.get("/api/health", (c) => c.json({ ok: true, uptime: process.uptime() }));

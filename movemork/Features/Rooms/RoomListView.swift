@@ -20,6 +20,7 @@ struct RoomListView: View {
     @State private var isExporting = false
     @State private var errorMessage: String? = nil
     @State private var lastErrorFromExport = false
+    @State private var exportSuccessBanner: String? = nil
 
     private var rooms: [RoomRecord] {
         propertyStore.currentProperty?.rooms ?? []
@@ -47,6 +48,18 @@ struct RoomListView: View {
                     walkthroughHeader
 
                     progressCard
+
+                    if let exportSuccessBanner {
+                        MMCard(tone: .quiet, padding: 14, spacing: 8) {
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(MoveMarkTheme.Colors.primary)
+                                Text(exportSuccessBanner)
+                                    .font(MoveMarkTheme.Typography.subheadline)
+                                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                            }
+                        }
+                    }
 
                     if let errorMessage {
                         MMErrorBanner(
@@ -351,7 +364,7 @@ struct RoomListView: View {
     private func handleMoveInExportTap() {
         guard !rooms.isEmpty else { return }
         guard completedCount > 0 else { return }
-        guard subscriptionManager.canExportMoveIn() else {
+        guard subscriptionManager.canExportMoveIn(forUser: sessionManager.userId) else {
             activePaywallReason = .unlimitedExports
             showPaywall = true
             return
@@ -369,8 +382,8 @@ struct RoomListView: View {
         if subscriptionManager.hasPro {
             return "Included with Pro"
         }
-        if subscriptionManager.canExportMoveIn() {
-            return subscriptionManager.remainingFreeMoveInExportsText()
+        if subscriptionManager.canExportMoveIn(forUser: sessionManager.userId) {
+            return subscriptionManager.remainingFreeMoveInExportsText(forUser: sessionManager.userId)
         }
         return "Upgrade for additional move-in exports"
     }
@@ -389,6 +402,7 @@ struct RoomListView: View {
 
         isExporting = true
         errorMessage = nil
+        exportSuccessBanner = nil
 
         Task { @MainActor in
             defer { isExporting = false }
@@ -401,14 +415,15 @@ struct RoomListView: View {
                     accessToken: session.accessToken
                 )
 
-                if !subscriptionManager.hasPro {
-                    subscriptionManager.incrementFreeMoveInExportCount()
+                if !subscriptionManager.hasPro, let uid = sessionManager.userId {
+                    subscriptionManager.incrementFreeMoveInExportCount(forUser: uid)
                 }
 
                 lastErrorFromExport = false
-                errorMessage = "Move-in export is ready. Open Exports to download."
+                exportSuccessBanner = MoveMarkFlowMessage.exportQueuedHint
                 MMHaptics.success()
             } catch {
+                exportSuccessBanner = nil
                 errorMessage = userFacingExportError(from: error)
                 lastErrorFromExport = true
             }
@@ -420,7 +435,10 @@ struct RoomListView: View {
         if lower.contains("property not found") {
             return "Couldn’t queue export for this property. Refresh and try again."
         }
-        return UserFacingDatabaseError.message(from: error, fallback: "Couldn’t complete move-in export. Try again.")
+        return MoveMarkFlowMessage.exportOrAPIFailed(
+            error,
+            fallback: "Couldn’t queue move-in export. Try again."
+        )
     }
 }
 
@@ -470,12 +488,12 @@ private struct AddRoomSheetView: View {
 
     private func submit() {
         guard let property = propertyStore.currentProperty else {
-            errorMessage = "No active property loaded."
+            errorMessage = MoveMarkFlowMessage.noActiveProperty
             return
         }
 
         guard let userId = sessionManager.userId else {
-            errorMessage = "You need to sign in again."
+            errorMessage = MoveMarkFlowMessage.signInRequired
             return
         }
 
@@ -496,19 +514,8 @@ private struct AddRoomSheetView: View {
                 try await propertyStore.addRoom(named: name, propertyId: property.id, userId: userId)
                 onDismiss()
             } catch {
-                errorMessage = userFacingRoomError(from: error)
+                errorMessage = MoveMarkFlowMessage.roomAddFailed(error)
             }
         }
-    }
-
-    private func userFacingRoomError(from error: Error) -> String {
-        let raw = error.localizedDescription.lowercased()
-        if raw.contains("duplicate") || raw.contains("already") {
-            return "A room with this name already exists."
-        }
-        if raw.contains("not authenticated") || raw.contains("jwt") || raw.contains("session") {
-            return "Session expired. Please sign in again."
-        }
-        return "Couldn’t add room. Try again."
     }
 }

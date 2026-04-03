@@ -9,18 +9,24 @@ import Foundation
 
 extension PropertyStore {
 
-    static var dbDateFormatter: DateFormatter {
+    /// Shared `yyyy-MM-dd` parser; `PropertyStore` is `@MainActor`, so this is not accessed concurrently across threads.
+    static let dbDateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd"
         return f
-    }
+    }()
 
     /// Loads rooms, docs, inspections, maintenance for one property and returns (PropertyRecord, maintenance log).
     func hydrateProperty(_ row: PropertyRow, userId: UUID) async throws -> (PropertyRecord, [MaintenanceRecord]) {
-        let rooms = try await propertyRepo.fetchRooms(propertyId: row.id)
-        let inspections = try await inspectionRepo.fetchInspections(propertyId: row.id)
+        async let roomsTask = propertyRepo.fetchRooms(propertyId: row.id)
+        async let inspectionsTask = inspectionRepo.fetchInspections(propertyId: row.id)
+        async let docRowsTask = documentRepo.fetchDocuments(propertyId: row.id)
+        async let issuesTask = maintenanceRepo.fetchIssues(propertyId: row.id)
+
+        let (rooms, inspections, docRows, issues) = try await (roomsTask, inspectionsTask, docRowsTask, issuesTask)
+
         // Support both legacy kebab-case and current snake_case values.
         let moveInIds = inspections.filter {
             let normalized = $0.inspectionType.lowercased()
@@ -31,14 +37,17 @@ extension PropertyStore {
             return normalized == "move_out" || normalized == "move-out" || normalized == "moveout"
         }.map(\.id)
 
-        let moveInItems = try await inspectionRepo.fetchAllInspectionItems(inspectionIds: moveInIds)
-        let moveOutItems = try await inspectionRepo.fetchAllInspectionItems(inspectionIds: moveOutIds)
+        async let moveInItemsTask = inspectionRepo.fetchAllInspectionItems(inspectionIds: moveInIds)
+        async let moveOutItemsTask = inspectionRepo.fetchAllInspectionItems(inspectionIds: moveOutIds)
+        let (moveInItems, moveOutItems) = try await (moveInItemsTask, moveOutItemsTask)
 
-        let moveInFiles = try await inspectionRepo.fetchEvidenceFilesByItems(itemIds: moveInItems.map(\.id))
-        let moveOutFiles = try await inspectionRepo.fetchEvidenceFilesByItems(itemIds: moveOutItems.map(\.id))
-
-        let moveInTagNames = try await inspectionRepo.fetchItemTagNames(inspectionItemIds: moveInItems.map(\.id))
-        let moveOutTagNames = try await inspectionRepo.fetchItemTagNames(inspectionItemIds: moveOutItems.map(\.id))
+        async let moveInFilesTask = inspectionRepo.fetchEvidenceFilesByItems(itemIds: moveInItems.map(\.id))
+        async let moveOutFilesTask = inspectionRepo.fetchEvidenceFilesByItems(itemIds: moveOutItems.map(\.id))
+        async let moveInTagNamesTask = inspectionRepo.fetchItemTagNames(inspectionItemIds: moveInItems.map(\.id))
+        async let moveOutTagNamesTask = inspectionRepo.fetchItemTagNames(inspectionItemIds: moveOutItems.map(\.id))
+        let (moveInFiles, moveOutFiles, moveInTagNames, moveOutTagNames) = try await (
+            moveInFilesTask, moveOutFilesTask, moveInTagNamesTask, moveOutTagNamesTask
+        )
 
         let moveInFilesSorted = moveInFiles.sorted {
             ($0.createdAt ?? $0.capturedAt ?? "") < ($1.createdAt ?? $1.capturedAt ?? "")
@@ -99,7 +108,6 @@ extension PropertyStore {
         }
 
         let dateFormatter = ISO8601DateFormatter()
-        let docRows = try await documentRepo.fetchDocuments(propertyId: row.id)
         let vaultDocTypes = Array(Set(docRows.map(\.documentType)))
 
         let moveInParsed = row.moveInDate.flatMap { Self.dbDateFormatter.date(from: $0) }
@@ -129,7 +137,6 @@ extension PropertyStore {
             vaultDocuments: vaultDocTypes
         )
 
-        let issues = try await maintenanceRepo.fetchIssues(propertyId: row.id)
         let maintenance = issues.map { issueRow in
             MaintenanceRecord(
                 id: issueRow.id,
@@ -149,6 +156,7 @@ extension PropertyStore {
         case 5: return .excellent
         case 4: return .good
         case 3: return .fair
+        case 2: return .belowFair
         case 1: return .poor
         default: return .good
         }

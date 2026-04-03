@@ -102,6 +102,10 @@ struct MaintenanceRepository {
             .from("maintenance-media")
             .upload(path, data: data, options: FileOptions(contentType: "image/jpeg"))
 
+        let parts = path.split(separator: "/")
+        if parts.count >= 2 {
+            await MoveMarkSignedURLCache.shared.invalidateKeys(containing: String(parts[1]))
+        }
         return path
     }
 }

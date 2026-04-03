@@ -1,4 +1,13 @@
 // MoveMark — Formal dispute packet generator.
+//
+// Auth model (review when changing storage):
+// - Supabase client uses the **caller’s JWT** (Authorization header) + **anon key**.
+// - DB reads (`disputes`, `properties`) run under that user’s RLS.
+// - Storage upload uses the **same** user-scoped client, so `storage.objects` policies must
+//   allow the authenticated user to write under their prefix (e.g. `{user_id}/...` in `exports`).
+// - No service_role in this function; elevating to service role would bypass RLS and must be
+//   paired with explicit ownership checks and a documented threat model.
+//
 // Reads dispute (including move_out_date, received_itemized, charge_date), builds HTML packet,
 // uploads to exports bucket, returns signed URL for parity with simple PDF.
 

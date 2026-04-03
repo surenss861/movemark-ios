@@ -1,0 +1,2 @@
+// App target base config. Supabase (and optional overrides) live in Config/Secrets.xcconfig (gitignored).
+#include? "Config/Secrets.xcconfig"

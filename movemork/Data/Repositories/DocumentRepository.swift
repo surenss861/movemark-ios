@@ -60,6 +60,12 @@ struct PropertyDocumentRow: Codable, Identifiable {
 
 struct DocumentRepository {
 
+    // MARK: - Pipeline notes
+    //
+    // Supporting docs are three steps: (1) storage upload, (2) `property_documents` insert, (3) property snapshot / row refresh.
+    // Callers should map failures per step (upload vs record vs refresh). Preview uses signed URLs only — not an upload failure.
+    // Replace: delete existing rows + storage for that slot, then upload + insert again.
+
     /// Canonical `document_type` for DB + storage path segments (legacy app builds used kebab-case for two types).
     static func normalizedDocumentType(_ raw: String) -> String {
         switch raw {
@@ -102,6 +108,15 @@ struct DocumentRepository {
         return [primary, "documents"]
     }
 
+    private static func storageContentType(forPath path: String) -> String {
+        let lower = path.lowercased()
+        if lower.hasSuffix(".pdf") { return "application/pdf" }
+        if lower.hasSuffix(".png") { return "image/png" }
+        if lower.hasSuffix(".heic") { return "image/heic" }
+        if lower.hasSuffix(".jpg") || lower.hasSuffix(".jpeg") { return "image/jpeg" }
+        return "application/octet-stream"
+    }
+
     /// Removes a file from storage. No-op if path is empty. Call before deleting DB row.
     private func removeFromStorage(bucket: String, path: String) async throws {
         guard !path.isEmpty else { return }
@@ -141,7 +156,7 @@ struct DocumentRepository {
     }
 
     func uploadDocument(data: Data, bucket: String, path: String) async throws -> String {
-        let contentType = path.hasSuffix(".pdf") ? "application/pdf" : "image/jpeg"
+        let contentType = Self.storageContentType(forPath: path)
         let candidates = bucket == "documents" ? [bucket] : [bucket, "documents"]
         var lastError: Error?
         for candidate in candidates {
@@ -149,6 +164,10 @@ struct DocumentRepository {
                 try await supabase.storage
                     .from(candidate)
                     .upload(path, data: data, options: FileOptions(contentType: contentType))
+                let segments = path.split(separator: "/")
+                if segments.count >= 2 {
+                    await MoveMarkSignedURLCache.shared.invalidateKeys(containing: String(segments[1]))
+                }
                 return path
             } catch {
                 lastError = error
@@ -162,6 +181,14 @@ struct DocumentRepository {
             .from("property_documents")
             .insert(row)
             .execute()
+    }
+
+    /// After a successful storage upload, if the DB insert fails, remove the bytes from every bucket that might hold them (upload may have landed in a fallback bucket).
+    func removeStaleUpload(documentType: String, path: String) async {
+        guard !path.isEmpty else { return }
+        for bucketName in Self.bucketCandidates(for: documentType) {
+            try? await removeFromStorage(bucket: bucketName, path: path)
+        }
     }
 
     /// Deletes one document: removes file from storage then DB row.
@@ -211,11 +238,14 @@ struct DocumentRepository {
         var lastError: Error?
         for candidate in candidates {
             do {
-                return try await supabase.storage
-                    .from(candidate)
-                    .createSignedURL(path: path, expiresIn: 3600)
+                return try await MoveMarkSignedURLCache.shared.url(bucket: candidate, path: path) {
+                    try await supabase.storage
+                        .from(candidate)
+                        .createSignedURL(path: path, expiresIn: 3600)
+                }
             } catch {
                 lastError = error
+                await MoveMarkSignedURLCache.shared.invalidate(bucket: candidate, path: path)
             }
         }
         throw lastError ?? NSError(domain: "MoveMark.DocumentRepository", code: 2)
