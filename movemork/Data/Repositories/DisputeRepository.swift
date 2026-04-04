@@ -172,7 +172,13 @@ struct DisputeRepository {
             .execute()
     }
 
-    func callGenerateDisputePacket(disputeId: UUID, propertyId: UUID, jwt: String) async throws -> URL {
+    /// Short-lived URL for immediate share; `storagePath` is the `exports` bucket object key to store in `exports.file_path`.
+    struct DisputePacketGenerationResult: Equatable {
+        var shareURL: URL
+        var storagePath: String
+    }
+
+    func callGenerateDisputePacket(disputeId: UUID, propertyId: UUID, jwt: String) async throws -> DisputePacketGenerationResult {
         struct RequestBody: Codable {
             let disputeId: UUID
             let propertyId: UUID
@@ -185,9 +191,11 @@ struct DisputeRepository {
 
         struct ResponseBody: Codable {
             let signedUrl: String
+            let filePath: String
 
             enum CodingKeys: String, CodingKey {
                 case signedUrl = "signed_url"
+                case filePath = "file_path"
             }
         }
 
@@ -202,6 +210,10 @@ struct DisputeRepository {
         guard let url = URL(string: decoded.signedUrl) else {
             throw URLError(.badURL)
         }
-        return url
+        let path = decoded.filePath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !path.isEmpty else {
+            throw URLError(.badServerResponse)
+        }
+        return DisputePacketGenerationResult(shareURL: url, storagePath: path)
     }
 }

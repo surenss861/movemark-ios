@@ -30,7 +30,8 @@ app.get("/api/health", (c) => c.json({ ok: true, uptime: process.uptime() }));
 app.route("/api/exports", exportsRouter);
 app.route("/api/webhooks", webhooksRouter);
 
-const port = Number(process.env.PORT ?? 3000);
+const defaultPort = process.env.NODE_ENV === "production" ? 8080 : 3000;
+const port = Number(process.env.PORT) || defaultPort;
 const host = "0.0.0.0";
 
 const server = serve({

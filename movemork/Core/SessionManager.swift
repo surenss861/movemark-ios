@@ -9,11 +9,38 @@ import Foundation
 import Observation
 import Supabase
 
+/// Thread-safe holder so `SessionManager.deinit` can cancel the auth listener without touching `@MainActor` state.
+private final class TaskCancellationBox: @unchecked Sendable {
+    private let lock = NSLock()
+    /// Guarded by `lock`; `nonisolated(unsafe)` so this helper type is not forced onto the main actor.
+    nonisolated(unsafe) private var task: Task<Void, Never>?
+
+    nonisolated init() {}
+
+    nonisolated func store(_ newTask: Task<Void, Never>?) {
+        lock.lock()
+        let previous = task
+        task = newTask
+        lock.unlock()
+        previous?.cancel()
+    }
+
+    nonisolated func cancel() {
+        lock.lock()
+        let current = task
+        task = nil
+        lock.unlock()
+        current?.cancel()
+    }
+}
+
 @MainActor
 @Observable
 final class SessionManager {
     enum AuthPhase: Equatable {
         case loading
+        /// Plist / build settings missing usable Supabase URL and anon key (no launch crash).
+        case misconfigured
         case signedOut
         case needsOnboarding
         case signedIn
@@ -26,8 +53,8 @@ final class SessionManager {
 
     private var hasResolvedInitialAuthState = false
     private var hasStartedAuthListener = false
-    /// Owned by `SessionManager` on the main actor only; `nonisolated(unsafe)` so `deinit` can cancel without actor violations.
-    nonisolated(unsafe) private var authStateTask: Task<Void, Never>? = nil
+    /// `SessionManager` is `@MainActor`; `deinit` is not — the box is the only cross-isolation handle to the listener task.
+    private let authStateTaskBox = TaskCancellationBox()
 
     init() {
         Task {
@@ -36,12 +63,18 @@ final class SessionManager {
     }
 
     deinit {
-        authStateTask?.cancel()
+        authStateTaskBox.cancel()
     }
 
     func bootstrap() async {
         authPhase = .loading
         hasResolvedInitialAuthState = false
+
+        guard isSupabaseConfigured else {
+            authPhase = .misconfigured
+            hasResolvedInitialAuthState = true
+            return
+        }
 
         startAuthListenerIfNeeded()
 
@@ -65,10 +98,11 @@ final class SessionManager {
     }
 
     private func startAuthListenerIfNeeded() {
+        guard isSupabaseConfigured else { return }
         guard !hasStartedAuthListener else { return }
         hasStartedAuthListener = true
 
-        authStateTask = Task { [weak self] in
+        authStateTaskBox.store(Task { [weak self] in
             guard let self else { return }
 
             for await (event, session) in supabase.auth.authStateChanges {
@@ -97,7 +131,7 @@ final class SessionManager {
                     break
                 }
             }
-        }
+        })
     }
 
     private func handleInitialSession(_ session: Session?) async {
@@ -192,6 +226,9 @@ final class SessionManager {
     }
 
     func signUp(email: String, password: String, confirmPassword: String) async throws {
+        guard isSupabaseConfigured else {
+            throw AuthError.validation("This build is not configured to reach MoveMark’s servers.")
+        }
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedEmail.isEmpty else {
             throw AuthError.validation("Enter your email.")
@@ -226,6 +263,9 @@ final class SessionManager {
     }
 
     func signIn(email: String, password: String) async throws {
+        guard isSupabaseConfigured else {
+            throw AuthError.validation("This build is not configured to reach MoveMark’s servers.")
+        }
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedEmail.isEmpty else {
             throw AuthError.validation("Enter your email.")
@@ -248,6 +288,9 @@ final class SessionManager {
 
     /// OAuth sign-in (Apple) through Supabase + ASWebAuthenticationSession.
     func signInWithApple() async throws {
+        guard isSupabaseConfigured else {
+            throw AuthError.validation("This build is not configured to reach MoveMark’s servers.")
+        }
         authPhase = .loading
         do {
             _ = try await supabase.auth.signInWithOAuth(
@@ -263,6 +306,9 @@ final class SessionManager {
 
     /// OAuth sign-in (Google) through Supabase + ASWebAuthenticationSession.
     func signInWithGoogle() async throws {
+        guard isSupabaseConfigured else {
+            throw AuthError.validation("This build is not configured to reach MoveMark’s servers.")
+        }
         authPhase = .loading
         do {
             _ = try await supabase.auth.signInWithOAuth(
@@ -277,6 +323,9 @@ final class SessionManager {
     }
 
     func completeOnboarding(firstName name: String) async throws {
+        guard isSupabaseConfigured else {
+            throw AuthError.validation("This build is not configured to reach MoveMark’s servers.")
+        }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw AuthError.validation("Enter your name.")
@@ -302,6 +351,9 @@ final class SessionManager {
 
     /// Updates local name immediately; Supabase upsert runs in a fire-and-forget task (not awaited by callers).
     func updateProfileFullName(_ name: String) throws {
+        guard isSupabaseConfigured else {
+            throw AuthError.validation("This build is not configured to reach MoveMark’s servers.")
+        }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw AuthError.validation("Enter your full name.")
@@ -321,6 +373,7 @@ final class SessionManager {
 
     /// Fire-and-forget profile name sync (upsert). Errors do not propagate to callers.
     private func persistProfileFullNameToSupabase(uid: UUID, fullName: String, email: String?) async {
+        guard isSupabaseConfigured else { return }
         #if DEBUG
         print("updateProfileFullName remote sync start")
         #endif
@@ -341,6 +394,9 @@ final class SessionManager {
 
     /// Sends a password reset email to the given address (e.g. current user's email).
     func sendPasswordReset(email: String) async throws {
+        guard isSupabaseConfigured else {
+            throw AuthError.validation("This build is not configured to reach MoveMark’s servers.")
+        }
         let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw AuthError.validation("Enter your email.")
@@ -350,10 +406,12 @@ final class SessionManager {
 
     /// Hard reset: always clear local state even if Supabase signOut fails (e.g. offline).
     func signOut() async {
-        do {
-            try await supabase.auth.signOut()
-        } catch {
-            // Intentionally swallow. We still clear local state below.
+        if isSupabaseConfigured {
+            do {
+                try await supabase.auth.signOut()
+            } catch {
+                // Intentionally swallow. We still clear local state below.
+            }
         }
 
         clearAuthenticatedFields()

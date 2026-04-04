@@ -8,7 +8,6 @@
 import SwiftUI
 import PhotosUI
 import UIKit
-import AVFoundation
 
 /// Fixed issue tags for the picker; must match seeded rows in `issue_tags`. Curated set for cleaner UI.
 fileprivate let fixedIssueTags = [
@@ -174,7 +173,7 @@ struct EvidenceCaptureView: View {
         }
         .alert("Camera Access Required", isPresented: $showCameraPermissionAlert) {
             Button("Open Settings") {
-                UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
+                MoveMarkCameraPermission.openAppSettings()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -202,28 +201,11 @@ struct EvidenceCaptureView: View {
     }
 
     private func presentCameraIfAllowed() {
-        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-            errorMessage = "Camera isn’t available on this device."
-            return
-        }
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
-            showCamera = true
-        case .notDetermined:
-            AVCaptureDevice.requestAccess(for: .video) { granted in
-                Task { @MainActor in
-                    if granted {
-                        showCamera = true
-                    } else {
-                        showCameraPermissionAlert = true
-                    }
-                }
-            }
-        case .denied, .restricted:
-            showCameraPermissionAlert = true
-        @unknown default:
-            errorMessage = "Camera isn’t available right now."
-        }
+        MoveMarkCameraPermission.requestPresentationIfEligible(
+            onPresentCamera: { showCamera = true },
+            onNeedsSettingsAlert: { showCameraPermissionAlert = true },
+            onUnavailableMessage: { errorMessage = $0 }
+        )
     }
 
 }

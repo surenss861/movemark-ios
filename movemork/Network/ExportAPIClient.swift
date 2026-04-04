@@ -37,7 +37,7 @@ struct MoveInExportResponse: Codable {
     }
 }
 
-/// Matches movemark-api JSON (`c.json` uses camelCase: userId, propertyId, …).
+/// Matches movemark-api export list JSON (camelCase or snake_case via shared decoder).
 struct ExportListItem: Codable, Identifiable {
     let id: UUID
     let userId: UUID
@@ -87,7 +87,13 @@ enum APIClientError: LocalizedError {
 final class ExportAPIClient {
     private let session: URLSession
     private let baseURL: URL
-    private static let decoder = JSONDecoder()
+
+    /// Single decoder for all export API responses; tolerates snake_case payloads from the server.
+    private static let decoder: JSONDecoder = {
+        let d = JSONDecoder()
+        d.keyDecodingStrategy = .convertFromSnakeCase
+        return d
+    }()
 
     init(baseURLString: String, session: URLSession = .shared) throws {
         guard let url = URL(string: baseURLString) else {

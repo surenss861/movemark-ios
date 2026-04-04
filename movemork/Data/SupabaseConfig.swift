@@ -6,6 +6,7 @@
 //
 //  Configure via `Config/Secrets.xcconfig` (gitignored; copy from Secrets.xcconfig.example),
 //  which sets `SUPABASE_URL` and `SUPABASE_ANON_KEY` for Info.plist substitution.
+//  In .xcconfig, `https://…` is truncated at `//` (comment) unless split — see example file.
 //  Do not commit production secrets in Swift source or project.pbxproj.
 //
 //  OAuth: add `movemark://auth-callback` in Supabase Dashboard → Auth → Redirect URLs.
@@ -16,25 +17,39 @@ import Supabase
 
 let supabaseOAuthRedirectURL = URL(string: "movemark://auth-callback")!
 
-private func loadSupabaseConfig() -> (url: URL, anonKey: String) {
+private struct SupabaseAppConfig {
+    let url: URL
+    let anonKey: String
+    let isValid: Bool
+}
+
+/// Placeholder client when plist keys are missing or unusable (e.g. empty or truncated xcconfig `https:`). Avoids launch-time `fatalError`; UI should gate on `isSupabaseConfigured`.
+private let supabasePlaceholderURL = URL(string: "https://invalid.movemark.app")!
+private let supabasePlaceholderAnonKey = "invalid"
+
+private let supabaseAppConfig: SupabaseAppConfig = {
     let urlString = (Bundle.main.object(forInfoDictionaryKey: "SupabaseURL") as? String)?
         .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     let key = (Bundle.main.object(forInfoDictionaryKey: "SupabaseAnonKey") as? String)?
         .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-    guard let url = URL(string: urlString), !urlString.isEmpty, !key.isEmpty else {
-        fatalError(
-            "SupabaseURL / SupabaseAnonKey missing or empty. Set SUPABASE_URL and SUPABASE_ANON_KEY in the app target’s Build Settings (same pattern as MoveMarkAPIBaseURL)."
-        )
+    guard !key.isEmpty, let url = URL(string: urlString) else {
+        return SupabaseAppConfig(url: supabasePlaceholderURL, anonKey: supabasePlaceholderAnonKey, isValid: false)
     }
-    return (url, key)
-}
+    let scheme = url.scheme?.lowercased()
+    guard scheme == "https" || scheme == "http", let host = url.host, !host.isEmpty else {
+        return SupabaseAppConfig(url: supabasePlaceholderURL, anonKey: supabasePlaceholderAnonKey, isValid: false)
+    }
 
-private let supabaseConfig = loadSupabaseConfig()
+    return SupabaseAppConfig(url: url, anonKey: key, isValid: true)
+}()
+
+/// `false` when `SupabaseURL` / `SupabaseAnonKey` are missing, empty, or not a usable HTTP(S) URL with a host (catches truncated `https:` from .xcconfig).
+var isSupabaseConfigured: Bool { supabaseAppConfig.isValid }
 
 let supabase = SupabaseClient(
-    supabaseURL: supabaseConfig.url,
-    supabaseKey: supabaseConfig.anonKey,
+    supabaseURL: supabaseAppConfig.url,
+    supabaseKey: supabaseAppConfig.anonKey,
     options: SupabaseClientOptions(
         auth: .init(
             redirectToURL: supabaseOAuthRedirectURL,

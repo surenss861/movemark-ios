@@ -139,7 +139,11 @@ Deno.serve(async (req) => {
     }
 
     return Response.json(
-      { signed_url: signed.signedUrl },
+      {
+        signed_url: signed.signedUrl,
+        // Storage path in `exports` — clients must persist this (not the signed URL) so downloads stay valid after expiry.
+        file_path: path,
+      },
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {

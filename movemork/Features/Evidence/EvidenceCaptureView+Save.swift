@@ -57,7 +57,7 @@ extension EvidenceCaptureView {
                         userId: userId
                     )
                     if hadZeroMoveOutEvidenceBefore {
-                        propertyStore.pendingVaultFeedback = .roomCompleted(roomName: roomName)
+                        propertyStore.pendingVaultFeedback = .moveOutRoomCompleted(roomName: roomName)
                     }
                 } else {
                     outcome = try await propertyStore.addEvidence(

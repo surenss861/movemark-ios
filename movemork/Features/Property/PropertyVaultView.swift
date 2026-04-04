@@ -661,7 +661,15 @@ struct PropertyVaultView: View {
         MMHaptics.success()
         showFeedback(event)
 
-        if case .roomCompleted = event, let nextId = nextRoom?.id {
+        let shouldPulseNextRoom: Bool = {
+            switch event {
+            case .roomCompleted, .moveOutRoomCompleted:
+                return true
+            default:
+                return false
+            }
+        }()
+        if shouldPulseNextRoom, let nextId = nextRoom?.id {
             pulseQueueHeadRoomId = nextId
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(1.2))

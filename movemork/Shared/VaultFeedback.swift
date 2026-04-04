@@ -9,6 +9,8 @@ import Foundation
 
 enum VaultFeedbackEvent: Equatable {
     case roomCompleted(roomName: String)
+    /// First move-out proof saved for this room (distinct copy from move-in).
+    case moveOutRoomCompleted(roomName: String)
     case documentUploaded(documentName: String)
     case readinessImproved(oldScore: Int, newScore: Int)
     case exportsUnlocked
@@ -25,6 +27,12 @@ struct VaultFeedbackMessage: Equatable, Identifiable {
             return VaultFeedbackMessage(
                 title: "\(roomName) documented",
                 subtitle: "The queue is moving forward."
+            )
+
+        case .moveOutRoomCompleted(let roomName):
+            return VaultFeedbackMessage(
+                title: "\(roomName) move-out documented",
+                subtitle: "Your move-out record is getting stronger."
             )
 
         case .documentUploaded(let documentName):

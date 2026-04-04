@@ -13,9 +13,37 @@ import RevenueCat
 
 private let subscriptionLog = Logger(subsystem: "movemark.movemork", category: "Subscription")
 
+/// Holds the RevenueCat `customerInfoStream` task so `SubscriptionManager.deinit` can cancel without actor violations.
+private final class SubscriptionCustomerInfoListenerBox: @unchecked Sendable {
+    private let lock = NSLock()
+    nonisolated(unsafe) private var task: Task<Void, Never>?
+
+    nonisolated init() {}
+
+    nonisolated func store(_ newTask: Task<Void, Never>?) {
+        lock.lock()
+        let previous = task
+        task = newTask
+        lock.unlock()
+        previous?.cancel()
+    }
+
+    nonisolated func cancel() {
+        lock.lock()
+        let current = task
+        task = nil
+        lock.unlock()
+        current?.cancel()
+    }
+}
+
 @MainActor
 @Observable
 final class SubscriptionManager {
+    deinit {
+        customerInfoListenerBox.cancel()
+    }
+
     var hasPro: Bool = false
     var isLoading: Bool = false
     var lastErrorMessage: String? = nil
@@ -26,7 +54,9 @@ final class SubscriptionManager {
     /// Some Test Store dashboards grant `test` before products attach to `movemark_pro1`; honored only when Test Store SDK use is allowed.
     private static let testStoreProEntitlementFallbackID = "test"
 
-    private var hasStartedCustomerInfoListener = false
+    /// False while no listener is running, or after the stream task exits (including cancellation).
+    private var isCustomerInfoListenerActive = false
+    private let customerInfoListenerBox = SubscriptionCustomerInfoListenerBox()
     private var lastKnownAppUserID: String? = nil
 
     /// Test Store keys (`test_…`) and the `test` entitlement bridge are **Debug-only**. Release / TestFlight / App Store always use `appl_…` and `movemark_pro1` only.
@@ -302,14 +332,21 @@ final class SubscriptionManager {
 
     private func startCustomerInfoListenerIfNeeded() {
         guard Purchases.isConfigured else { return }
-        guard !hasStartedCustomerInfoListener else { return }
-        hasStartedCustomerInfoListener = true
+        guard !isCustomerInfoListenerActive else { return }
+        isCustomerInfoListenerActive = true
 
-        Task { @MainActor in
+        customerInfoListenerBox.store(Task { @MainActor [weak self] in
+            defer { self?.markCustomerInfoListenerFinished() }
+            guard let self else { return }
             for await customerInfo in Purchases.shared.customerInfoStream {
-                hasPro = Self.hasActiveProEntitlement(customerInfo)
+                guard !Task.isCancelled else { return }
+                self.hasPro = Self.hasActiveProEntitlement(customerInfo)
             }
-        }
+        })
+    }
+
+    private func markCustomerInfoListenerFinished() {
+        isCustomerInfoListenerActive = false
     }
 
     func syncAuth(appUserID: String?) async {

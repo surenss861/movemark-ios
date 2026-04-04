@@ -10,6 +10,68 @@ import PDFKit
 
 enum PDFGenerator {
 
+    // MARK: - Layout helpers (move-in / move-out reports)
+
+    private static func pdfEnsureSpace(
+        context: UIGraphicsPDFRendererContext,
+        y: inout CGFloat,
+        blockHeight: CGFloat,
+        pageRect: CGRect,
+        margin: CGFloat,
+        bgColor: UIColor,
+        continuationInsetY: CGFloat = 20
+    ) {
+        let bottomLimit = pageRect.height - margin
+        if y + blockHeight > bottomLimit {
+            context.beginPage()
+            bgColor.setFill()
+            UIRectFill(pageRect)
+            y = margin + continuationInsetY
+        }
+    }
+
+    private static func pdfBoundingHeight(
+        _ text: String,
+        width: CGFloat,
+        attributes: [NSAttributedString.Key: Any]
+    ) -> CGFloat {
+        let bound = (text as NSString).boundingRect(
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: attributes,
+            context: nil
+        )
+        return max(ceil(bound.height), 1)
+    }
+
+    private static func pdfDrawWrappedLine(
+        _ text: String,
+        x: CGFloat,
+        y: inout CGFloat,
+        width: CGFloat,
+        attributes: [NSAttributedString.Key: Any],
+        context: UIGraphicsPDFRendererContext,
+        pageRect: CGRect,
+        margin: CGFloat,
+        bgColor: UIColor,
+        trailingSpacing: CGFloat = 6
+    ) {
+        let h = pdfBoundingHeight(text, width: width, attributes: attributes)
+        pdfEnsureSpace(
+            context: context,
+            y: &y,
+            blockHeight: h + trailingSpacing,
+            pageRect: pageRect,
+            margin: margin,
+            bgColor: bgColor
+        )
+        (text as NSString).draw(
+            in: CGRect(x: x, y: y, width: width, height: h),
+            withAttributes: attributes
+        )
+        y += h + trailingSpacing
+    }
+
     static func generateDisputeSummary(
         property: PropertyRecord,
         dispute: DisputeDraft,
@@ -202,33 +264,51 @@ enum PDFGenerator {
             property.addressLine1.draw(at: CGPoint(x: margin, y: y), withAttributes: bodyAttrs)
             y += 30
 
-            for room in rooms {
-                if y > pageRect.height - 100 {
-                    context.beginPage()
-                    bgColor.setFill()
-                    UIRectFill(pageRect)
-                    y = margin + 20
-                }
+            let contentWidth = pageRect.width - margin * 2
+            let evidenceIndent: CGFloat = 16
 
-                room.name.draw(at: CGPoint(x: margin, y: y), withAttributes: headingAttrs)
-                y += 28
-                "Evidence entries: \(room.evidence.count)".draw(at: CGPoint(x: margin, y: y), withAttributes: labelAttrs)
-                y += 20
+            for room in rooms {
+                Self.pdfDrawWrappedLine(
+                    room.name,
+                    x: margin,
+                    y: &y,
+                    width: contentWidth,
+                    attributes: headingAttrs,
+                    context: context,
+                    pageRect: pageRect,
+                    margin: margin,
+                    bgColor: bgColor,
+                    trailingSpacing: 8
+                )
+                Self.pdfDrawWrappedLine(
+                    "Evidence entries: \(room.evidence.count)",
+                    x: margin,
+                    y: &y,
+                    width: contentWidth,
+                    attributes: labelAttrs,
+                    context: context,
+                    pageRect: pageRect,
+                    margin: margin,
+                    bgColor: bgColor,
+                    trailingSpacing: 10
+                )
 
                 for evidence in room.evidence {
-                    if y > pageRect.height - 60 {
-                        context.beginPage()
-                        bgColor.setFill()
-                        UIRectFill(pageRect)
-                        y = margin + 20
-                    }
-                    "• \(evidence.title) — \(evidence.condition.rawValue) — \(evidence.photoCount) photos".draw(
-                        at: CGPoint(x: margin + 16, y: y),
-                        withAttributes: bodyAttrs
+                    let line = "• \(evidence.title) — \(evidence.condition.rawValue) — \(evidence.photoCount) photos"
+                    Self.pdfDrawWrappedLine(
+                        line,
+                        x: margin + evidenceIndent,
+                        y: &y,
+                        width: contentWidth - evidenceIndent,
+                        attributes: bodyAttrs,
+                        context: context,
+                        pageRect: pageRect,
+                        margin: margin,
+                        bgColor: bgColor,
+                        trailingSpacing: 4
                     )
-                    y += 20
                 }
-                y += 12
+                y += 8
             }
         }
     }
@@ -262,36 +342,51 @@ enum PDFGenerator {
             property.addressLine1.draw(at: CGPoint(x: margin, y: y), withAttributes: bodyAttrs)
             y += 30
 
-            for room in rooms {
-                if y > pageRect.height - 120 {
-                    context.beginPage()
-                    bgColor.setFill()
-                    UIRectFill(pageRect)
-                    y = margin + 20
-                }
+            let contentWidth = pageRect.width - margin * 2
+            let evidenceIndent: CGFloat = 16
 
-                room.name.draw(at: CGPoint(x: margin, y: y), withAttributes: headingAttrs)
-                y += 28
-                "Before: \(room.evidence.count) entries  |  After: \(room.moveOutEvidence.count) entries".draw(
-                    at: CGPoint(x: margin, y: y),
-                    withAttributes: labelAttrs
+            for room in rooms {
+                Self.pdfDrawWrappedLine(
+                    room.name,
+                    x: margin,
+                    y: &y,
+                    width: contentWidth,
+                    attributes: headingAttrs,
+                    context: context,
+                    pageRect: pageRect,
+                    margin: margin,
+                    bgColor: bgColor,
+                    trailingSpacing: 8
                 )
-                y += 24
+                Self.pdfDrawWrappedLine(
+                    "Before: \(room.evidence.count) entries  |  After: \(room.moveOutEvidence.count) entries",
+                    x: margin,
+                    y: &y,
+                    width: contentWidth,
+                    attributes: labelAttrs,
+                    context: context,
+                    pageRect: pageRect,
+                    margin: margin,
+                    bgColor: bgColor,
+                    trailingSpacing: 10
+                )
 
                 for evidence in room.moveOutEvidence {
-                    if y > pageRect.height - 60 {
-                        context.beginPage()
-                        bgColor.setFill()
-                        UIRectFill(pageRect)
-                        y = margin + 20
-                    }
-                    "• \(evidence.title) — \(evidence.condition.rawValue) — \(evidence.photoCount) photos".draw(
-                        at: CGPoint(x: margin + 16, y: y),
-                        withAttributes: bodyAttrs
+                    let line = "• \(evidence.title) — \(evidence.condition.rawValue) — \(evidence.photoCount) photos"
+                    Self.pdfDrawWrappedLine(
+                        line,
+                        x: margin + evidenceIndent,
+                        y: &y,
+                        width: contentWidth - evidenceIndent,
+                        attributes: bodyAttrs,
+                        context: context,
+                        pageRect: pageRect,
+                        margin: margin,
+                        bgColor: bgColor,
+                        trailingSpacing: 4
                     )
-                    y += 20
                 }
-                y += 12
+                y += 8
             }
         }
     }

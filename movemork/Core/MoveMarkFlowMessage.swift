@@ -92,6 +92,9 @@ enum MoveMarkFlowMessage {
         UserFacingDatabaseError.message(from: error, fallback: "Couldn’t load maintenance list. Try again.")
     }
 
+    /// `PropertyStore.refreshMaintenance` failed without a surfaced `Error` (e.g. network).
+    static let maintenanceListSyncFailed = "Couldn’t refresh maintenance list. Try again."
+
     static func maintenancePhotoUploadFailed(_ error: Error) -> String {
         if isLikelyStorageFailure(error) {
             return "Couldn’t upload this photo. Check your connection and try again."

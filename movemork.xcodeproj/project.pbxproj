@@ -42,7 +42,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		2152E0A02F621A5300EDA905 /* Exceptions for "movemork" folder in "movemork" target */ = {
+		21F1E0222F71000200B50C14 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -55,7 +55,7 @@
 		2152E07F2F621A5100EDA905 /* movemork */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				2152E0A02F621A5300EDA905 /* Exceptions for "movemork" folder in "movemork" target */,
+				21F1E0222F71000200B50C14 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
 			);
 			path = movemork;
 			sourceTree = "<group>";

@@ -228,6 +228,10 @@ extension PropertyStore {
 
         await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
 
+        if !evidence.issueTags.isEmpty {
+            try await inspectionRepo.insertItemTags(inspectionItemId: itemId, tagNames: evidence.issueTags)
+        }
+
         applyOptimisticMoveOutEvidence(
             roomID: roomID,
             itemId: itemId,

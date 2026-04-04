@@ -3,6 +3,7 @@
 //  movemork
 //
 //  MoveMark — Native camera capture for evidence photos.
+//  Present only after `MoveMarkCameraPermission.requestPresentationIfEligible` succeeds.
 //
 
 import SwiftUI

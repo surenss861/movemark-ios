@@ -120,6 +120,8 @@ extension PropertyStore {
     /// **Limitation:** Only the currently active (hydrated) property returns a live count.
     /// Non-active properties always return 0 because the maintenance log is only loaded
     /// for `currentProperty`. Callers should not rely on this for non-active properties.
+    /// Open maintenance issues for **this** property — but only when it is the **active** hydrated vault.
+    /// Non-active properties always return `0` (we do not load `maintenanceLog` for other vault cards).
     func openIssueCount(for property: PropertyRecord) -> Int {
         if currentProperty?.id == property.id {
             return maintenanceLog.filter { $0.status != .resolved }.count
@@ -147,7 +149,6 @@ extension PropertyStore {
     func readinessScore(for property: PropertyRecord) -> Int {
         let documentedRooms = documentedRoomCount(for: property)
         let totalRooms = totalRoomCount(for: property)
-        let missingDocs = missingSupportingRecordCount(for: property)
         let openIssues = openIssueCount(for: property)
 
         let roomScore: Double = {

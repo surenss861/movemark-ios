@@ -539,7 +539,7 @@ struct DisputeBuilderView: View {
 
             do {
                 let session = try await supabase.auth.session
-                let url = try await disputeRepo.callGenerateDisputePacket(
+                let packet = try await disputeRepo.callGenerateDisputePacket(
                     disputeId: existingDisputeId,
                     propertyId: property.id,
                     jwt: session.accessToken
@@ -551,12 +551,12 @@ struct DisputeBuilderView: View {
                     propertyId: property.id,
                     userId: userId,
                     exportType: "dispute_packet",
-                    filePath: url.absoluteString,
+                    filePath: packet.storagePath,
                     createdAt: nil
                 )
                 try await disputeRepo.insertExportRecord(exportRow)
 
-                shareItems = [url]
+                shareItems = [packet.shareURL]
                 openExportsOnShareDismiss = true
                 showShareSheet = true
                 successMessage = "Formal packet generated."
@@ -602,6 +602,8 @@ struct DisputeBuilderView: View {
         return f
     }()
 
+    private static let evidenceCapturedAtISOFormatter = ISO8601DateFormatter()
+
     private static func parseDBDate(_ value: String?) -> Date? {
         guard let value, !value.isEmpty else { return nil }
         return Self.dbDateFormatter.date(from: value)
@@ -634,12 +636,14 @@ struct DisputeBuilderView: View {
     }
 
     private func evidencePhotoRowTitle(for file: EvidenceFileRow) -> String {
-        if let mid = file.maintenanceIssueId,
-           let issue = maintenanceIssues.first(where: { $0.id == mid }) {
-            return "\(issue.title) · maintenance photo"
+        if file.maintenanceIssueId != nil {
+            if let issue = maintenanceIssues.first(where: { $0.id == file.maintenanceIssueId }) {
+                return "\(issue.title) · maintenance photo"
+            }
+            return uncategorizedEvidenceTitle(for: file, kind: "Maintenance photo")
         }
         guard let property = propertyStore.currentProperty else {
-            return friendlyFileName(file.filePath)
+            return uncategorizedEvidenceTitle(for: file)
         }
         for room in property.rooms {
             if let rec = room.evidence.first(where: { $0.photos.contains(where: { $0.id == file.id }) }) {
@@ -649,7 +653,17 @@ struct DisputeBuilderView: View {
                 return "\(room.name) · \(rec.title) (move-out)"
             }
         }
-        return friendlyFileName(file.filePath)
+        return uncategorizedEvidenceTitle(for: file)
+    }
+
+    /// When a file row doesn’t map to hydrated room/issue data, avoid raw storage paths in the UI.
+    private func uncategorizedEvidenceTitle(for file: EvidenceFileRow, kind: String = "Uncategorized photo") -> String {
+        let raw = file.capturedAt ?? file.createdAt ?? ""
+        guard !raw.isEmpty, let date = Self.evidenceCapturedAtISOFormatter.date(from: raw) else {
+            return kind
+        }
+        let dateStr = date.formatted(date: .abbreviated, time: .omitted)
+        return "\(kind) · \(dateStr)"
     }
 
     private func evidencePhotoRowSubtitle(for file: EvidenceFileRow) -> String {
@@ -676,7 +690,7 @@ struct DisputeBuilderView: View {
 
     private func evidenceCapturedLabel(for file: EvidenceFileRow) -> String {
         let raw = file.capturedAt ?? file.createdAt ?? ""
-        guard !raw.isEmpty, let date = ISO8601DateFormatter().date(from: raw) else {
+        guard !raw.isEmpty, let date = Self.evidenceCapturedAtISOFormatter.date(from: raw) else {
             return "Room photo"
         }
         return date.formatted(date: .abbreviated, time: .omitted)

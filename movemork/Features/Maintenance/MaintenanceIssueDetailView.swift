@@ -10,6 +10,8 @@ import PhotosUI
 import NukeUI
 
 struct MaintenanceIssueDetailView: View {
+    @Environment(PropertyStore.self) private var propertyStore
+
     @State private var issue: MaintenanceIssueRow
     @State private var followUpNote = ""
     @State private var selectedPhotos: [PhotosPickerItem] = []
@@ -376,6 +378,7 @@ struct MaintenanceIssueDetailView: View {
                 updated.followUpDate = ISO8601DateFormatter().string(from: Date())
                 issue = updated
                 followUpNote = ""
+                _ = await propertyStore.refreshMaintenance(propertyId: issue.propertyId)
             } catch {
                 errorMessage = MoveMarkFlowMessage.maintenanceFollowUpFailed(error)
                 retryAction = { saveFollowUp() }
@@ -399,6 +402,7 @@ struct MaintenanceIssueDetailView: View {
                 updated.status = "resolved"
                 issue = updated
                 MMHaptics.success()
+                _ = await propertyStore.refreshMaintenance(propertyId: issue.propertyId)
             } catch {
                 errorMessage = MoveMarkFlowMessage.maintenanceResolveFailed(error)
                 retryAction = { markResolved() }

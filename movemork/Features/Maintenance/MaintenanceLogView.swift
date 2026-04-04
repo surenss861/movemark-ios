@@ -18,20 +18,22 @@ struct MaintenanceLogView: View {
     @State private var details = ""
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var loadedImages: [UIImage] = []
-    @State private var issues: [MaintenanceIssueRow] = []
     @State private var isLoading = false
     @State private var isSubmitting = false
     @State private var errorMessage: String? = nil
+    @State private var errorRetryAction: (() -> Void)? = nil
     @State private var softNotice: String? = nil
 
-    private let maintenanceRepo = MaintenanceRepository()
-
-    private var openIssues: [MaintenanceIssueRow] {
-        issues.filter { $0.status != "resolved" }
+    private var log: [MaintenanceRecord] {
+        propertyStore.maintenanceLog
     }
 
-    private var resolvedIssues: [MaintenanceIssueRow] {
-        issues.filter { $0.status == "resolved" }
+    private var openIssues: [MaintenanceRecord] {
+        log.filter { $0.status != .resolved }
+    }
+
+    private var resolvedIssues: [MaintenanceRecord] {
+        log.filter { $0.status == .resolved }
     }
 
     var body: some View {
@@ -59,12 +61,12 @@ struct MaintenanceLogView: View {
                     if let errorMessage {
                         MMErrorBanner(
                             message: errorMessage,
-                            retryTitle: MMCopy.tryAgain,
-                            onRetry: { addIncident() }
+                            retryTitle: errorRetryAction != nil ? MMCopy.tryAgain : nil,
+                            onRetry: errorRetryAction
                         )
                     }
 
-                    if issues.isEmpty && !isLoading {
+                    if log.isEmpty && !isLoading {
                         MMCard {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("No incidents yet")
@@ -102,8 +104,8 @@ struct MaintenanceLogView: View {
                 .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
             }
         }
-        // Single load entry point (avoid pairing `.task` + `.onAppear` — duplicate fetches).
-        .task(id: propertyStore.currentProperty?.id) { await loadIssues() }
+        // Re-sync when the active vault changes; list reads `propertyStore.maintenanceLog` (hydrated on switch + refreshed here).
+        .task(id: propertyStore.currentProperty?.id) { await syncMaintenanceLogFromServer() }
         .navigationTitle("Maintenance")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -218,7 +220,7 @@ struct MaintenanceLogView: View {
     }
 
     @ViewBuilder
-    private func issueSection(title: String, subtitle: String, rows: [MaintenanceIssueRow], tone: MMPill.Tone) -> some View {
+    private func issueSection(title: String, subtitle: String, rows: [MaintenanceRecord], tone: MMPill.Tone) -> some View {
         if !rows.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
@@ -234,17 +236,20 @@ struct MaintenanceLogView: View {
                         MMCard {
                             VStack(alignment: .leading, spacing: 10) {
                                 HStack {
-                                    MMPill(text: entry.category ?? "General", tone: .warning)
+                                    MMPill(text: entry.category, tone: .warning)
                                     Spacer()
-                                    MMPill(text: entry.status, tone: entry.status == "resolved" ? .success : .warning)
+                                    MMPill(
+                                        text: entry.status.rawValue,
+                                        tone: entry.status == .resolved ? .success : .warning
+                                    )
                                 }
 
                                 Text(entry.title)
                                     .font(MoveMarkTheme.Typography.sectionTitle)
                                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                                if let desc = entry.description, !desc.isEmpty {
-                                    Text(desc)
+                                if !entry.details.isEmpty {
+                                    Text(entry.details)
                                         .font(MoveMarkTheme.Typography.subheadline)
                                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                                         .fixedSize(horizontal: false, vertical: true)
@@ -258,27 +263,17 @@ struct MaintenanceLogView: View {
         }
     }
 
-    private func loadIssues() async {
+    private func syncMaintenanceLogFromServer() async {
         guard let property = propertyStore.currentProperty else { return }
         isLoading = true
+        errorMessage = nil
+        errorRetryAction = nil
         defer { isLoading = false }
 
-        do {
-            issues = try await maintenanceRepo.fetchIssues(propertyId: property.id)
-        } catch {
-            errorMessage = MoveMarkFlowMessage.maintenanceListLoadFailed(error)
-        }
-    }
-
-    /// After a successful save, reconcile with the server without surfacing refresh failures as “save failed.”
-    private func reloadIssuesSilentlyAfterSave() async {
-        guard let property = propertyStore.currentProperty else { return }
-        do {
-            issues = try await maintenanceRepo.fetchIssues(propertyId: property.id)
-        } catch {
-            #if DEBUG
-            print("MoveMark: maintenance list refresh after save failed:", error.localizedDescription)
-            #endif
+        let ok = await propertyStore.refreshMaintenance(propertyId: property.id)
+        if !ok {
+            errorMessage = MoveMarkFlowMessage.maintenanceListSyncFailed
+            errorRetryAction = { Task { await syncMaintenanceLogFromServer() } }
         }
     }
 
@@ -324,6 +319,7 @@ struct MaintenanceLogView: View {
 
         isSubmitting = true
         errorMessage = nil
+        errorRetryAction = nil
         softNotice = nil
 
         let record = MaintenanceRecord(
@@ -354,13 +350,12 @@ struct MaintenanceLogView: View {
                 selectedPhotos = []
                 loadedImages = []
 
-                issues.insert(outcome.inserted, at: 0)
-                await reloadIssuesSilentlyAfterSave()
                 if outcome.listRefreshFailed {
                     softNotice = MoveMarkFlowMessage.incidentSavedRefreshStale
                 }
             } catch {
                 errorMessage = MoveMarkFlowMessage.maintenanceComposerFailed(error)
+                errorRetryAction = { addIncident() }
             }
         }
     }
