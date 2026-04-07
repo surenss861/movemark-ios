@@ -23,11 +23,17 @@ function handleExportsError(c: Context, error: unknown, logLabel: string) {
 export const exportsRouter = new Hono();
 
 exportsRouter.get("/", async (c) => {
+  const t0 = performance.now();
   try {
     const userId = await requireUserIdFromBearer(c);
+    const authMs = Math.round(performance.now() - t0);
+
     const propertyIdFilter = c.req.query("propertyId")?.trim();
 
     if (!propertyIdFilter) {
+      console.log(
+        `[movemark-api:exports] GET / timing authMs=${authMs} totalMs=${Math.round(performance.now() - t0)} status=400 reason=missing_propertyId`
+      );
       return c.json({ error: "propertyId query parameter is required" }, 400);
     }
 
@@ -40,7 +46,10 @@ exportsRouter.get("/", async (c) => {
       query = query.eq("property_id", propertyIdFilter);
     }
 
+    const tDb = performance.now();
     const { data, error } = await query.order("created_at", { ascending: false });
+    const dbMs = Math.round(performance.now() - tDb);
+    const totalMs = Math.round(performance.now() - t0);
 
     if (error) {
       console.error("[movemark-api:exports] list query failed", {
@@ -50,6 +59,9 @@ exportsRouter.get("/", async (c) => {
         details: error.details,
         hint: error.hint,
       });
+      console.log(
+        `[movemark-api:exports] GET / timing authMs=${authMs} dbMs=${dbMs} totalMs=${totalMs} status=500 query_error=1`
+      );
       return c.json({ error: "Failed to load exports" }, 500);
     }
 
@@ -65,46 +77,81 @@ exportsRouter.get("/", async (c) => {
       createdAt: row.created_at,
     }));
 
+    console.log(
+      `[movemark-api:exports] GET / timing authMs=${authMs} dbMs=${dbMs} totalMs=${totalMs} status=200 rows=${rows.length}`
+    );
     return c.json(rows, 200);
   } catch (error) {
+    const totalMs = Math.round(performance.now() - t0);
+    if (error instanceof Error && error.message === "Unauthorized") {
+      console.log(
+        `[movemark-api:exports] GET / timing totalMs=${totalMs} status=401 (auth failed before user id)`
+      );
+    }
     return handleExportsError(c, error, "GET /");
   }
 });
 
 exportsRouter.get("/:id/download", async (c) => {
+  const t0 = performance.now();
   try {
     const userId = await requireUserIdFromBearer(c);
+    const authMs = Math.round(performance.now() - t0);
+
     const exportId = c.req.param("id");
     if (!exportId) {
+      console.log(
+        `[movemark-api:exports] GET /:id/download timing authMs=${authMs} totalMs=${Math.round(performance.now() - t0)} status=400`
+      );
       return c.json({ error: "Missing export id" }, 400);
     }
 
+    const tRow = performance.now();
     const { data: row, error } = await supabaseAdmin
       .from("exports")
       .select("id,user_id,status,file_path")
       .eq("id", exportId)
       .eq("user_id", userId)
       .single();
+    const rowMs = Math.round(performance.now() - tRow);
 
     if (error || !row) {
+      console.log(
+        `[movemark-api:exports] GET /:id/download timing authMs=${authMs} rowMs=${rowMs} totalMs=${Math.round(performance.now() - t0)} status=404`
+      );
       return c.json({ error: "Export not found" }, 404);
     }
     if (row.status !== "completed") {
+      console.log(
+        `[movemark-api:exports] GET /:id/download timing authMs=${authMs} rowMs=${rowMs} totalMs=${Math.round(performance.now() - t0)} status=409`
+      );
       return c.json({ error: "Export is not ready yet" }, 409);
     }
     if (!row.file_path) {
+      console.log(
+        `[movemark-api:exports] GET /:id/download timing authMs=${authMs} rowMs=${rowMs} totalMs=${Math.round(performance.now() - t0)} status=500 missing_path`
+      );
       return c.json({ error: "Export file path missing" }, 500);
     }
 
+    const tSign = performance.now();
     const { data: signed, error: signedError } = await supabaseAdmin.storage
       .from(env.EXPORT_BUCKET_NAME)
       .createSignedUrl(row.file_path, 60 * 15);
+    const signedMs = Math.round(performance.now() - tSign);
+    const totalMs = Math.round(performance.now() - t0);
 
     if (signedError || !signed?.signedUrl) {
       console.error("[movemark-api:exports] signed URL", signedError);
+      console.log(
+        `[movemark-api:exports] GET /:id/download timing authMs=${authMs} rowMs=${rowMs} signedUrlMs=${signedMs} totalMs=${totalMs} status=500 signed_url_error`
+      );
       return c.json({ error: "Failed to prepare download" }, 500);
     }
 
+    console.log(
+      `[movemark-api:exports] GET /:id/download timing authMs=${authMs} rowMs=${rowMs} signedUrlMs=${signedMs} totalMs=${totalMs} status=200`
+    );
     const response: ExportDownloadResponseBody = {
       exportId: row.id,
       status: row.status,
@@ -113,6 +160,12 @@ exportsRouter.get("/:id/download", async (c) => {
     };
     return c.json(response, 200);
   } catch (error) {
+    const totalMs = Math.round(performance.now() - t0);
+    if (error instanceof Error && error.message === "Unauthorized") {
+      console.log(
+        `[movemark-api:exports] GET /:id/download timing totalMs=${totalMs} status=401`
+      );
+    }
     return handleExportsError(c, error, "GET /:id/download");
   }
 });
