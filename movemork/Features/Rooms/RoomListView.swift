@@ -437,7 +437,8 @@ struct RoomListView: View {
         }
         return MoveMarkFlowMessage.exportOrAPIFailed(
             error,
-            fallback: "Couldn’t queue move-in export. Try again."
+            fallback: "Couldn’t queue move-in export. Try again.",
+            intent: .mutate
         )
     }
 }

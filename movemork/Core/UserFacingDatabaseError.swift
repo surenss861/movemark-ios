@@ -8,10 +8,19 @@ import Foundation
 /// Maps Supabase/Postgres errors to short, actionable copy. Prefer this over ad-hoc string checks per screen.
 enum UserFacingDatabaseError {
 
+    /// Whether the failing operation was primarily reading or mutating data. Used for RLS / policy copy.
+    enum Intent: Sendable {
+        /// SELECT / list / refresh / preview / verify.
+        case load
+        /// INSERT / UPDATE / DELETE / upload.
+        case mutate
+    }
+
     /// - Parameters:
     ///   - error: Underlying error from client SDK.
     ///   - fallback: Message when no known pattern matches.
-    static func message(from error: Error, fallback: String) -> String {
+    ///   - intent: Distinguishes load vs save permission errors (RLS). Defaults to `.load` so accidental omissions skew toward “couldn’t load,” not a false “couldn’t save.”
+    static func message(from error: Error, fallback: String, intent: Intent = .load) -> String {
         let lower = error.localizedDescription.lowercased()
 
         if lower.contains("not authenticated")
@@ -28,7 +37,12 @@ enum UserFacingDatabaseError {
             || lower.contains("42501")
             || lower.contains("permission denied for table")
             || (lower.contains("permission denied") && lower.contains("policy")) {
-            return "Couldn’t save: your account isn’t allowed to write this data right now. Try signing out and back in."
+            switch intent {
+            case .load:
+                return "Couldn’t load this data. Your account doesn’t have access — try signing out and back in."
+            case .mutate:
+                return "Couldn’t save: your account isn’t allowed to write this data right now. Try signing out and back in."
+            }
         }
 
         if lower.contains("bucket")
