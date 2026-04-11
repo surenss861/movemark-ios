@@ -2,7 +2,10 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serve } from "@hono/node-server";
 import { assertEnv, corsAllowedOrigins } from "./lib/env.js";
+import { propertyCapabilitiesRouter } from "./routes/capabilities.js";
+import { disputesRouter } from "./routes/disputes.js";
 import { exportsRouter } from "./routes/exports.js";
+import { vaultsRouter } from "./routes/vaults.js";
 import { webhooksRouter } from "./routes/webhooks.js";
 
 assertEnv();
@@ -28,6 +31,9 @@ app.get("/", (c) => c.json({ ok: true, service: "movemark-api" }));
 app.get("/api/health", (c) => c.json({ ok: true, uptime: process.uptime() }));
 
 app.route("/api/exports", exportsRouter);
+app.route("/api/vaults", vaultsRouter);
+app.route("/api/disputes", disputesRouter);
+app.route("/api/properties", propertyCapabilitiesRouter);
 app.route("/api/webhooks", webhooksRouter);
 
 const defaultPort = process.env.NODE_ENV === "production" ? 8080 : 3000;
