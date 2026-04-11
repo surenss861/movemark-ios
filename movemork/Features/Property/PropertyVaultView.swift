@@ -934,6 +934,7 @@ struct PropertyVaultView: View {
             let metaOK = await propertyStore.refreshDocuments(propertyId: property.id)
             let rowsOK = await refreshDocumentRowsAfterMutation()
             uploadSoftNotice = nil
+            uploadError = nil
             if !metaOK || !rowsOK {
                 uploadSoftNotice = MoveMarkFlowMessage.documentVaultRefreshHint
             }
@@ -1033,6 +1034,7 @@ struct PropertyVaultView: View {
                 evaluateWorkflowFeedback(documentName: "Document")
             }
 
+            uploadError = nil
             lastFailedPhotoDocType = nil
             selectedPhotoItem = nil
         }
@@ -1117,6 +1119,8 @@ struct PropertyVaultView: View {
             } else {
                 evaluateWorkflowFeedback(documentName: "Document")
             }
+
+            uploadError = nil
         }
     }
 }

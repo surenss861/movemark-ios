@@ -75,6 +75,7 @@ extension EvidenceCaptureView {
                     }
                 }
 
+                errorMessage = nil
                 title = ""
                 notes = ""
                 selectedTags = []
@@ -129,6 +130,7 @@ extension EvidenceCaptureView {
                 propertyId: property.id,
                 userId: userId
             )
+            errorMessage = nil
             var msg = "Entry removed."
             if outcome.hydrationRefreshFailed { msg += MoveMarkFlowMessage.proofHydrationHint }
             successMessage = msg
@@ -165,6 +167,7 @@ extension EvidenceCaptureView {
                 propertyId: property.id,
                 userId: userId
             )
+            errorMessage = nil
             var msg = "Entry updated."
             if outcome.hydrationRefreshFailed { msg += MoveMarkFlowMessage.proofHydrationHint }
             successMessage = msg
@@ -196,6 +199,7 @@ extension EvidenceCaptureView {
                 userId: userId,
                 isMoveOut: moveOutMode
             )
+            errorMessage = nil
             var msg = "Photos added to entry."
             if outcome.hydrationRefreshFailed { msg += MoveMarkFlowMessage.proofHydrationHint }
             successMessage = msg

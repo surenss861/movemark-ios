@@ -44,6 +44,7 @@ extension PropertyStore {
     }
 
     func fetchAll(userId: UUID) async {
+        errorMessage = nil
         isLoading = true
         defer {
             isLoading = false
@@ -109,6 +110,7 @@ extension PropertyStore {
     /// Switches the active property and hydrates it. Call after fetchAll has run so `properties` is populated.
     func selectProperty(id: UUID, userId: UUID) async {
         guard properties.contains(where: { $0.id == id }) else { return }
+        errorMessage = nil
         activePropertyId = id
         UserDefaults.standard.set(id.uuidString, forKey: Self.persistedActivePropertyIdKey(userId: userId))
         guard let row = properties.first(where: { $0.id == id }) else { return }
