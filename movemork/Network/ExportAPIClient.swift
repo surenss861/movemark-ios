@@ -203,4 +203,100 @@ final class ExportAPIClient {
             throw APIClientError.decodingFailed
         }
     }
+
+    // MARK: - Vault / capabilities / dispute catalog (movemark-api)
+
+    func fetchVaultSummary(
+        propertyId: UUID,
+        accessToken: String,
+        includeExports: Bool = true,
+        includeDispute: Bool = true
+    ) async throws -> VaultSummaryResponse {
+        try await getJSON(
+            path: "api/vaults/\(propertyId.uuidString)/summary",
+            accessToken: accessToken,
+            queryItems: [
+                URLQueryItem(name: "includeExports", value: includeExports ? "true" : "false"),
+                URLQueryItem(name: "includeDispute", value: includeDispute ? "true" : "false"),
+            ],
+            as: VaultSummaryResponse.self
+        )
+    }
+
+    func fetchPropertyCapabilities(
+        propertyId: UUID,
+        accessToken: String
+    ) async throws -> PropertyCapabilitiesResponse {
+        try await getJSON(
+            path: "api/properties/\(propertyId.uuidString)/capabilities",
+            accessToken: accessToken,
+            queryItems: [],
+            as: PropertyCapabilitiesResponse.self
+        )
+    }
+
+    func fetchDisputeEvidenceCatalog(
+        propertyId: UUID,
+        accessToken: String,
+        includeSignedUrls: Bool = false
+    ) async throws -> DisputeEvidenceCatalogResponse {
+        try await getJSON(
+            path: "api/disputes/\(propertyId.uuidString)/evidence-catalog",
+            accessToken: accessToken,
+            queryItems: [
+                URLQueryItem(name: "includeSignedUrls", value: includeSignedUrls ? "true" : "false"),
+            ],
+            as: DisputeEvidenceCatalogResponse.self
+        )
+    }
+
+    private func getJSON<T: Decodable>(
+        path: String,
+        accessToken: String,
+        queryItems: [URLQueryItem],
+        as type: T.Type
+    ) async throws -> T {
+        guard !accessToken.isEmpty else {
+            throw APIClientError.missingAuthToken
+        }
+
+        var base = baseURL
+        for component in path.split(separator: "/") where !component.isEmpty {
+            base = base.appendingPathComponent(String(component))
+        }
+
+        var components = URLComponents(url: base, resolvingAgainstBaseURL: false)
+        if !queryItems.isEmpty {
+            components?.queryItems = queryItems
+        }
+        guard let url = components?.url else {
+            throw APIClientError.invalidBaseURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIClientError.invalidResponse
+        }
+
+        guard 200..<300 ~= httpResponse.statusCode else {
+            let message = String(data: data, encoding: .utf8) ?? "Server error"
+            throw APIClientError.serverError(message)
+        }
+
+        do {
+            return try Self.decoder.decode(T.self, from: data)
+        } catch {
+            exportAPILog.error(
+                "decode failed path=\(path, privacy: .public) error=\(String(describing: error), privacy: .public)"
+            )
+            throw APIClientError.decodingFailed
+        }
+    }
 }
+
+/// Same HTTP client as ``ExportAPIClient``; use for all MoveMark Railway API calls.
+typealias MoveMarkAPIClient = ExportAPIClient

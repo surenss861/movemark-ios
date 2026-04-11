@@ -40,6 +40,8 @@ struct DisputeBuilderView: View {
     @State private var evidenceFiles: [EvidenceFileRow] = []
     @State private var maintenanceIssues: [MaintenanceIssueRow] = []
     @State private var documents: [PropertyDocumentRow] = []
+    /// When non-nil, row titles/subtitles prefer server-shaped labels from ``fetchDisputeEvidenceCatalog``; selection IDs stay client-loaded.
+    @State private var disputeEvidenceCatalog: DisputeEvidenceCatalogResponse?
     @State private var isLoadingEvidence = false
 
     private let disputeRepo = DisputeRepository()
@@ -221,13 +223,7 @@ struct DisputeBuilderView: View {
                     title: "Room photos",
                     count: selectedEvidenceFileIds.count,
                     emptyText: "No room photos yet. Add move-in or move-out evidence from Walkthrough or Move-out.",
-                    rows: evidenceFiles.map { file in
-                        SelectionRowData(
-                            id: file.id,
-                            title: evidencePhotoRowTitle(for: file),
-                            subtitle: evidencePhotoRowSubtitle(for: file)
-                        )
-                    },
+                    rows: evidenceFiles.map { photoSelectionRow(for: $0) },
                     selectedIDs: Binding(
                         get: { selectedEvidenceFileIds },
                         set: { selectedEvidenceFileIds = $0 }
@@ -238,13 +234,7 @@ struct DisputeBuilderView: View {
                     title: "Maintenance issues",
                     count: selectedMaintenanceIds.count,
                     emptyText: "No maintenance issues logged yet.",
-                    rows: maintenanceIssues.map { issue in
-                        SelectionRowData(
-                            id: issue.id,
-                            title: issue.title,
-                            subtitle: issue.category ?? "Issue"
-                        )
-                    },
+                    rows: maintenanceIssues.map { maintenanceSelectionRow(for: $0) },
                     selectedIDs: Binding(
                         get: { selectedMaintenanceIds },
                         set: { selectedMaintenanceIds = $0 }
@@ -255,13 +245,7 @@ struct DisputeBuilderView: View {
                     title: "Documents",
                     count: selectedDocumentIds.count,
                     emptyText: "No documents uploaded yet. Add lease, deposit receipt, or screenshots in Vault.",
-                    rows: documents.map { doc in
-                        SelectionRowData(
-                            id: doc.id,
-                            title: documentRowTitle(doc),
-                            subtitle: documentRowSubtitle(doc)
-                        )
-                    },
+                    rows: documents.map { documentSelectionRow(for: $0) },
                     selectedIDs: Binding(
                         get: { selectedDocumentIds },
                         set: { selectedDocumentIds = $0 }
@@ -391,13 +375,109 @@ struct DisputeBuilderView: View {
             async let filesTask = inspectionRepo.fetchEvidenceFiles(propertyId: property.id)
             async let maintenanceTask = maintenanceRepo.fetchIssues(propertyId: property.id)
             async let documentsTask = documentRepo.fetchDocuments(propertyId: property.id)
+            async let catalogTask = fetchDisputeEvidenceCatalog(propertyId: property.id)
 
             evidenceFiles = try await filesTask
             maintenanceIssues = try await maintenanceTask
             documents = try await documentsTask
+            disputeEvidenceCatalog = await catalogTask
         } catch {
+            disputeEvidenceCatalog = nil
             errorMessage = MoveMarkFlowMessage.disputeEvidenceLoadFailed(error)
             retryAction = { Task { await loadEvidenceData() } }
+        }
+    }
+
+    /// Optional catalog for labels; returns nil if API base URL missing or request fails (UI keeps client-only titles).
+    private func fetchDisputeEvidenceCatalog(propertyId: UUID) async -> DisputeEvidenceCatalogResponse? {
+        guard
+            let base = Bundle.main.object(forInfoDictionaryKey: "MoveMarkAPIBaseURL") as? String,
+            !base.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return nil
+        }
+        do {
+            let session = try await supabase.auth.session
+            let client = try ExportAPIClient(baseURLString: base)
+            return try await client.fetchDisputeEvidenceCatalog(
+                propertyId: propertyId,
+                accessToken: session.accessToken,
+                includeSignedUrls: false
+            )
+        } catch {
+            return nil
+        }
+    }
+
+    private func photoSelectionRow(for file: EvidenceFileRow) -> SelectionRowData {
+        if let item = disputeEvidenceCatalog?.roomPhotos.first(where: { $0.evidenceFileId == file.id.uuidString }) {
+            let subtitle: String
+            if !item.tagNames.isEmpty {
+                subtitle = item.tagNames.joined(separator: ", ")
+            } else {
+                subtitle = Self.humanizedEvidenceStage(item.stage)
+            }
+            return SelectionRowData(id: file.id, title: item.label, subtitle: subtitle)
+        }
+        if file.maintenanceIssueId != nil,
+           let item = (disputeEvidenceCatalog?.maintenancePhotos ?? []).first(where: { $0.evidenceFileId == file.id.uuidString }) {
+            let subtitle: String
+            if let sub = item.issueCategory?.trimmingCharacters(in: .whitespacesAndNewlines), !sub.isEmpty {
+                subtitle = sub
+            } else {
+                subtitle = "Maintenance photo"
+            }
+            return SelectionRowData(id: file.id, title: item.label, subtitle: subtitle)
+        }
+        return SelectionRowData(
+            id: file.id,
+            title: evidencePhotoRowTitle(for: file),
+            subtitle: evidencePhotoRowSubtitle(for: file)
+        )
+    }
+
+    private func maintenanceSelectionRow(for issue: MaintenanceIssueRow) -> SelectionRowData {
+        if let item = disputeEvidenceCatalog?.maintenanceIssues.first(where: { $0.issueId == issue.id.uuidString }) {
+            let subtitle: String
+            if let sub = issue.category?.trimmingCharacters(in: .whitespacesAndNewlines), !sub.isEmpty {
+                subtitle = sub
+            } else {
+                subtitle = "Issue"
+            }
+            return SelectionRowData(id: issue.id, title: item.label, subtitle: subtitle)
+        }
+        return SelectionRowData(
+            id: issue.id,
+            title: issue.title,
+            subtitle: issue.category ?? "Issue"
+        )
+    }
+
+    private func documentSelectionRow(for doc: PropertyDocumentRow) -> SelectionRowData {
+        if let item = disputeEvidenceCatalog?.documents.first(where: { $0.documentId == doc.id.uuidString }) {
+            return SelectionRowData(id: doc.id, title: item.label, subtitle: documentRowSubtitle(forCatalogType: item.type))
+        }
+        return SelectionRowData(
+            id: doc.id,
+            title: documentRowTitle(doc),
+            subtitle: documentRowSubtitle(doc)
+        )
+    }
+
+    private func documentRowSubtitle(forCatalogType raw: String) -> String {
+        let norm = DocumentRepository.normalizedDocumentType(raw)
+        if let type = VaultDocumentType(rawValue: norm) {
+            return type.displayTitle
+        }
+        if norm.isEmpty { return "Supporting document" }
+        return norm.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+
+    private static func humanizedEvidenceStage(_ raw: String) -> String {
+        switch raw {
+        case "move_in": return "Move-in"
+        case "move_out": return "Move-out"
+        default: return "Photo"
         }
     }
 

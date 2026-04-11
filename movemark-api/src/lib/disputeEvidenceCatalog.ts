@@ -2,6 +2,7 @@ import type {
   DisputeDocumentItem,
   DisputeEvidenceCatalogResponse,
   DisputeMaintenanceIssueItem,
+  DisputeMaintenancePhotoItem,
   DisputeRoomPhotoItem,
 } from "../types/disputes.js";
 import { supabaseAdmin } from "./supabase.js";
@@ -104,6 +105,7 @@ export async function buildDisputeEvidenceCatalog(
   const evidenceFiles = evidenceFilesRes.data ?? [];
   const maintenance = maintenanceRes.data ?? [];
   const documents = documentsRes.data ?? [];
+  const maintenanceById = new Map(maintenance.map((m) => [m.id, m]));
 
   const itemById = new Map(items.map((i) => [i.id, i]));
   const roomById = new Map(rooms.map((r) => [r.id, r]));
@@ -173,6 +175,34 @@ export async function buildDisputeEvidenceCatalog(
     });
   }
 
+  const maintenancePhotos: DisputeMaintenancePhotoItem[] = [];
+  for (const file of evidenceFiles) {
+    if (!file.maintenance_issue_id) continue;
+    if (file.inspection_item_id) continue;
+
+    const issue = maintenanceById.get(file.maintenance_issue_id);
+    const capturedAt =
+      (file as { captured_at?: string | null }).captured_at ??
+      file.created_at ??
+      null;
+
+    const label = buildMaintenancePhotoLabel({
+      issueTitle: issue?.title ?? null,
+      issueStatus: issue?.status ?? null,
+      capturedAt,
+    });
+
+    maintenancePhotos.push({
+      evidenceFileId: file.id,
+      maintenanceIssueId: file.maintenance_issue_id,
+      issueTitle: issue?.title ?? "Maintenance issue",
+      issueCategory: issue?.category ?? null,
+      capturedAt,
+      label,
+      thumbnailUrl: includeSignedUrls ? null : undefined,
+    });
+  }
+
   const maintenanceIssues: DisputeMaintenanceIssueItem[] = maintenance.map(
     (m) => ({
       issueId: m.id,
@@ -198,10 +228,11 @@ export async function buildDisputeEvidenceCatalog(
   return {
     propertyId,
     roomPhotos,
+    maintenancePhotos,
     maintenanceIssues,
     documents: documentItems,
     summary: {
-      photoCount: roomPhotos.length,
+      photoCount: roomPhotos.length + maintenancePhotos.length,
       maintenanceCount: maintenanceIssues.length,
       documentCount: documentItems.length,
     },
@@ -215,6 +246,26 @@ function normalizeMaintenanceStatus(
   if (raw === "follow_up") return "follow_up";
   if (raw === "resolved") return "resolved";
   return "open";
+}
+
+function buildMaintenancePhotoLabel(args: {
+  issueTitle: string | null;
+  issueStatus: string | null;
+  capturedAt: string | null;
+}) {
+  const title = args.issueTitle?.trim() || "Maintenance issue";
+  if (args.capturedAt) {
+    const date = new Date(args.capturedAt).toLocaleDateString("en-CA", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    return `${title} · Maintenance photo · ${date}`;
+  }
+  const status = args.issueStatus ? humanizeStatus(args.issueStatus) : "";
+  return status
+    ? `${title} · Maintenance photo · ${status}`
+    : `${title} · Maintenance photo`;
 }
 
 function buildEvidenceLabel(args: {

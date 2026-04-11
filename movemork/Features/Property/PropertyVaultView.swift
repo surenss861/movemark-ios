@@ -7,6 +7,7 @@
 
 import SwiftUI
 import PhotosUI
+import Supabase
 
 struct PropertyVaultView: View {
     let property: PropertyRecord
@@ -47,20 +48,49 @@ struct PropertyVaultView: View {
     @State private var activePaywallReason: PaywallReason = .disputePacket
     @State private var showAllSupportingRecords = false
     @State private var showPropertyDetails = false
+    /// Server-computed vault dashboard; when nil, UI falls back to ``PropertyStore`` (offline / API error).
+    @State private var vaultSummary: VaultSummaryResponse?
 
     private let documentRepo = DocumentRepository()
 
     private static let documentTypeOrder: [VaultDocumentType] = [.lease, .depositReceipt, .listingScreenshot, .cleaningReceipt, .utilityProof, .moveOutInvoice, .other]
     private static let priorityDocumentTypes: [VaultDocumentType] = [.lease, .depositReceipt, .listingScreenshot]
 
-    private var completedRooms: Int { propertyStore.documentedRoomCount(for: property) }
-    private var totalRooms: Int { propertyStore.totalRoomCount(for: property) }
+    private var completedRooms: Int {
+        if let v = vaultSummary { return v.walkthrough.documentedRooms }
+        return propertyStore.documentedRoomCount(for: property)
+    }
+    private var totalRooms: Int {
+        if let v = vaultSummary { return v.walkthrough.totalRooms }
+        return propertyStore.totalRoomCount(for: property)
+    }
     private var totalPhotos: Int { propertyStore.totalPhotoCount(for: property) }
-    private var progress: Double { propertyStore.roomsCompletionProgress(for: property) }
-    private var nextRoom: RoomRecord? { propertyStore.nextRoomToCapture(for: property) }
-    private var missingRecordsCount: Int { propertyStore.missingSupportingRecordCount(for: property) }
-    private var openIssuesCount: Int { propertyStore.openIssueCount(for: property) }
-    private var readinessScore: Int { propertyStore.readinessScore(for: property) }
+    private var progress: Double {
+        if let v = vaultSummary, v.walkthrough.totalRooms > 0 {
+            return Double(v.walkthrough.documentedRooms) / Double(v.walkthrough.totalRooms)
+        }
+        return propertyStore.roomsCompletionProgress(for: property)
+    }
+    private var nextRoom: RoomRecord? {
+        if let idString = vaultSummary?.walkthrough.nextRoom?.roomId,
+           let uuid = UUID(uuidString: idString),
+           let match = property.rooms.first(where: { $0.id == uuid }) {
+            return match
+        }
+        return propertyStore.nextRoomToCapture(for: property)
+    }
+    private var missingRecordsCount: Int {
+        if let v = vaultSummary { return v.supportingRecords.missingRequired }
+        return propertyStore.missingSupportingRecordCount(for: property)
+    }
+    private var openIssuesCount: Int {
+        if let v = vaultSummary { return v.maintenance.openCount }
+        return propertyStore.openIssueCount(for: property)
+    }
+    private var readinessScore: Int {
+        if let v = vaultSummary { return v.readiness.score }
+        return propertyStore.readinessScore(for: property)
+    }
 
     private var orderedRooms: [RoomRecord] {
         guard let next = nextRoom else { return property.rooms }
@@ -75,6 +105,10 @@ struct PropertyVaultView: View {
     }
 
     private var walkthroughSubtitle: String {
+        if let label = vaultSummary?.readiness.primaryNextAction?.label,
+           !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return label
+        }
         if let next = nextRoom, next.evidence.isEmpty {
             return "Open \(next.name) to capture proof"
         }
@@ -216,7 +250,9 @@ struct PropertyVaultView: View {
             )
         }
         .task(id: property.id) {
-            await loadDocumentRows()
+            async let documents: Void = loadDocumentRows()
+            async let vault: Void = loadVaultSummary()
+            _ = await (documents, vault)
             captureBaselineIfNeeded()
         }
         .onAppear {
@@ -300,6 +336,10 @@ struct PropertyVaultView: View {
     }
 
     private var readinessGuidanceLine: String {
+        if let label = vaultSummary?.readiness.primaryNextAction?.label,
+           !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return label
+        }
         if totalRooms == 0 {
             return "Start by adding rooms, then capture move-in proof."
         }
@@ -775,6 +815,8 @@ struct PropertyVaultView: View {
         lastKnownReadinessScore = newReadiness
         lastKnownUploadedDocumentCount = newDocumentCount
         lastKnownExportReady = newExportReady
+
+        Task { await loadVaultSummary() }
     }
 
     private func docRow(for documentType: String) -> PropertyDocumentRow? {
@@ -807,6 +849,29 @@ struct PropertyVaultView: View {
             documentRows = try await documentRepo.fetchDocuments(propertyId: property.id)
         } catch {
             documentRows = []
+        }
+    }
+
+    /// Fetches server-side vault summary (rooms, docs, maintenance, readiness, exports/dispute flags). Fails silently and keeps local store UI when the API is unavailable.
+    private func loadVaultSummary() async {
+        guard
+            let base = Bundle.main.object(forInfoDictionaryKey: "MoveMarkAPIBaseURL") as? String,
+            !base.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return
+        }
+        do {
+            let session = try await supabase.auth.session
+            let client = try ExportAPIClient(baseURLString: base)
+            let summary = try await client.fetchVaultSummary(
+                propertyId: property.id,
+                accessToken: session.accessToken,
+                includeExports: true,
+                includeDispute: true
+            )
+            vaultSummary = summary
+        } catch {
+            vaultSummary = nil
         }
     }
 
@@ -857,6 +922,7 @@ struct PropertyVaultView: View {
             if !metaOK || !rowsOK {
                 uploadSoftNotice = MoveMarkFlowMessage.documentVaultRefreshHint
             }
+            await loadVaultSummary()
         } catch {
             uploadError = MoveMarkFlowMessage.documentDeleteFailed(error)
         }

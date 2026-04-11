@@ -1,6 +1,8 @@
 export interface DisputeEvidenceCatalogResponse {
   propertyId: string;
   roomPhotos: DisputeRoomPhotoItem[];
+  /** Evidence files linked to a maintenance issue only (not walkthrough inspection items). */
+  maintenancePhotos: DisputeMaintenancePhotoItem[];
   maintenanceIssues: DisputeMaintenanceIssueItem[];
   documents: DisputeDocumentItem[];
   summary: {
@@ -9,6 +11,16 @@ export interface DisputeEvidenceCatalogResponse {
     documentCount: number;
   };
   updatedAt: string;
+}
+
+export interface DisputeMaintenancePhotoItem {
+  evidenceFileId: string;
+  maintenanceIssueId: string;
+  issueTitle: string;
+  issueCategory: string | null;
+  capturedAt: string | null;
+  label: string;
+  thumbnailUrl?: string | null;
 }
 
 export interface DisputeRoomPhotoItem {
