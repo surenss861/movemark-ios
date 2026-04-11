@@ -50,6 +50,7 @@ struct PropertyVaultView: View {
     @State private var showPropertyDetails = false
     /// Server-computed vault dashboard; when nil, UI falls back to ``PropertyStore`` (offline / API error).
     @State private var vaultSummary: VaultSummaryResponse?
+    @State private var vaultSummaryError: String? = nil
 
     private let documentRepo = DocumentRepository()
 
@@ -154,6 +155,17 @@ struct PropertyVaultView: View {
                     .animation(MMMotion.screenTransition.delay(0.05), value: contentVisible)
                     .padding(.bottom, 4)
 
+                    if let vaultSummaryError, uploadError == nil {
+                        MMErrorBanner(
+                            message: vaultSummaryError,
+                            onRetry: { Task { await loadVaultSummary() } }
+                        )
+                        .opacity(contentVisible ? 1 : 0)
+                        .offset(y: contentVisible ? 0 : 8)
+                        .animation(MMMotion.screenTransition.delay(0.06), value: contentVisible)
+                        .padding(.bottom, 10)
+                    }
+
                     PropertyVaultWalkthroughBar(
                         subtitle: walkthroughSubtitle,
                         progressText: "\(completedRooms) of \(totalRooms) documented",
@@ -250,6 +262,7 @@ struct PropertyVaultView: View {
             )
         }
         .task(id: property.id) {
+            vaultSummaryError = nil
             async let documents: Void = loadDocumentRows()
             async let vault: Void = loadVaultSummary()
             _ = await (documents, vault)
@@ -870,8 +883,10 @@ struct PropertyVaultView: View {
                 includeDispute: true
             )
             vaultSummary = summary
+            vaultSummaryError = nil
         } catch {
             vaultSummary = nil
+            vaultSummaryError = MoveMarkFlowMessage.vaultSummaryRefreshFailed
         }
     }
 

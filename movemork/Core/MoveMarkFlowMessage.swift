@@ -42,6 +42,10 @@ enum MoveMarkFlowMessage {
 
     static let exportQueuedHint = "Export queued. Open Exports to download when it’s ready—verification can take a moment."
 
+    /// Railway vault summary (`GET /api/vaults/.../summary`) failed; local ``PropertyStore`` data is still shown.
+    static let vaultSummaryRefreshFailed =
+        "Couldn’t refresh vault summary right now. Your vault still shows saved data—try again in a moment."
+
     // MARK: - Likely cause
 
     static func isLikelyStorageFailure(_ error: Error) -> Bool {

@@ -41,7 +41,7 @@ export async function buildVaultSummary(
 
   const documentsPromise = supabaseAdmin
     .from("property_documents")
-    .select("id,document_type,created_at")
+    .select("id,document_type,uploaded_at")
     .eq("property_id", propertyId)
     .eq("user_id", userId);
 

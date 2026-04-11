@@ -49,7 +49,7 @@ export async function buildDisputeEvidenceCatalog(
 
     supabaseAdmin
       .from("property_documents")
-      .select("id,document_type,created_at,file_path")
+      .select("id,document_type,uploaded_at,file_path")
       .eq("property_id", propertyId)
       .eq("user_id", userId),
   ]);
@@ -221,7 +221,7 @@ export async function buildDisputeEvidenceCatalog(
     documentId: d.id,
     type: d.document_type,
     label: humanizeDocType(d.document_type),
-    uploadedAt: d.created_at ?? null,
+    uploadedAt: d.uploaded_at ?? null,
     previewUrl: includeSignedUrls ? null : undefined,
   }));
 

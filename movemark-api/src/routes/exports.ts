@@ -267,7 +267,7 @@ exportsRouter.post("/move-in", async (c) => {
       .select("*")
       .eq("property_id", body.propertyId)
       .eq("user_id", userId)
-      .order("created_at", { ascending: true });
+      .order("uploaded_at", { ascending: true });
 
     const requestedAt = new Date().toISOString();
 
