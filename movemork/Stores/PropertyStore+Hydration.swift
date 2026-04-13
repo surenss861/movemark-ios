@@ -72,38 +72,42 @@ extension PropertyStore {
             var record = RoomRecord(id: roomRow.id, name: roomRow.name)
             let moveInForRoom = moveInItems.filter { $0.roomId == roomRow.id }
                 .sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
-            record.evidence = moveInForRoom.map { item in
-                let (title, notes) = Self.parseInspectionNotes(item.notes, defaultTitle: "Move-in capture")
-                let photos = moveInPhotosByItem[item.id] ?? []
-                return EvidenceRecord(
-                    id: item.id,
-                    title: title,
-                    notes: notes,
-                    issueTags: moveInTagNames[item.id] ?? [],
-                    condition: Self.conditionFromInt(item.conditionRating),
-                    createdAt: isoDate.date(from: item.createdAt ?? "") ?? Date(),
-                    photoCount: photos.count,
-                    photos: photos,
-                    stage: .moveIn
-                )
-            }
+            record.evidence = PropertyStore.dedupeEvidenceEntriesPreservingOrder(
+                moveInForRoom.map { item in
+                    let (title, notes) = Self.parseInspectionNotes(item.notes, defaultTitle: "Move-in capture")
+                    let photos = moveInPhotosByItem[item.id] ?? []
+                    return EvidenceRecord(
+                        id: item.id,
+                        title: title,
+                        notes: notes,
+                        issueTags: moveInTagNames[item.id] ?? [],
+                        condition: Self.conditionFromInt(item.conditionRating),
+                        createdAt: isoDate.date(from: item.createdAt ?? "") ?? Date(),
+                        photoCount: photos.count,
+                        photos: photos,
+                        stage: .moveIn
+                    )
+                }
+            )
             let moveOutForRoom = moveOutItems.filter { $0.roomId == roomRow.id }
                 .sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
-            record.moveOutEvidence = moveOutForRoom.map { item in
-                let (title, notes) = Self.parseInspectionNotes(item.notes, defaultTitle: "Move-out capture")
-                let photos = moveOutPhotosByItem[item.id] ?? []
-                return EvidenceRecord(
-                    id: item.id,
-                    title: title,
-                    notes: notes,
-                    issueTags: moveOutTagNames[item.id] ?? [],
-                    condition: Self.conditionFromInt(item.conditionRating),
-                    createdAt: isoDate.date(from: item.createdAt ?? "") ?? Date(),
-                    photoCount: photos.count,
-                    photos: photos,
-                    stage: .moveOut
-                )
-            }
+            record.moveOutEvidence = PropertyStore.dedupeEvidenceEntriesPreservingOrder(
+                moveOutForRoom.map { item in
+                    let (title, notes) = Self.parseInspectionNotes(item.notes, defaultTitle: "Move-out capture")
+                    let photos = moveOutPhotosByItem[item.id] ?? []
+                    return EvidenceRecord(
+                        id: item.id,
+                        title: title,
+                        notes: notes,
+                        issueTags: moveOutTagNames[item.id] ?? [],
+                        condition: Self.conditionFromInt(item.conditionRating),
+                        createdAt: isoDate.date(from: item.createdAt ?? "") ?? Date(),
+                        photoCount: photos.count,
+                        photos: photos,
+                        stage: .moveOut
+                    )
+                }
+            )
             return record
         }
 

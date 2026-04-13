@@ -169,8 +169,15 @@ extension PropertyStore {
 
         await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
 
+        // Tags are optional metadata; RLS/network failure here must not surface as “save failed” after item+photos persisted.
         if !evidence.issueTags.isEmpty {
-            try await inspectionRepo.insertItemTags(inspectionItemId: itemId, tagNames: evidence.issueTags)
+            do {
+                try await inspectionRepo.insertItemTags(inspectionItemId: itemId, tagNames: evidence.issueTags)
+            } catch {
+                #if DEBUG
+                print("MoveMark: insertItemTags failed after move-in save (evidence already stored):", error)
+                #endif
+            }
         }
 
         applyOptimisticMoveInEvidence(
@@ -239,7 +246,13 @@ extension PropertyStore {
         await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
 
         if !evidence.issueTags.isEmpty {
-            try await inspectionRepo.insertItemTags(inspectionItemId: itemId, tagNames: evidence.issueTags)
+            do {
+                try await inspectionRepo.insertItemTags(inspectionItemId: itemId, tagNames: evidence.issueTags)
+            } catch {
+                #if DEBUG
+                print("MoveMark: insertItemTags failed after move-out save (evidence already stored):", error)
+                #endif
+            }
         }
 
         applyOptimisticMoveOutEvidence(
@@ -525,6 +538,8 @@ extension PropertyStore {
                 room.evidence.insert(synthetic, at: 0)
             }
         }
+        room.evidence = Self.dedupeEvidenceEntriesPreservingOrder(room.evidence)
+        room.moveOutEvidence = Self.dedupeEvidenceEntriesPreservingOrder(room.moveOutEvidence)
         prop.rooms[rIdx] = room
         currentProperty = prop
     }
@@ -569,6 +584,54 @@ extension PropertyStore {
             photoCount: count,
             photos: fallbackPhotos,
             stage: stage
+        )
+    }
+
+    /// Merges duplicate ``EvidenceRecord``s with the same inspection item id (e.g. synthetic fallback row + hydrated row).
+    static func dedupeEvidenceEntriesPreservingOrder(_ entries: [EvidenceRecord]) -> [EvidenceRecord] {
+        guard entries.count > 1 else { return entries }
+        var merged: [EvidenceRecord] = []
+        var slotById: [UUID: Int] = [:]
+        for entry in entries {
+            if let slot = slotById[entry.id] {
+                merged[slot] = mergeEvidenceRecordsWithSameId(merged[slot], entry)
+            } else {
+                slotById[entry.id] = merged.count
+                merged.append(entry)
+            }
+        }
+        return merged
+    }
+
+    private static func mergeEvidenceRecordsWithSameId(_ a: EvidenceRecord, _ b: EvidenceRecord) -> EvidenceRecord {
+        var seen = Set<String>()
+        var photos: [EvidencePhoto] = []
+        for p in a.photos + b.photos where !seen.contains(p.filePath) {
+            photos.append(p)
+            seen.insert(p.filePath)
+        }
+        let defaultMoveIn = "Move-in capture"
+        let defaultMoveOut = "Move-out capture"
+        func isPlaceholderTitle(_ t: String) -> Bool { t == defaultMoveIn || t == defaultMoveOut }
+        let title: String = {
+            if !isPlaceholderTitle(a.title) { return a.title }
+            if !isPlaceholderTitle(b.title) { return b.title }
+            return a.title.count >= b.title.count ? a.title : b.title
+        }()
+        let notes = a.notes.count >= b.notes.count ? a.notes : b.notes
+        let tags = Array(Set(a.issueTags + b.issueTags)).sorted()
+        let createdAt = min(a.createdAt, b.createdAt)
+        let pc = max(a.photoCount, b.photoCount, photos.count)
+        return EvidenceRecord(
+            id: a.id,
+            title: title,
+            notes: notes,
+            issueTags: tags,
+            condition: a.condition,
+            createdAt: createdAt,
+            photoCount: pc,
+            photos: photos,
+            stage: a.stage
         )
     }
 }
