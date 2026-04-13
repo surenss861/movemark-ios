@@ -1,0 +1,15 @@
+-- One-time / manual cleanup: inspection_items that have no evidence_files rows.
+-- Run the SELECT first. Only DELETE after you confirm rows are legacy junk (e.g. old broken saves).
+--
+-- Preview orphan item ids:
+-- SELECT ii.id, ii.room_id, ii.inspection_id, ii.created_at
+-- FROM public.inspection_items ii
+-- WHERE NOT EXISTS (
+--   SELECT 1 FROM public.evidence_files ef WHERE ef.inspection_item_id = ii.id
+-- );
+
+-- Uncomment to delete those rows (cascades depend on your FKs; adjust if needed):
+-- DELETE FROM public.inspection_items ii
+-- WHERE NOT EXISTS (
+--   SELECT 1 FROM public.evidence_files ef WHERE ef.inspection_item_id = ii.id
+-- );

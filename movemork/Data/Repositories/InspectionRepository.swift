@@ -7,7 +7,13 @@
 //
 
 import Foundation
+import os
 import Supabase
+
+private let inspectionRepoPhotoLog = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "movemork",
+    category: "InspectionRepositoryPhotos"
+)
 
 /// Full row for reads (`select`). Do not use for `upsert` — only send columns that exist on `public.inspections`.
 struct InspectionRow: Codable, Identifiable {
@@ -393,10 +399,22 @@ struct InspectionRepository {
         let folder = isMoveOut ? "move-out" : "move-in"
         var added: [EvidencePhoto] = []
         added.reserveCapacity(photos.count)
-        for photoData in photos {
+        inspectionRepoPhotoLog.info(
+            "appendPhotos start item=\(inspectionItemId.uuidString, privacy: .public) room=\(roomId.uuidString, privacy: .public) count=\(photos.count) folder=\(folder, privacy: .public)"
+        )
+        for (index, photoData) in photos.enumerated() {
             let path = "\(userId)/\(propertyId)/\(folder)/\(roomId)/\(UUID()).jpg"
+            inspectionRepoPhotoLog.debug("append \(index + 1)/\(photos.count) bytes=\(photoData.count) path=\(path, privacy: .public)")
             do {
                 _ = try await uploadPhoto(data: photoData, path: path)
+                inspectionRepoPhotoLog.debug("append upload OK path=\(path, privacy: .public)")
+            } catch {
+                inspectionRepoPhotoLog.error(
+                    "append uploadPhoto FAILED path=\(path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                )
+                throw error
+            }
+            do {
                 let fileId = try await insertEvidenceFile(
                     propertyId: propertyId,
                     inspectionItemId: inspectionItemId,
@@ -406,11 +424,16 @@ struct InspectionRepository {
                     capturedAt: Date()
                 )
                 added.append(EvidencePhoto(id: fileId, filePath: path))
+                inspectionRepoPhotoLog.debug("append insertEvidenceFile OK fileId=\(fileId.uuidString, privacy: .public)")
             } catch {
                 await removeOrphanInspectionUpload(path: path)
+                inspectionRepoPhotoLog.error(
+                    "append insertEvidenceFile FAILED path=\(path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                )
                 throw error
             }
         }
+        inspectionRepoPhotoLog.info("appendPhotos done item=\(inspectionItemId.uuidString, privacy: .public) added=\(added.count)")
         await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
         return added
     }

@@ -6,6 +6,13 @@
 //
 
 import Foundation
+import os
+
+/// Unified Logging for room proof uploads (visible in Console.app / `log stream` for TestFlight builds).
+private let inspectionPhotoPipelineLog = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "movemork",
+    category: "InspectionPhotoPipeline"
+)
 
 extension PropertyStore {
     private enum MutationError: LocalizedError {
@@ -48,10 +55,28 @@ extension PropertyStore {
         var savedPhotos: [EvidencePhoto] = []
         savedPhotos.reserveCapacity(photos.count)
         var failedCount = 0
-        for photoData in photos {
+        inspectionPhotoPipelineLog.info(
+            "Pipeline start property=\(propertyId.uuidString, privacy: .public) room=\(roomId.uuidString, privacy: .public) item=\(inspectionItemId.uuidString, privacy: .public) folder=\(folder, privacy: .public) photoCount=\(photos.count)"
+        )
+        for (index, photoData) in photos.enumerated() {
             let path = "\(userId)/\(propertyId)/\(folder)/\(roomId)/\(UUID()).jpg"
+            inspectionPhotoPipelineLog.debug(
+                "Photo \(index + 1)/\(photos.count) bytes=\(photoData.count) path=\(path, privacy: .public)"
+            )
             do {
                 _ = try await inspectionRepo.uploadPhoto(data: photoData, path: path)
+                inspectionPhotoPipelineLog.debug("uploadPhoto OK path=\(path, privacy: .public)")
+            } catch {
+                failedCount += 1
+                inspectionPhotoPipelineLog.error(
+                    "uploadPhoto FAILED path=\(path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                )
+                #if DEBUG
+                print("MoveMark: uploadPhoto failed", path, error)
+                #endif
+                continue
+            }
+            do {
                 let fileId = try await inspectionRepo.insertEvidenceFile(
                     propertyId: propertyId,
                     inspectionItemId: inspectionItemId,
@@ -61,14 +86,23 @@ extension PropertyStore {
                     capturedAt: Date()
                 )
                 savedPhotos.append(EvidencePhoto(id: fileId, filePath: path))
+                inspectionPhotoPipelineLog.debug(
+                    "insertEvidenceFile OK fileId=\(fileId.uuidString, privacy: .public) path=\(path, privacy: .public)"
+                )
             } catch {
                 failedCount += 1
                 await inspectionRepo.removeOrphanInspectionUpload(path: path)
+                inspectionPhotoPipelineLog.error(
+                    "insertEvidenceFile FAILED path=\(path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                )
                 #if DEBUG
-                print("MoveMark: saveInspectionPhotos failed for path \(path):", error)
+                print("MoveMark: insertEvidenceFile failed after upload", path, error)
                 #endif
             }
         }
+        inspectionPhotoPipelineLog.info(
+            "Pipeline end item=\(inspectionItemId.uuidString, privacy: .public) savedCount=\(savedPhotos.count) failedAttempts=\(failedCount)"
+        )
         return PhotoPipelineResult(savedPhotos: savedPhotos, failedCount: failedCount)
     }
 
@@ -206,6 +240,9 @@ extension PropertyStore {
         )
 
         guard pipeline.hasAnySuccess else {
+            inspectionPhotoPipelineLog.warning(
+                "Zero evidence_files linked — deleting inspection_item=\(itemId.uuidString, privacy: .public) room=\(roomID.uuidString, privacy: .public) property=\(propertyId.uuidString, privacy: .public) moveIn"
+            )
             try? await inspectionRepo.deleteInspectionItem(id: itemId)
             throw MutationError.noProofPhotosLinked(isMoveOut: false)
         }
@@ -280,6 +317,9 @@ extension PropertyStore {
         )
 
         guard pipeline.hasAnySuccess else {
+            inspectionPhotoPipelineLog.warning(
+                "Zero evidence_files linked — deleting inspection_item=\(itemId.uuidString, privacy: .public) room=\(roomID.uuidString, privacy: .public) property=\(propertyId.uuidString, privacy: .public) moveOut"
+            )
             try? await inspectionRepo.deleteInspectionItem(id: itemId)
             throw MutationError.noProofPhotosLinked(isMoveOut: true)
         }
