@@ -67,9 +67,14 @@ Or paste SQL into **Supabase Dashboard → SQL Editor → Run**.
 **Repair migration history (then use `db push` again):** only if you accept reconciling history—**back up first**. The CLI suggested marking remote-only versions as reverted:
 
 ```bash
-npx supabase@latest migration repair --status reverted 20260306164304 20260306164335 20260310095112 20260311210715
-npx supabase@latest db push --yes
+# From repo root, linked to the right project: `supabase link`
+supabase migration repair --status reverted 20260306164304 20260306164335 20260310095112 20260311210715
+supabase db push
 ```
+
+That **removes the four remote-only version stamps** so the CLI no longer expects missing files. It does **not** roll back schema by itself—it only fixes the migration history table.
+
+**If `supabase db pull` then prints a long list of `migration repair --status applied …`:** the remote DB is missing “applied” records for migrations whose SQL you already ran (e.g. via Dashboard). Only run those `applied` lines if you are sure that migration’s SQL is **already** on the database; otherwise use `db push` to apply pending files normally after the `reverted` step.
 
 If the remote schema was built outside this repo, prefer **`supabase db pull`** (or re-baseline migrations) so local files match production; see [Supabase migration docs](https://supabase.com/docs/guides/cli/managing-environments).
 
