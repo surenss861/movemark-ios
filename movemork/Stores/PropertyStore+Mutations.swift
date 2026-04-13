@@ -18,8 +18,6 @@ extension PropertyStore {
     private enum MutationError: LocalizedError {
         case invalidRoomName
         case duplicateRoomName
-        /// Inspection item was inserted but no `evidence_files` row linked (avoid metadata-only rows).
-        case noProofPhotosLinked(isMoveOut: Bool)
 
         var errorDescription: String? {
             switch self {
@@ -27,10 +25,6 @@ extension PropertyStore {
                 return "Enter a room name."
             case .duplicateRoomName:
                 return "A room with this name already exists."
-            case .noProofPhotosLinked(let moveOut):
-                return moveOut
-                    ? "Couldn’t save move-out proof photos right now. Try again."
-                    : "Couldn’t save proof photos right now. Try again."
             }
         }
     }
@@ -38,6 +32,8 @@ extension PropertyStore {
     private struct PhotoPipelineResult {
         let savedPhotos: [EvidencePhoto]
         let failedCount: Int
+        /// Insert failed after a successful storage upload (distinguishes DB/RLS vs bucket/network when `savedPhotos` is empty).
+        let insertFailedAfterUploadCount: Int
 
         var hasAnySuccess: Bool { !savedPhotos.isEmpty }
         var hadAnyFailure: Bool { failedCount > 0 }
@@ -55,6 +51,7 @@ extension PropertyStore {
         var savedPhotos: [EvidencePhoto] = []
         savedPhotos.reserveCapacity(photos.count)
         var failedCount = 0
+        var insertFailedAfterUploadCount = 0
         inspectionPhotoPipelineLog.info(
             "Pipeline start property=\(propertyId.uuidString, privacy: .public) room=\(roomId.uuidString, privacy: .public) item=\(inspectionItemId.uuidString, privacy: .public) folder=\(folder, privacy: .public) photoCount=\(photos.count)"
         )
@@ -91,6 +88,7 @@ extension PropertyStore {
                 )
             } catch {
                 failedCount += 1
+                insertFailedAfterUploadCount += 1
                 await inspectionRepo.removeOrphanInspectionUpload(path: path)
                 inspectionPhotoPipelineLog.error(
                     "insertEvidenceFile FAILED path=\(path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
@@ -101,9 +99,13 @@ extension PropertyStore {
             }
         }
         inspectionPhotoPipelineLog.info(
-            "Pipeline end item=\(inspectionItemId.uuidString, privacy: .public) savedCount=\(savedPhotos.count) failedAttempts=\(failedCount)"
+            "Pipeline end item=\(inspectionItemId.uuidString, privacy: .public) savedCount=\(savedPhotos.count) failedAttempts=\(failedCount) insertFailAfterUpload=\(insertFailedAfterUploadCount)"
         )
-        return PhotoPipelineResult(savedPhotos: savedPhotos, failedCount: failedCount)
+        return PhotoPipelineResult(
+            savedPhotos: savedPhotos,
+            failedCount: failedCount,
+            insertFailedAfterUploadCount: insertFailedAfterUploadCount
+        )
     }
 
     /// Refreshes vault document types for the current property (e.g. after upload). Call after adding a document.
@@ -241,10 +243,12 @@ extension PropertyStore {
 
         guard pipeline.hasAnySuccess else {
             inspectionPhotoPipelineLog.warning(
-                "Zero evidence_files linked — deleting inspection_item=\(itemId.uuidString, privacy: .public) room=\(roomID.uuidString, privacy: .public) property=\(propertyId.uuidString, privacy: .public) moveIn"
+                "Zero evidence_files linked — deleting inspection_item=\(itemId.uuidString, privacy: .public) room=\(roomID.uuidString, privacy: .public) property=\(propertyId.uuidString, privacy: .public) moveIn insertFailAfterUpload=\(pipeline.insertFailedAfterUploadCount)"
             )
             try? await inspectionRepo.deleteInspectionItem(id: itemId)
-            throw MutationError.noProofPhotosLinked(isMoveOut: false)
+            throw pipeline.insertFailedAfterUploadCount > 0
+                ? ProofSaveZeroLinksError.moveInDatabase
+                : ProofSaveZeroLinksError.moveInStorage
         }
 
         await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
@@ -318,10 +322,12 @@ extension PropertyStore {
 
         guard pipeline.hasAnySuccess else {
             inspectionPhotoPipelineLog.warning(
-                "Zero evidence_files linked — deleting inspection_item=\(itemId.uuidString, privacy: .public) room=\(roomID.uuidString, privacy: .public) property=\(propertyId.uuidString, privacy: .public) moveOut"
+                "Zero evidence_files linked — deleting inspection_item=\(itemId.uuidString, privacy: .public) room=\(roomID.uuidString, privacy: .public) property=\(propertyId.uuidString, privacy: .public) moveOut insertFailAfterUpload=\(pipeline.insertFailedAfterUploadCount)"
             )
             try? await inspectionRepo.deleteInspectionItem(id: itemId)
-            throw MutationError.noProofPhotosLinked(isMoveOut: true)
+            throw pipeline.insertFailedAfterUploadCount > 0
+                ? ProofSaveZeroLinksError.moveOutDatabase
+                : ProofSaveZeroLinksError.moveOutStorage
         }
 
         await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)

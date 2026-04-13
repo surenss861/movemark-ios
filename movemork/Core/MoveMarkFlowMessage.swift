@@ -19,6 +19,27 @@ struct MaintenanceSubmitOutcome: Sendable {
     var listRefreshFailed: Bool
 }
 
+/// All photo attempts failed to produce an `evidence_files` row (inspection item is deleted). Surfaces **storage** vs **database** so QA/logs align with `InspectionPhotoPipeline`.
+enum ProofSaveZeroLinksError: LocalizedError {
+    case moveInStorage
+    case moveInDatabase
+    case moveOutStorage
+    case moveOutDatabase
+
+    var errorDescription: String? {
+        switch self {
+        case .moveInStorage:
+            return "Couldn’t upload proof photos. Check your connection and try again."
+        case .moveInDatabase:
+            return "Couldn’t link proof photos in the database. Try again."
+        case .moveOutStorage:
+            return "Couldn’t upload move-out proof photos. Check your connection and try again."
+        case .moveOutDatabase:
+            return "Couldn’t link move-out proof photos in the database. Try again."
+        }
+    }
+}
+
 enum MoveMarkFlowMessage {
 
     // MARK: - Local validation / missing state (not from `Error`)
@@ -58,6 +79,9 @@ enum MoveMarkFlowMessage {
     // MARK: - Room proof
 
     static func proofSaveFailed(_ error: Error) -> String {
+        if let zero = error as? ProofSaveZeroLinksError {
+            return zero.errorDescription ?? "Couldn’t save proof. Try again."
+        }
         if isLikelyStorageFailure(error) {
             return "Couldn’t upload photos, so this proof wasn’t saved. Check your connection and try again."
         }
