@@ -395,16 +395,21 @@ struct InspectionRepository {
         added.reserveCapacity(photos.count)
         for photoData in photos {
             let path = "\(userId)/\(propertyId)/\(folder)/\(roomId)/\(UUID()).jpg"
-            _ = try await uploadPhoto(data: photoData, path: path)
-            let fileId = try await insertEvidenceFile(
-                propertyId: propertyId,
-                inspectionItemId: inspectionItemId,
-                maintenanceIssueId: nil,
-                filePath: path,
-                fileType: "image",
-                capturedAt: Date()
-            )
-            added.append(EvidencePhoto(id: fileId, filePath: path))
+            do {
+                _ = try await uploadPhoto(data: photoData, path: path)
+                let fileId = try await insertEvidenceFile(
+                    propertyId: propertyId,
+                    inspectionItemId: inspectionItemId,
+                    maintenanceIssueId: nil,
+                    filePath: path,
+                    fileType: "image",
+                    capturedAt: Date()
+                )
+                added.append(EvidencePhoto(id: fileId, filePath: path))
+            } catch {
+                await removeOrphanInspectionUpload(path: path)
+                throw error
+            }
         }
         await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
         return added

@@ -11,6 +11,8 @@ extension PropertyStore {
     private enum MutationError: LocalizedError {
         case invalidRoomName
         case duplicateRoomName
+        /// Inspection item was inserted but no `evidence_files` row linked (avoid metadata-only rows).
+        case noProofPhotosLinked(isMoveOut: Bool)
 
         var errorDescription: String? {
             switch self {
@@ -18,8 +20,56 @@ extension PropertyStore {
                 return "Enter a room name."
             case .duplicateRoomName:
                 return "A room with this name already exists."
+            case .noProofPhotosLinked(let moveOut):
+                return moveOut
+                    ? "Couldn’t save move-out proof photos right now. Try again."
+                    : "Couldn’t save proof photos right now. Try again."
             }
         }
+    }
+
+    private struct PhotoPipelineResult {
+        let savedPhotos: [EvidencePhoto]
+        let failedCount: Int
+
+        var hasAnySuccess: Bool { !savedPhotos.isEmpty }
+        var hadAnyFailure: Bool { failedCount > 0 }
+    }
+
+    /// Uploads each JPEG and inserts `evidence_files`; continues on per-photo failure. Orphan storage is removed when insert fails after upload.
+    private func saveInspectionPhotos(
+        photos: [Data],
+        userId: UUID,
+        propertyId: UUID,
+        roomId: UUID,
+        inspectionItemId: UUID,
+        folder: String
+    ) async -> PhotoPipelineResult {
+        var savedPhotos: [EvidencePhoto] = []
+        savedPhotos.reserveCapacity(photos.count)
+        var failedCount = 0
+        for photoData in photos {
+            let path = "\(userId)/\(propertyId)/\(folder)/\(roomId)/\(UUID()).jpg"
+            do {
+                _ = try await inspectionRepo.uploadPhoto(data: photoData, path: path)
+                let fileId = try await inspectionRepo.insertEvidenceFile(
+                    propertyId: propertyId,
+                    inspectionItemId: inspectionItemId,
+                    maintenanceIssueId: nil,
+                    filePath: path,
+                    fileType: "image",
+                    capturedAt: Date()
+                )
+                savedPhotos.append(EvidencePhoto(id: fileId, filePath: path))
+            } catch {
+                failedCount += 1
+                await inspectionRepo.removeOrphanInspectionUpload(path: path)
+                #if DEBUG
+                print("MoveMark: saveInspectionPhotos failed for path \(path):", error)
+                #endif
+            }
+        }
+        return PhotoPipelineResult(savedPhotos: savedPhotos, failedCount: failedCount)
     }
 
     /// Refreshes vault document types for the current property (e.g. after upload). Call after adding a document.
@@ -146,25 +196,18 @@ extension PropertyStore {
             conditionRating: conditionInt
         )
 
-        var savedPhotos: [EvidencePhoto] = []
-        savedPhotos.reserveCapacity(photos.count)
-        for photoData in photos {
-            let path = "\(userId)/\(propertyId)/move-in/\(roomID)/\(UUID()).jpg"
-            do {
-                _ = try await inspectionRepo.uploadPhoto(data: photoData, path: path)
-                let fileId = try await inspectionRepo.insertEvidenceFile(
-                    propertyId: propertyId,
-                    inspectionItemId: itemId,
-                    maintenanceIssueId: nil,
-                    filePath: path,
-                    fileType: "image",
-                    capturedAt: Date()
-                )
-                savedPhotos.append(EvidencePhoto(id: fileId, filePath: path))
-            } catch {
-                await inspectionRepo.removeOrphanInspectionUpload(path: path)
-                throw error
-            }
+        let pipeline = await saveInspectionPhotos(
+            photos: photos,
+            userId: userId,
+            propertyId: propertyId,
+            roomId: roomID,
+            inspectionItemId: itemId,
+            folder: "move-in"
+        )
+
+        guard pipeline.hasAnySuccess else {
+            try? await inspectionRepo.deleteInspectionItem(id: itemId)
+            throw MutationError.noProofPhotosLinked(isMoveOut: false)
         }
 
         await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
@@ -184,7 +227,7 @@ extension PropertyStore {
             roomID: roomID,
             itemId: itemId,
             evidence: evidence,
-            photoCount: photos.count,
+            savedPhotos: pipeline.savedPhotos,
             propertyId: propertyId
         )
         let ok = await refreshActivePropertyHydration(userId: userId)
@@ -193,9 +236,14 @@ extension PropertyStore {
             roomID: roomID,
             propertyId: propertyId,
             isMoveOut: false,
-            fallbackPhotos: savedPhotos,
-            minimumPhotoCount: photos.count
+            fallbackPhotos: pipeline.savedPhotos,
+            minimumPhotoCount: pipeline.savedPhotos.count
         )
+        #if DEBUG
+        if pipeline.hadAnyFailure {
+            print("MoveMark: addEvidence partially succeeded — some photos failed, but proof was saved.")
+        }
+        #endif
         return PropertyMutationOutcome(hydrationRefreshFailed: !ok)
     }
 
@@ -222,25 +270,18 @@ extension PropertyStore {
             conditionRating: conditionInt
         )
 
-        var savedPhotos: [EvidencePhoto] = []
-        savedPhotos.reserveCapacity(photos.count)
-        for photoData in photos {
-            let path = "\(userId)/\(propertyId)/move-out/\(roomID)/\(UUID()).jpg"
-            do {
-                _ = try await inspectionRepo.uploadPhoto(data: photoData, path: path)
-                let fileId = try await inspectionRepo.insertEvidenceFile(
-                    propertyId: propertyId,
-                    inspectionItemId: itemId,
-                    maintenanceIssueId: nil,
-                    filePath: path,
-                    fileType: "image",
-                    capturedAt: Date()
-                )
-                savedPhotos.append(EvidencePhoto(id: fileId, filePath: path))
-            } catch {
-                await inspectionRepo.removeOrphanInspectionUpload(path: path)
-                throw error
-            }
+        let pipeline = await saveInspectionPhotos(
+            photos: photos,
+            userId: userId,
+            propertyId: propertyId,
+            roomId: roomID,
+            inspectionItemId: itemId,
+            folder: "move-out"
+        )
+
+        guard pipeline.hasAnySuccess else {
+            try? await inspectionRepo.deleteInspectionItem(id: itemId)
+            throw MutationError.noProofPhotosLinked(isMoveOut: true)
         }
 
         await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
@@ -259,7 +300,7 @@ extension PropertyStore {
             roomID: roomID,
             itemId: itemId,
             evidence: evidence,
-            photoCount: photos.count,
+            savedPhotos: pipeline.savedPhotos,
             propertyId: propertyId
         )
         let ok = await refreshActivePropertyHydration(userId: userId)
@@ -268,9 +309,14 @@ extension PropertyStore {
             roomID: roomID,
             propertyId: propertyId,
             isMoveOut: true,
-            fallbackPhotos: savedPhotos,
-            minimumPhotoCount: photos.count
+            fallbackPhotos: pipeline.savedPhotos,
+            minimumPhotoCount: pipeline.savedPhotos.count
         )
+        #if DEBUG
+        if pipeline.hadAnyFailure {
+            print("MoveMark: addMoveOutEvidence partially succeeded — some photos failed, but proof was saved.")
+        }
+        #endif
         return PropertyMutationOutcome(hydrationRefreshFailed: !ok)
     }
 
@@ -417,7 +463,7 @@ extension PropertyStore {
         roomID: UUID,
         itemId: UUID,
         evidence: EvidenceRecord,
-        photoCount: Int,
+        savedPhotos: [EvidencePhoto],
         propertyId: UUID
     ) {
         guard var prop = currentProperty, prop.id == propertyId,
@@ -429,11 +475,12 @@ extension PropertyStore {
             issueTags: evidence.issueTags,
             condition: evidence.condition,
             createdAt: Date(),
-            photoCount: photoCount,
-            photos: [],
+            photoCount: savedPhotos.count,
+            photos: savedPhotos,
             stage: .moveIn
         )
         prop.rooms[rIdx].evidence.insert(newRec, at: 0)
+        prop.rooms[rIdx].evidence = Self.dedupeEvidenceEntriesPreservingOrder(prop.rooms[rIdx].evidence)
         currentProperty = prop
     }
 
@@ -441,7 +488,7 @@ extension PropertyStore {
         roomID: UUID,
         itemId: UUID,
         evidence: EvidenceRecord,
-        photoCount: Int,
+        savedPhotos: [EvidencePhoto],
         propertyId: UUID
     ) {
         guard var prop = currentProperty, prop.id == propertyId,
@@ -453,11 +500,12 @@ extension PropertyStore {
             issueTags: evidence.issueTags,
             condition: evidence.condition,
             createdAt: Date(),
-            photoCount: photoCount,
-            photos: [],
+            photoCount: savedPhotos.count,
+            photos: savedPhotos,
             stage: .moveOut
         )
         prop.rooms[rIdx].moveOutEvidence.insert(newRec, at: 0)
+        prop.rooms[rIdx].moveOutEvidence = Self.dedupeEvidenceEntriesPreservingOrder(prop.rooms[rIdx].moveOutEvidence)
         currentProperty = prop
     }
 
