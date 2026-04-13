@@ -30,6 +30,19 @@ Run these in order (by filename). Use Supabase Dashboard SQL editor or `supabase
 | `20260402000003_full_app_rls_hardening.sql` | Full RLS for user-owned paths; **skips** any table that does not exist (`to_regclass` + `NOTICE`). Safe on empty DBs — but the app still needs the real schema on the linked project |
 | `20260402000004_app_query_indexes.sql` | Same guard pattern: creates indexes only when each target table exists |
 
+### `supabase db query` missing or `unknown flag: --linked`
+
+Older global CLI builds (for example **v2.48.x**) only expose `supabase db` subcommands like `diff`, `dump`, `lint`, `pull`, `push`, `reset`, `start` — there is **no** `query`, so `--linked` fails. Use one of:
+
+| Approach | Notes |
+|----------|--------|
+| **`npx supabase@latest db query --linked -f … --yes`** | Matches the repo scripts; does not rely on your global `supabase` version. |
+| **Upgrade global CLI** | e.g. Homebrew: `brew upgrade supabase` until `supabase db query --help` works. |
+| **Dashboard → SQL Editor** | Paste the migration file and run. |
+| **`psql` + URI** | From **Project Settings → Database**, use the connection string: `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/….sql` (or set `DATABASE_URL` and run `./scripts/apply-*.sh` — see script headers). |
+
+**Quiet output:** `npx … db query --linked` often prints only `Initialising login role…` and then nothing—DDL usually returns no rows. Exit code **0** means the file ran. The `./scripts/apply-*.sh` helpers print an explicit `OK: applied …` line after a successful run.
+
 ## When `db push` says “Remote migration versions not found in local migrations directory”
 
 The linked database’s `supabase_migrations.schema_migrations` lists versions (e.g. `20260306164304`, `20260306164335`, …) that **are not** files in this repo. The CLI refuses to `db push` until local and remote history agree.
