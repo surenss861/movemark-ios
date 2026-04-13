@@ -150,16 +150,21 @@ extension PropertyStore {
         savedPhotos.reserveCapacity(photos.count)
         for photoData in photos {
             let path = "\(userId)/\(propertyId)/move-in/\(roomID)/\(UUID()).jpg"
-            _ = try await inspectionRepo.uploadPhoto(data: photoData, path: path)
-            let fileId = try await inspectionRepo.insertEvidenceFile(
-                propertyId: propertyId,
-                inspectionItemId: itemId,
-                maintenanceIssueId: nil,
-                filePath: path,
-                fileType: "image",
-                capturedAt: Date()
-            )
-            savedPhotos.append(EvidencePhoto(id: fileId, filePath: path))
+            do {
+                _ = try await inspectionRepo.uploadPhoto(data: photoData, path: path)
+                let fileId = try await inspectionRepo.insertEvidenceFile(
+                    propertyId: propertyId,
+                    inspectionItemId: itemId,
+                    maintenanceIssueId: nil,
+                    filePath: path,
+                    fileType: "image",
+                    capturedAt: Date()
+                )
+                savedPhotos.append(EvidencePhoto(id: fileId, filePath: path))
+            } catch {
+                await inspectionRepo.removeOrphanInspectionUpload(path: path)
+                throw error
+            }
         }
 
         await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
@@ -214,16 +219,21 @@ extension PropertyStore {
         savedPhotos.reserveCapacity(photos.count)
         for photoData in photos {
             let path = "\(userId)/\(propertyId)/move-out/\(roomID)/\(UUID()).jpg"
-            _ = try await inspectionRepo.uploadPhoto(data: photoData, path: path)
-            let fileId = try await inspectionRepo.insertEvidenceFile(
-                propertyId: propertyId,
-                inspectionItemId: itemId,
-                maintenanceIssueId: nil,
-                filePath: path,
-                fileType: "image",
-                capturedAt: Date()
-            )
-            savedPhotos.append(EvidencePhoto(id: fileId, filePath: path))
+            do {
+                _ = try await inspectionRepo.uploadPhoto(data: photoData, path: path)
+                let fileId = try await inspectionRepo.insertEvidenceFile(
+                    propertyId: propertyId,
+                    inspectionItemId: itemId,
+                    maintenanceIssueId: nil,
+                    filePath: path,
+                    fileType: "image",
+                    capturedAt: Date()
+                )
+                savedPhotos.append(EvidencePhoto(id: fileId, filePath: path))
+            } catch {
+                await inspectionRepo.removeOrphanInspectionUpload(path: path)
+                throw error
+            }
         }
 
         await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
@@ -482,31 +492,54 @@ extension PropertyStore {
               let rIdx = prop.rooms.firstIndex(where: { $0.id == roomID }) else { return }
         var room = prop.rooms[rIdx]
         if isMoveOut {
-            guard let eIdx = room.moveOutEvidence.firstIndex(where: { $0.id == itemId }) else { return }
-            room.moveOutEvidence[eIdx] = Self.mergedEvidenceWithFallbackPhotos(
-                room.moveOutEvidence[eIdx],
-                fallbackPhotos: fallbackPhotos,
-                minimumPhotoCount: minimumPhotoCount
-            )
+            if let eIdx = room.moveOutEvidence.firstIndex(where: { $0.id == itemId }) {
+                room.moveOutEvidence[eIdx] = Self.mergedEvidenceWithFallbackPhotos(
+                    room.moveOutEvidence[eIdx],
+                    fallbackPhotos: fallbackPhotos,
+                    minimumPhotoCount: minimumPhotoCount
+                )
+            } else if !fallbackPhotos.isEmpty {
+                // Hydration can briefly omit a just-inserted item; still attach known-good file refs from this save.
+                let synthetic = Self.syntheticEvidenceRecord(
+                    itemId: itemId,
+                    fallbackPhotos: fallbackPhotos,
+                    minimumPhotoCount: minimumPhotoCount,
+                    stage: .moveOut
+                )
+                room.moveOutEvidence.insert(synthetic, at: 0)
+            }
         } else {
-            guard let eIdx = room.evidence.firstIndex(where: { $0.id == itemId }) else { return }
-            room.evidence[eIdx] = Self.mergedEvidenceWithFallbackPhotos(
-                room.evidence[eIdx],
-                fallbackPhotos: fallbackPhotos,
-                minimumPhotoCount: minimumPhotoCount
-            )
+            if let eIdx = room.evidence.firstIndex(where: { $0.id == itemId }) {
+                room.evidence[eIdx] = Self.mergedEvidenceWithFallbackPhotos(
+                    room.evidence[eIdx],
+                    fallbackPhotos: fallbackPhotos,
+                    minimumPhotoCount: minimumPhotoCount
+                )
+            } else if !fallbackPhotos.isEmpty {
+                let synthetic = Self.syntheticEvidenceRecord(
+                    itemId: itemId,
+                    fallbackPhotos: fallbackPhotos,
+                    minimumPhotoCount: minimumPhotoCount,
+                    stage: .moveIn
+                )
+                room.evidence.insert(synthetic, at: 0)
+            }
         }
         prop.rooms[rIdx] = room
         currentProperty = prop
     }
 
+    /// Merges `fallbackPhotos` from the save pipeline into the hydrated entry so thumbnails/count stay truthful when reads lag or counts disagree.
     private static func mergedEvidenceWithFallbackPhotos(
         _ entry: EvidenceRecord,
         fallbackPhotos: [EvidencePhoto],
         minimumPhotoCount: Int
     ) -> EvidenceRecord {
         var entry = entry
-        if entry.photos.count >= minimumPhotoCount { return entry }
+        guard !fallbackPhotos.isEmpty else {
+            entry.photoCount = max(entry.photoCount, entry.photos.count, minimumPhotoCount)
+            return entry
+        }
         var seenPaths = Set(entry.photos.map(\.filePath))
         var merged = entry.photos
         for p in fallbackPhotos where !seenPaths.contains(p.filePath) {
@@ -516,5 +549,26 @@ extension PropertyStore {
         entry.photos = merged
         entry.photoCount = max(entry.photoCount, merged.count, minimumPhotoCount)
         return entry
+    }
+
+    private static func syntheticEvidenceRecord(
+        itemId: UUID,
+        fallbackPhotos: [EvidencePhoto],
+        minimumPhotoCount: Int,
+        stage: EvidenceRecord.Stage
+    ) -> EvidenceRecord {
+        let title = stage == .moveOut ? "Move-out capture" : "Move-in capture"
+        let count = max(fallbackPhotos.count, minimumPhotoCount)
+        return EvidenceRecord(
+            id: itemId,
+            title: title,
+            notes: "",
+            issueTags: [],
+            condition: .good,
+            createdAt: Date(),
+            photoCount: count,
+            photos: fallbackPhotos,
+            stage: stage
+        )
     }
 }

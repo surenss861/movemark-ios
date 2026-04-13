@@ -257,6 +257,14 @@ struct InspectionRepository {
             .remove(paths: [path])
     }
 
+    /// Best-effort removal when storage upload succeeded but `evidence_files` insert failed (avoids orphan objects).
+    func removeOrphanInspectionUpload(path: String) async {
+        guard !path.isEmpty else { return }
+        _ = try? await supabase.storage
+            .from(Self.evidenceStorageBucket)
+            .remove(paths: [path])
+    }
+
     /// Deletes evidence file rows for an inspection item and removes each file from storage first.
     func deleteEvidenceFilesForInspectionItem(inspectionItemId: UUID) async throws {
         let rows: [EvidenceFileRow] = try await supabase
