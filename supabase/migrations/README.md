@@ -24,7 +24,8 @@ Run these in order (by filename). Use Supabase Dashboard SQL editor or `supabase
 | `20260312000007_rls_policies_direct.sql` | RLS policies for tables with direct `user_id` |
 | `20260312000008_rls_policies_indirect.sql` | RLS policies for rooms, inspection_items, evidence_files, issue_tags, inspection_item_tags, dispute_evidence_links |
 | `20260328000001_exports_requested_completed_at.sql` | Adds `exports.requested_at` and `exports.completed_at` (idempotent) |
-| `20260329000001_storage_buckets_and_policies.sql` | Creates Storage buckets (`inspection-media`, `maintenance-media`, `exports`, vault doc buckets, `documents`) + RLS on `storage.objects` (own `{user_id}/…` prefix) |
+| `20260329000001_storage_buckets_and_policies.sql` | Creates Storage buckets + RLS on `storage.objects` — first path segment matches `auth.uid()` **case-insensitively** (`lower(...)`, for Swift UUID strings). |
+| `20260329100000_storage_policies_uuid_case_insensitive.sql` | **Repair only:** same policy shape for projects that already applied an older `20260329000001` without `lower()`. Idempotent if policies already match. |
 | `20260402000001_table_rls_evidence_docs_maintenance.sql` | Targeted table RLS (guarded if tables missing); prefer `20260402000003` for full app hardening |
 | `20260402000003_full_app_rls_hardening.sql` | Full RLS for user-owned paths; **skips** any table that does not exist (`to_regclass` + `NOTICE`). Safe on empty DBs — but the app still needs the real schema on the linked project |
 | `20260402000004_app_query_indexes.sql` | Same guard pattern: creates indexes only when each target table exists |
