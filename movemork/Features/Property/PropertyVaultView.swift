@@ -276,18 +276,18 @@ struct PropertyVaultView: View {
         .onDisappear {
             contentVisible = false
         }
-        .confirmationDialog("Delete document?", isPresented: Binding(get: { deleteConfirmType != nil }, set: { if !$0 { deleteConfirmType = nil } })) {
+        .alert("Delete document?", isPresented: Binding(get: { deleteConfirmType != nil }, set: { if !$0 { deleteConfirmType = nil } })) {
+            Button("Cancel", role: .cancel) {
+                deleteConfirmType = nil
+            }
             Button("Delete", role: .destructive) {
                 if let type = deleteConfirmType {
                     Task { await confirmDeleteDocument(type: type) }
                 }
                 deleteConfirmType = nil
             }
-            Button("Cancel", role: .cancel) {
-                deleteConfirmType = nil
-            }
         } message: {
-            Text("This cannot be undone. You can upload again later.")
+            Text("This file will be removed from your vault. You can upload again later. This can't be undone.")
         }
         .onChange(of: selectedPhotoItem) { _, new in
             guard let new else { return }
@@ -745,6 +745,14 @@ struct PropertyVaultView: View {
         }
     }
 
+    /// Keeps workflow toasts / highlights accurate after deletes (upload path already updates via `evaluateWorkflowFeedback`).
+    private func refreshWorkflowBaseline() {
+        let prop = (propertyStore.currentProperty?.id == property.id) ? propertyStore.currentProperty! : property
+        lastKnownReadinessScore = propertyStore.readinessScore(for: prop)
+        lastKnownUploadedDocumentCount = propertyStore.uploadedSupportingRecordCount(for: prop)
+        lastKnownExportReady = propertyStore.isExportReady(for: prop)
+    }
+
     private func triggerDocumentHighlight(_ docType: VaultDocumentType) {
         highlightedDocumentType = docType
 
@@ -929,8 +937,11 @@ struct PropertyVaultView: View {
     }
 
     private func confirmDeleteDocument(type: String) async {
+        let slotKeys = Set(DocumentRepository.documentTypeQueryKeys(type))
         do {
             try await documentRepo.deleteDocuments(propertyId: property.id, documentType: type)
+            documentRows.removeAll { slotKeys.contains($0.documentType) }
+            previewErrorMessage = nil
             let metaOK = await propertyStore.refreshDocuments(propertyId: property.id)
             let rowsOK = await refreshDocumentRowsAfterMutation()
             uploadSoftNotice = nil
@@ -938,6 +949,7 @@ struct PropertyVaultView: View {
             if !metaOK || !rowsOK {
                 uploadSoftNotice = MoveMarkFlowMessage.documentVaultRefreshHint
             }
+            refreshWorkflowBaseline()
             await loadVaultSummary()
         } catch {
             uploadError = MoveMarkFlowMessage.documentDeleteFailed(error)
@@ -1061,7 +1073,15 @@ struct PropertyVaultView: View {
                 return
             }
 
-            guard url.startAccessingSecurityScopedResource() else { return }
+            guard url.startAccessingSecurityScopedResource() else {
+                uploadError = MoveMarkFlowMessage.documentUploadFailed(
+                    NSError(domain: "MoveMark.Vault", code: 1, userInfo: [
+                        NSLocalizedDescriptionKey: "Could not access the selected file. Try again or pick a different file."
+                    ])
+                )
+                lastFailedFileDocType = docType
+                return
+            }
             defer { url.stopAccessingSecurityScopedResource() }
             let data: Data
             do {
@@ -1121,6 +1141,7 @@ struct PropertyVaultView: View {
             }
 
             uploadError = nil
+            lastFailedFileDocType = nil
         }
     }
 }

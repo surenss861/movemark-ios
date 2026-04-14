@@ -179,18 +179,18 @@ struct EvidenceCaptureView: View {
         } message: {
             Text("Enable camera access for MoveMark in Settings to take photos.")
         }
-        .confirmationDialog("Delete this proof entry?", isPresented: Binding(get: { deleteConfirmEntry != nil }, set: { if !$0 { deleteConfirmEntry = nil } })) {
+        .alert("Delete proof?", isPresented: Binding(get: { deleteConfirmEntry != nil }, set: { if !$0 { deleteConfirmEntry = nil } })) {
+            Button("Cancel", role: .cancel) {
+                deleteConfirmEntry = nil
+            }
             Button("Delete", role: .destructive) {
                 if let entry = deleteConfirmEntry {
                     Task { await deleteEntry(entry.id) }
                 }
                 deleteConfirmEntry = nil
             }
-            Button("Cancel", role: .cancel) {
-                deleteConfirmEntry = nil
-            }
         } message: {
-            Text("Photos and notes for this entry will be removed. This cannot be undone.")
+            Text("Photos and notes for this entry will be removed. This can't be undone.")
         }
         .navigationTitle(roomName)
         .navigationBarTitleDisplayMode(.inline)

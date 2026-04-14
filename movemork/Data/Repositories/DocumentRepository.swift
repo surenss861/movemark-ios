@@ -204,6 +204,9 @@ struct DocumentRepository {
                 try? await removeFromStorage(bucket: bucketName, path: row.filePath)
             }
         }
+        if let pid = rows.first?.propertyId {
+            await MoveMarkSignedURLCache.shared.invalidateKeys(containing: pid.uuidString)
+        }
         try await supabase
             .from("property_documents")
             .delete()
@@ -221,6 +224,7 @@ struct DocumentRepository {
                 try? await removeFromStorage(bucket: bucketName, path: row.filePath)
             }
         }
+        await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
         var del = supabase
             .from("property_documents")
             .delete()
