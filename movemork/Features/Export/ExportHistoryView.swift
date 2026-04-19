@@ -33,8 +33,29 @@ struct ExportHistoryView: View {
         return value
     }
 
+    /// Prefer hydrated `currentProperty`; fall back to persisted `activePropertyId` so Exports matches Vault when hydration lags or the vault tab is not mounted.
+    private var resolvedExportPropertyId: UUID? {
+        if let id = propertyStore.currentProperty?.id { return id }
+        if let aid = propertyStore.activePropertyId,
+           propertyStore.properties.contains(where: { $0.id == aid }) {
+            return aid
+        }
+        return nil
+    }
+
     private var hasActiveVault: Bool {
-        propertyStore.currentProperty != nil
+        resolvedExportPropertyId != nil
+    }
+
+    private var activeVaultDisplayTitle: String? {
+        guard let pid = resolvedExportPropertyId else { return nil }
+        if let cp = propertyStore.currentProperty, cp.id == pid {
+            let t = cp.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            return t.isEmpty ? nil : cp.title
+        }
+        guard let row = propertyStore.properties.first(where: { $0.id == pid }) else { return nil }
+        let t = row.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : row.title
     }
 
     var body: some View {
@@ -102,7 +123,7 @@ struct ExportHistoryView: View {
                 ShareSheet(activityItems: shareItems)
             }
         }
-        .task(id: propertyStore.currentProperty?.id) {
+        .task(id: resolvedExportPropertyId) {
             await loadExports()
         }
     }
@@ -129,8 +150,15 @@ struct ExportHistoryView: View {
         MMEditorialHeader(
             eyebrow: "MoveMark",
             title: "Exports",
-            subtitle: "Reports and packets for your current vault."
+            subtitle: headerSubtitle
         )
+    }
+
+    private var headerSubtitle: String {
+        if let name = activeVaultDisplayTitle, !name.isEmpty {
+            return "Move-in and move-out reports for \(name)."
+        }
+        return "Move-in and move-out reports for your current vault."
     }
 
     private var noVaultSelectedState: some View {
@@ -143,7 +171,7 @@ struct ExportHistoryView: View {
                         .font(MoveMarkTheme.Typography.cardTitle)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                    Text("Exports are tied to the property you have open. Open a vault from the home list, then return here.")
+                    Text("Exports are tied to a property. Choose a vault on the Vaults tab, then come back here.")
                         .font(MoveMarkTheme.Typography.subheadline)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -172,7 +200,7 @@ struct ExportHistoryView: View {
                         .font(MoveMarkTheme.Typography.cardTitle)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                    Text("Move-in reports, move-out reports, and dispute packets you generate for this property will appear here.")
+                    Text("Move-in and move-out reports you generate for this property will appear here. Dispute packets also list when created.")
                         .font(MoveMarkTheme.Typography.subheadline)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -526,7 +554,7 @@ struct ExportHistoryView: View {
             return
         }
 
-        guard let currentPropertyId = propertyStore.currentProperty?.id else {
+        guard let currentPropertyId = resolvedExportPropertyId else {
             exports = []
             errorMessage = nil
             return

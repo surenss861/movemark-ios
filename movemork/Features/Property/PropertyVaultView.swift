@@ -9,6 +9,12 @@ import SwiftUI
 import PhotosUI
 import Supabase
 
+private struct VaultDocumentQuickLookItem: Identifiable {
+    let id = UUID()
+    let fileURL: URL
+    let title: String
+}
+
 struct PropertyVaultView: View {
     let property: PropertyRecord
     @Binding var path: [AppRoute]
@@ -48,6 +54,9 @@ struct PropertyVaultView: View {
     @State private var activePaywallReason: PaywallReason = .disputePacket
     @State private var showAllSupportingRecords = false
     @State private var showPropertyDetails = false
+    @State private var documentQuickLook: VaultDocumentQuickLookItem?
+    @State private var documentPreviewTempURL: URL?
+    @State private var isPreparingDocumentPreview = false
     /// Server-computed vault dashboard; when nil, UI falls back to ``PropertyStore`` (offline / API error).
     @State private var vaultSummary: VaultSummaryResponse?
     @State private var vaultSummaryError: String? = nil
@@ -119,7 +128,7 @@ struct PropertyVaultView: View {
 
     private var exportsSubtitle: String {
         propertyStore.isExportReady(for: property)
-            ? "Generate reports and packets"
+            ? "Generate reports"
             : "Add proof before exporting"
     }
 
@@ -308,6 +317,35 @@ struct PropertyVaultView: View {
                 handleFileSelection(url: url, docType: pendingFileDocType)
             case .failure(let error):
                 uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
+            }
+        }
+        .fullScreenCover(item: $documentQuickLook, onDismiss: {
+            if let url = documentPreviewTempURL {
+                try? FileManager.default.removeItem(at: url)
+                documentPreviewTempURL = nil
+            }
+        }) { item in
+            NavigationStack {
+                QuickLookPreviewRepresentable(url: item.fileURL)
+                    .ignoresSafeArea(edges: .bottom)
+                    .navigationTitle(item.title)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") {
+                                documentQuickLook = nil
+                            }
+                        }
+                    }
+            }
+        }
+        .overlay {
+            if isPreparingDocumentPreview {
+                ZStack {
+                    Color.black.opacity(0.35).ignoresSafeArea()
+                    ProgressView("Opening…")
+                        .tint(MoveMarkTheme.Colors.primary)
+                }
             }
         }
     }
@@ -923,16 +961,46 @@ struct PropertyVaultView: View {
             previewErrorMessage = MoveMarkFlowMessage.documentPreviewMissing
             return
         }
+        await MainActor.run { isPreparingDocumentPreview = true }
         do {
-            let url = try await documentRepo.signedURL(
+            let remoteURL = try await documentRepo.signedURL(
                 bucket: DocumentRepository.storageBucket(forDocumentType: row.documentType),
                 path: row.filePath
             )
+            let (data, response) = try await URLSession.shared.data(from: remoteURL)
+            if let http = response as? HTTPURLResponse, !(200 ... 299).contains(http.statusCode) {
+                throw URLError(.badServerResponse)
+            }
+            let ext = preferredPreviewFileExtension(for: row, docType: type)
+            let temp = FileManager.default.temporaryDirectory
+                .appendingPathComponent("vault-doc-\(UUID().uuidString)", isDirectory: false)
+                .appendingPathExtension(ext)
+            try data.write(to: temp, options: .atomic)
             await MainActor.run {
-                UIApplication.shared.open(url)
+                if let old = documentPreviewTempURL {
+                    try? FileManager.default.removeItem(at: old)
+                }
+                documentPreviewTempURL = temp
+                documentQuickLook = VaultDocumentQuickLookItem(fileURL: temp, title: type.displayTitle)
             }
         } catch {
-            previewErrorMessage = MoveMarkFlowMessage.documentPreviewFailed(error)
+            await MainActor.run {
+                previewErrorMessage = MoveMarkFlowMessage.documentPreviewFailed(error)
+            }
+        }
+        await MainActor.run { isPreparingDocumentPreview = false }
+    }
+
+    private func preferredPreviewFileExtension(for row: PropertyDocumentRow, docType: VaultDocumentType) -> String {
+        let fromName = (row.fileName as NSString).pathExtension.lowercased()
+        if !fromName.isEmpty { return fromName }
+        let fromPath = (row.filePath as NSString).pathExtension.lowercased()
+        if !fromPath.isEmpty { return fromPath }
+        switch docType {
+        case .listingScreenshot:
+            return "jpg"
+        default:
+            return "pdf"
         }
     }
 
