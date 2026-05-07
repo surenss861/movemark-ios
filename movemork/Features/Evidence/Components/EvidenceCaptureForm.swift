@@ -24,7 +24,7 @@ struct EvidenceCaptureForm: View {
     var onRetry: (() -> Void)? = nil
 
     var body: some View {
-        MMCard(tone: .quiet, padding: 18, spacing: 16) {
+        MMCard(tone: .artifact, padding: 18, spacing: 16) {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(moveOutMode ? "Add move-out proof" : "Details")
@@ -50,10 +50,12 @@ struct EvidenceCaptureForm: View {
                     text: $notes
                 )
 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text("Condition")
-                        .font(.system(size: 13.5, weight: .medium))
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.92))
+                        .font(MoveMarkTheme.Typography.caption)
+                        .tracking(0.9)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        .textCase(.uppercase)
 
                     Picker("Condition", selection: $selectedCondition) {
                         ForEach(RoomRecord.ConditionRating.allCases, id: \.self) { rating in
@@ -62,6 +64,15 @@ struct EvidenceCaptureForm: View {
                     }
                     .pickerStyle(.segmented)
                 }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(MoveMarkTheme.Colors.surfaceInset.opacity(0.55))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.38), lineWidth: 0.8)
+                )
 
                 if let errorMessage {
                     MMErrorBanner(
@@ -72,14 +83,32 @@ struct EvidenceCaptureForm: View {
                 }
 
                 if let successMessage {
-                    Text(successMessage)
-                        .font(MoveMarkTheme.Typography.subheadlineMedium)
-                        .foregroundStyle(MoveMarkTheme.Colors.primary)
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(MoveMarkTheme.Colors.semanticSuccess)
+                        Text(successMessage)
+                            .font(MoveMarkTheme.Typography.subheadline)
+                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(MoveMarkTheme.Colors.semanticSuccess.opacity(0.1))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(MoveMarkTheme.Colors.semanticSuccess.opacity(0.22), lineWidth: 0.8)
+                    )
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
         }
-        .opacity(isUploading ? 0.7 : 1.0)
+        .opacity(isUploading ? 0.72 : 1.0)
         .allowsHitTesting(!isUploading)
+        .animation(MMMotion.fastFade, value: successMessage)
     }
 
     private var issueTagPicker: some View {

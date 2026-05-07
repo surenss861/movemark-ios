@@ -21,9 +21,19 @@ struct EvidenceCaptureBottomSaveBar: View {
     }
 
     private var primaryLine: String {
-        photoCount == 0
+        if isUploading { return "Saving proof…" }
+        if didJustSave { return "Proof saved" }
+        return photoCount == 0
             ? "Add media to continue"
-            : "\(photoCount) photo\(photoCount == 1 ? "" : "s") ready"
+            : "\(photoCount) photo\(photoCount == 1 ? "" : "s") ready to save"
+    }
+
+    private var primaryLineColor: Color {
+        if photoCount == 0, !isUploading, !didJustSave {
+            return MoveMarkTheme.Colors.semanticWarning.opacity(0.95)
+        }
+        if didJustSave { return MoveMarkTheme.Colors.semanticSuccess.opacity(0.95) }
+        return MoveMarkTheme.Colors.textPrimary
     }
 
     var body: some View {
@@ -31,7 +41,9 @@ struct EvidenceCaptureBottomSaveBar: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(primaryLine)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                    .foregroundStyle(primaryLineColor)
+                    .animation(MMMotion.fastFade, value: didJustSave)
+                    .animation(MMMotion.fastFade, value: isUploading)
 
                 Text("\(tagSummary) · \(condition.rawValue)")
                     .font(.system(size: 11.5, weight: .medium))
@@ -65,14 +77,18 @@ struct EvidenceCaptureBottomSaveBar: View {
             .disabled(photoCount == 0 || isUploading)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, 11)
         .background(
-            MoveMarkTheme.Colors.background.opacity(0.94)
+            ZStack {
+                MoveMarkTheme.Colors.surfaceInset.opacity(0.88)
+                MoveMarkTheme.Colors.background.opacity(0.55)
+            }
         )
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(Color.white.opacity(0.045))
+                .fill(Color.white.opacity(0.055))
                 .frame(height: 0.6)
         }
+        .shadow(color: .black.opacity(0.35), radius: 14, y: -4)
     }
 }

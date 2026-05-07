@@ -181,16 +181,11 @@ struct MoveOutFoundationView: View {
             )
 
             if rooms.isEmpty {
-                MMCard {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("No rooms yet")
-                            .font(MoveMarkTheme.Typography.cardTitle)
-                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                        Text("Add rooms in Walkthrough first, then return here to capture move-out proof.")
-                            .font(MoveMarkTheme.Typography.subheadline)
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    }
-                }
+                MMEmptyState(
+                    systemImage: "arrow.left.arrow.right.circle",
+                    title: "Add rooms in Walkthrough first",
+                    message: "Move-out compares each room to your move-in baseline. Create rooms and capture move-in proof, then return here for move-out photos and notes."
+                )
             }
 
             ForEach(rooms) { room in
@@ -215,17 +210,17 @@ struct MoveOutFoundationView: View {
         let hasMoveOut = !room.moveOutEvidence.isEmpty
         let conditionDeltaText = conditionDelta(latestMoveIn: latestMoveIn, latestMoveOut: latestMoveOut)
 
-        return MMCard {
+        return MMCard(tone: .artifact) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     Text(room.name)
-                        .font(MoveMarkTheme.Typography.sectionTitle)
+                        .font(MoveMarkTheme.Typography.cardTitle)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     Spacer()
                     if hasMoveOut {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 18))
-                            .foregroundStyle(MoveMarkTheme.Colors.primary)
+                            .foregroundStyle(MoveMarkTheme.Colors.semanticSuccess)
                     }
                 }
 

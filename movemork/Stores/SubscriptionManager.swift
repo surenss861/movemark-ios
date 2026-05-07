@@ -45,9 +45,15 @@ final class SubscriptionManager {
     }
 
     var hasPro: Bool = false
-    var isLoading: Bool = false
+    /// True while refetching offerings from RevenueCat (initial load, pull-to-refresh style paths).
+    var isRefreshingOfferings: Bool = false
+    /// True during an in-flight purchase or restore (StoreKit / RevenueCat transaction).
+    var isStoreKitBusy: Bool = false
     var lastErrorMessage: String? = nil
     var currentOffering: Offering? = nil
+
+    /// Aggregate for screens that only need a single “busy” flag (e.g. Account restore while offerings also refresh).
+    var isLoading: Bool { isRefreshingOfferings || isStoreKitBusy }
 
     /// Canonical RevenueCat entitlement (App Store + aligned Test Store).
     private let proEntitlementID = "movemark_pro1"
@@ -133,6 +139,7 @@ final class SubscriptionManager {
 
         if !Purchases.isConfigured {
             let apiKey = Self.resolvedRevenueCatPublicAPIKey
+            Self.logRevenueCatKeyResolution(apiKey: apiKey)
 
             if Self.allowsRevenueCatTestStoreKey, apiKey.hasPrefix("appl_") {
                 let envT = ProcessInfo.processInfo.environment["REVENUECAT_TEST_STORE_PUBLIC_KEY"]?
@@ -141,9 +148,21 @@ final class SubscriptionManager {
                 let plistT = Self.revenueCatTestStoreAPIKeyFromBundle()
                 if !envUsable && plistT.isEmpty {
                     subscriptionLog.notice(
-                        "RevenueCat: Test Store allowed but no test key — set user-defined REVENUECAT_TEST_STORE_PUBLIC_KEY on the MoveMark app target for Debug and Release (not only the project), then Clean Build Folder. Using appl_… fallback."
+                        "RevenueCat: Debug allows Test Store but no test key found — set REVENUECAT_TEST_STORE_PUBLIC_KEY in a local ignored xcconfig or scheme env, or the app uses appl_… only."
                     )
                 }
+            }
+
+            #if DEBUG
+            if !Self.allowsRevenueCatTestStoreKey, Self.isRevenueCatTestStoreSDKKey(apiKey) {
+                assertionFailure("Shipping build must not resolve RevenueCat Test Store (test_…) key. Use Release + appl_… for Archive/TestFlight.")
+            }
+            #endif
+
+            if !Self.allowsRevenueCatTestStoreKey, Self.isRevenueCatTestStoreSDKKey(apiKey) {
+                subscriptionLog.error(
+                    "RevenueCat configure blocked: test_… key in a build that only allows appl_… (Archive/TestFlight/App Store). Remove Test Store overrides from Release."
+                )
             }
 
             guard Self.isValidRevenueCatPublicKey(apiKey) else {
@@ -164,9 +183,8 @@ final class SubscriptionManager {
             Purchases.configure(with: builder.build())
             #if !DEBUG
             // TestFlight / App Store: verify embedded key in Console (category Subscription) without logging the full secret.
-            let keyKind = apiKey.hasPrefix("test_") ? "Test Store" : "App Store"
             subscriptionLog.notice(
-                "RevenueCat configured (\(keyKind, privacy: .public) key prefix \(Self.keyDiagnosticPrefix(apiKey), privacy: .public))"
+                "RevenueCat configured (App Store key prefix \(Self.keyDiagnosticPrefix(apiKey), privacy: .public))"
             )
             #endif
         }
@@ -177,6 +195,7 @@ final class SubscriptionManager {
     }
 
     /// When Test Store is allowed (Debug or `REVENUECAT_ALLOW_TEST_STORE_KEY`), prefers `REVENUECAT_TEST_STORE_PUBLIC_KEY` / `RevenueCatTestStorePublicAPIKey` so you can keep `appl_…` in `REVENUECAT_APP_STORE_PUBLIC_KEY` for App Store archives.
+    /// Release/TestFlight (default) never reads Test Store plist/env paths — only `appl_…` via `RevenueCatPublicAPIKey` / `REVENUECAT_PUBLIC_API_KEY` fallback.
     private static var resolvedRevenueCatPublicAPIKey: String {
         if allowsRevenueCatTestStoreKey {
             let envTest = ProcessInfo.processInfo.environment["REVENUECAT_TEST_STORE_PUBLIC_KEY"]?
@@ -193,6 +212,38 @@ final class SubscriptionManager {
         let fromEnv = ProcessInfo.processInfo.environment["REVENUECAT_PUBLIC_API_KEY"]?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return fromEnv
+    }
+
+    private static func isRevenueCatTestStoreSDKKey(_ key: String) -> Bool {
+        key.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("test_")
+    }
+
+    /// One-line diagnostics for Console: build channel, resolved key shape, masked prefix. Call before `Purchases.configure`.
+    private static func logRevenueCatKeyResolution(apiKey: String) {
+        let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let keyKind: String
+        if trimmed.isEmpty {
+            keyKind = "missing"
+        } else if isRevenueCatTestStoreSDKKey(trimmed) {
+            keyKind = "test_store"
+        } else if trimmed.hasPrefix("appl_") {
+            keyKind = "app_store"
+        } else {
+            keyKind = "other"
+        }
+
+        let buildChannel: String
+        #if DEBUG
+        buildChannel = "DEBUG"
+        #elseif REVENUECAT_ALLOW_TEST_STORE_KEY
+        buildChannel = "RELEASE_allow_test_store"
+        #else
+        buildChannel = "RELEASE"
+        #endif
+
+        subscriptionLog.notice(
+            "RevenueCat startup build=\(buildChannel, privacy: .public) keyKind=\(keyKind, privacy: .public) prefix=\(keyDiagnosticPrefix(apiKey), privacy: .public) testStorePathAllowed=\(allowsRevenueCatTestStoreKey, privacy: .public)"
+        )
     }
 
     private static func revenueCatTestStoreAPIKeyFromBundle() -> String {
@@ -377,7 +428,7 @@ final class SubscriptionManager {
         }
     }
 
-    /// - Parameter showLoading: When false, skips toggling `isLoading` (use after purchase/restore to avoid UI flicker).
+    /// - Parameter showLoading: When false, skips toggling `isRefreshingOfferings` (use after purchase/restore to avoid UI flicker).
     func refresh(showLoading: Bool = true) async {
         guard Purchases.isConfigured else {
             if lastErrorMessage == nil {
@@ -387,11 +438,11 @@ final class SubscriptionManager {
         }
 
         if showLoading {
-            isLoading = true
+            isRefreshingOfferings = true
         }
         defer {
             if showLoading {
-                isLoading = false
+                isRefreshingOfferings = false
             }
         }
 
@@ -423,6 +474,10 @@ final class SubscriptionManager {
                     "offering id=\(oid, privacy: .public) packageCount=\(off.availablePackages.count, privacy: .public) storeProductIDs=\(String(describing: pids), privacy: .public) rcPackageIDs=\(String(describing: rcIds), privacy: .public)"
                 )
             }
+            #else
+            subscriptionLog.notice(
+                "offerings fetched catalogOfferingCount=\(offerings.all.count, privacy: .public) sdkCurrent=\(offerings.current?.identifier ?? "nil", privacy: .public)"
+            )
             #endif
 
             let resolvedOffering: Offering? = {
@@ -444,20 +499,14 @@ final class SubscriptionManager {
 
             if let current = resolvedOffering {
                 let count = current.availablePackages.count
-                #if DEBUG
                 let packageIDs = current.availablePackages.map(\.storeProduct.productIdentifier)
                 let rcPackageIDs = current.availablePackages.map(\.identifier)
                 subscriptionLog.notice(
-                    "refresh resolved offering=\(current.identifier, privacy: .public) packageCount=\(count, privacy: .public) storeProductIDs=\(String(describing: packageIDs), privacy: .public) rcPackageIDs=\(String(describing: rcPackageIDs), privacy: .public)"
+                    "refresh resolved offering=\(current.identifier, privacy: .public) packageCount=\(count, privacy: .public) storeProductIDs=\(String(describing: packageIDs), privacy: .public) rcPackageIDs=\(String(describing: rcPackageIDs), privacy: .public) proEntitlement=\(self.proEntitlementID, privacy: .public)"
                 )
-                #else
-                subscriptionLog.notice(
-                    "refresh resolved offering=\(current.identifier, privacy: .public) packageCount=\(count, privacy: .public)"
-                )
-                #endif
 
                 if current.availablePackages.isEmpty {
-                    subscriptionLog.notice("refresh resolved offering has zero packages (check RevenueCat packages / StoreKit config on simulator)")
+                    subscriptionLog.notice("refresh resolved offering has zero packages (check RevenueCat packages / App Store Connect / Paid Apps Agreement)")
                     lastErrorMessage = "Plans aren’t available yet. Check your default offering and packages in RevenueCat."
                 } else {
                     lastErrorMessage = nil
@@ -470,7 +519,7 @@ final class SubscriptionManager {
             lastErrorMessage = Self.userFacingRevenueCatOperationError(error)
             let ns = error as NSError
             subscriptionLog.error(
-                "RevenueCat refresh failed domain=\(ns.domain, privacy: .public) code=\(ns.code, privacy: .public) description=\(ns.localizedDescription, privacy: .public)"
+                "RevenueCat offerings fetch failed proEntitlement=\(self.proEntitlementID, privacy: .public) domain=\(ns.domain, privacy: .public) code=\(ns.code, privacy: .public) description=\(ns.localizedDescription, privacy: .public)"
             )
         }
     }
@@ -484,8 +533,8 @@ final class SubscriptionManager {
             )
         }
 
-        isLoading = true
-        defer { isLoading = false }
+        isStoreKitBusy = true
+        defer { isStoreKitBusy = false }
 
         let result = try await Purchases.shared.purchase(package: package)
         hasPro = Self.hasActiveProEntitlement(result.customerInfo)
@@ -502,8 +551,8 @@ final class SubscriptionManager {
             )
         }
 
-        isLoading = true
-        defer { isLoading = false }
+        isStoreKitBusy = true
+        defer { isStoreKitBusy = false }
 
         let customerInfo = try await Purchases.shared.restorePurchases()
         hasPro = Self.hasActiveProEntitlement(customerInfo)

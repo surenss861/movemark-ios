@@ -86,8 +86,8 @@ struct SupportingRecordRow: View {
             .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(
                 isPresent
-                    ? MoveMarkTheme.Colors.primary.opacity(0.95)
-                    : Color.white.opacity(0.66)
+                    ? MoveMarkTheme.Colors.semanticSuccess.opacity(0.95)
+                    : MoveMarkTheme.Colors.semanticWarning.opacity(0.95)
             )
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
@@ -95,16 +95,16 @@ struct SupportingRecordRow: View {
                 Capsule()
                     .fill(
                         isPresent
-                            ? MoveMarkTheme.Colors.primary.opacity(0.13)
-                            : Color.white.opacity(0.05)
+                            ? MoveMarkTheme.Colors.semanticSuccess.opacity(0.13)
+                            : MoveMarkTheme.Colors.semanticWarning.opacity(0.12)
                     )
             )
             .overlay(
                 Capsule()
                     .stroke(
                         isPresent
-                            ? MoveMarkTheme.Colors.primary.opacity(0.16)
-                            : Color.white.opacity(0.06),
+                            ? MoveMarkTheme.Colors.semanticSuccess.opacity(0.22)
+                            : MoveMarkTheme.Colors.semanticWarning.opacity(0.28),
                         lineWidth: 0.8
                     )
             )

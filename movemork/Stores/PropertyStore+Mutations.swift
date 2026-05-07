@@ -14,6 +14,11 @@ private let inspectionPhotoPipelineLog = Logger(
     category: "InspectionPhotoPipeline"
 )
 
+private let maintenancePhotoPipelineLog = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "movemork",
+    category: "MaintenancePhotoPipeline"
+)
+
 extension PropertyStore {
     private enum MutationError: LocalizedError {
         case invalidRoomName
@@ -100,6 +105,73 @@ extension PropertyStore {
         }
         inspectionPhotoPipelineLog.info(
             "Pipeline end item=\(inspectionItemId.uuidString, privacy: .public) savedCount=\(savedPhotos.count) failedAttempts=\(failedCount) insertFailAfterUpload=\(insertFailedAfterUploadCount)"
+        )
+        return PhotoPipelineResult(
+            savedPhotos: savedPhotos,
+            failedCount: failedCount,
+            insertFailedAfterUploadCount: insertFailedAfterUploadCount
+        )
+    }
+
+    /// Uploads maintenance JPEGs to `maintenance-media` and inserts `evidence_files` with `maintenance_issue_id`. Mirrors ``saveInspectionPhotos`` orphan cleanup.
+    private func saveMaintenancePhotos(
+        photos: [Data],
+        userId: UUID,
+        propertyId: UUID,
+        issueId: UUID
+    ) async -> PhotoPipelineResult {
+        var savedPhotos: [EvidencePhoto] = []
+        savedPhotos.reserveCapacity(photos.count)
+        var failedCount = 0
+        var insertFailedAfterUploadCount = 0
+        maintenancePhotoPipelineLog.info(
+            "Pipeline start property=\(propertyId.uuidString, privacy: .public) issue=\(issueId.uuidString, privacy: .public) photoCount=\(photos.count)"
+        )
+        for (index, photoData) in photos.enumerated() {
+            let path = "\(userId)/\(propertyId)/\(issueId)/\(UUID()).jpg"
+            maintenancePhotoPipelineLog.debug(
+                "Photo \(index + 1)/\(photos.count) bytes=\(photoData.count) path=\(path, privacy: .public)"
+            )
+            do {
+                _ = try await maintenanceRepo.uploadAttachment(data: photoData, path: path)
+                maintenancePhotoPipelineLog.debug("uploadAttachment OK path=\(path, privacy: .public)")
+            } catch {
+                failedCount += 1
+                maintenancePhotoPipelineLog.error(
+                    "uploadAttachment FAILED path=\(path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                )
+                #if DEBUG
+                print("MoveMark: maintenance uploadAttachment failed", path, error)
+                #endif
+                continue
+            }
+            do {
+                let fileId = try await inspectionRepo.insertEvidenceFile(
+                    propertyId: propertyId,
+                    inspectionItemId: nil,
+                    maintenanceIssueId: issueId,
+                    filePath: path,
+                    fileType: "image",
+                    capturedAt: Date()
+                )
+                savedPhotos.append(EvidencePhoto(id: fileId, filePath: path))
+                maintenancePhotoPipelineLog.debug(
+                    "insertEvidenceFile OK fileId=\(fileId.uuidString, privacy: .public) path=\(path, privacy: .public)"
+                )
+            } catch {
+                failedCount += 1
+                insertFailedAfterUploadCount += 1
+                await maintenanceRepo.removeOrphanUploadedAttachment(path: path)
+                maintenancePhotoPipelineLog.error(
+                    "insertEvidenceFile FAILED path=\(path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                )
+                #if DEBUG
+                print("MoveMark: maintenance insertEvidenceFile failed after upload", path, error)
+                #endif
+            }
+        }
+        maintenancePhotoPipelineLog.info(
+            "Pipeline end issue=\(issueId.uuidString, privacy: .public) savedCount=\(savedPhotos.count) failedAttempts=\(failedCount) insertFailAfterUpload=\(insertFailedAfterUploadCount)"
         )
         return PhotoPipelineResult(
             savedPhotos: savedPhotos,
@@ -449,20 +521,27 @@ extension PropertyStore {
 
         let inserted = try await maintenanceRepo.insertIssue(row)
 
-        for photoData in photos {
-            let path = "\(userId)/\(propertyId)/\(inserted.id)/\(UUID()).jpg"
-            _ = try await maintenanceRepo.uploadAttachment(data: photoData, path: path)
-            try await inspectionRepo.insertEvidenceFile(
+        let pipeline: PhotoPipelineResult
+        if photos.isEmpty {
+            pipeline = PhotoPipelineResult(savedPhotos: [], failedCount: 0, insertFailedAfterUploadCount: 0)
+        } else {
+            pipeline = await saveMaintenancePhotos(
+                photos: photos,
+                userId: userId,
                 propertyId: propertyId,
-                inspectionItemId: nil,
-                maintenanceIssueId: inserted.id,
-                filePath: path,
-                fileType: "image",
-                capturedAt: Date()
+                issueId: inserted.id
             )
         }
 
-        if currentProperty?.id == propertyId {
+        if !photos.isEmpty, !pipeline.hasAnySuccess {
+            try await maintenanceRepo.deleteIssue(id: inserted.id)
+            throw MaintenanceAttachmentPipelineError.noPhotosLinked
+        }
+
+        let savedPhotoCount = photos.isEmpty ? 0 : pipeline.savedPhotos.count
+        let hadPartialPhotoLoss = !photos.isEmpty && pipeline.hadAnyFailure && pipeline.hasAnySuccess
+
+        if activePropertyId == propertyId {
             let created = ISO8601DateFormatter().date(from: inserted.dateReported ?? inserted.dateDiscovered ?? "") ?? Date()
             let newEntry = MaintenanceRecord(
                 id: inserted.id,
@@ -472,21 +551,32 @@ extension PropertyStore {
                 status: .open,
                 createdAt: created,
                 landlordResponse: "",
-                photoCount: photos.count
+                photoCount: savedPhotoCount
             )
             maintenanceLog.insert(newEntry, at: 0)
         }
         let listOK = await refreshMaintenance(propertyId: propertyId)
-        return MaintenanceSubmitOutcome(inserted: inserted, listRefreshFailed: !listOK)
+        return MaintenanceSubmitOutcome(
+            inserted: inserted,
+            listRefreshFailed: !listOK,
+            hadPartialPhotoLoss: hadPartialPhotoLoss
+        )
     }
 
     /// Refreshes maintenance log from DB (e.g. after creating or updating an issue).
     /// - Returns: `false` if the fetch failed; does **not** clear existing `maintenanceLog` so post-save state isn’t wiped.
     @discardableResult
     func refreshMaintenance(propertyId: UUID) async -> Bool {
-        guard currentProperty?.id == propertyId else { return true }
+        guard activePropertyId == propertyId else { return true }
         do {
             let rows = try await maintenanceRepo.fetchIssues(propertyId: propertyId)
+            let evidenceFiles = try await inspectionRepo.fetchEvidenceFiles(propertyId: propertyId)
+            var photoCountByIssue: [UUID: Int] = [:]
+            for file in evidenceFiles {
+                if let mid = file.maintenanceIssueId {
+                    photoCountByIssue[mid, default: 0] += 1
+                }
+            }
             maintenanceLog = rows.map { row in
                 MaintenanceRecord(
                     id: row.id,
@@ -496,7 +586,7 @@ extension PropertyStore {
                     status: row.status == "resolved" ? .resolved : (row.status == "follow_up" ? .followUp : .open),
                     createdAt: ISO8601DateFormatter().date(from: row.dateReported ?? row.dateDiscovered ?? "") ?? Date(),
                     landlordResponse: row.landlordResponse ?? "",
-                    photoCount: 0
+                    photoCount: photoCountByIssue[row.id] ?? 0
                 )
             }
             return true

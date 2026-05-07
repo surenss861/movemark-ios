@@ -67,16 +67,11 @@ struct MaintenanceLogView: View {
                     }
 
                     if log.isEmpty && !isLoading {
-                        MMCard {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("No incidents yet")
-                                    .font(MoveMarkTheme.Typography.cardTitle)
-                                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                                Text("Log an issue above when something happens. Photos and timestamps strengthen your record.")
-                                    .font(MoveMarkTheme.Typography.subheadline)
-                                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            }
-                        }
+                        MMEmptyState(
+                            systemImage: "wrench.and.screwdriver",
+                            title: "No maintenance issues logged yet",
+                            message: "When something breaks or needs landlord follow-up, log it here with photos. Dated incidents become part of your vault record."
+                        )
                     }
 
                     issueSection(
@@ -233,8 +228,17 @@ struct MaintenanceLogView: View {
                     Button {
                         path.append(.maintenanceIssueDetail(issueID: entry.id))
                     } label: {
-                        MMCard {
+                        MMCard(tone: .artifact) {
                             VStack(alignment: .leading, spacing: 10) {
+                                Text(entry.title)
+                                    .font(MoveMarkTheme.Typography.cardTitle)
+                                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                                    .fixedSize(horizontal: false, vertical: true)
+
+                                Text(maintenanceMetadataLine(for: entry))
+                                    .font(MoveMarkTheme.Typography.subheadlineMedium)
+                                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+
                                 HStack {
                                     MMPill(text: entry.category, tone: .warning)
                                     Spacer()
@@ -244,15 +248,12 @@ struct MaintenanceLogView: View {
                                     )
                                 }
 
-                                Text(entry.title)
-                                    .font(MoveMarkTheme.Typography.sectionTitle)
-                                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
                                 if !entry.details.isEmpty {
                                     Text(entry.details)
                                         .font(MoveMarkTheme.Typography.subheadline)
-                                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.92))
                                         .fixedSize(horizontal: false, vertical: true)
+                                        .lineLimit(3)
                                 }
                             }
                         }
@@ -261,6 +262,14 @@ struct MaintenanceLogView: View {
                 }
             }
         }
+    }
+
+    private func maintenanceMetadataLine(for entry: MaintenanceRecord) -> String {
+        let date = entry.createdAt.formatted(date: .abbreviated, time: .omitted)
+        if entry.photoCount > 0 {
+            return "\(entry.photoCount) photo\(entry.photoCount == 1 ? "" : "s") · \(date)"
+        }
+        return date
     }
 
     private func syncMaintenanceLogFromServer() async {
@@ -350,12 +359,19 @@ struct MaintenanceLogView: View {
                 selectedPhotos = []
                 loadedImages = []
 
-                if outcome.listRefreshFailed {
+                if outcome.hadPartialPhotoLoss && outcome.listRefreshFailed {
+                    softNotice =
+                        "\(MoveMarkFlowMessage.maintenancePartialPhotosSaved) If the list looks wrong, open Maintenance again."
+                } else if outcome.hadPartialPhotoLoss {
+                    softNotice = MoveMarkFlowMessage.maintenancePartialPhotosSaved
+                } else if outcome.listRefreshFailed {
                     softNotice = MoveMarkFlowMessage.incidentSavedRefreshStale
                 }
+                MMHaptics.success()
             } catch {
                 errorMessage = MoveMarkFlowMessage.maintenanceComposerFailed(error)
                 errorRetryAction = { addIncident() }
+                MMHaptics.error()
             }
         }
     }

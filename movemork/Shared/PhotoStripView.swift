@@ -31,20 +31,28 @@ struct PhotoStripView: View {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 60, height: 60)
+                        .frame(width: 64, height: 64)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.55), lineWidth: 0.9)
+                        )
                 }
 
                 if images.count > 4 {
                     ZStack {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.white.opacity(0.06))
-                            .frame(width: 60, height: 60)
+                            .fill(MoveMarkTheme.Colors.surfaceInset.opacity(0.9))
+                            .frame(width: 64, height: 64)
 
                         Text("+\(images.count - 4)")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.9))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.92))
                     }
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.5), lineWidth: 0.9)
+                    )
                 }
             }
         } else if let count = placeholderCount, count > 0 {
@@ -57,21 +65,25 @@ struct PhotoStripView: View {
             ForEach(0..<min(max(count, 1), 4), id: \.self) { idx in
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Color.white.opacity(idx == 0 ? 0.10 : 0.04))
-                    .frame(width: 60, height: 60)
+                    .frame(width: 64, height: 64)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(idx == 0 ? MoveMarkTheme.Colors.accent : MoveMarkTheme.Colors.panelStroke, lineWidth: 1)
+                            .stroke(idx == 0 ? MoveMarkTheme.Colors.accent.opacity(0.75) : MoveMarkTheme.Colors.panelStroke.opacity(0.55), lineWidth: 1)
                     )
             }
 
             if count > 4 {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.fieldFill)
-                    .frame(width: 60, height: 60)
+                    .fill(MoveMarkTheme.Colors.surfaceInset.opacity(0.88))
+                    .frame(width: 64, height: 64)
                     .overlay(
                         Text("+\(count - 4)")
                             .font(MoveMarkTheme.Typography.footnote)
                             .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.5), lineWidth: 0.9)
                     )
             }
         }

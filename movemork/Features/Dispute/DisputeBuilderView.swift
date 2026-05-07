@@ -818,14 +818,27 @@ private extension DisputeBuilderView {
     ) -> some View {
         DisclosureGroup {
             if rows.isEmpty {
-                Text(emptyText)
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    .padding(.vertical, 8)
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(MoveMarkTheme.Colors.accent.opacity(0.85))
+                    Text(emptyText)
+                        .font(MoveMarkTheme.Typography.subheadline)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(MoveMarkTheme.Colors.surfaceInset.opacity(0.55))
+                )
+                .padding(.vertical, 4)
             } else {
                 VStack(spacing: 8) {
                     ForEach(rows) { row in
                         Button {
+                            MMHaptics.selection()
                             if selectedIDs.wrappedValue.contains(row.id) {
                                 selectedIDs.wrappedValue.remove(row.id)
                             } else {
@@ -834,23 +847,38 @@ private extension DisputeBuilderView {
                         } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: selectedIDs.wrappedValue.contains(row.id) ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(selectedIDs.wrappedValue.contains(row.id) ? MoveMarkTheme.Colors.primary : MoveMarkTheme.Colors.textSecondary)
+                                    .foregroundStyle(
+                                        selectedIDs.wrappedValue.contains(row.id)
+                                            ? MoveMarkTheme.Colors.semanticSuccess
+                                            : MoveMarkTheme.Colors.textSecondary
+                                    )
 
-                                VStack(alignment: .leading, spacing: 3) {
+                                VStack(alignment: .leading, spacing: 4) {
                                     Text(row.title)
-                                        .font(MoveMarkTheme.Typography.subheadlineMedium)
+                                        .font(MoveMarkTheme.Typography.sectionTitle)
                                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                                        .lineLimit(1)
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
 
                                     Text(row.subtitle)
                                         .font(MoveMarkTheme.Typography.footnote)
                                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                                        .lineLimit(1)
+                                        .lineLimit(2)
                                 }
 
-                                Spacer()
+                                Spacer(minLength: 0)
                             }
-                            .padding(.vertical, 4)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(MoveMarkTheme.Colors.surfaceInset.opacity(0.92))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.45), lineWidth: 0.8)
+                            )
                         }
                         .buttonStyle(.plain)
                     }

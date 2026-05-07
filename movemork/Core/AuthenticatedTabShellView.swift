@@ -35,7 +35,7 @@ struct AuthenticatedTabShellView: View {
             set: { new in
                 guard new != selectedTab else { return }
                 MMHaptics.selection()
-                withAnimation(MMMotion.tabSwitch) { selectedTab = new }
+                withAnimation(MMMotion.screenTransition) { selectedTab = new }
             }
         )
     }
@@ -48,8 +48,8 @@ struct AuthenticatedTabShellView: View {
                 case .vaults:
                     AuthenticatedShellView(path: $vaultPath)
                         .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .move(edge: .leading)),
-                            removal: .opacity
+                            insertion: .opacity.combined(with: .offset(x: -12)),
+                            removal: .opacity.combined(with: .offset(x: 8))
                         ))
                 case .exports:
                     NavigationStack {
@@ -58,20 +58,20 @@ struct AuthenticatedTabShellView: View {
                             .navigationBarTitleDisplayMode(.inline)
                     }
                     .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .move(edge: .trailing)),
-                        removal: .opacity
+                        insertion: .opacity.combined(with: .offset(x: 14)),
+                        removal: .opacity.combined(with: .offset(x: -8))
                     ))
                 case .account:
                     NavigationStack {
                         AccountView()
                     }
                     .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .move(edge: .trailing)),
-                        removal: .opacity
+                        insertion: .opacity.combined(with: .offset(x: 14)),
+                        removal: .opacity.combined(with: .offset(x: -8))
                     ))
                 }
             }
-            .animation(MMMotion.tabSwitch, value: selectedTab)
+            .animation(MMMotion.screenTransition, value: selectedTab)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .environment(\.mmRootTabBarVisible, showsRootTabBar)
 

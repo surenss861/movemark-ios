@@ -6,7 +6,7 @@
 //
 
 import Testing
-@testable import movemork
+@testable import MoveMark
 
 struct movemorkTests {
 

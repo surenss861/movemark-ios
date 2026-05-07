@@ -446,26 +446,20 @@ struct VaultRootView: View {
                         onRetry: { Task { await reload() } }
                     )
                 } else {
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 14) {
-                            SectionLabel(text: "Start here")
-                            Text("No property yet")
-                                .font(MoveMarkTheme.Typography.cardTitle)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            Text("Create your first property vault, then start capturing move-in proof room by room.")
-                                .font(MoveMarkTheme.Typography.subheadline)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                            MMButton(title: "Add property") {
-                                if subscriptionManager.canCreateProperty(currentCount: propertyStore.properties.count) {
-                                    showAddProperty = true
-                                } else {
-                                    activePaywallReason = .extraProperty
-                                    showPaywall = true
-                                }
+                    MMEmptyState(
+                        systemImage: "building.columns.fill",
+                        title: "Your first vault",
+                        message: "Create a property vault for your rental, then run the move-in walkthrough room by room. Everything you save stays organized for exports and disputes.",
+                        primaryTitle: "Add property",
+                        primaryAction: {
+                            if subscriptionManager.canCreateProperty(currentCount: propertyStore.properties.count) {
+                                showAddProperty = true
+                            } else {
+                                activePaywallReason = .extraProperty
+                                showPaywall = true
                             }
                         }
-                    }
+                    )
                 }
             }
             .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)

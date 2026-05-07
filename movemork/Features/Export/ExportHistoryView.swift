@@ -58,6 +58,19 @@ struct ExportHistoryView: View {
         return t.isEmpty ? nil : row.title
     }
 
+    /// Hydrated vault only — same source as ``PropertyStore.isExportReady(for:)``.
+    private var resolvedPropertyRecord: PropertyRecord? {
+        guard let pid = resolvedExportPropertyId,
+              let cp = propertyStore.currentProperty, cp.id == pid else { return nil }
+        return cp
+    }
+
+    /// `nil` when the active vault isn’t hydrated yet (e.g. only `activePropertyId`); then we don’t block the “no exports yet” path.
+    private var isExportReadyForResolvedVault: Bool? {
+        guard let p = resolvedPropertyRecord else { return nil }
+        return propertyStore.isExportReady(for: p)
+    }
+
     var body: some View {
         ZStack {
             MoveMarkTheme.Colors.background.ignoresSafeArea()
@@ -88,8 +101,10 @@ struct ExportHistoryView: View {
 
                     if !hasActiveVault && !isLoading {
                         noVaultSelectedState
-                    } else if exports.isEmpty && !isLoading {
-                        emptyState
+                    } else if hasActiveVault, !isLoading, exports.isEmpty, isExportReadyForResolvedVault == false {
+                        vaultNotExportReadyState
+                    } else if hasActiveVault && exports.isEmpty && !isLoading {
+                        emptyStateNoExportsYet
                     } else {
                         VStack(alignment: .leading, spacing: 18) {
                             exportSection(title: "Move-in reports", rows: rows(for: "move_in_report"))
@@ -126,14 +141,17 @@ struct ExportHistoryView: View {
         .task(id: resolvedExportPropertyId) {
             await loadExports()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .moveMarkExportsShouldRefresh)) { _ in
+            Task { await loadExports() }
+        }
     }
 
     private func canShareExport(_ status: ExportVerificationStatus) -> Bool {
         switch status {
-        case .serverFailed, .queued, .processing, .verifying, .missingPath, .invalidURL:
-            return false
-        case .ready, .unknown, .verificationFailed:
+        case .ready:
             return true
+        case .serverFailed, .queued, .processing, .verifying, .missingPath, .invalidURL, .unknown, .verificationFailed:
+            return false
         }
     }
 
@@ -190,25 +208,28 @@ struct ExportHistoryView: View {
         }
     }
 
-    private var emptyState: some View {
+    /// Vault is selected and hydrated, but ``isExportReady`` is false — honest gate vs vault “ready” headline.
+    private var vaultNotExportReadyState: some View {
         MMCard(tone: .quiet, padding: 18, spacing: 16) {
             VStack(alignment: .leading, spacing: 14) {
                 exportArtifactPreview
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("No exports for this vault yet")
+                    Text("Strengthen your vault first")
                         .font(MoveMarkTheme.Typography.cardTitle)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                    Text("Move-in and move-out reports you generate for this property will appear here. Dispute packets also list when created.")
-                        .font(MoveMarkTheme.Typography.subheadline)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Text(
+                        "Move-in PDF exports work best after at least one room has proof and your vault isn’t missing too many supporting records. Add walkthrough proof or upload lease and deposit records from the vault, then come back."
+                    )
+                    .font(MoveMarkTheme.Typography.subheadline)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if showOpenVaultsCTA {
                     MMButton(
-                        title: "Open a vault to export",
+                        title: "Go to Vaults",
                         action: { onOpenVaults?() },
                         kind: .secondary,
                         size: .standard
@@ -217,6 +238,33 @@ struct ExportHistoryView: View {
                 }
             }
         }
+    }
+
+    /// Active vault, export-ready or still loading readiness, and no rows yet.
+    private var emptyStateNoExportsYet: some View {
+        MMCard(tone: .quiet, padding: 18, spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
+                exportArtifactPreview
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("No reports for this vault yet")
+                        .font(MoveMarkTheme.Typography.cardTitle)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+
+                    Text(emptyStateNoExportsBody)
+                        .font(MoveMarkTheme.Typography.subheadline)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private var emptyStateNoExportsBody: String {
+        if resolvedPropertyRecord == nil {
+            return "Generate a move-in report from Walkthrough (export button on the move-in screen) or open this property’s vault. Move-out PDFs and dispute packets appear here when you create them."
+        }
+        return "Move-in and move-out PDFs and dispute packets you generate for this property will list here with status. Use Walkthrough to queue a move-in report when your vault is ready."
     }
 
     private var exportArtifactPreview: some View {
@@ -314,29 +362,29 @@ struct ExportHistoryView: View {
     private func exportRowCard(_ row: ExportRow) -> some View {
         let status = verificationStatus[row.id] ?? .unknown
 
-        return MMCard(tone: .quiet, padding: 16, spacing: 14) {
+        return MMCard(tone: .artifact, padding: 16, spacing: 14) {
             HStack(alignment: .top, spacing: 14) {
                 exportRowThumbnail(for: row)
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(label(for: row.exportType))
-                        .font(MoveMarkTheme.Typography.sectionTitle)
+                        .font(MoveMarkTheme.Typography.cardTitle)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
                     HStack(spacing: 8) {
                         Text(formattedDate(row.createdAt))
-                            .font(MoveMarkTheme.Typography.footnote)
+                            .font(MoveMarkTheme.Typography.subheadlineMedium)
                             .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
                         Text("·")
-                            .font(MoveMarkTheme.Typography.footnote)
+                            .font(MoveMarkTheme.Typography.subheadlineMedium)
                             .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.5))
 
                         exportStatusLabel(status)
                     }
 
                     Text(shortPath(row.filePath))
-                        .font(MoveMarkTheme.Typography.caption)
+                        .font(MoveMarkTheme.Typography.footnote)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.78))
                         .lineLimit(1)
 
@@ -445,7 +493,7 @@ struct ExportHistoryView: View {
             HStack(spacing: 4) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 11))
-                    .foregroundStyle(MoveMarkTheme.Colors.primary)
+                    .foregroundStyle(MoveMarkTheme.Colors.semanticSuccess)
 
                 Text(status.displayLabel)
                     .font(MoveMarkTheme.Typography.caption)
@@ -453,9 +501,15 @@ struct ExportHistoryView: View {
             }
 
         case .verifying:
-            Text(status.displayLabel)
-                .font(MoveMarkTheme.Typography.caption)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 11))
+                    .foregroundStyle(MoveMarkTheme.Colors.semanticWarning)
+
+                Text(status.displayLabel)
+                    .font(MoveMarkTheme.Typography.caption)
+                    .foregroundStyle(MoveMarkTheme.Colors.semanticWarning.opacity(0.95))
+            }
 
         case .unknown:
             Text(status.displayLabel)
@@ -466,33 +520,44 @@ struct ExportHistoryView: View {
             HStack(spacing: 4) {
                 Image(systemName: "tray.fill")
                     .font(.system(size: 11))
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    .foregroundStyle(MoveMarkTheme.Colors.semanticWarning)
 
                 Text(status.displayLabel)
                     .font(MoveMarkTheme.Typography.caption)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    .foregroundStyle(MoveMarkTheme.Colors.semanticWarning.opacity(0.95))
             }
 
         case .processing:
             HStack(spacing: 4) {
                 Image(systemName: "clock.fill")
                     .font(.system(size: 11))
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    .foregroundStyle(MoveMarkTheme.Colors.semanticWarning)
 
                 Text(status.displayLabel)
                     .font(MoveMarkTheme.Typography.caption)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    .foregroundStyle(MoveMarkTheme.Colors.semanticWarning.opacity(0.95))
             }
 
-        case .missingPath, .invalidURL, .verificationFailed, .serverFailed:
+        case .missingPath, .invalidURL, .verificationFailed:
             HStack(spacing: 4) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 11))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(MoveMarkTheme.Colors.semanticWarning)
 
                 Text(status.displayLabel)
                     .font(MoveMarkTheme.Typography.caption)
-                    .foregroundStyle(.orange.opacity(0.95))
+                    .foregroundStyle(MoveMarkTheme.Colors.semanticWarning.opacity(0.95))
+            }
+
+        case .serverFailed:
+            HStack(spacing: 4) {
+                Image(systemName: "xmark.octagon.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(MoveMarkTheme.Colors.semanticDanger)
+
+                Text(status.displayLabel)
+                    .font(MoveMarkTheme.Typography.caption)
+                    .foregroundStyle(MoveMarkTheme.Colors.semanticDanger.opacity(0.95))
             }
         }
     }
@@ -505,9 +570,14 @@ struct ExportHistoryView: View {
                 let client = try makeAPIClient()
                 _ = try await client.fetchDownloadURL(exportId: row.id.uuidString, accessToken: accessToken)
                 verificationStatus[row.id] = .ready
+                MMHaptics.success()
             } catch let api as APIClientError {
                 if case .exportNotReady = api {
                     verificationStatus[row.id] = .processing
+                    MMHaptics.soft()
+                } else if case .exportFailed = api {
+                    verificationStatus[row.id] = .serverFailed
+                    MMHaptics.error()
                 } else {
                     verificationStatus[row.id] = .verificationFailed(
                         MoveMarkFlowMessage.exportOrAPIFailed(
@@ -515,6 +585,7 @@ struct ExportHistoryView: View {
                             fallback: "Verification failed. Try again."
                         )
                     )
+                    MMHaptics.error()
                 }
             } catch {
                 verificationStatus[row.id] = .verificationFailed(
@@ -523,6 +594,7 @@ struct ExportHistoryView: View {
                         fallback: "Verification failed. Try again."
                     )
                 )
+                MMHaptics.error()
             }
         }
     }
@@ -577,6 +649,8 @@ struct ExportHistoryView: View {
                     let fp = (item.filePath ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                     if fp.isEmpty {
                         nextVerification[item.id] = .missingPath
+                    } else {
+                        nextVerification[item.id] = .ready
                     }
                 }
             }
@@ -599,6 +673,7 @@ struct ExportHistoryView: View {
                 fallback: "Couldn’t load exports. Try again."
             )
             exports = []
+            MMHaptics.error()
         }
     }
 
@@ -617,11 +692,17 @@ struct ExportHistoryView: View {
                 showShareSheet = true
                 verificationStatus[row.id] = .ready
                 successBanner = "Download link ready — use Share to save or send."
+                MMHaptics.success()
             } catch let api as APIClientError {
                 if case .exportNotReady = api {
                     verificationStatus[row.id] = .processing
                     successBanner = nil
                     errorMessage = nil
+                } else if case .exportFailed = api {
+                    verificationStatus[row.id] = .serverFailed
+                    successBanner = nil
+                    errorMessage = MoveMarkFlowMessage.exportServerFailedHint
+                    MMHaptics.error()
                 } else {
                     let mapped = MoveMarkFlowMessage.exportOrAPIFailed(
                         api,
@@ -629,6 +710,7 @@ struct ExportHistoryView: View {
                     )
                     verificationStatus[row.id] = .verificationFailed(mapped)
                     errorMessage = mapped
+                    MMHaptics.error()
                 }
             } catch {
                 let mapped = MoveMarkFlowMessage.exportOrAPIFailed(
@@ -637,6 +719,7 @@ struct ExportHistoryView: View {
                 )
                 verificationStatus[row.id] = .verificationFailed(mapped)
                 errorMessage = mapped
+                MMHaptics.error()
             }
         }
     }
@@ -650,4 +733,9 @@ struct ExportHistoryView: View {
         let session = try await supabase.auth.session
         return session.accessToken
     }
+}
+
+extension Notification.Name {
+    /// Posted after a move-in export is queued from Walkthrough so ``ExportHistoryView`` can reload without switching tabs.
+    static let moveMarkExportsShouldRefresh = Notification.Name("MoveMark.exportsShouldRefresh")
 }

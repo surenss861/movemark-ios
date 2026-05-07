@@ -348,6 +348,7 @@ struct MaintenanceIssueDetailView: View {
                         capturedAt: Date()
                     )
                 } catch {
+                    await maintenanceRepo.removeOrphanUploadedAttachment(path: path)
                     errorMessage = MoveMarkFlowMessage.maintenancePhotoRecordFailed(error)
                     retryAction = { uploadPhotos(items) }
                     return

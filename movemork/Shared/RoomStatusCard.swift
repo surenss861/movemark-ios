@@ -158,18 +158,18 @@ struct RoomStatusCard: View {
                     .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(
                         needsMoreProof
-                            ? Color.orange.opacity(0.92)
+                            ? MoveMarkTheme.Colors.semanticWarning.opacity(0.92)
                             : MoveMarkTheme.Colors.textSecondary.opacity(0.88)
                     )
 
                 Text("\(photoCount) photos")
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.82))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.82))
 
                 if issueCount > 0 {
                     Text("\(issueCount) issues")
                         .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(Color.orange.opacity(0.92))
+                        .foregroundStyle(MoveMarkTheme.Colors.semanticWarning.opacity(0.92))
                 }
             }
         } else if isNext {

@@ -108,4 +108,21 @@ struct MaintenanceRepository {
         }
         return path
     }
+
+    /// Best-effort removal when storage upload succeeded but `evidence_files` insert failed (avoids orphan objects in `maintenance-media`).
+    func removeOrphanUploadedAttachment(path: String) async {
+        guard !path.isEmpty else { return }
+        _ = try? await supabase.storage
+            .from("maintenance-media")
+            .remove(paths: [path])
+    }
+
+    /// Deletes a maintenance issue row (e.g. when photo pipeline produced zero linked evidence after user attached photos).
+    func deleteIssue(id: UUID) async throws {
+        try await supabase
+            .from("maintenance_issues")
+            .delete()
+            .eq("id", value: id)
+            .execute()
+    }
 }

@@ -317,6 +317,7 @@ struct PropertyVaultView: View {
                 handleFileSelection(url: url, docType: pendingFileDocType)
             case .failure(let error):
                 uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
+                MMHaptics.error()
             }
         }
         .fullScreenCover(item: $documentQuickLook, onDismiss: {
@@ -512,11 +513,11 @@ struct PropertyVaultView: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(MoveMarkTheme.Colors.panel.opacity(0.80))
+        .background(MoveMarkTheme.Colors.surfaceInset.opacity(0.94))
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.48), lineWidth: 0.5)
+                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.52), lineWidth: 0.5)
         )
     }
 

@@ -54,6 +54,7 @@ struct VaultCoverExpandedTray: View {
                 RoundedRectangle(cornerRadius: 1)
                     .fill(MoveMarkTheme.Colors.primary.opacity(0.6))
                     .frame(width: max(0, geo.size.width * content.progress), height: 2)
+                    .animation(MMMotion.proofProgress, value: content.progress)
             }
         }
         .frame(height: 2)

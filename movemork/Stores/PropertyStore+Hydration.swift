@@ -24,8 +24,18 @@ extension PropertyStore {
         async let inspectionsTask = inspectionRepo.fetchInspections(propertyId: row.id)
         async let docRowsTask = documentRepo.fetchDocuments(propertyId: row.id)
         async let issuesTask = maintenanceRepo.fetchIssues(propertyId: row.id)
+        async let propertyEvidenceFilesTask = inspectionRepo.fetchEvidenceFiles(propertyId: row.id)
 
-        let (rooms, inspections, docRows, issues) = try await (roomsTask, inspectionsTask, docRowsTask, issuesTask)
+        let (rooms, inspections, docRows, issues, propertyEvidenceFiles) = try await (
+            roomsTask, inspectionsTask, docRowsTask, issuesTask, propertyEvidenceFilesTask
+        )
+
+        var maintenancePhotoCountByIssue: [UUID: Int] = [:]
+        for file in propertyEvidenceFiles {
+            if let mid = file.maintenanceIssueId {
+                maintenancePhotoCountByIssue[mid, default: 0] += 1
+            }
+        }
 
         // Support both legacy kebab-case and current snake_case values.
         let moveInIds = inspections.filter {
@@ -148,8 +158,8 @@ extension PropertyStore {
                 category: issueRow.category ?? "General",
                 details: issueRow.description ?? "",
                 status: issueRow.status == "resolved" ? .resolved : (issueRow.status == "follow_up" ? .followUp : .open),
-                landlordResponse: "",
-                photoCount: 0
+                landlordResponse: issueRow.landlordResponse ?? "",
+                photoCount: maintenancePhotoCountByIssue[issueRow.id] ?? 0
             )
         }
         return (record, maintenance)

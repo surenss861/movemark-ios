@@ -2,30 +2,53 @@
 //  MMEmptyState.swift
 //  movemork
 //
-//  MoveMark — Empty state card with CTA.
+//  Calm empty / guidance surface — one icon, clear title, supportive copy, optional CTA.
 //
 
 import SwiftUI
 
 struct MMEmptyState: View {
+    let systemImage: String
     let title: String
     let message: String
-    let buttonTitle: String
-    let action: () -> Void
+    var primaryTitle: String?
+    var primaryAction: (() -> Void)?
+
+    init(
+        systemImage: String,
+        title: String,
+        message: String,
+        primaryTitle: String? = nil,
+        primaryAction: (() -> Void)? = nil
+    ) {
+        self.systemImage = systemImage
+        self.title = title
+        self.message = message
+        self.primaryTitle = primaryTitle
+        self.primaryAction = primaryAction
+    }
 
     var body: some View {
-        MMCard {
+        MMCard(tone: .quiet, padding: 22, spacing: 16) {
             VStack(alignment: .leading, spacing: 14) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(MoveMarkTheme.Colors.accent.opacity(0.92))
+                    .symbolRenderingMode(.hierarchical)
+
                 Text(title)
-                    .font(.system(size: 22, weight: .bold))
+                    .font(MoveMarkTheme.Typography.cardTitle)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
                 Text(message)
-                    .font(.system(size: 16))
+                    .font(MoveMarkTheme.Typography.subheadline)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                MMButton(title: buttonTitle, action: action)
+                if let primaryTitle, let primaryAction {
+                    MMButton(title: primaryTitle, action: primaryAction, kind: .primary, size: .standard)
+                        .padding(.top, 4)
+                }
             }
         }
     }

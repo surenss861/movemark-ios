@@ -12,9 +12,13 @@ struct ProPaywallView: View {
     let reason: PaywallReason
     let onClose: () -> Void
 
+    @Environment(\.openURL) private var openURL
     @Environment(SubscriptionManager.self) private var subscriptionManager
     @State private var localErrorMessage: String? = nil
     @State private var selectedPackageID: String? = nil
+    @State private var restoreOutcomeMessage: String? = nil
+    /// False until the first `refresh()` tied to this paywall presentation finishes (avoids a one-frame “fake” plan placeholder).
+    @State private var initialOfferingsFetchCompleted = false
 
     /// Store product IDs — must match RevenueCat package products (App Store: monthly/yearly_subscription; Test Store mirror: testmonthly/testyearly).
     private static let monthlyProductIDs = ["monthly_subscription", "testmonthly"]
@@ -38,9 +42,9 @@ struct ProPaywallView: View {
                 }
             }
             .task {
-                if subscriptionManager.currentOffering == nil {
-                    await subscriptionManager.refresh()
-                }
+                initialOfferingsFetchCompleted = false
+                await subscriptionManager.refresh()
+                initialOfferingsFetchCompleted = true
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -57,8 +61,11 @@ struct ProPaywallView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Close")
+                    .disabled(subscriptionManager.isStoreKitBusy)
+                    .opacity(subscriptionManager.isStoreKitBusy ? 0.45 : 1)
                 }
             }
+            .interactiveDismissDisabled(subscriptionManager.isStoreKitBusy)
         }
     }
 
@@ -106,29 +113,41 @@ struct ProPaywallView: View {
                     .font(MoveMarkTheme.Typography.cardTitle)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
+                paywallRestoreSection
+                    .padding(.top, 10)
+
                 plansLoadSection
                     .padding(.top, 12)
 
-                if let local = localErrorMessage {
-                    MMErrorBanner(message: paywallBannerMessage(local))
-                        .padding(.top, 14)
-                } else if let err = subscriptionManager.lastErrorMessage {
-                    MMErrorBanner(message: paywallBannerMessage(err))
+                if !displayPackages.isEmpty {
+                    Text(
+                        "MoveMark Pro is an auto-renewing subscription (monthly or annual). Prices below come from the App Store. Apple processes payment and renewal."
+                    )
+                    .font(MoveMarkTheme.Typography.caption)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.84))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 10)
+                }
+
+                if paywallPlansUnavailable {
+                    plansUnavailableRecoveryBlock
+                } else if let local = localErrorMessage, !displayPackages.isEmpty {
+                    MMErrorBanner(message: paywallBannerMessage(local), retryTitle: nil, onRetry: nil)
                         .padding(.top, 14)
                 }
 
                 if let selectedPackage {
                     ZStack {
                         MMButton(
-                            title: subscriptionManager.isLoading ? "Starting…" : continuePurchaseTitle(for: selectedPackage),
+                            title: subscriptionManager.isStoreKitBusy ? "Starting…" : continuePurchaseTitle(for: selectedPackage),
                             action: { startPurchase(selectedPackage) },
                             kind: .primary,
                             size: .hero,
-                            isDisabled: subscriptionManager.isLoading
+                            isDisabled: subscriptionManager.isStoreKitBusy || subscriptionManager.isRefreshingOfferings
                         )
-                        .opacity(subscriptionManager.isLoading ? 0.7 : 1)
+                        .opacity(subscriptionManager.isStoreKitBusy ? 0.7 : 1)
 
-                        if subscriptionManager.isLoading {
+                        if subscriptionManager.isStoreKitBusy {
                             ProgressView()
                                 .tint(.white)
                         }
@@ -136,17 +155,8 @@ struct ProPaywallView: View {
                     .padding(.top, 16)
                 }
 
-                Button {
-                    restorePurchases()
-                } label: {
-                    Text("Restore purchases")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.92))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.plain)
-                .disabled(subscriptionManager.isLoading)
-                .padding(.top, 18)
+                paywallLegalLinks
+                    .padding(.top, 8)
 
                 Text("Auto-renews until cancelled. Manage or cancel in Settings › Apple ID › Subscriptions.")
                     .font(MoveMarkTheme.Typography.caption)
@@ -158,11 +168,139 @@ struct ProPaywallView: View {
         }
     }
 
-    private var isPlansLoadingIndicatorShowing: Bool {
-        subscriptionManager.isLoading &&
-            displayPackages.isEmpty &&
-            subscriptionManager.lastErrorMessage == nil &&
-            localErrorMessage == nil
+    /// Empty catalog after at least one paywall fetch finished — never show silent placeholders.
+    private var paywallPlansUnavailable: Bool {
+        displayPackages.isEmpty
+            && !subscriptionManager.isRefreshingOfferings
+            && initialOfferingsFetchCompleted
+    }
+
+    private var paywallRestoreSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Already subscribed on this Apple ID? Restore before purchasing again.")
+                .font(MoveMarkTheme.Typography.footnote)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.82))
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                restorePurchases()
+            } label: {
+                Text(subscriptionManager.isStoreKitBusy ? "Restoring purchases…" : "Restore purchases")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.92))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .disabled(subscriptionManager.isStoreKitBusy)
+
+            if let restoreOutcomeMessage {
+                MMCompactCallout(
+                    systemImage: "info.circle.fill",
+                    title: "Restore result",
+                    message: restoreOutcomeMessage
+                )
+            }
+        }
+    }
+
+    private var plansUnavailableTechnicalDetail: String {
+        if let local = localErrorMessage, !local.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return paywallBannerMessage(local)
+        }
+        let server = subscriptionManager.lastErrorMessage ?? ""
+        if !server.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return paywallBannerMessage(server)
+        }
+        return "If this persists, confirm the Paid Apps Agreement is active in App Store Connect and that subscription products are attached to your RevenueCat offering."
+    }
+
+    private var privacyPolicyURL: URL? { legalURL(forInfoKey: "LegalPrivacyPolicyURL") }
+
+    private var termsOfUseURL: URL? { legalURL(forInfoKey: "LegalTermsURL") }
+
+    private func legalURL(forInfoKey key: String) -> URL? {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.hasPrefix("$("), let url = URL(string: trimmed) else { return nil }
+        return url
+    }
+
+    @ViewBuilder
+    private var paywallLegalLinks: some View {
+        if termsOfUseURL != nil || privacyPolicyURL != nil {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Legal")
+                    .font(MoveMarkTheme.Typography.caption)
+                    .tracking(0.9)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    .textCase(.uppercase)
+
+                HStack(spacing: 20) {
+                    if let u = termsOfUseURL {
+                        Button {
+                            openURL(u)
+                        } label: {
+                            Text("Terms of Use")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.92))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if let p = privacyPolicyURL {
+                        Button {
+                            openURL(p)
+                        } label: {
+                            Text("Privacy Policy")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.92))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var plansUnavailableRecoveryBlock: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Plans unavailable")
+                .font(MoveMarkTheme.Typography.cardTitle)
+                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+
+            Text("MoveMark couldn’t load subscription plans right now. You can continue on Free and try again later.")
+                .font(MoveMarkTheme.Typography.subheadline)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(plansUnavailableTechnicalDetail)
+                .font(MoveMarkTheme.Typography.caption)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.78))
+                .fixedSize(horizontal: false, vertical: true)
+
+            MMButton(
+                title: subscriptionManager.isRefreshingOfferings ? "Trying…" : "Try again",
+                action: {
+                    localErrorMessage = nil
+                    restoreOutcomeMessage = nil
+                    Task { @MainActor in
+                        await subscriptionManager.refresh()
+                    }
+                },
+                kind: .primary,
+                size: .standard,
+                isDisabled: subscriptionManager.isRefreshingOfferings || subscriptionManager.isStoreKitBusy
+            )
+
+            MMButton(
+                title: "Continue on Free",
+                action: { onClose() },
+                kind: .secondary,
+                size: .standard,
+                isDisabled: subscriptionManager.isStoreKitBusy
+            )
+        }
+        .padding(.top, 14)
     }
 
     @ViewBuilder
@@ -173,83 +311,26 @@ struct ProPaywallView: View {
                     pricingOption(package)
                 }
             }
-        } else if isPlansLoadingIndicatorShowing {
-            HStack(spacing: 12) {
-                ProgressView()
-                    .tint(MoveMarkTheme.Colors.primary)
+        } else if subscriptionManager.isRefreshingOfferings || !initialOfferingsFetchCompleted {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    ProgressView()
+                        .tint(MoveMarkTheme.Colors.primary)
 
-                Text("Loading plans…")
-                    .font(MoveMarkTheme.Typography.subheadline)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    Text("Loading plans…")
+                        .font(MoveMarkTheme.Typography.subheadlineMedium)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.92))
+                }
+                Text("Fetching subscription options from the App Store. This usually takes a few seconds.")
+                    .font(MoveMarkTheme.Typography.footnote)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.82))
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 8)
         } else {
-            placeholderPlanRows()
+            EmptyView()
         }
-    }
-
-    private func placeholderPlanRows() -> some View {
-        VStack(spacing: 12) {
-            placeholderPlanRow(
-                title: "Yearly",
-                subtitle: "Best value when you stay a full lease term",
-                isBestValue: true
-            )
-
-            placeholderPlanRow(
-                title: "Monthly",
-                subtitle: "Full Pro access, billed monthly",
-                isBestValue: false
-            )
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Plans unavailable. Yearly and Monthly placeholders shown.")
-    }
-
-    private func placeholderPlanRow(title: String, subtitle: String, isBestValue: Bool) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Text(title)
-                        .font(MoveMarkTheme.Typography.subheadlineMedium)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.82))
-
-                    if isBestValue {
-                        Text("Best value")
-                            .font(MoveMarkTheme.Typography.caption)
-                            .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.88))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(MoveMarkTheme.Colors.primary.opacity(0.18))
-                            .clipShape(Capsule())
-                    }
-                }
-
-                Text("—")
-                    .font(MoveMarkTheme.Typography.subheadline)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.58))
-
-                Text(subtitle)
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.74))
-            }
-
-            Spacer(minLength: 8)
-
-            Circle()
-                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.78), lineWidth: 1)
-                .frame(width: 22, height: 22)
-                .padding(.top, 2)
-        }
-        .padding(14)
-        .background(MoveMarkTheme.Colors.fieldFill.opacity(0.96))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.82), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .allowsHitTesting(false)
     }
 
     private func paywallBannerMessage(_ raw: String) -> String {
@@ -357,6 +438,12 @@ struct ProPaywallView: View {
         } label: {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
+                    Text("MoveMark Pro")
+                        .font(MoveMarkTheme.Typography.caption)
+                        .tracking(0.85)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        .textCase(.uppercase)
+
                     HStack(spacing: 8) {
                         Text(planDisplayTitle(for: package))
                             .font(MoveMarkTheme.Typography.subheadlineMedium)
@@ -371,6 +458,13 @@ struct ProPaywallView: View {
                                 .background(MoveMarkTheme.Colors.primary.opacity(0.16))
                                 .clipShape(Capsule())
                         }
+                    }
+
+                    if let storeTitle = storeProductListingTitle(for: package, product: product) {
+                        Text(storeTitle)
+                            .font(MoveMarkTheme.Typography.footnote)
+                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Text(priceCaption(for: package, product: product))
@@ -411,6 +505,19 @@ struct ProPaywallView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(
+            "MoveMark Pro, \(planDisplayTitle(for: package)), \(priceCaption(for: package, product: product))"
+        )
+    }
+
+    /// Shown when App Store localized title adds detail beyond our Monthly/Yearly label.
+    private func storeProductListingTitle(for package: Package, product: StoreProduct) -> String? {
+        let raw = product.localizedTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return nil }
+        let plan = planDisplayTitle(for: package)
+        if raw.caseInsensitiveCompare(plan) == .orderedSame { return nil }
+        if raw.caseInsensitiveCompare("MoveMark Pro") == .orderedSame { return nil }
+        return raw
     }
 
     private func benefitRow(_ title: String, _ subtitle: String) -> some View {
@@ -535,6 +642,7 @@ struct ProPaywallView: View {
 
     private func startPurchase(_ package: Package) {
         localErrorMessage = nil
+        restoreOutcomeMessage = nil
 
         Task { @MainActor in
             do {
@@ -548,12 +656,15 @@ struct ProPaywallView: View {
 
     private func restorePurchases() {
         localErrorMessage = nil
+        restoreOutcomeMessage = nil
 
         Task { @MainActor in
             do {
                 try await subscriptionManager.restorePurchases()
                 if subscriptionManager.hasPro {
                     onClose()
+                } else {
+                    restoreOutcomeMessage = "No active subscription was found for this Apple ID."
                 }
             } catch {
                 localErrorMessage = userFacingPaywallError(from: error)

@@ -21,6 +21,7 @@ struct RoomListView: View {
     @State private var errorMessage: String? = nil
     @State private var lastErrorFromExport = false
     @State private var exportSuccessBanner: String? = nil
+    @State private var roomsListAppeared = false
 
     private var rooms: [RoomRecord] {
         propertyStore.currentProperty?.rooms ?? []
@@ -82,6 +83,9 @@ struct RoomListView: View {
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
                 .padding(.top, 22)
                 .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
+            }
+            .onAppear {
+                roomsListAppeared = true
             }
         }
         .sheet(isPresented: $showPaywall) {
@@ -217,20 +221,17 @@ struct RoomListView: View {
             }
 
             if rooms.isEmpty {
-                MMCard(tone: .quiet, padding: 18, spacing: 8) {
-                    Text("No rooms yet")
-                        .font(MoveMarkTheme.Typography.sectionTitle)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                    Text("Tap Add room above to add your first room, then tap it to capture proof.")
-                        .font(MoveMarkTheme.Typography.subheadline)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                }
+                MMEmptyState(
+                    systemImage: "door.left.hand.open",
+                    title: "Start with your move-in walkthrough",
+                    message: "Add rooms for this rental, then open each one to capture dated photos and notes. That record is your baseline if anything is disputed later."
+                )
             }
 
             VStack(spacing: 10) {
                 ForEach(Array(rooms.enumerated()), id: \.element.id) { idx, room in
                     roomRow(index: idx + 1, room: room)
+                        .mmStaggeredAppear(isVisible: roomsListAppeared, index: idx)
                 }
             }
         }
@@ -298,7 +299,7 @@ struct RoomListView: View {
         return Button {
             path.append(.roomDetail(roomID: room.id))
         } label: {
-            MMCard(tone: .quiet, padding: 14, spacing: 0) {
+            MMCard(tone: .artifact, padding: 16, spacing: 0) {
                 HStack(alignment: .center, spacing: 14) {
                     ZStack {
                         Circle()
@@ -318,11 +319,12 @@ struct RoomListView: View {
                             )
                     }
 
-                    VStack(alignment: .leading, spacing: 5) {
+                    VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 8) {
                             Text(room.name)
-                                .font(MoveMarkTheme.Typography.sectionTitle)
+                                .font(MoveMarkTheme.Typography.cardTitle)
                                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                                .lineLimit(2)
 
                             if isNext && !isComplete {
                                 MMPill(text: "Next", tone: .warning)
@@ -335,12 +337,12 @@ struct RoomListView: View {
                                 + (issueCount > 0 ? ["\(issueCount) \(issueCount == 1 ? "issue" : "issues")"] : [])
 
                             Text(parts.isEmpty ? "Ready to review" : parts.joined(separator: " · "))
-                                .font(MoveMarkTheme.Typography.footnote)
+                                .font(MoveMarkTheme.Typography.subheadline)
                                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                                 .lineLimit(2)
                         } else {
-                            Text("Not started")
-                                .font(MoveMarkTheme.Typography.footnote)
+                            Text("Not started — tap to capture proof")
+                                .font(MoveMarkTheme.Typography.subheadline)
                                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         }
                     }
@@ -348,14 +350,14 @@ struct RoomListView: View {
                     Spacer(minLength: 0)
 
                     Image(systemName: isComplete ? "checkmark.circle.fill" : "chevron.right")
-                        .font(.system(size: isComplete ? 20 : 14, weight: .medium))
+                        .font(.system(size: isComplete ? 22 : 14, weight: .medium))
                         .foregroundStyle(
                             isComplete
-                                ? MoveMarkTheme.Colors.primary
+                                ? MoveMarkTheme.Colors.semanticSuccess
                                 : MoveMarkTheme.Colors.textSecondary
                         )
                 }
-                .frame(minHeight: 56)
+                .frame(minHeight: 60)
             }
         }
         .buttonStyle(.plain)
@@ -422,10 +424,12 @@ struct RoomListView: View {
                 lastErrorFromExport = false
                 exportSuccessBanner = MoveMarkFlowMessage.exportQueuedHint
                 MMHaptics.success()
+                NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
             } catch {
                 exportSuccessBanner = nil
                 errorMessage = userFacingExportError(from: error)
                 lastErrorFromExport = true
+                MMHaptics.error()
             }
         }
     }

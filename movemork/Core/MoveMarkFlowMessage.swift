@@ -17,6 +17,20 @@ struct PropertyMutationOutcome: Sendable {
 struct MaintenanceSubmitOutcome: Sendable {
     var inserted: MaintenanceIssueRow
     var listRefreshFailed: Bool
+    /// Some (not all) photo uploads or DB links failed; issue still created with remaining photos.
+    var hadPartialPhotoLoss: Bool
+}
+
+/// User attached maintenance photos but none could be linked; issue insert was rolled back.
+enum MaintenanceAttachmentPipelineError: LocalizedError {
+    case noPhotosLinked
+
+    var errorDescription: String? {
+        switch self {
+        case .noPhotosLinked:
+            return "Couldn’t save issue photos. Check your connection and try again."
+        }
+    }
 }
 
 /// All photo attempts failed to produce an `evidence_files` row (inspection item is deleted). Surfaces **storage** vs **database** so QA/logs align with `InspectionPhotoPipeline`.
@@ -56,6 +70,9 @@ enum MoveMarkFlowMessage {
     static let proofPreviewTapRetry = "Couldn’t load preview. Tap to retry."
 
     static let incidentSavedRefreshStale = "Incident saved. If it doesn’t show below, go back and open Maintenance again."
+
+    static let maintenancePartialPhotosSaved =
+        "Issue saved. Some photos didn’t upload or attach—only the photos that succeeded are on this issue. You can add more from the issue detail."
 
     static let maintenanceEvidencePreviewHint = " Photos are saved; previews may take a moment. Leave and return if images don’t appear."
 
@@ -106,6 +123,9 @@ enum MoveMarkFlowMessage {
     // MARK: - Maintenance
 
     static func maintenanceComposerFailed(_ error: Error) -> String {
+        if error is MaintenanceAttachmentPipelineError {
+            return error.localizedDescription
+        }
         if isLikelyStorageFailure(error) {
             return "Couldn’t upload photos. The incident may still be saved without images—check the list, or try again."
         }
@@ -257,6 +277,14 @@ enum MoveMarkFlowMessage {
             return "Your profile couldn’t be updated. Please try again."
         }
         return UserFacingDatabaseError.message(from: error, fallback: "Couldn’t update your name. Try again.", intent: .mutate)
+    }
+
+    static func subscriptionRestoreFailed(_ error: Error) -> String {
+        let raw = error.localizedDescription.lowercased()
+        if raw.contains("network") || raw.contains("offline") || raw.contains("internet") {
+            return "No connection. Check your internet and try again."
+        }
+        return "Couldn’t restore purchases. Try again in a moment."
     }
 
     static func onboardingProfileSaveFailed(_ error: Error) -> String {

@@ -91,6 +91,17 @@ struct AuthContainerView: View {
 
     private var headerBlock: some View {
         VStack(alignment: .leading, spacing: 18) {
+            Image("MoveMarkLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.5), lineWidth: 0.8)
+                )
+                .accessibilityHidden(true)
+
             Button {
                 dismiss()
             } label: {
@@ -250,7 +261,7 @@ struct AuthContainerView: View {
     private func submit() {
         guard !isLoading else { return }
         if mode == .signUp && !hasAcceptedLegal {
-            errorMessage = "Please accept the Terms and Privacy Policy."
+            errorMessage = "Please accept the Terms of Use and Privacy Policy."
             return
         }
         isLoading = true
@@ -307,13 +318,13 @@ struct AuthContainerView: View {
                 .accessibilityLabel(hasAcceptedLegal ? "Accepted legal terms" : "Accept legal terms")
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("I agree to the Terms of Service and acknowledge the Privacy Policy.")
+                    Text("I agree to the Terms of Use and acknowledge the Privacy Policy.")
                         .font(.system(size: 14))
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.85))
                         .fixedSize(horizontal: false, vertical: true)
 
                     HStack(spacing: 14) {
-                        Button("Terms of Service") {
+                        Button("Terms of Use") {
                             if let termsURL { openURL(termsURL) }
                         }
                         .buttonStyle(.plain)

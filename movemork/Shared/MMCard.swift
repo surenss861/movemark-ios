@@ -12,6 +12,8 @@ struct MMCard<Content: View>: View {
         case elevated
         case standard
         case quiet
+        /// Dense lists / proof rows: lifted from background, calm stroke (artifact-like).
+        case artifact
 
         var fill: Color {
             switch self {
@@ -21,6 +23,8 @@ struct MMCard<Content: View>: View {
                 return MoveMarkTheme.Colors.panel.opacity(0.94)
             case .quiet:
                 return MoveMarkTheme.Colors.panel.opacity(0.82)
+            case .artifact:
+                return MoveMarkTheme.Colors.surfaceInset.opacity(0.96)
             }
         }
 
@@ -32,6 +36,8 @@ struct MMCard<Content: View>: View {
                 return 0.75
             case .quiet:
                 return 0.45
+            case .artifact:
+                return 0.58
             }
         }
 
@@ -43,6 +49,8 @@ struct MMCard<Content: View>: View {
                 return 0.10
             case .quiet:
                 return 0.0
+            case .artifact:
+                return 0.08
             }
         }
     }
@@ -77,7 +85,7 @@ struct MMCard<Content: View>: View {
             )
             .stroke(
                 MoveMarkTheme.Colors.panelStroke.opacity(tone.strokeOpacity),
-                lineWidth: tone == .quiet ? 0.8 : 1
+                lineWidth: (tone == .quiet || tone == .artifact) ? 0.8 : 1
             )
         )
         .clipShape(
@@ -88,9 +96,9 @@ struct MMCard<Content: View>: View {
         )
         .shadow(
             color: .black.opacity(tone.shadowOpacity),
-            radius: tone == .elevated ? 18 : 10,
+            radius: tone == .elevated ? 18 : (tone == .artifact ? 12 : 10),
             x: 0,
-            y: tone == .elevated ? 8 : 4
+            y: tone == .elevated ? 8 : (tone == .artifact ? 5 : 4)
         )
     }
 }

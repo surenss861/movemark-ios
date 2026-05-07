@@ -151,10 +151,7 @@ struct EvidenceCaptureView: View {
                 evidence: entry,
                 roomName: roomName,
                 onSave: { title, notes, tags, condition in
-                    Task {
-                        await saveEditedEvidence(entryId: entry.id, title: title, notes: notes, tags: tags, condition: condition)
-                    }
-                    editingEntry = nil
+                    await saveEditedEvidence(entryId: entry.id, title: title, notes: notes, tags: tags, condition: condition)
                 },
                 onDismiss: { editingEntry = nil }
             )
@@ -163,10 +160,7 @@ struct EvidenceCaptureView: View {
             AppendPhotosSheet(
                 entry: entry,
                 onAdd: { photoData in
-                    Task {
-                        await appendPhotos(to: entry.id, photoData: photoData)
-                    }
-                    appendPhotosEntry = nil
+                    await appendPhotos(to: entry.id, photoData: photoData)
                 },
                 onDismiss: { appendPhotosEntry = nil }
             )
@@ -214,15 +208,22 @@ struct EvidenceCaptureView: View {
 private struct EditEvidenceSheet: View {
     let evidence: EvidenceRecord
     let roomName: String
-    let onSave: (String, String, [String], RoomRecord.ConditionRating) -> Void
+    let onSave: (String, String, [String], RoomRecord.ConditionRating) async -> String?
     let onDismiss: () -> Void
 
     @State private var title: String
     @State private var notes: String
     @State private var selectedTags: Set<String>
     @State private var condition: RoomRecord.ConditionRating
+    @State private var isSaving = false
+    @State private var localEditError: String?
 
-    init(evidence: EvidenceRecord, roomName: String, onSave: @escaping (String, String, [String], RoomRecord.ConditionRating) -> Void, onDismiss: @escaping () -> Void) {
+    init(
+        evidence: EvidenceRecord,
+        roomName: String,
+        onSave: @escaping (String, String, [String], RoomRecord.ConditionRating) async -> String?,
+        onDismiss: @escaping () -> Void
+    ) {
         self.evidence = evidence
         self.roomName = roomName
         self.onSave = onSave
@@ -236,55 +237,233 @@ private struct EditEvidenceSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    MMTextField(title: "Title", placeholder: "e.g. North wall", text: $title)
-                    MMTextField(title: "Notes", placeholder: "Details", text: $notes)
-                    tagPicker
-                    Picker("Condition", selection: $condition) {
-                        ForEach(RoomRecord.ConditionRating.allCases, id: \.self) { r in
-                            Text(r.rawValue).tag(r)
+                VStack(alignment: .leading, spacing: 18) {
+                    MMCard(tone: .artifact, padding: 18, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Edit proof")
+                                    .font(MoveMarkTheme.Typography.cardTitle)
+                                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+
+                                Text("Update the title, notes, issue markers, and condition for this saved entry.")
+                                    .font(MoveMarkTheme.Typography.footnote)
+                                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.82))
+                            }
+
+                            if evidence.photoCount > 0 {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Photos on file")
+                                        .font(MoveMarkTheme.Typography.caption)
+                                        .tracking(0.9)
+                                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                                        .textCase(.uppercase)
+
+                                    PhotoStripView(placeholderCount: evidence.photoCount)
+                                        .padding(12)
+                                        .background(MoveMarkTheme.Colors.surfaceInset.opacity(0.65))
+                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.42), lineWidth: 0.8)
+                                        )
+                                }
+                            }
+
+                            VStack(alignment: .leading, spacing: 16) {
+                                MMTextField(title: "Entry title", placeholder: "e.g. North wall", text: $title)
+                                MMTextField(title: "Notes", placeholder: "What matters, where it is", text: $notes)
+
+                                issueTagPicker
+
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text("Condition")
+                                        .font(MoveMarkTheme.Typography.caption)
+                                        .tracking(0.9)
+                                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                                        .textCase(.uppercase)
+
+                                    Picker("Condition", selection: $condition) {
+                                        ForEach(RoomRecord.ConditionRating.allCases, id: \.self) { r in
+                                            Text(r.rawValue).tag(r)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                }
+                                .padding(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(MoveMarkTheme.Colors.surfaceInset.opacity(0.55))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.38), lineWidth: 0.8)
+                                )
+                            }
+                            .disabled(isSaving)
+
+                            if let localEditError {
+                                MMErrorBanner(
+                                    message: localEditError,
+                                    retryTitle: MMCopy.tryAgain,
+                                    onRetry: {
+                                        Task { await commitSave() }
+                                    }
+                                )
+                            }
                         }
                     }
-                    .pickerStyle(.segmented)
                 }
-                .padding()
+                .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
+                .padding(.vertical, 16)
+                .padding(.bottom, 88)
             }
-            .navigationTitle("Edit entry")
+            .background(MoveMarkTheme.Colors.background.ignoresSafeArea())
+            .navigationTitle("Edit proof")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { onDismiss() }
+                        .disabled(isSaving)
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        onSave(
-                            title.isEmpty ? roomName : title,
-                            notes,
-                            Array(selectedTags),
-                            condition
-                        )
-                    }
+            }
+            .safeAreaInset(edge: .bottom) {
+                editSaveChrome
+            }
+            .interactiveDismissDisabled(isSaving)
+        }
+    }
+
+    private var issueTagPicker: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Issue tags")
+                    .font(.system(size: 13.5, weight: .medium))
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.92))
+
+                Text(
+                    selectedTags.isEmpty
+                        ? "Optional damage markers"
+                        : "\(selectedTags.count) selected"
+                )
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.68))
+            }
+
+            FlowLayout(spacing: 8) {
+                ForEach(fixedIssueTags, id: \.self) { tag in
+                    tagChip(tag)
                 }
             }
         }
     }
 
-    private var tagPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Issue tags")
-                .font(MoveMarkTheme.Typography.caption)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-            FlowLayout(spacing: 8) {
-                ForEach(fixedIssueTags, id: \.self) { tag in
-                    Button {
-                        if selectedTags.contains(tag) { selectedTags.remove(tag) }
-                        else { selectedTags.insert(tag) }
-                    } label: {
-                        MMPill(text: tag, tone: selectedTags.contains(tag) ? .warning : .neutral)
-                    }
-                    .buttonStyle(.plain)
-                }
+    @ViewBuilder
+    private func tagChip(_ tag: String) -> some View {
+        let isSelected = selectedTags.contains(tag)
+
+        Button {
+            MMHaptics.selection()
+            if isSelected {
+                selectedTags.remove(tag)
+            } else {
+                selectedTags.insert(tag)
             }
+        } label: {
+            Text(tag)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(
+                    isSelected
+                        ? MoveMarkTheme.Colors.textPrimary
+                        : MoveMarkTheme.Colors.textSecondary.opacity(0.76)
+                )
+                .padding(.horizontal, 13)
+                .frame(height: 34)
+                .background(
+                    Capsule()
+                        .fill(
+                            isSelected
+                                ? Color.white.opacity(0.10)
+                                : Color.white.opacity(0.03)
+                        )
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            isSelected
+                                ? MoveMarkTheme.Colors.primary.opacity(0.22)
+                                : MoveMarkTheme.Colors.panelStroke.opacity(0.38),
+                            lineWidth: 0.8
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var editSaveChrome: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(editPrimaryChromeLine)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+
+                Text("Updates this saved proof entry.")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.78))
+            }
+
+            Spacer(minLength: 0)
+
+            Button {
+                Task { await commitSave() }
+            } label: {
+                Text(isSaving ? "Saving…" : "Save changes")
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.98))
+                    .padding(.horizontal, 16)
+                    .frame(height: 40)
+                    .background(
+                        Capsule()
+                            .fill(MoveMarkTheme.Colors.primary.opacity(isSaving ? 0.72 : 0.90))
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(isSaving)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(
+            ZStack {
+                MoveMarkTheme.Colors.surfaceInset.opacity(0.88)
+                MoveMarkTheme.Colors.background.opacity(0.55)
+            }
+        )
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color.white.opacity(0.055))
+                .frame(height: 0.6)
+        }
+        .shadow(color: .black.opacity(0.35), radius: 14, y: -4)
+    }
+
+    private var editPrimaryChromeLine: String {
+        if isSaving { return "Saving changes…" }
+        return "Review changes"
+    }
+
+    private func commitSave() async {
+        localEditError = nil
+        isSaving = true
+        let err = await onSave(
+            title.isEmpty ? roomName : title,
+            notes,
+            Array(selectedTags),
+            condition
+        )
+        isSaving = false
+        if let err {
+            localEditError = err
+        } else {
+            onDismiss()
         }
     }
 }
@@ -292,60 +471,211 @@ private struct EditEvidenceSheet: View {
 // MARK: - Append photos sheet
 private struct AppendPhotosSheet: View {
     let entry: EvidenceRecord
-    let onAdd: ([Data]) -> Void
+    let onAdd: ([Data]) async -> String?
     let onDismiss: () -> Void
 
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var loadedImages: [UIImage] = []
     @State private var isUploading = false
+    @State private var localError: String?
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Add photos to \"\(entry.title)\"")
-                    .font(MoveMarkTheme.Typography.sectionTitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    MMCard(tone: .artifact, padding: 18, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Add photos")
+                                    .font(MoveMarkTheme.Typography.cardTitle)
+                                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                PhotosPicker(selection: $selectedItems, maxSelectionCount: 20, matching: .images) {
-                    Text(loadedImages.isEmpty ? "Select photos" : "\(loadedImages.count) photos selected")
-                        .font(MoveMarkTheme.Typography.subheadlineMedium)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 48)
-                        .background(MoveMarkTheme.Colors.fieldFill)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .disabled(isUploading)
-                .onChange(of: selectedItems) { _, new in
-                    loadItems(new)
-                }
+                                Text("Append to “\(entry.title)”. New shots upload with this entry’s record.")
+                                    .font(MoveMarkTheme.Typography.footnote)
+                                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.82))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
 
-                if !loadedImages.isEmpty {
-                    Text("\(loadedImages.count) photo(s) will be added to this entry.")
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                            if entry.photoCount > 0 {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Current photos on entry")
+                                        .font(MoveMarkTheme.Typography.caption)
+                                        .tracking(0.9)
+                                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                                        .textCase(.uppercase)
+
+                                    PhotoStripView(placeholderCount: entry.photoCount)
+                                        .padding(12)
+                                        .background(MoveMarkTheme.Colors.surfaceInset.opacity(0.55))
+                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.38), lineWidth: 0.8)
+                                        )
+                                }
+                            }
+
+                            PhotosPicker(selection: $selectedItems, maxSelectionCount: 20, matching: .images) {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "photo.on.rectangle.angled")
+                                        .font(.system(size: 16, weight: .semibold))
+                                    Text(loadedImages.isEmpty ? "Choose photos from library" : "\(loadedImages.count) new photo\(loadedImages.count == 1 ? "" : "s") selected")
+                                        .font(MoveMarkTheme.Typography.subheadlineMedium)
+                                }
+                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 52)
+                                .background(MoveMarkTheme.Colors.fieldFill.opacity(0.88))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.65), lineWidth: 0.9)
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            }
+                            .disabled(isUploading)
+                            .onChange(of: selectedItems) { _, new in
+                                loadItems(new)
+                            }
+
+                            if loadedImages.isEmpty {
+                                MMCompactCallout(
+                                    systemImage: "photo.badge.plus",
+                                    title: "No new photos selected",
+                                    message: "Pick one or more images. They’ll upload as part of this proof entry."
+                                )
+                            } else {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    HStack {
+                                        Text("\(loadedImages.count) new photo\(loadedImages.count == 1 ? "" : "s") ready")
+                                            .font(MoveMarkTheme.Typography.subheadlineMedium)
+                                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.92))
+
+                                        Spacer()
+
+                                        MMPill(text: "Ready to append", tone: .success)
+                                    }
+
+                                    PhotoStripView(images: loadedImages)
+                                        .padding(12)
+                                        .background(MoveMarkTheme.Colors.surfaceInset.opacity(0.65))
+                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.4), lineWidth: 0.8)
+                                        )
+                                }
+                            }
+
+                            if let localError {
+                                MMErrorBanner(
+                                    message: localError,
+                                    retryTitle: MMCopy.tryAgain,
+                                    onRetry: { Task { await commitAppend() } }
+                                )
+                            }
+                        }
+                    }
                 }
+                .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
+                .padding(.vertical, 16)
+                .padding(.bottom, 88)
             }
-            .padding()
+            .background(MoveMarkTheme.Colors.background.ignoresSafeArea())
             .navigationTitle("Add photos")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { onDismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
-                        let data = loadedImages.compactMap { $0.jpegData(compressionQuality: 0.82) }
-                        if !data.isEmpty {
-                            isUploading = true
-                            onAdd(data)
-                        } else {
-                            onDismiss()
-                        }
-                    }
-                    .disabled(loadedImages.isEmpty || isUploading)
+                        .disabled(isUploading)
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                appendBottomChrome
+            }
+            .interactiveDismissDisabled(isUploading)
+        }
+    }
+
+    private var appendBottomChrome: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(bottomPrimaryLine)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(bottomPrimaryColor)
+
+                Text("Appends to this entry’s gallery.")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.78))
+            }
+
+            Spacer(minLength: 0)
+
+            Button {
+                Task { await commitAppend() }
+            } label: {
+                Text(isUploading ? "Adding…" : "Add to entry")
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(.white.opacity(loadedImages.isEmpty ? 0.72 : 0.98))
+                    .padding(.horizontal, 14)
+                    .frame(height: 40)
+                    .background(
+                        Capsule()
+                            .fill(
+                                loadedImages.isEmpty
+                                    ? Color.white.opacity(0.10)
+                                    : MoveMarkTheme.Colors.primary.opacity(isUploading ? 0.72 : 0.90)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(loadedImages.isEmpty || isUploading)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(
+            ZStack {
+                MoveMarkTheme.Colors.surfaceInset.opacity(0.88)
+                MoveMarkTheme.Colors.background.opacity(0.55)
+            }
+        )
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color.white.opacity(0.055))
+                .frame(height: 0.6)
+        }
+        .shadow(color: .black.opacity(0.35), radius: 14, y: -4)
+    }
+
+    private var bottomPrimaryLine: String {
+        if isUploading { return "Adding photos…" }
+        if loadedImages.isEmpty { return "Select photos to continue" }
+        return "\(loadedImages.count) photo\(loadedImages.count == 1 ? "" : "s") ready to append"
+    }
+
+    private var bottomPrimaryColor: Color {
+        if loadedImages.isEmpty, !isUploading {
+            return MoveMarkTheme.Colors.semanticWarning.opacity(0.95)
+        }
+        return MoveMarkTheme.Colors.textPrimary
+    }
+
+    private func commitAppend() async {
+        localError = nil
+        let data = loadedImages.compactMap { $0.jpegData(compressionQuality: 0.82) }
+        guard !data.isEmpty else {
+            MMHaptics.warning()
+            localError = "Choose at least one photo to add."
+            return
+        }
+
+        isUploading = true
+        let err = await onAdd(data)
+        isUploading = false
+
+        if let err {
+            localError = err
+        } else {
+            onDismiss()
         }
     }
 
@@ -367,6 +697,7 @@ private struct AppendPhotosSheet: View {
                 }
             }
             loadedImages = images
+            localError = nil
         }
     }
 }

@@ -33,6 +33,7 @@ struct ProgressRingView: View {
                     style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
+                .animation(MMMotion.proofProgress, value: clamped)
 
             if let label {
                 Text(label)

@@ -25,75 +25,75 @@ struct EvidenceSavedProofSection: View {
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
             if existingEntries.isEmpty {
-                MMCard(tone: .quiet, padding: 16, spacing: 8) {
-                    Text("No saved proof yet")
-                        .font(MoveMarkTheme.Typography.sectionTitle)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                    Text("Saved entries for this room will appear here.")
-                        .font(MoveMarkTheme.Typography.subheadline)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                }
+                MMCompactCallout(
+                    systemImage: "doc.text.image",
+                    title: moveOutMode ? "No move-out entries yet" : "No saved entries yet",
+                    message: "After you save proof with the bar below, each entry appears here with photos, condition, and tags so you can edit or add more later."
+                )
             } else {
                 VStack(spacing: 10) {
                     ForEach(existingEntries) { evidence in
                         savedProofRow(evidence)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .offset(y: 10)),
+                                removal: .opacity
+                            ))
                     }
                 }
+                .animation(MMMotion.cardReveal, value: existingEntries.map(\.id.uuidString).joined(separator: ","))
             }
         }
     }
 
     private func savedProofRow(_ evidence: EvidenceRecord) -> some View {
-        MMCard(tone: .quiet, padding: 14, spacing: 12) {
+        MMCard(tone: .artifact, padding: 16, spacing: 12) {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(evidence.title)
-                            .font(MoveMarkTheme.Typography.sectionTitle)
-                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(evidence.title)
+                        .font(MoveMarkTheme.Typography.cardTitle)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                        .lineLimit(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                        Text(evidence.createdAt.formatted(date: .abbreviated, time: .shortened))
-                            .font(MoveMarkTheme.Typography.footnote)
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    }
-
-                    Spacer()
-
-                    Text("\(evidence.photoCount) photo\(evidence.photoCount == 1 ? "" : "s")")
-                        .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        .padding(.horizontal, 10)
-                        .frame(height: 26)
-                        .background(Color.white.opacity(0.05))
-                        .clipShape(Capsule())
+                    MMPill(
+                        text: "\(evidence.photoCount) photo\(evidence.photoCount == 1 ? "" : "s")",
+                        tone: evidence.photoCount > 0 ? .success : .warning
+                    )
                 }
+
+                Text(evidence.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(MoveMarkTheme.Typography.subheadlineMedium)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
                 SavedProofPhotoThumbnails(
                     evidence: evidence,
                     inspectionRepo: inspectionRepo
                 )
 
+                HStack(spacing: 8) {
+                    Text("Condition")
+                        .font(MoveMarkTheme.Typography.caption)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    Text("\(evidence.condition.rawValue) · \(evidence.condition.conditionMeterValue)/5")
+                        .font(MoveMarkTheme.Typography.subheadlineMedium)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.9))
+                }
+
                 if !evidence.issueTags.isEmpty {
-                    HStack(spacing: 8) {
-                        ForEach(evidence.issueTags.prefix(3), id: \.self) { tag in
+                    FlowLayout(spacing: 8) {
+                        ForEach(evidence.issueTags, id: \.self) { tag in
                             MMPill(text: tag, tone: .warning)
                         }
                     }
                 }
 
-                Text(evidence.notes.isEmpty ? "No notes added." : evidence.notes)
+                Text(evidence.notes.isEmpty ? "No notes on this entry." : evidence.notes)
                     .font(MoveMarkTheme.Typography.subheadline)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    .lineLimit(3)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.92))
+                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 8) {
-                    Text("Condition \(evidence.condition.conditionMeterValue)/5")
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-
-                    Spacer()
-
                     MMButton(
                         title: "Edit",
                         action: { onEdit(evidence) },
@@ -105,16 +105,18 @@ struct EvidenceSavedProofSection: View {
                     MMButton(
                         title: "Add photos",
                         action: { onAddPhotos(evidence) },
-                        kind: .quiet,
+                        kind: .secondary,
                         size: .compact,
                         expandsToFillWidth: false
                     )
+
+                    Spacer(minLength: 8)
 
                     Button("Delete") {
                         onDelete(evidence)
                     }
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.red.opacity(0.9))
+                    .foregroundStyle(MoveMarkTheme.Colors.semanticDanger)
                 }
             }
         }
@@ -154,16 +156,20 @@ private struct SavedProofPhotoThumbnails: View {
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
-                        ForEach(evidence.photos.prefix(4)) { photo in
+                        ForEach(Array(evidence.photos.prefix(4))) { photo in
                             thumbnailCell(photo)
                         }
                         if evidence.photos.count > 4 {
                             Text("+\(evidence.photos.count - 4)")
                                 .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                                .frame(width: 44, height: 72)
-                                .background(Color.white.opacity(0.06))
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.88))
+                                .frame(width: 48, height: 76)
+                                .background(MoveMarkTheme.Colors.surfaceInset.opacity(0.88))
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.5), lineWidth: 0.9)
+                                )
                         }
                     }
                 }
@@ -223,7 +229,7 @@ private struct SavedProofPhotoThumbnails: View {
                                 imageRenderFailedIds.remove(photo.id)
                             }
                         }
-                        .frame(width: 72, height: 72)
+                        .frame(width: 76, height: 76)
                         .clipped()
                 }
                 .buttonStyle(.plain)
@@ -234,13 +240,17 @@ private struct SavedProofPhotoThumbnails: View {
                     .overlay { ProgressView() }
             }
         }
-        .frame(width: 72, height: 72)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .frame(width: 76, height: 76)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.48), lineWidth: 0.9)
+        )
     }
 
     private func thumbPlaceholder(systemName: String, caption: String) -> some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(Color.white.opacity(0.08))
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(MoveMarkTheme.Colors.surfaceInset.opacity(0.75))
             .overlay {
                 VStack(spacing: 4) {
                     Image(systemName: systemName)

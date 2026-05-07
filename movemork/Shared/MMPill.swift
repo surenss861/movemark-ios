@@ -16,6 +16,7 @@ struct MMPill: View {
         case accent
         case success
         case warning
+        case danger
     }
 
     var body: some View {
@@ -36,8 +37,9 @@ struct MMPill: View {
         switch tone {
         case .neutral: return MoveMarkTheme.Colors.textSecondary
         case .accent: return MoveMarkTheme.Colors.accent
-        case .success: return MoveMarkTheme.Colors.primary
-        case .warning: return Color.orange.opacity(0.95)
+        case .success: return MoveMarkTheme.Colors.semanticSuccess
+        case .warning: return MoveMarkTheme.Colors.semanticWarning
+        case .danger: return MoveMarkTheme.Colors.semanticDanger
         }
     }
 
@@ -45,8 +47,9 @@ struct MMPill: View {
         switch tone {
         case .neutral: return Color.white.opacity(0.03)
         case .accent: return MoveMarkTheme.Colors.accent.opacity(0.10)
-        case .success: return MoveMarkTheme.Colors.primary.opacity(0.10)
-        case .warning: return Color.orange.opacity(0.10)
+        case .success: return MoveMarkTheme.Colors.semanticSuccess.opacity(0.10)
+        case .warning: return MoveMarkTheme.Colors.semanticWarning.opacity(0.12)
+        case .danger: return MoveMarkTheme.Colors.semanticDanger.opacity(0.12)
         }
     }
 
@@ -54,8 +57,9 @@ struct MMPill: View {
         switch tone {
         case .neutral: return MoveMarkTheme.Colors.panelStroke
         case .accent: return MoveMarkTheme.Colors.accent.opacity(0.30)
-        case .success: return MoveMarkTheme.Colors.primary.opacity(0.30)
-        case .warning: return Color.orange.opacity(0.30)
+        case .success: return MoveMarkTheme.Colors.semanticSuccess.opacity(0.30)
+        case .warning: return MoveMarkTheme.Colors.semanticWarning.opacity(0.32)
+        case .danger: return MoveMarkTheme.Colors.semanticDanger.opacity(0.32)
         }
     }
 }

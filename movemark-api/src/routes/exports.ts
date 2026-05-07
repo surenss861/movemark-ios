@@ -11,6 +11,23 @@ import type {
   ExportRequestBody,
   ExportResponseBody,
 } from "../types/exports.js";
+import { isUuidString } from "../lib/exportGuards.js";
+
+async function markExportFailed(exportId: string, reason: string): Promise<void> {
+  try {
+    const { error } = await supabaseAdmin
+      .from("exports")
+      .update({ status: "failed" })
+      .eq("id", exportId);
+    if (error) {
+      console.error(`[movemark-api:exports] markExportFailed update error id=${exportId}`, error);
+    } else {
+      console.log(`[movemark-api:exports] export status=failed id=${exportId} reason=${reason}`);
+    }
+  } catch (e) {
+    console.error(`[movemark-api:exports] markExportFailed exception id=${exportId}`, e);
+  }
+}
 
 function handleExportsError(c: Context, error: unknown, logLabel: string) {
   if (error instanceof Error && error.message === "Unauthorized") {
@@ -35,6 +52,25 @@ exportsRouter.get("/", async (c) => {
         `[movemark-api:exports] GET / timing authMs=${authMs} totalMs=${Math.round(performance.now() - t0)} status=400 reason=missing_propertyId`
       );
       return c.json({ error: "propertyId query parameter is required" }, 400);
+    }
+
+    if (!isUuidString(propertyIdFilter)) {
+      return c.json({ error: "Invalid propertyId" }, 400);
+    }
+
+    const { data: ownedProperty, error: propErr } = await supabaseAdmin
+      .from("properties")
+      .select("id")
+      .eq("id", propertyIdFilter)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (propErr) {
+      console.error("[movemark-api:exports] GET / property lookup", propErr);
+      return c.json({ error: "Failed to verify property" }, 500);
+    }
+    if (!ownedProperty) {
+      return c.json({ error: "Property not found" }, 404);
     }
 
     let query = supabaseAdmin
@@ -121,6 +157,13 @@ exportsRouter.get("/:id/download", async (c) => {
       );
       return c.json({ error: "Export not found" }, 404);
     }
+    if (row.status === "failed") {
+      console.log(
+        `[movemark-api:exports] GET /:id/download timing authMs=${authMs} rowMs=${rowMs} totalMs=${Math.round(performance.now() - t0)} status=400 reason=failed`
+      );
+      // 400 (not 409) so clients don’t treat this as “still processing” like a queued export.
+      return c.json({ error: "Export failed", code: "export_failed" }, 400);
+    }
     if (row.status !== "completed") {
       console.log(
         `[movemark-api:exports] GET /:id/download timing authMs=${authMs} rowMs=${rowMs} totalMs=${Math.round(performance.now() - t0)} status=409`
@@ -177,6 +220,10 @@ exportsRouter.post("/move-in", async (c) => {
 
     if (!body.propertyId || body.format !== "pdf") {
       return c.json({ error: "Invalid request body" }, 400);
+    }
+
+    if (!isUuidString(body.propertyId)) {
+      return c.json({ error: "Invalid propertyId" }, 400);
     }
 
     const { data: property, error: propertyError } = await supabaseAdmin
@@ -287,45 +334,55 @@ exportsRouter.post("/move-in", async (c) => {
       return c.json({ error: "Failed to create export row" }, 500);
     }
 
-    const pdfBuffer = await generateMoveInPdfBuffer({
-      property,
-      rooms: rooms ?? [],
-      inspection: inspection ?? null,
-      inspectionItems: inspectionItemsForPdf,
-      propertyDocuments: propertyDocuments ?? [],
-    });
+    try {
+      const pdfBuffer = await generateMoveInPdfBuffer({
+        property,
+        rooms: rooms ?? [],
+        inspection: inspection ?? null,
+        inspectionItems: inspectionItemsForPdf,
+        propertyDocuments: propertyDocuments ?? [],
+      });
 
-    const upload = await uploadExportToSupabaseStorage({
-      userId,
-      exportId: exportRow.id,
-      fileBuffer: pdfBuffer,
-    });
+      const upload = await uploadExportToSupabaseStorage({
+        userId,
+        exportId: exportRow.id,
+        fileBuffer: pdfBuffer,
+      });
 
-    const { error: updateError } = await supabaseAdmin
-      .from("exports")
-      .update({
+      const { error: updateError } = await supabaseAdmin
+        .from("exports")
+        .update({
+          status: "completed",
+          file_path: upload.path,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", exportRow.id);
+
+      if (updateError) {
+        console.error("[movemark-api:exports] move-in finalize", updateError);
+        throw new Error(`finalize: ${updateError.message}`);
+      }
+
+      const response: ExportResponseBody = {
+        exportId: exportRow.id,
         status: "completed",
-        file_path: upload.path,
-        completed_at: new Date().toISOString(),
-      })
-      .eq("id", exportRow.id);
+        type: "move_in_report",
+        requestedAt:
+          (exportRow.requested_at as string | undefined) ??
+          (exportRow.created_at as string | undefined) ??
+          requestedAt,
+      };
 
-    if (updateError) {
-      console.error("[movemark-api:exports] move-in finalize", updateError);
-      return c.json({ error: "Failed to complete export" }, 500);
+      return c.json(response, 200);
+    } catch (pipelineError) {
+      const msg = pipelineError instanceof Error ? pipelineError.message : String(pipelineError);
+      console.error("[movemark-api:exports] POST /move-in pipeline failed", pipelineError);
+      await markExportFailed(exportRow.id, msg);
+      return c.json(
+        { error: "Export generation failed", code: "export_generation_failed" },
+        500
+      );
     }
-
-    const response: ExportResponseBody = {
-      exportId: exportRow.id,
-      status: "completed",
-      type: "move_in_report",
-      requestedAt:
-        (exportRow.requested_at as string | undefined) ??
-        (exportRow.created_at as string | undefined) ??
-        requestedAt,
-    };
-
-    return c.json(response, 200);
   } catch (error) {
     return handleExportsError(c, error, "POST /move-in");
   }

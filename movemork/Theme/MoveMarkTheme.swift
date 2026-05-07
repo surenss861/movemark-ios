@@ -22,6 +22,20 @@ enum MoveMarkTheme {
 
         static let divider = Color.white.opacity(0.10)
         static let fieldFill = Color(red: 0.05, green: 0.05, blue: 0.06)
+
+        // MARK: Semantic (meaningful color only — not decoration)
+
+        /// Proof saved, export ready, verified, resolved.
+        static let semanticSuccess = primary
+
+        /// Missing records, open maintenance, needs attention.
+        static let semanticWarning = Color(red: 0.93, green: 0.72, blue: 0.32)
+
+        /// Failed upload, destructive action, server-side export failure.
+        static let semanticDanger = Color(red: 0.94, green: 0.36, blue: 0.38)
+
+        /// Dark-mode depth: surface slightly above `background`, below `panel`.
+        static let surfaceInset = Color(red: 0.10, green: 0.10, blue: 0.11)
     }
 
     enum Spacing {

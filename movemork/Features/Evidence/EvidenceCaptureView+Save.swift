@@ -22,7 +22,8 @@ extension EvidenceCaptureView {
         guard !isUploading else { return }
 
         if loadedImages.isEmpty {
-            errorMessage = "Add at least one photo."
+            errorMessage = "Add at least one photo before saving."
+            MMHaptics.warning()
             return
         }
 
@@ -109,6 +110,7 @@ extension EvidenceCaptureView {
                 print("ROOM SAVE FAILED:", error.localizedDescription)
                 #endif
                 errorMessage = MoveMarkFlowMessage.proofSaveFailed(error)
+                MMHaptics.error()
             }
         }
     }
@@ -137,24 +139,31 @@ extension EvidenceCaptureView {
             MMHaptics.success()
         } catch {
             errorMessage = MoveMarkFlowMessage.proofDeleteFailed(error)
+            MMHaptics.error()
         }
     }
 
+    /// - Returns: `nil` on success, user-facing message on failure (also sets `errorMessage`).
+    @discardableResult
     func saveEditedEvidence(
         entryId: UUID,
         title: String,
         notes: String,
         tags: [String],
         condition: RoomRecord.ConditionRating
-    ) async {
+    ) async -> String? {
         guard let property = propertyStore.currentProperty else {
-            errorMessage = MoveMarkFlowMessage.noActiveProperty
-            return
+            let msg = MoveMarkFlowMessage.noActiveProperty
+            errorMessage = msg
+            MMHaptics.error()
+            return msg
         }
 
         guard let userId = sessionManager.userId else {
-            errorMessage = MoveMarkFlowMessage.signInRequired
-            return
+            let msg = MoveMarkFlowMessage.signInRequired
+            errorMessage = msg
+            MMHaptics.error()
+            return msg
         }
 
         do {
@@ -172,22 +181,37 @@ extension EvidenceCaptureView {
             if outcome.hydrationRefreshFailed { msg += MoveMarkFlowMessage.proofHydrationHint }
             successMessage = msg
             MMHaptics.success()
+            return nil
         } catch {
-            errorMessage = MoveMarkFlowMessage.proofUpdateFailed(error)
+            let msg = MoveMarkFlowMessage.proofUpdateFailed(error)
+            errorMessage = msg
+            MMHaptics.error()
+            return msg
         }
     }
 
-    func appendPhotos(to entryId: UUID, photoData: [Data]) async {
-        guard !photoData.isEmpty else { return }
+    /// - Returns: `nil` if photos were appended; otherwise a user-facing message (also assigned to `errorMessage` for the capture screen).
+    @discardableResult
+    func appendPhotos(to entryId: UUID, photoData: [Data]) async -> String? {
+        guard !photoData.isEmpty else {
+            let msg = "Choose at least one photo to add."
+            errorMessage = msg
+            MMHaptics.warning()
+            return msg
+        }
 
         guard let property = propertyStore.currentProperty else {
-            errorMessage = MoveMarkFlowMessage.noActiveProperty
-            return
+            let msg = MoveMarkFlowMessage.noActiveProperty
+            errorMessage = msg
+            MMHaptics.error()
+            return msg
         }
 
         guard let userId = sessionManager.userId else {
-            errorMessage = MoveMarkFlowMessage.signInRequired
-            return
+            let msg = MoveMarkFlowMessage.signInRequired
+            errorMessage = msg
+            MMHaptics.error()
+            return msg
         }
 
         do {
@@ -204,8 +228,12 @@ extension EvidenceCaptureView {
             if outcome.hydrationRefreshFailed { msg += MoveMarkFlowMessage.proofHydrationHint }
             successMessage = msg
             MMHaptics.success()
+            return nil
         } catch {
-            errorMessage = MoveMarkFlowMessage.proofAppendPhotosFailed(error)
+            let msg = MoveMarkFlowMessage.proofAppendPhotosFailed(error)
+            errorMessage = msg
+            MMHaptics.error()
+            return msg
         }
     }
 }

@@ -65,6 +65,8 @@ enum APIClientError: LocalizedError {
     case decodingFailed
     /// Server returned 409 — export row exists but file is not ready yet.
     case exportNotReady
+    /// Server marked the export row failed (e.g. PDF generation). Distinct from still processing.
+    case exportFailed
 
     var errorDescription: String? {
         switch self {
@@ -80,6 +82,8 @@ enum APIClientError: LocalizedError {
             return "Failed to decode server response."
         case .exportNotReady:
             return "Export is still processing."
+        case .exportFailed:
+            return "This export failed on the server. Generate a new report."
         }
     }
 }
@@ -103,6 +107,20 @@ final class ExportAPIClient {
         self.session = session
     }
 
+    /// Parses `{ "error": "...", "code": "..." }` from API error responses when present.
+    private static func serverMessage(from data: Data) -> String {
+        struct ErrBody: Decodable {
+            let error: String?
+            let code: String?
+        }
+        if let body = try? Self.decoder.decode(ErrBody.self, from: data),
+           let msg = body.error?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !msg.isEmpty {
+            return msg
+        }
+        return String(data: data, encoding: .utf8) ?? "Server error"
+    }
+
     func requestMoveInExport(propertyId: UUID, accessToken: String) async throws -> MoveInExportResponse {
         guard !accessToken.isEmpty else {
             throw APIClientError.missingAuthToken
@@ -124,8 +142,7 @@ final class ExportAPIClient {
         }
 
         guard 200..<300 ~= httpResponse.statusCode else {
-            let message = String(data: data, encoding: .utf8) ?? "Server error"
-            throw APIClientError.serverError(message)
+            throw APIClientError.serverError(Self.serverMessage(from: data))
         }
 
         do {
@@ -163,8 +180,7 @@ final class ExportAPIClient {
 
         guard 200..<300 ~= httpResponse.statusCode else {
             exportAPILog.error("GET exports failure body=\(bodyPreview, privacy: .public)")
-            let message = String(data: data, encoding: .utf8) ?? "Server error"
-            throw APIClientError.serverError(message)
+            throw APIClientError.serverError(Self.serverMessage(from: data))
         }
 
         do {
@@ -192,9 +208,19 @@ final class ExportAPIClient {
         if httpResponse.statusCode == 409 {
             throw APIClientError.exportNotReady
         }
+        if httpResponse.statusCode == 400 {
+            struct DownloadErr: Decodable {
+                let error: String?
+                let code: String?
+            }
+            if let body = try? Self.decoder.decode(DownloadErr.self, from: data),
+               body.code == "export_failed" {
+                throw APIClientError.exportFailed
+            }
+            throw APIClientError.serverError(Self.serverMessage(from: data))
+        }
         guard 200..<300 ~= httpResponse.statusCode else {
-            let message = String(data: data, encoding: .utf8) ?? "Server error"
-            throw APIClientError.serverError(message)
+            throw APIClientError.serverError(Self.serverMessage(from: data))
         }
 
         do {

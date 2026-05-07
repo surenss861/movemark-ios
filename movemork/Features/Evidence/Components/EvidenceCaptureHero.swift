@@ -78,7 +78,7 @@ struct EvidenceCaptureHero: View {
     }
 
     private var heroProofCard: some View {
-        MMCard {
+        MMCard(tone: .artifact) {
             VStack(alignment: .leading, spacing: 14) {
                 ZStack(alignment: .topTrailing) {
                     LinearGradient(
