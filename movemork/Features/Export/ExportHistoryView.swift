@@ -78,6 +78,10 @@ struct ExportHistoryView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     header
+                    if hasActiveVault {
+                        exportContextStrip
+                        exportReadinessHero
+                    }
 
                     if let successBanner {
                         MMCard(tone: .quiet, padding: 14, spacing: 8) {
@@ -101,10 +105,10 @@ struct ExportHistoryView: View {
 
                     if !hasActiveVault && !isLoading {
                         noVaultSelectedState
-                    } else if hasActiveVault, !isLoading, exports.isEmpty, isExportReadyForResolvedVault == false {
-                        vaultNotExportReadyState
                     } else if hasActiveVault && exports.isEmpty && !isLoading {
-                        emptyStateNoExportsYet
+                        if isExportReadyForResolvedVault != false {
+                            emptyStateNoExportsYet
+                        }
                     } else {
                         VStack(alignment: .leading, spacing: 18) {
                             exportSection(title: "Move-in reports", rows: rows(for: "move_in_report"))
@@ -174,9 +178,134 @@ struct ExportHistoryView: View {
 
     private var headerSubtitle: String {
         if let name = activeVaultDisplayTitle, !name.isEmpty {
-            return "Move-in and move-out reports for \(name)."
+            return "Generate, verify, and share reports for \(name)."
         }
-        return "Move-in and move-out reports for your current vault."
+        return "Generate, verify, and share reports for your current vault."
+    }
+
+    private var exportContextStrip: some View {
+        MMCard(tone: .quiet, padding: 12, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text("Current vault")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    Text("·")
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.45))
+                    Text(activeVaultDisplayTitle ?? "Selected vault")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                }
+                Text(exportContextLine)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var exportContextLine: String {
+        if resolvedPropertyRecord == nil {
+            return "Open this vault once to load readiness and included evidence."
+        }
+        let reports = exports.count
+        if reports == 0 {
+            return "No generated reports yet."
+        }
+        return reports == 1 ? "1 export artifact available." : "\(reports) export artifacts available."
+    }
+
+    private var exportReadinessHero: some View {
+        MMCard(tone: .artifact, padding: 16, spacing: 12) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Move-in report")
+                            .font(MoveMarkTheme.Typography.cardTitle)
+                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                        Text(readinessSubline)
+                            .font(MoveMarkTheme.Typography.footnote)
+                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    MMPill(text: readinessPillText, tone: readinessPillTone)
+                }
+
+                HStack(spacing: 8) {
+                    statusPill(readinessRoomsChip)
+                    statusPill(readinessPhotosChip)
+                    statusPill(readinessRecordsChip)
+                    statusPill(readinessIssuesChip)
+                }
+
+                if hasActiveVault && exports.isEmpty {
+                    MMCompactCallout(
+                        systemImage: isExportReadyForResolvedVault == false ? "exclamationmark.triangle.fill" : "doc.badge.plus",
+                        title: isExportReadyForResolvedVault == false ? "Strengthen vault before export" : "Ready to generate your first report",
+                        message: isExportReadyForResolvedVault == false
+                            ? "Add room proof and supporting records, then generate from Walkthrough."
+                            : "Generate a move-in report from Walkthrough. It will appear here with status and sharing actions."
+                    )
+                }
+            }
+        }
+    }
+
+    private var readinessSubline: String {
+        if isLoading { return "Checking export readiness…" }
+        if let p = resolvedPropertyRecord {
+            return propertyStore.proofWorkspaceHeadline(for: p)
+        }
+        return "Select and open a vault to load export readiness."
+    }
+
+    private var readinessRoomsChip: String {
+        guard let p = resolvedPropertyRecord else { return "Rooms —" }
+        let total = p.rooms.count
+        let withProof = p.rooms.filter { !$0.evidence.isEmpty }.count
+        return total > 0 ? "Rooms \(withProof)/\(total)" : "Rooms 0"
+    }
+
+    private var readinessPhotosChip: String {
+        guard let p = resolvedPropertyRecord else { return "Photos —" }
+        let photos = p.rooms
+            .flatMap(\.evidence)
+            .reduce(0) { $0 + $1.photoCount }
+        return "Photos \(photos)"
+    }
+
+    private var readinessRecordsChip: String {
+        guard let p = resolvedPropertyRecord else { return "Records —" }
+        return "Records \(p.vaultDocuments.count)"
+    }
+
+    private var readinessIssuesChip: String {
+        guard let p = resolvedPropertyRecord else { return "Issues —" }
+        return "Issues \(propertyStore.openIssueCount(for: p))"
+    }
+
+    private var readinessPillText: String {
+        if isLoading { return "Loading" }
+        if exports.contains(where: { ($0.exportType == "move_in_report") && ((verificationStatus[$0.id] == .processing) || (verificationStatus[$0.id] == .queued) || (verificationStatus[$0.id] == .verifying)) }) {
+            return "Processing"
+        }
+        if exports.contains(where: { ($0.exportType == "move_in_report") && ((verificationStatus[$0.id] == .serverFailed) || (verificationStatus[$0.id]?.isProblem == true)) }) {
+            return "Failed"
+        }
+        if isExportReadyForResolvedVault == false { return "Needs proof" }
+        if exports.contains(where: { $0.exportType == "move_in_report" }) { return "Ready" }
+        return hasActiveVault ? "Ready" : "No vault"
+    }
+
+    private var readinessPillTone: MMPill.Tone {
+        switch readinessPillText {
+        case "Ready": return .success
+        case "Processing", "Loading": return .warning
+        case "Failed": return .danger
+        case "Needs proof": return .warning
+        default: return .neutral
+        }
     }
 
     private var noVaultSelectedState: some View {
@@ -189,7 +318,7 @@ struct ExportHistoryView: View {
                         .font(MoveMarkTheme.Typography.cardTitle)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                    Text("Exports are tied to a property. Choose a vault on the Vaults tab, then come back here.")
+                    Text("Exports are tied to a property. Choose a vault on the Vaults tab, then come back here to generate and share reports.")
                         .font(MoveMarkTheme.Typography.subheadline)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -198,38 +327,6 @@ struct ExportHistoryView: View {
                 if showOpenVaultsCTA {
                     MMButton(
                         title: "Open a vault",
-                        action: { onOpenVaults?() },
-                        kind: .secondary,
-                        size: .standard
-                    )
-                    .padding(.top, 2)
-                }
-            }
-        }
-    }
-
-    /// Vault is selected and hydrated, but ``isExportReady`` is false — honest gate vs vault “ready” headline.
-    private var vaultNotExportReadyState: some View {
-        MMCard(tone: .quiet, padding: 18, spacing: 16) {
-            VStack(alignment: .leading, spacing: 14) {
-                exportArtifactPreview
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Strengthen your vault first")
-                        .font(MoveMarkTheme.Typography.cardTitle)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                    Text(
-                        "Move-in PDF exports work best after at least one room has proof and your vault isn’t missing too many supporting records. Add walkthrough proof or upload lease and deposit records from the vault, then come back."
-                    )
-                    .font(MoveMarkTheme.Typography.subheadline)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-
-                if showOpenVaultsCTA {
-                    MMButton(
-                        title: "Go to Vaults",
                         action: { onOpenVaults?() },
                         kind: .secondary,
                         size: .standard
@@ -262,9 +359,9 @@ struct ExportHistoryView: View {
 
     private var emptyStateNoExportsBody: String {
         if resolvedPropertyRecord == nil {
-            return "Generate a move-in report from Walkthrough (export button on the move-in screen) or open this property’s vault. Move-out PDFs and dispute packets appear here when you create them."
+            return "Generate a move-in report from Walkthrough (export button on the move-in screen) or open this property’s vault. Move-out reports and dispute packets appear here as you create them."
         }
-        return "Move-in and move-out PDFs and dispute packets you generate for this property will list here with status. Use Walkthrough to queue a move-in report when your vault is ready."
+        return "This vault is ready for report generation. Queue from Walkthrough, then verify and share from this screen."
     }
 
     private var exportArtifactPreview: some View {
@@ -362,26 +459,22 @@ struct ExportHistoryView: View {
     private func exportRowCard(_ row: ExportRow) -> some View {
         let status = verificationStatus[row.id] ?? .unknown
 
-        return MMCard(tone: .artifact, padding: 16, spacing: 14) {
-            HStack(alignment: .top, spacing: 14) {
+        return MMCard(tone: .artifact, padding: 16, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 12) {
                 exportRowThumbnail(for: row)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(label(for: row.exportType))
-                        .font(MoveMarkTheme.Typography.cardTitle)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
                     HStack(spacing: 8) {
-                        Text(formattedDate(row.createdAt))
-                            .font(MoveMarkTheme.Typography.subheadlineMedium)
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-
-                        Text("·")
-                            .font(MoveMarkTheme.Typography.subheadlineMedium)
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.5))
-
+                        Text(label(for: row.exportType))
+                            .font(MoveMarkTheme.Typography.cardTitle)
+                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                         exportStatusLabel(status)
                     }
+
+                    Text(formattedDate(row.createdAt))
+                        .font(MoveMarkTheme.Typography.subheadlineMedium)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
                     Text(shortPath(row.filePath))
                         .font(MoveMarkTheme.Typography.footnote)
@@ -403,9 +496,10 @@ struct ExportHistoryView: View {
                     }
                 }
 
-                Spacer(minLength: 10)
+                Spacer(minLength: 0)
+                }
 
-                VStack(alignment: .trailing, spacing: 8) {
+                HStack(spacing: 8) {
                     MMButton(
                         title: "Share",
                         action: { share(row) },
@@ -417,7 +511,7 @@ struct ExportHistoryView: View {
 
                     if shouldShowVerifyButton(for: status) {
                         MMButton(
-                            title: status == .verifying ? "Verifying…" : "Verify",
+                            title: status == .verifying ? "Checking…" : "Check status",
                             action: { verify(row) },
                             kind: .quiet,
                             size: .compact,
@@ -679,6 +773,7 @@ struct ExportHistoryView: View {
 
     private func share(_ row: ExportRow) {
         Task { @MainActor in
+            MMHaptics.soft()
             errorMessage = nil
             successBanner = nil
             do {

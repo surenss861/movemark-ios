@@ -91,7 +91,7 @@ struct VaultRootView: View {
     private var vaultsDashboard: some View {
         ZStack(alignment: .topTrailing) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
                     stagedHeader
 
                     if let error = propertyStore.errorMessage {
@@ -117,6 +117,11 @@ struct VaultRootView: View {
                         .offset(y: hasAnimatedIn ? 0 : 18)
                         .animation(MMMotion.cardReveal.delay(0.12 + Double(index) * 0.05), value: hasAnimatedIn)
                     }
+
+                    vaultHealthFooter
+                        .opacity(hasAnimatedIn ? 1 : 0)
+                        .offset(y: hasAnimatedIn ? 0 : 8)
+                        .animation(.easeOut(duration: 0.35).delay(0.2), value: hasAnimatedIn)
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
                 .padding(.top, 12)
@@ -202,45 +207,41 @@ struct VaultRootView: View {
 
     /// Inline system state — not a summary card; bridges hero → workspace.
     private var vaultSystemContextStrip: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Rectangle()
-                .fill(MoveMarkTheme.Colors.divider.opacity(0.55))
-                .frame(height: 0.5)
-                .frame(maxWidth: .infinity)
+        MMCard(tone: .quiet, padding: 12, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .center, spacing: 8) {
+                    Text(vaultContextStripTitle)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-            HStack(alignment: .top, spacing: 8) {
-                Circle()
-                    .fill(MoveMarkTheme.Colors.primary.opacity(0.9))
-                    .frame(width: 5, height: 5)
-                    .padding(.top, 4)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        Text(vaultContextStripTitle)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                        Text("·")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.45))
-
-                        Text(vaultContextWorkspaceName)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.88))
-                            .lineLimit(1)
-                    }
-
-                    Text(vaultContextPhaseLine)
+                    Text("·")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .lineLimit(2)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.45))
+
+                    Text(vaultContextWorkspaceName)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.88))
+                        .lineLimit(1)
                 }
 
-                Spacer(minLength: 0)
+                Text(vaultContextPhaseLine)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2)
+
+                if let next = vaultContextNextLine {
+                    HStack(spacing: 6) {
+                        Capsule()
+                            .fill(MoveMarkTheme.Colors.primary.opacity(0.9))
+                            .frame(width: 4, height: 4)
+                        Text(next)
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.94))
+                    }
+                }
             }
         }
-        .padding(.top, 2)
     }
 
     private var vaultContextStripTitle: String {
@@ -267,6 +268,12 @@ struct VaultRootView: View {
         return "Choose a vault below to continue your proof trail"
     }
 
+    private var vaultContextNextLine: String? {
+        guard let activeId = propertyStore.activePropertyId,
+              let prop = propertyStore.currentProperty, prop.id == activeId else { return nil }
+        return cleanedNextLine(propertyStore.primaryNextAction(for: prop).title)
+    }
+
     /// Secondary vaults: honest copy when we don’t have that property hydrated.
     private func secondaryStatusLine(for row: PropertyRow) -> String {
         if let prop = propertyStore.currentProperty, prop.id == row.id {
@@ -281,7 +288,13 @@ struct VaultRootView: View {
             return "Current"
         }
 
-        guard let prop = propertyStore.currentProperty, prop.id == row.id else { return nil }
+        guard let prop = propertyStore.currentProperty, prop.id == row.id else {
+            switch fallbackStyle(for: row) {
+            case .ready: return "Ready"
+            case .started: return "In progress"
+            case .empty: return "Open"
+            }
+        }
 
         let total = propertyStore.totalRoomCount(for: prop)
         guard total > 0 else { return nil }
@@ -315,14 +328,17 @@ struct VaultRootView: View {
         let prop = (propertyStore.currentProperty?.id == row.id) ? propertyStore.currentProperty : nil
 
         let workflow: String? = {
-            guard isFeatured, let p = prop else { return nil }
-            return propertyStore.proofWorkspaceHeadline(for: p)
+            if let p = prop { return propertyStore.proofWorkspaceHeadline(for: p) }
+            if isCurrent { return "Open this vault to refresh live proof workflow" }
+            return nil
         }()
 
         let metrics: String? = {
-            guard isFeatured, let p = prop else { return nil }
-            let line = propertyStore.compactProofMetricsLine(for: p)
-            return line.isEmpty ? nil : line
+            if let p = prop {
+                let line = propertyStore.compactProofMetricsLine(for: p)
+                return line.isEmpty ? nil : line
+            }
+            return "Open to view proof status, rooms, and records."
         }()
 
         let bandStatusLine: String = {
@@ -340,8 +356,8 @@ struct VaultRootView: View {
             workflowHeadline: workflow,
             proofMetricsLine: metrics,
             nextAction: isFeatured ? next : nil,
-            ctaTitle: isFeatured ? featuredCtaTitle(for: row) : "Open",
-            chipText: isFeatured ? statusChip(for: row) : nil,
+            ctaTitle: featuredCtaTitle(for: row),
+            chipText: statusChip(for: row),
             previewImageURL: previewURLByPropertyId[row.id],
             fallbackStyle: fallbackStyle(for: row),
             isRecent: isCurrent,
@@ -353,6 +369,42 @@ struct VaultRootView: View {
     private func featuredCtaTitle(for row: PropertyRow) -> String {
         guard let prop = propertyStore.currentProperty, prop.id == row.id else { return "Open" }
         return propertyStore.primaryNextAction(for: prop).shortCTA
+    }
+
+    private var vaultHealthFooter: some View {
+        MMCard(tone: .quiet, padding: 14, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Vault health")
+                    .font(MoveMarkTheme.Typography.subheadlineMedium)
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                Text(vaultHealthLine)
+                    .font(MoveMarkTheme.Typography.footnote)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var vaultHealthLine: String {
+        guard let prop = propertyStore.currentProperty else {
+            return "Open a vault to view proof progress, supporting records, and next recommended action."
+        }
+        let documented = propertyStore.documentedRoomCount(for: prop)
+        let total = propertyStore.totalRoomCount(for: prop)
+        let docs = prop.vaultDocuments.count
+        let action = cleanedNextLine(propertyStore.primaryNextAction(for: prop).title)
+        if total == 0 {
+            return "\(docs) records uploaded · Next: \(action)"
+        }
+        return "\(documented)/\(total) rooms documented · \(docs) records uploaded · Next: \(action)"
+    }
+
+    private func cleanedNextLine(_ raw: String) -> String {
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.lowercased().hasPrefix("next:") {
+            return String(t.dropFirst(5)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return t
     }
 
     /// Expansion tray data when we have full property (currentProperty). Nil for other rows. Uses store workflow.

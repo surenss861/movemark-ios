@@ -18,10 +18,10 @@ struct VaultCoverCard: View {
     private let nonFeaturedCornerRadius: CGFloat = 22
     private let featuredCornerRadius: CGFloat = 24
     private var cornerRadius: CGFloat { model.isEmphasized ? featuredCornerRadius : nonFeaturedCornerRadius }
-    /// Secondary vaults: compact summary, not mini-heroes.
-    private let nonFeaturedHeight: CGFloat = 152
-    /// Active workspace: slightly shorter image slot; band carries proof hierarchy.
-    private let featuredHeight: CGFloat = 220
+    /// Secondary vaults: still compact, but tall enough to avoid “placeholder strip” feel.
+    private let nonFeaturedHeight: CGFloat = 170
+    /// Active workspace: elevated, but no oversized dead cover area.
+    private let featuredHeight: CGFloat = 206
     private var cardHeight: CGFloat { model.isEmphasized ? featuredHeight : nonFeaturedHeight }
     private let expandedTrayHeight: CGFloat = 94
     private let chevronStripHeight: CGFloat = 15

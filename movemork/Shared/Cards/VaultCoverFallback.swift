@@ -2,7 +2,7 @@
 //  VaultCoverFallback.swift
 //  movemork
 //
-//  Non-featured: subtle placeholder. Featured: hero cover zone — surface is the idea, not empty-state graphic.
+//  Non-featured + featured cover surfaces share the same “proof workspace” language.
 //
 
 import SwiftUI
@@ -23,7 +23,7 @@ struct VaultCoverFallback: View {
         .opacity(isPressed ? 0.94 : 1.0)
     }
 
-    // MARK: - Featured: editorial cover slot — two-zone depth, directional light, no placeholder icon.
+    // MARK: - Featured: editorial cover slot with subtle vault-health signals.
 
     private var featuredCoverZone: some View {
         ZStack {
@@ -70,8 +70,24 @@ struct VaultCoverFallback: View {
                 endRadius: 260
             )
 
-            // No placeholder icon for featured — the surface is the hero.
+            featuredStatusRows
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+    }
+
+    private var featuredStatusRows: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 7) {
+                capsule("ROOM PROOF")
+                capsule(style == .ready ? "EXPORT READY" : "IN PROGRESS")
+            }
+
+            meter(width: 0.64)
+            meter(width: 0.82)
+        }
+        .opacity(0.56)
     }
 
     private var featuredBaseGradient: [Color] {
@@ -97,7 +113,7 @@ struct VaultCoverFallback: View {
         }
     }
 
-    // MARK: - Non-featured: standard placeholder treatment.
+    // MARK: - Non-featured: compact placeholder that still reads like a live vault.
 
     private var standardCoverZone: some View {
         ZStack {
@@ -132,8 +148,19 @@ struct VaultCoverFallback: View {
                 endRadius: 180
             )
 
-            // Quiet structure only — no “missing media” placeholder icon.
-            frameMotif.opacity(0.018)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 7) {
+                    capsule("VAULT")
+                    capsule(style == .empty ? "NOT STARTED" : "ACTIVE")
+                }
+
+                meter(width: style == .ready ? 0.9 : (style == .started ? 0.65 : 0.42))
+                meter(width: 0.58)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .opacity(0.5)
         }
     }
 
@@ -148,10 +175,27 @@ struct VaultCoverFallback: View {
         }
     }
 
-    private var frameMotif: some View {
-        RoundedRectangle(cornerRadius: 20)
-            .stroke(.white, lineWidth: 1)
-            .frame(width: 100, height: 64)
-            .offset(y: -12)
+    private func capsule(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .semibold))
+            .tracking(0.7)
+            .foregroundStyle(Color.white.opacity(0.58))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color.white.opacity(0.05))
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+
+    private func meter(width: CGFloat) -> some View {
+        GeometryReader { proxy in
+            Capsule()
+                .fill(Color.white.opacity(0.1))
+                .overlay(alignment: .leading) {
+                    Capsule()
+                        .fill(MoveMarkTheme.Colors.primary.opacity(0.3))
+                        .frame(width: proxy.size.width * width)
+                }
+        }
+        .frame(height: 4)
     }
 }

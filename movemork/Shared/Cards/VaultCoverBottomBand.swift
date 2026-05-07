@@ -45,19 +45,23 @@ struct VaultCoverBottomBand: View {
                     .lineLimit(1)
             }
 
-            if isEmphasized, let headline = workflowHeadline, !headline.isEmpty {
+            if let headline = workflowHeadline, !headline.isEmpty {
                 Text(headline)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.96))
+                    .font(.system(size: isEmphasized ? 14 : 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(isEmphasized ? 0.96 : 0.86))
                     .fixedSize(horizontal: false, vertical: true)
                     .lineLimit(2)
                     .padding(.top, 2)
             }
 
-            if isEmphasized, let metrics = proofMetricsLine, !metrics.isEmpty {
+            if let metrics = proofMetricsLine, !metrics.isEmpty {
                 Text(metrics)
                     .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.88))
+                    .foregroundStyle(
+                        isEmphasized
+                            ? MoveMarkTheme.Colors.primary.opacity(0.88)
+                            : .white.opacity(0.7)
+                    )
                     .lineLimit(2)
             }
 
