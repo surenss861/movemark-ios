@@ -35,6 +35,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		21516D012FAD07CB0085DC8F /* MoveMark.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = MoveMark.storekit; sourceTree = "<group>"; };
 		2152E07D2F621A5100EDA905 /* MoveMark.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MoveMark.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2152E08E2F621A5300EDA905 /* movemorkTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = movemorkTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2152E0982F621A5300EDA905 /* movemorkUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = movemorkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -108,6 +109,7 @@
 		2152E0742F621A5100EDA905 = {
 			isa = PBXGroup;
 			children = (
+				21516D012FAD07CB0085DC8F /* MoveMark.storekit */,
 				21F1E0202F71000000B50C10 /* MoveMarkApp.xcconfig */,
 				2152E07F2F621A5100EDA905 /* movemork */,
 				2152E0912F621A5300EDA905 /* movemorkTests */,

@@ -62,39 +62,42 @@ struct AccountView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                MMEditorialHeader(
-                    eyebrow: "MoveMark",
-                    title: "Account",
-                    subtitle: "Manage your profile, security, and app settings."
-                )
-                profileCard
-                subscriptionCard
-                legalCard
-                securityCard
-                aboutCard
+        ZStack {
+            MoveMarkTheme.Colors.background.ignoresSafeArea()
 
-                MMButton(
-                    title: "Sign out",
-                    action: {
-                        propertyStore.clear()
-                        Task { await sessionManager.signOut() }
-                    },
-                    kind: .secondary,
-                    size: .standard
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    MMEditorialHeader(
+                        eyebrow: "MoveMark",
+                        title: "Account",
+                        subtitle: "Manage your profile, security, and app settings."
+                    )
+                    profileCard
+                    subscriptionCard
+                    legalCard
+                    securityCard
+                    aboutCard
+
+                    MMButton(
+                        title: "Sign out",
+                        action: {
+                            propertyStore.clear()
+                            Task { await sessionManager.signOut() }
+                        },
+                        kind: .secondary,
+                        size: .standard
+                    )
+                }
+                .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
+                .padding(.top, 18)
+                .padding(
+                    .bottom,
+                    rootTabBarVisible
+                        ? MoveMarkTheme.Spacing.scrollTailRootTabChrome
+                        : MoveMarkTheme.Spacing.scrollTailFocusedFlow
                 )
             }
-            .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-            .padding(.top, 22)
-            .padding(
-                .bottom,
-                rootTabBarVisible
-                    ? MoveMarkTheme.Spacing.scrollTailRootTabChrome
-                    : MoveMarkTheme.Spacing.scrollTailFocusedFlow
-            )
         }
-        .background(MoveMarkTheme.Colors.background.ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showPaywall) {
