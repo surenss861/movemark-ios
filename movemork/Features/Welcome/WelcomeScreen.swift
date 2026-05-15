@@ -2,7 +2,7 @@
 //  WelcomeScreen.swift
 //  movemork
 //
-//  MoveMark — Proof Passport intro (one object, one chip, one action).
+//  MoveMark — Proof dossier + product story intro.
 //
 
 import SwiftUI
@@ -13,38 +13,47 @@ struct WelcomeScreen: View {
     @State private var bgVisible = false
     @State private var heroVisible = false
     @State private var copyVisible = false
+    @State private var railVisible = false
     @State private var ctaVisible = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let horizontalPadding: CGFloat = 28
+    private let sidePadding: CGFloat = 20
 
     var body: some View {
         NavigationStack {
             GeometryReader { geo in
-                let passportWidth = geo.size.width - (horizontalPadding * 2)
-                let heroHeight = min(geo.size.height * 0.44, 320)
+                let contentWidth = geo.size.width - (sidePadding * 2)
 
                 ZStack {
                     WelcomeVaultBackground()
                         .opacity(bgVisible ? 1 : 0)
 
-                    VStack(spacing: 0) {
-                        heroZone(
-                            width: passportWidth,
-                            height: heroHeight,
-                            topSafe: geo.safeAreaInsets.top
-                        )
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            brandLine
+                                .padding(.horizontal, sidePadding)
+                                .padding(.top, max(8, geo.safeAreaInsets.top + 2))
 
-                        copyZone
-                            .padding(.horizontal, horizontalPadding)
-                            .padding(.top, 22)
+                            heroBlock(width: contentWidth, topInset: 0)
+                                .padding(.top, 10)
 
-                        Spacer(minLength: 12)
+                            headlineBlock
+                                .padding(.horizontal, sidePadding)
+                                .padding(.top, 16)
 
-                        actionZone
-                            .padding(.horizontal, horizontalPadding)
-                            .padding(.bottom, max(24, geo.safeAreaInsets.bottom + 12))
+                            WelcomeProofFlowRail()
+                                .padding(.horizontal, sidePadding)
+                                .padding(.top, 22)
+                                .opacity(railVisible ? 1 : 0)
+                                .offset(y: railVisible ? 0 : 8)
+                                .animation(reduceMotion ? nil : .easeOut(duration: 0.45).delay(0.24), value: railVisible)
+
+                            ctaBlock
+                                .padding(.horizontal, sidePadding)
+                                .padding(.top, 26)
+                                .padding(.bottom, max(16, geo.safeAreaInsets.bottom + 8))
+                        }
                     }
                 }
             }
@@ -56,45 +65,43 @@ struct WelcomeScreen: View {
     }
 
     private func playEntrance() {
-        let d: Double = reduceMotion ? 0 : 1
-        withAnimation(.easeOut(duration: 0.5 * d)) { bgVisible = true }
-        withAnimation(.easeOut(duration: 0.65 * d).delay(reduceMotion ? 0 : 0.06)) { heroVisible = true }
-        withAnimation(.easeOut(duration: 0.5 * d).delay(reduceMotion ? 0 : 0.18)) { copyVisible = true }
-        withAnimation(.easeOut(duration: 0.45 * d).delay(reduceMotion ? 0 : 0.28)) { ctaVisible = true }
-    }
-
-    // MARK: - Hero
-
-    private func heroZone(width: CGFloat, height: CGFloat, topSafe: CGFloat) -> some View {
-        ZStack(alignment: .bottomLeading) {
-            WelcomeReportBackingCard()
-                .frame(width: width)
-                .opacity(heroVisible ? 1 : 0)
-                .offset(x: heroVisible ? 0 : 8, y: heroVisible ? -8 : 4)
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.6).delay(0.1), value: heroVisible)
-
-            WelcomeProofPassportCard(width: width)
-                .opacity(heroVisible ? 1 : 0)
-                .offset(y: heroVisible ? 0 : (reduceMotion ? 0 : 18))
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.65).delay(0.06), value: heroVisible)
-
-            WelcomeProtectionChip()
-                .offset(x: width - 168, y: -6)
-                .opacity(heroVisible ? 1 : 0)
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.5).delay(0.14), value: heroVisible)
+        if reduceMotion {
+            bgVisible = true
+            heroVisible = true
+            copyVisible = true
+            railVisible = true
+            ctaVisible = true
+            return
         }
-        .frame(height: height)
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, horizontalPadding)
-        .padding(.top, max(12, topSafe + 6))
+        withAnimation(.easeOut(duration: 0.5)) { bgVisible = true }
+        withAnimation(.easeOut(duration: 0.65).delay(0.05)) { heroVisible = true }
+        withAnimation(.easeOut(duration: 0.5).delay(0.18)) { copyVisible = true }
+        withAnimation(.easeOut(duration: 0.45).delay(0.26)) { railVisible = true }
+        withAnimation(.easeOut(duration: 0.45).delay(0.34)) { ctaVisible = true }
     }
 
-    // MARK: - Copy
+    private var brandLine: some View {
+        Text("Deposit proof starts here")
+            .font(.system(size: 11, weight: .semibold))
+            .tracking(1.4)
+            .textCase(.uppercase)
+            .foregroundStyle(MoveMarkTheme.Colors.proofMint.opacity(0.85))
+            .opacity(heroVisible ? 1 : 0)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.5).delay(0.04), value: heroVisible)
+    }
 
-    private var copyZone: some View {
+    private func heroBlock(width: CGFloat, topInset: CGFloat) -> some View {
+        WelcomeProofDossierHero(width: width)
+            .padding(.horizontal, sidePadding)
+            .opacity(heroVisible ? 1 : 0)
+            .offset(y: heroVisible ? 0 : 14)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.65).delay(0.05), value: heroVisible)
+    }
+
+    private var headlineBlock: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Get your deposit back.")
-                .font(.system(size: 38, weight: .bold))
+                .font(.system(size: 36, weight: .bold))
                 .tracking(-0.8)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -106,26 +113,39 @@ struct WelcomeScreen: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .opacity(copyVisible ? 1 : 0)
-        .offset(y: copyVisible ? 0 : (reduceMotion ? 0 : 10))
+        .offset(y: copyVisible ? 0 : 8)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.5).delay(0.18), value: copyVisible)
     }
 
-    // MARK: - Action
+    private var ctaBlock: some View {
+        VStack(spacing: 12) {
+            ZStack {
+                Ellipse()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                MoveMarkTheme.Colors.primary.opacity(0.22),
+                                .clear
+                            ],
+                            center: .center,
+                            startRadius: 10,
+                            endRadius: 120
+                        )
+                    )
+                    .frame(height: 56)
+                    .offset(y: 8)
+                    .opacity(ctaVisible ? 1 : 0)
 
-    private var actionZone: some View {
-        VStack(spacing: 0) {
-            MMButton(
-                title: "Start proof",
-                action: {
-                    MMHaptics.soft()
-                    authInitialMode = .signUp
-                    showAuth = true
-                },
-                showsTrailingArrow: true
-            )
-            .opacity(ctaVisible ? 1 : 0)
-            .offset(y: ctaVisible ? 0 : (reduceMotion ? 0 : 8))
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.45).delay(0.28), value: ctaVisible)
+                MMButton(
+                    title: "Start proof",
+                    action: {
+                        MMHaptics.soft()
+                        authInitialMode = .signUp
+                        showAuth = true
+                    },
+                    showsTrailingArrow: true
+                )
+            }
 
             HStack(spacing: 6) {
                 Spacer(minLength: 0)
@@ -144,8 +164,9 @@ struct WelcomeScreen: View {
                 .buttonStyle(.plain)
                 Spacer(minLength: 0)
             }
-            .padding(.top, 14)
-            .opacity(ctaVisible ? 1 : 0)
         }
+        .opacity(ctaVisible ? 1 : 0)
+        .offset(y: ctaVisible ? 0 : 8)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.45).delay(0.34), value: ctaVisible)
     }
 }
