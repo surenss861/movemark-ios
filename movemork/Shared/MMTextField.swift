@@ -2,7 +2,7 @@
 //  MMTextField.swift
 //  movemork
 //
-//  MoveMark — Styled text and secure field; slimmer label and shell.
+//  MoveMark — Dark inset fields for auth forms.
 //
 
 import SwiftUI
@@ -18,31 +18,47 @@ struct MMTextField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 13.5, weight: .medium))
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.92))
+                .font(.system(size: 13.5, weight: .semibold))
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
-            Group {
-                if isSecure {
-                    SecureField(placeholder, text: $text)
-                } else {
-                    TextField(placeholder, text: $text)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(keyboardType)
+            ZStack(alignment: .leading) {
+                if text.isEmpty {
+                    Text(placeholder)
+                        .font(MoveMarkTheme.Typography.body)
+                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                        .padding(.horizontal, 16)
+                        .allowsHitTesting(false)
                 }
+
+                Group {
+                    if isSecure {
+                        SecureField("", text: $text)
+                    } else {
+                        TextField("", text: $text)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(keyboardType)
+                    }
+                }
+                .font(MoveMarkTheme.Typography.body)
+                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                .tint(MoveMarkTheme.Colors.proofMint)
+                .padding(.horizontal, 16)
             }
-            .font(MoveMarkTheme.Typography.body)
-            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-            .padding(.horizontal, 16)
             .frame(height: 54)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.82))
+                    .fill(MoveMarkTheme.Colors.fieldFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.72), lineWidth: 0.9)
+                    .stroke(MoveMarkTheme.Colors.subtleStroke, lineWidth: 1)
             )
+            .overlay(alignment: .top) {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.white.opacity(0.07), lineWidth: 1)
+                    .padding(1)
+            }
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
     }

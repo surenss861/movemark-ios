@@ -2,7 +2,7 @@
 //  WelcomeScreen.swift
 //  movemork
 //
-//  MoveMark — Clean green + white welcome. Proof-first hero, obvious CTA.
+//  MoveMark — Proof Passport intro (one object, one chip, one action).
 //
 
 import SwiftUI
@@ -10,229 +10,91 @@ import SwiftUI
 struct WelcomeScreen: View {
     @State private var showAuth = false
     @State private var authInitialMode: AuthContainerView.Mode = .signUp
-    @State private var heroRevealed = false
+    @State private var bgVisible = false
+    @State private var heroVisible = false
+    @State private var copyVisible = false
+    @State private var ctaVisible = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private let horizontalPadding: CGFloat = 28
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                welcomeBackground
-                    .ignoresSafeArea()
+            GeometryReader { geo in
+                let passportWidth = geo.size.width - (horizontalPadding * 2)
+                let heroHeight = min(geo.size.height * 0.44, 320)
 
-                VStack(spacing: 0) {
-                    Spacer(minLength: 28)
+                ZStack {
+                    WelcomeVaultBackground()
+                        .opacity(bgVisible ? 1 : 0)
 
-                    heroCardCluster
-                        .padding(.horizontal, 24)
-                        .opacity(heroRevealed ? 1 : 0.9)
-                        .offset(y: heroRevealed ? 0 : 10)
+                    VStack(spacing: 0) {
+                        heroZone(
+                            width: passportWidth,
+                            height: heroHeight,
+                            topSafe: geo.safeAreaInsets.top
+                        )
 
-                    Spacer(minLength: 12)
+                        copyZone
+                            .padding(.horizontal, horizontalPadding)
+                            .padding(.top, 22)
 
-                    bottomContent
-                        .padding(.horizontal, 26)
-                        .padding(.bottom, 32)
+                        Spacer(minLength: 12)
+
+                        actionZone
+                            .padding(.horizontal, horizontalPadding)
+                            .padding(.bottom, max(24, geo.safeAreaInsets.bottom + 12))
+                    }
                 }
             }
-            .onAppear {
-                withAnimation(.easeOut(duration: 0.55)) {
-                    heroRevealed = true
-                }
-            }
+            .onAppear { playEntrance() }
             .navigationDestination(isPresented: $showAuth) {
                 AuthContainerView(initialMode: authInitialMode)
             }
         }
     }
 
-    private var welcomeBackground: some View {
-        ZStack {
-            MoveMarkTheme.Colors.background
-
-            RadialGradient(
-                colors: [
-                    MoveMarkTheme.Colors.mint.opacity(0.85),
-                    MoveMarkTheme.Colors.background,
-                    MoveMarkTheme.Colors.background
-                ],
-                center: .top,
-                startRadius: 40,
-                endRadius: 420
-            )
-
-            RadialGradient(
-                colors: [
-                    MoveMarkTheme.Colors.primary.opacity(0.12),
-                    .clear
-                ],
-                center: .bottomTrailing,
-                startRadius: 20,
-                endRadius: 280
-            )
-            .offset(x: 40, y: 80)
-        }
+    private func playEntrance() {
+        let d: Double = reduceMotion ? 0 : 1
+        withAnimation(.easeOut(duration: 0.5 * d)) { bgVisible = true }
+        withAnimation(.easeOut(duration: 0.65 * d).delay(reduceMotion ? 0 : 0.06)) { heroVisible = true }
+        withAnimation(.easeOut(duration: 0.5 * d).delay(reduceMotion ? 0 : 0.18)) { copyVisible = true }
+        withAnimation(.easeOut(duration: 0.45 * d).delay(reduceMotion ? 0 : 0.28)) { ctaVisible = true }
     }
 
-    private var heroCardCluster: some View {
-        ZStack {
-            protectedDepositCard
-                .offset(x: 72, y: -8)
-                .rotationEffect(.degrees(3))
+    // MARK: - Hero
 
-            proofPhoneCard
-                .offset(x: -12, y: 24)
+    private func heroZone(width: CGFloat, height: CGFloat, topSafe: CGFloat) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            WelcomeReportBackingCard()
+                .frame(width: width)
+                .opacity(heroVisible ? 1 : 0)
+                .offset(x: heroVisible ? 0 : 8, y: heroVisible ? -8 : 4)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.6).delay(0.1), value: heroVisible)
+
+            WelcomeProofPassportCard(width: width)
+                .opacity(heroVisible ? 1 : 0)
+                .offset(y: heroVisible ? 0 : (reduceMotion ? 0 : 18))
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.65).delay(0.06), value: heroVisible)
+
+            WelcomeProtectionChip()
+                .offset(x: width - 168, y: -6)
+                .opacity(heroVisible ? 1 : 0)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.5).delay(0.14), value: heroVisible)
         }
-        .frame(height: 300)
+        .frame(height: height)
         .frame(maxWidth: .infinity)
+        .padding(.horizontal, horizontalPadding)
+        .padding(.top, max(12, topSafe + 6))
     }
 
-    private var proofPhoneCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ZStack(alignment: .bottomLeading) {
-                Image("welcome-kitchen-main")
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(height: 140)
-                    .clipped()
+    // MARK: - Copy
 
-                LinearGradient(
-                    colors: [.clear, MoveMarkTheme.Colors.textPrimary.opacity(0.2)],
-                    startPoint: .center,
-                    endPoint: .bottom
-                )
-                .frame(height: 140)
-
-                HStack {
-                    Text("Kitchen")
-                        .font(MoveMarkTheme.Typography.caption)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(MoveMarkTheme.Colors.primary.opacity(0.92))
-                        .clipShape(Capsule())
-                    Spacer()
-                }
-                .padding(12)
-            }
-
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    proofScoreRing
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Proof score")
-                            .font(MoveMarkTheme.Typography.caption)
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        Text("Strong")
-                            .font(MoveMarkTheme.Typography.subheadlineMedium)
-                            .foregroundStyle(MoveMarkTheme.Colors.textDarkGreen)
-                    }
-                    Spacer()
-                    Text("12 photos")
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                }
-
-                HStack(spacing: 6) {
-                    miniThumb("welcome-kitchen-2")
-                    miniThumb("welcome-kitchen-3")
-                    miniThumb("welcome-kitchen-4")
-                    Text("+8")
-                        .font(MoveMarkTheme.Typography.caption)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        .frame(width: 36, height: 36)
-                        .background(MoveMarkTheme.Colors.mint.opacity(0.6))
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                }
-            }
-            .padding(14)
-            .background(MoveMarkTheme.Colors.panel)
-        }
-        .frame(width: 248)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 1)
-        )
-        .shadow(color: MoveMarkTheme.Colors.textPrimary.opacity(0.08), radius: 24, y: 12)
-        .rotationEffect(.degrees(-2.5))
-    }
-
-    private var proofScoreRing: some View {
-        ZStack {
-            Circle()
-                .stroke(MoveMarkTheme.Colors.mint, lineWidth: 4)
-                .frame(width: 40, height: 40)
-            Circle()
-                .trim(from: 0, to: 0.82)
-                .stroke(MoveMarkTheme.Colors.primary, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .frame(width: 40, height: 40)
-            Text("82")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(MoveMarkTheme.Colors.textDarkGreen)
-        }
-    }
-
-    private var protectedDepositCard: some View {
+    private var copyZone: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Image(systemName: "checkmark.shield.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(MoveMarkTheme.Colors.primary)
-                Spacer()
-                MMPill(text: "Protected", tone: .success)
-            }
-
-            Text("$2,400")
-                .font(MoveMarkTheme.Typography.cardValue)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-            Text("Deposit protected")
-                .font(MoveMarkTheme.Typography.subheadline)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-
-            HStack(spacing: 12) {
-                statMini("24", "Photos")
-                statMini("3", "Issues")
-            }
-        }
-        .padding(16)
-        .frame(width: 188)
-        .background(MoveMarkTheme.Colors.panelAlt)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 1)
-        )
-        .shadow(color: MoveMarkTheme.Colors.textPrimary.opacity(0.06), radius: 16, y: 8)
-    }
-
-    private func statMini(_ value: String, _ label: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value)
-                .font(MoveMarkTheme.Typography.subheadlineMedium)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-            Text(label)
-                .font(MoveMarkTheme.Typography.caption)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-        }
-    }
-
-    private func miniThumb(_ name: String) -> some View {
-        Image(name)
-            .resizable()
-            .aspectRatio(contentMode: .fill)
-            .frame(width: 36, height: 36)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 0.8)
-            )
-    }
-
-    private var bottomContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
             Text("Get your deposit back.")
-                .font(MoveMarkTheme.Typography.heroLarge)
+                .font(.system(size: 38, weight: .bold))
                 .tracking(-0.8)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -240,22 +102,36 @@ struct WelcomeScreen: View {
             Text("Take photos now. Make a report later.")
                 .font(MoveMarkTheme.Typography.body)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                .lineSpacing(3)
-                .padding(.top, 10)
-                .padding(.bottom, 22)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .opacity(copyVisible ? 1 : 0)
+        .offset(y: copyVisible ? 0 : (reduceMotion ? 0 : 10))
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.5).delay(0.18), value: copyVisible)
+    }
 
-            MMButton(title: "Start proof") {
-                MMHaptics.soft()
-                authInitialMode = .signUp
-                showAuth = true
-            }
+    // MARK: - Action
+
+    private var actionZone: some View {
+        VStack(spacing: 0) {
+            MMButton(
+                title: "Start proof",
+                action: {
+                    MMHaptics.soft()
+                    authInitialMode = .signUp
+                    showAuth = true
+                },
+                showsTrailingArrow: true
+            )
+            .opacity(ctaVisible ? 1 : 0)
+            .offset(y: ctaVisible ? 0 : (reduceMotion ? 0 : 8))
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.45).delay(0.28), value: ctaVisible)
 
             HStack(spacing: 6) {
                 Spacer(minLength: 0)
                 Text("Already have an account?")
                     .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-
+                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                 Button {
                     MMHaptics.soft()
                     authInitialMode = .signIn
@@ -263,12 +139,13 @@ struct WelcomeScreen: View {
                 } label: {
                     Text("Sign in")
                         .font(MoveMarkTheme.Typography.subheadlineMedium)
-                        .foregroundStyle(MoveMarkTheme.Colors.textDarkGreen)
+                        .foregroundStyle(MoveMarkTheme.Colors.limeAccent)
                 }
                 .buttonStyle(.plain)
                 Spacer(minLength: 0)
             }
             .padding(.top, 14)
+            .opacity(ctaVisible ? 1 : 0)
         }
     }
 }

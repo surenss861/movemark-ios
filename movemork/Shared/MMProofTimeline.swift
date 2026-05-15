@@ -54,7 +54,7 @@ struct MMProofTimeline: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        MMCard(tone: .quiet, padding: 16, spacing: 12) {
+        MMCard(tone: .elevated, padding: 18, spacing: 12) {
             VStack(alignment: .leading, spacing: 14) {
                 Text(title)
                     .font(MoveMarkTheme.Typography.caption)
@@ -86,24 +86,28 @@ struct MMProofTimeline: View {
             VStack(spacing: 0) {
                 ZStack {
                     Circle()
-                        .fill(row.status.iconColor.opacity(0.14))
-                        .frame(width: 32, height: 32)
+                        .fill(row.status.iconColor.opacity(0.18))
+                        .frame(width: 44, height: 44)
+                        .overlay(
+                            Circle()
+                                .stroke(MoveMarkTheme.Colors.subtleStroke, lineWidth: 1)
+                        )
                     Image(systemName: row.iconName)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(row.status.iconColor)
                 }
 
                 if !isLast {
                     Rectangle()
                         .fill(row.status.railColor)
-                        .frame(width: 2)
+                        .frame(width: 2.5)
                         .frame(maxHeight: .infinity)
                         .padding(.top, 4)
                 }
             }
-            .frame(width: 32)
+            .frame(width: 40)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(row.title)
                         .font(.system(size: 15, weight: .semibold))
@@ -132,9 +136,15 @@ struct MMProofTimeline: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(
                     highlighted
-                        ? MoveMarkTheme.Colors.mint.opacity(reduceMotion ? 0.55 : 0.72)
+                        ? MoveMarkTheme.Colors.primary.opacity(reduceMotion ? 0.12 : 0.18)
                         : Color.clear
                 )
+                .overlay {
+                    if highlighted {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(MoveMarkTheme.Colors.proofMint.opacity(0.35), lineWidth: 1)
+                    }
+                }
         )
         .animation(reduceMotion ? nil : MMMotion.fastFade, value: highlighted)
     }

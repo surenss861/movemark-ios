@@ -19,7 +19,7 @@ struct movemorkApp: App {
                 .environment(sessionManager)
                 .environment(propertyStore)
                 .environment(subscriptionManager)
-                .preferredColorScheme(.light)
+                .preferredColorScheme(.dark)
         }
     }
 }

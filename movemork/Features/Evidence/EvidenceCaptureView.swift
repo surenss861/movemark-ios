@@ -70,7 +70,7 @@ struct EvidenceCaptureView: View {
 
     var body: some View {
         ZStack {
-            MoveMarkTheme.Colors.background.ignoresSafeArea()
+            MMEmeraldBackground()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -320,7 +320,7 @@ private struct EditEvidenceSheet: View {
                 .padding(.vertical, 16)
                 .padding(.bottom, 88)
             }
-            .background(MoveMarkTheme.Colors.background.ignoresSafeArea())
+            .mmEmeraldBackground()
             .navigationTitle("Edit proof")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -578,7 +578,7 @@ private struct AppendPhotosSheet: View {
                 .padding(.vertical, 16)
                 .padding(.bottom, 88)
             }
-            .background(MoveMarkTheme.Colors.background.ignoresSafeArea())
+            .mmEmeraldBackground()
             .navigationTitle("Add photos")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

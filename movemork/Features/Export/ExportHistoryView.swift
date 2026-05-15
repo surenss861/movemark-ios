@@ -77,7 +77,7 @@ struct ExportHistoryView: View {
 
     var body: some View {
         ZStack {
-            MoveMarkTheme.Colors.background.ignoresSafeArea()
+            MMEmeraldBackground()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
@@ -203,7 +203,7 @@ struct ExportHistoryView: View {
     }
 
     private var exportContextStrip: some View {
-        MMCard(tone: .quiet, padding: 12, spacing: 8) {
+        MMCard(tone: .standard, padding: 12, spacing: 8) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text("Current vault")
@@ -257,7 +257,7 @@ struct ExportHistoryView: View {
     }
 
     private var exportReadinessHero: some View {
-        MMReportPreviewCard(
+        MMReportHeroCard(
             title: "Move-in report",
             metrics: readinessMetricsLine,
             status: reportPreviewStatus,

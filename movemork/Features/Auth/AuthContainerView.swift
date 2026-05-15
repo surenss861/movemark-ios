@@ -47,87 +47,61 @@ struct AuthContainerView: View {
 
     var body: some View {
         ZStack {
-            atmosphericBackground
+            MMEmeraldBackground(emphasizesCTABloom: true)
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
                     headerBlock
+                    trustChip
+                        .padding(.bottom, 14)
                     authPanel
                     Spacer(minLength: 24)
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.vertical, 24)
+                .padding(.vertical, 20)
             }
         }
         .navigationBarBackButtonHidden(true)
     }
 
-    private var atmosphericBackground: some View {
-        ZStack {
-            MoveMarkTheme.Colors.background
-
-            RadialGradient(
-                colors: [
-                    MoveMarkTheme.Colors.primary.opacity(0.05),
-                    Color.clear
-                ],
-                center: .bottomTrailing,
-                startRadius: 60,
-                endRadius: 350
-            )
-
-            RadialGradient(
-                colors: [
-                    MoveMarkTheme.Colors.accent.opacity(0.03),
-                    Color.clear
-                ],
-                center: .topLeading,
-                startRadius: 40,
-                endRadius: 280
-            )
-        }
-        .ignoresSafeArea()
-    }
-
     private var headerBlock: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Image("MoveMarkLogo")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 44, height: 44)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.5), lineWidth: 0.8)
-                )
-                .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center, spacing: 14) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
+                        .frame(width: 42, height: 42)
+                        .background(MoveMarkTheme.Colors.deepCard.opacity(0.9))
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
 
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(MoveMarkTheme.Typography.button)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                    .frame(width: 46, height: 46)
-                    .background(MoveMarkTheme.Colors.mint.opacity(0.55))
-                    .clipShape(Circle())
+                Image("MoveMarkLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 40, height: 40)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .overlay(
-                        Circle()
-                            .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.9), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.white.opacity(0.12), lineWidth: 0.8)
                     )
-            }
-            .buttonStyle(.plain)
+                    .accessibilityHidden(true)
 
-            Rectangle()
-                .fill(MoveMarkTheme.Colors.accent)
-                .frame(width: 38, height: 3)
-                .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+                Spacer(minLength: 0)
+            }
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(mode == .signIn ? "Welcome back" : "Create your account")
                     .font(MoveMarkTheme.Typography.screenTitle)
                     .tracking(-0.6)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                    .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
 
                 Text(
                     mode == .signIn
@@ -135,10 +109,29 @@ struct AuthContainerView: View {
                         : "Start building your proof trail."
                 )
                 .font(MoveMarkTheme.Typography.body)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .foregroundStyle(MoveMarkTheme.Colors.textOnDarkMuted)
             }
         }
-        .padding(.bottom, 22)
+        .padding(.bottom, 8)
+    }
+
+    private var trustChip: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "lock.shield.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(MoveMarkTheme.Colors.limeAccent)
+            Text("Your proof stays private.")
+                .font(MoveMarkTheme.Typography.footnote)
+                .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(MoveMarkTheme.Colors.deepCard.opacity(0.85))
+        .clipShape(Capsule())
+        .overlay(
+            Capsule()
+                .stroke(MoveMarkTheme.Colors.limeAccent.opacity(0.22), lineWidth: 1)
+        )
     }
 
     private var authPanel: some View {
@@ -353,7 +346,7 @@ struct AuthContainerView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(MoveMarkTheme.Colors.mint.opacity(0.4))
+                .fill(MoveMarkTheme.Colors.surface.opacity(0.85))
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 1)

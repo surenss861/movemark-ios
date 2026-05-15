@@ -44,7 +44,7 @@ struct RoomListView: View {
 
     var body: some View {
         ZStack {
-            MoveMarkTheme.Colors.background.ignoresSafeArea()
+            MMEmeraldBackground()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
@@ -153,53 +153,34 @@ struct RoomListView: View {
 
     private var progressCard: some View {
         VStack(spacing: 12) {
-            MMProofMeter(
-                title: "Proof meter",
-                valueLine: rooms.isEmpty ? "0 rooms done" : "\(completedCount) of \(rooms.count) rooms done",
-                subtitle: rooms.isEmpty
-                    ? "Add your first room below."
-                    : (completedCount >= rooms.count
-                        ? "All rooms done."
-                        : (nextRoom != nil ? "Next: \(nextRoom?.name ?? "")" : "Keep going.")),
-                progress: progress,
-                tone: rooms.isEmpty ? .warning : .primary
-            )
+            if !rooms.isEmpty {
+                MMProofHeroCard(
+                    headline: "\(completedCount) of \(rooms.count) rooms done",
+                    nextLine: nextRoom.map { "Next: \($0.name)" } ?? "Review your rooms.",
+                    progress: progress,
+                    primaryTitle: MMNextBestActionMapper.roomProof(
+                        roomsEmpty: false,
+                        allRoomsDone: completedCount >= rooms.count,
+                        hasNextRoom: nextRoom != nil
+                    ).title,
+                    onPrimary: {
+                        if let nextRoom {
+                            path.append(.roomDetail(roomID: nextRoom.id))
+                        } else if let first = rooms.first {
+                            path.append(.roomDetail(roomID: first.id))
+                        }
+                    },
+                    style: .light
+                )
+            }
 
             if rooms.isEmpty {
-                MMNextActionCard(
-                    title: "Next",
-                    message: "Add a room to start proof.",
-                    metric: nil,
-                    primaryTitle: MMNextBestActionMapper.roomProof(
-                        roomsEmpty: true,
-                        allRoomsDone: false,
-                        hasNextRoom: false
-                    ).title,
-                    onPrimary: { showAddRoom = true }
-                )
-            } else if completedCount >= rooms.count {
-                MMNextActionCard(
-                    title: "Next",
-                    message: "Make a report or review your rooms.",
-                    metric: "\(completedCount)/\(rooms.count) rooms",
-                    primaryTitle: MMNextBestActionMapper.roomProof(
-                        roomsEmpty: false,
-                        allRoomsDone: true,
-                        hasNextRoom: false
-                    ).title,
-                    onPrimary: { path.append(.roomDetail(roomID: rooms[0].id)) }
-                )
-            } else if let nextRoom {
-                MMNextActionCard(
-                    title: "Next room",
-                    message: nextRoom.name,
-                    metric: "\(completedCount)/\(rooms.count) rooms",
-                    primaryTitle: MMNextBestActionMapper.roomProof(
-                        roomsEmpty: false,
-                        allRoomsDone: false,
-                        hasNextRoom: true
-                    ).title,
-                    onPrimary: { path.append(.roomDetail(roomID: nextRoom.id)) }
+                MMProofTaskCard(
+                    systemImage: "door.left.hand.open",
+                    title: "Add your first room",
+                    message: "Start move-in proof for each room.",
+                    actionTitle: MMNextBestAction.addRoom.title,
+                    onAction: { showAddRoom = true }
                 )
             }
         }

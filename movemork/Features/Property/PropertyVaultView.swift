@@ -164,7 +164,7 @@ struct PropertyVaultView: View {
 
     var body: some View {
         ZStack {
-            MoveMarkTheme.Colors.background.ignoresSafeArea()
+            MMEmeraldBackground()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -176,11 +176,32 @@ struct PropertyVaultView: View {
                     .id(property.id)
                     .padding(.bottom, 8)
 
-                    proofReadinessHeroCard
+                    MMDepositProtectionCard(
+                        depositDisplay: depositDisplayText,
+                        proofScoreLabel: proofScoreLabel,
+                        summaryLine: propertyStore.readinessSummaryLine(for: property),
+                        roomsLine: "\(completedRooms) of \(totalRooms) rooms · \(totalPhotos) photos"
+                    )
                     .opacity(contentVisible ? 1 : 0)
                     .offset(y: contentVisible ? 0 : 8)
                     .animation(MMMotion.screenTransition.delay(0.05), value: contentVisible)
-                    .padding(.bottom, 4)
+                    .padding(.bottom, 12)
+
+                    MMProofHeroCard(
+                        headline: "\(completedRooms) of \(totalRooms) rooms done",
+                        nextLine: readinessGuidanceLine,
+                        progress: progress,
+                        progressLabel: "\(readinessScore)% proof score",
+                        primaryTitle: MMNextBestActionMapper.from(
+                            propertyNextAction: propertyStore.primaryNextAction(for: property)
+                        ).title,
+                        onPrimary: { path.append(.walkthrough) },
+                        style: .light
+                    )
+                    .opacity(contentVisible ? 1 : 0)
+                    .offset(y: contentVisible ? 0 : 8)
+                    .animation(MMMotion.screenTransition.delay(0.06), value: contentVisible)
+                    .padding(.bottom, 14)
 
                     if let vaultSummaryError, uploadError == nil {
                         MMErrorBanner(
@@ -192,16 +213,6 @@ struct PropertyVaultView: View {
                         .animation(MMMotion.screenTransition.delay(0.06), value: contentVisible)
                         .padding(.bottom, 10)
                     }
-
-                    PropertyVaultWalkthroughBar(
-                        subtitle: walkthroughSubtitle,
-                        progressText: "\(completedRooms) of \(totalRooms) rooms done",
-                        onTap: { path.append(.walkthrough) }
-                    )
-                    .opacity(contentVisible ? 1 : 0)
-                    .offset(y: contentVisible ? 0 : 8)
-                    .animation(MMMotion.screenTransition.delay(0.08), value: contentVisible)
-                    .padding(.bottom, 14)
 
                     MMProofTimeline(
                         title: "Proof trail",
@@ -269,7 +280,7 @@ struct PropertyVaultView: View {
             }
         }
         .mmProofToast(message: proofToast, isVisible: proofToastVisible)
-        .background(MoveMarkTheme.Colors.background.ignoresSafeArea())
+        .mmEmeraldBackground()
         .sheet(isPresented: $showEditProperty) {
             NavigationStack {
                 EditPropertyView(property: property)
@@ -372,42 +383,17 @@ struct PropertyVaultView: View {
         }
     }
 
-    private var proofReadinessHeroCard: some View {
-        MMCard(tone: .quiet, padding: 16, spacing: 12) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Proof progress")
-                        .font(MoveMarkTheme.Typography.cardTitle)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                    Spacer()
-                    Text("\(readinessScore)% complete")
-                        .font(MoveMarkTheme.Typography.subheadlineMedium)
-                        .foregroundStyle(MoveMarkTheme.Colors.primary)
-                }
+    private var depositDisplayText: String {
+        let raw = property.depositAmount.trimmingCharacters(in: .whitespacesAndNewlines)
+        if raw.isEmpty { return "Deposit protection" }
+        if raw.hasPrefix("$") { return raw }
+        return "$\(raw)"
+    }
 
-                Text(readinessGuidanceLine)
-                    .font(MoveMarkTheme.Typography.subheadline)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    .lineLimit(2)
-
-                HStack(spacing: 10) {
-                    MMButton(
-                        title: MMNextBestActionMapper.from(
-                            propertyNextAction: propertyStore.primaryNextAction(for: property)
-                        ).title,
-                        action: { path.append(.walkthrough) },
-                        kind: .primary,
-                        size: .compact
-                    )
-                    MMButton(
-                        title: MMNextBestAction.addDocs.title,
-                        action: { showAllSupportingRecords = true },
-                        kind: .secondary,
-                        size: .compact
-                    )
-                }
-            }
-        }
+    private var proofScoreLabel: String {
+        if readinessScore >= 70 { return "Strong proof" }
+        if readinessScore >= 40 { return "Building proof" }
+        return "Early proof"
     }
 
     private var readinessGuidanceLine: String {

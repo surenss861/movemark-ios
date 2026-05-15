@@ -21,7 +21,7 @@ enum VaultDocumentType: String, CaseIterable {
 
     var displayTitle: String {
         switch self {
-        case .lease: return "Lease"
+        case .lease: return "lease"
         case .depositReceipt: return "Deposit receipt"
         case .listingScreenshot: return "Listing proof"
         case .cleaningReceipt: return "Cleaning receipt"

@@ -132,7 +132,7 @@ struct VaultRootView: View {
                 )
             }
             .scrollIndicators(.hidden, axes: .vertical)
-            .background(MoveMarkTheme.Colors.background.ignoresSafeArea())
+            .mmProofShellBackground(heroFocus: true)
             .task {
                 await loadPreviewURLs()
             }
@@ -169,21 +169,21 @@ struct VaultRootView: View {
         VStack(alignment: .leading, spacing: 7) {
             Text("Your proof")
                 .font(.system(size: 36, weight: .bold))
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
                 .opacity(hasAnimatedIn ? 1 : 0)
                 .offset(y: hasAnimatedIn ? 0 : 12)
                 .animation(.easeOut(duration: 0.45).delay(0.04), value: hasAnimatedIn)
 
             Text("Finish each room before move-out.")
                 .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .foregroundStyle(MoveMarkTheme.Colors.textOnDarkMuted)
                 .fixedSize(horizontal: false, vertical: true)
                 .opacity(hasAnimatedIn ? 1 : 0)
                 .offset(y: hasAnimatedIn ? 0 : 10)
                 .animation(.easeOut(duration: 0.4).delay(0.06), value: hasAnimatedIn)
 
             Rectangle()
-                .fill(MoveMarkTheme.Colors.primary)
+                .fill(MoveMarkTheme.Colors.limeAccent)
                 .frame(width: hasAnimatedIn ? 40 : 0, height: 3)
                 .clipShape(Capsule())
                 .animation(.easeOut(duration: 0.45).delay(0.08), value: hasAnimatedIn)
@@ -196,24 +196,35 @@ struct VaultRootView: View {
         .padding(.bottom, 4)
     }
 
-    /// Inline system state — not a summary card; bridges hero → workspace.
+    /// Dominant proof hero — replaces stacked meter + next cards.
     private var vaultSystemContextStrip: some View {
         VStack(spacing: 12) {
-            MMProofMeter(
-                title: "Proof meter",
-                valueLine: vaultProofProgressHeadline,
-                subtitle: vaultContextNextLine != nil ? "What’s next" : vaultContextPhaseLine,
+            MMProofHeroCard(
+                headline: vaultProofProgressHeadline,
+                nextLine: vaultContextNextLine ?? vaultContextPhaseLine,
                 progress: vaultProofProgressValue,
-                tone: vaultProofMeterTone
+                progressLabel: vaultProofProgressShortMetric,
+                primaryTitle: featuredContinueProofTitle,
+                onPrimary: { openFeaturedVaultOrContinue() },
+                style: .premium
             )
 
-            if let next = vaultContextNextLine {
-                MMNextActionCard(
-                    title: "Next",
-                    message: next,
-                    metric: vaultProofProgressShortMetric,
-                    primaryTitle: featuredContinueProofTitle,
-                    onPrimary: { openFeaturedVaultOrContinue() }
+            if let prop = propertyStore.currentProperty,
+               propertyStore.missingSupportingRecordCount(for: prop) > 0,
+               let missing = PropertyStore.moveInRequiredDocumentTypes.first(where: { type in
+                   !DocumentRepository.documentTypeQueryKeys(type.rawValue)
+                       .contains { prop.vaultDocuments.contains($0) }
+               }) {
+                MMProofTaskCard(
+                    systemImage: "doc.badge.plus",
+                    title: "Add \(missing.displayTitle)",
+                    message: "Needed for a stronger report.",
+                    actionTitle: MMNextBestAction.addDocs.title,
+                    onAction: {
+                        if let row = propertyStore.properties.first(where: { $0.id == prop.id }) {
+                            openVaultDetail(for: row)
+                        }
+                    }
                 )
             }
         }
@@ -351,25 +362,25 @@ struct VaultRootView: View {
         let next = nextAction(for: row)
         let prop = (propertyStore.currentProperty?.id == row.id) ? propertyStore.currentProperty : nil
 
-        let workflow: String? = {
-            if let p = prop { return propertyStore.proofWorkspaceHeadline(for: p) }
-            if isCurrent { return "Open this vault to refresh live proof workflow" }
-            return nil
-        }()
-
-        let metrics: String? = {
-            if let p = prop {
-                let line = propertyStore.compactProofMetricsLine(for: p)
-                return line.isEmpty ? nil : line
-            }
-            return "Open to view proof status, rooms, and records."
-        }()
-
         let bandStatusLine: String = {
             if isFeatured, let p = prop {
                 return propertyStore.heroStatusLine(for: p)
             }
             return secondaryStatusLine(for: row)
+        }()
+
+        let workflow: String? = {
+            guard isFeatured, let p = prop else { return nil }
+            let line = propertyStore.proofWorkspaceHeadline(for: p)
+            if line == bandStatusLine { return nil }
+            return line
+        }()
+
+        let metrics: String? = {
+            guard isFeatured, let p = prop else { return nil }
+            let line = propertyStore.compactProofMetricsLine(for: p)
+            if line.isEmpty || line == bandStatusLine { return nil }
+            return line
         }()
 
         return VaultCoverCardModel(
@@ -396,9 +407,9 @@ struct VaultRootView: View {
     }
 
     private var vaultHealthFooter: some View {
-        MMCard(tone: .quiet, padding: 14, spacing: 10) {
+        MMCard(tone: .standard, padding: 14, spacing: 10) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Proof progress")
+                Text("All vaults")
                     .font(MoveMarkTheme.Typography.subheadlineMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 Text(vaultHealthLine)
@@ -542,7 +553,7 @@ struct VaultRootView: View {
             .padding(.top, 18)
             .padding(.bottom, MoveMarkTheme.Spacing.scrollTailRootTabChrome)
         }
-        .background(MoveMarkTheme.Colors.background.ignoresSafeArea())
+        .mmProofShellBackground(heroFocus: true)
     }
 
     private var vaultHeader: some View {

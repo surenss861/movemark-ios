@@ -29,8 +29,7 @@ struct ProPaywallView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
-                MoveMarkTheme.Colors.background
-                    .ignoresSafeArea()
+                MMEmeraldBackground()
 
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 18) {
@@ -89,7 +88,7 @@ struct ProPaywallView: View {
 
             Text(reason.headline)
                 .font(.system(size: 28, weight: .bold))
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(reason.subheadline)
@@ -106,7 +105,7 @@ struct ProPaywallView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text(benefitsTitle)
                     .font(MoveMarkTheme.Typography.cardTitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                    .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
 
                 VStack(alignment: .leading, spacing: 14) {
                     ForEach(Array(benefits.enumerated()), id: \.offset) { _, item in
@@ -118,65 +117,86 @@ struct ProPaywallView: View {
     }
 
     private var pricingCard: some View {
-        MMCard {
-            VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("MoveMark Pro")
+                    .font(MoveMarkTheme.Typography.caption)
+                    .tracking(0.9)
+                    .foregroundStyle(MoveMarkTheme.Colors.limeAccent.opacity(0.95))
+                    .textCase(.uppercase)
+
                 Text(reason == .moveOutExport ? "Choose your protection plan" : "Choose your plan")
                     .font(MoveMarkTheme.Typography.cardTitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                paywallRestoreSection
-                    .padding(.top, 10)
-
-                plansLoadSection
-                    .padding(.top, 12)
-
-                if !displayPackages.isEmpty {
-                    Text(
-                        "MoveMark Pro is an auto-renewing subscription (monthly or annual). Prices below come from the App Store. Apple processes payment and renewal."
-                    )
-                    .font(MoveMarkTheme.Typography.caption)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.84))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 10)
-                }
-
-                if paywallPlansUnavailable {
-                    plansUnavailableRecoveryBlock
-                } else if let local = localErrorMessage, !displayPackages.isEmpty {
-                    MMErrorBanner(message: paywallBannerMessage(local), retryTitle: nil, onRetry: nil)
-                        .padding(.top, 14)
-                }
-
-                if let selectedPackage {
-                    ZStack {
-                        MMButton(
-                            title: subscriptionManager.isStoreKitBusy ? "Starting…" : continuePurchaseTitle(for: selectedPackage),
-                            action: { startPurchase(selectedPackage) },
-                            kind: .primary,
-                            size: .hero,
-                            isDisabled: subscriptionManager.isStoreKitBusy || subscriptionManager.isRefreshingOfferings
-                        )
-                        .opacity(subscriptionManager.isStoreKitBusy ? 0.7 : 1)
-
-                        if subscriptionManager.isStoreKitBusy {
-                            ProgressView()
-                                .tint(.white)
-                        }
-                    }
-                    .padding(.top, 16)
-                }
-
-                paywallLegalLinks
-                    .padding(.top, 8)
-
-                Text("Auto-renews until cancelled. Manage or cancel in Settings › Apple ID › Subscriptions.")
-                    .font(MoveMarkTheme.Typography.caption)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.82))
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 18)
+                    .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
             }
+            .padding(.bottom, 4)
+
+            paywallRestoreSection
+                .padding(.top, 10)
+
+            plansLoadSection
+                .padding(.top, 12)
+
+            if !displayPackages.isEmpty {
+                Text(
+                    "MoveMark Pro is an auto-renewing subscription (monthly or annual). Prices below come from the App Store. Apple processes payment and renewal."
+                )
+                .font(MoveMarkTheme.Typography.caption)
+                .foregroundStyle(MoveMarkTheme.Colors.textOnDarkMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 10)
+            }
+
+            if paywallPlansUnavailable {
+                plansUnavailableRecoveryBlock
+            } else if let local = localErrorMessage, !displayPackages.isEmpty {
+                MMErrorBanner(message: paywallBannerMessage(local), retryTitle: nil, onRetry: nil)
+                    .padding(.top, 14)
+            }
+
+            if let selectedPackage {
+                ZStack {
+                    MMButton(
+                        title: subscriptionManager.isStoreKitBusy ? "Starting…" : continuePurchaseTitle(for: selectedPackage),
+                        action: { startPurchase(selectedPackage) },
+                        kind: .primary,
+                        size: .hero,
+                        isDisabled: subscriptionManager.isStoreKitBusy || subscriptionManager.isRefreshingOfferings
+                    )
+                    .opacity(subscriptionManager.isStoreKitBusy ? 0.7 : 1)
+
+                    if subscriptionManager.isStoreKitBusy {
+                        ProgressView()
+                            .tint(.white)
+                    }
+                }
+                .padding(.top, 16)
+            }
+
+            paywallLegalLinks
+                .padding(.top, 8)
+
+            Text("Auto-renews until cancelled. Manage or cancel in Settings › Apple ID › Subscriptions.")
+                .font(MoveMarkTheme.Typography.caption)
+                .foregroundStyle(MoveMarkTheme.Colors.textOnDarkMuted)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 18)
         }
+        .padding(20)
+        .background(
+            LinearGradient(
+                colors: [MoveMarkTheme.Colors.cardRaised, MoveMarkTheme.Colors.card, MoveMarkTheme.Colors.surface],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(MoveMarkTheme.Colors.limeAccent.opacity(0.2), lineWidth: 1)
+        )
+        .shadow(color: MoveMarkTheme.Colors.textPrimary.opacity(0.12), radius: 18, y: 8)
     }
 
     /// Empty catalog after at least one paywall fetch finished — never show silent placeholders.
@@ -190,7 +210,7 @@ struct ProPaywallView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Already subscribed on this Apple ID? Restore before purchasing again.")
                 .font(MoveMarkTheme.Typography.footnote)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.82))
+                .foregroundStyle(MoveMarkTheme.Colors.textOnDarkMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
             Button {
@@ -277,17 +297,19 @@ struct ProPaywallView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Plans didn’t load")
                 .font(MoveMarkTheme.Typography.cardTitle)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
 
             Text("Try again in a minute. You can keep using Free for now.")
                 .font(MoveMarkTheme.Typography.subheadline)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            #if DEBUG
             Text(plansUnavailableTechnicalDetail)
                 .font(MoveMarkTheme.Typography.caption)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.78))
+                .foregroundStyle(MoveMarkTheme.Colors.textOnDarkMuted.opacity(0.78))
                 .fixedSize(horizontal: false, vertical: true)
+            #endif
 
             MMButton(
                 title: subscriptionManager.isRefreshingOfferings
@@ -347,11 +369,7 @@ struct ProPaywallView: View {
     }
 
     private func paywallBannerMessage(_ raw: String) -> String {
-        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if t.count > 200 {
-            return "Plans aren’t available right now. Try again later."
-        }
-        return t
+        SubscriptionManager.sanitizedPlansErrorMessage(raw)
     }
 
     private func continuePurchaseTitle(for package: Package) -> String {
@@ -460,7 +478,7 @@ struct ProPaywallView: View {
                     HStack(spacing: 8) {
                         Text(planDisplayTitle(for: package))
                             .font(MoveMarkTheme.Typography.subheadlineMedium)
-                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                            .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
 
                         if isYearly {
                             Text("Best value")
@@ -543,7 +561,7 @@ struct ProPaywallView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(MoveMarkTheme.Typography.subheadlineMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                    .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
 
                 Text(subtitle)
                     .font(MoveMarkTheme.Typography.footnote)
@@ -570,13 +588,13 @@ struct ProPaywallView: View {
         case .extraProperty:
             return [
                 ("More property vaults", "Separate proof trails for each rental."),
-                ("Unlimited exports", "Save, share, or send proof PDFs anytime."),
+                ("Unlimited reports", "Save, share, or send proof PDFs anytime."),
                 ("Case builder included", "Stronger dispute workflow from your evidence."),
             ]
         case .unlimitedExports:
             return [
-                ("Unlimited move-in exports", "Fresh baseline reports as docs grow."),
-                ("Move-out exports", "Before-and-after records for deposit disputes."),
+                ("Unlimited move-in reports", "Fresh baseline reports as docs grow."),
+                ("Move-out reports", "Before-and-after records for deposit disputes."),
                 ("Case builder included", "Exports plus proof in one flow."),
             ]
         case .disputePacket:
@@ -587,8 +605,8 @@ struct ProPaywallView: View {
             ]
         case .moveOutExport:
             return [
-                ("Move-out exports", "Before-and-after proof when risk is real."),
-                ("Unlimited exports", "Update reports as you add evidence."),
+                ("Move-out reports", "Before-and-after proof when risk is real."),
+                ("Unlimited reports", "Update reports as you add evidence."),
                 ("Case builder", "Move-out proof inside a stronger workflow."),
             ]
         }

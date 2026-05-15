@@ -2,7 +2,7 @@
 //  MMCard.swift
 //  movemork
 //
-//  MoveMark — Clean financial card surfaces (white / mint tiers).
+//  MoveMark — Tactile emerald card surfaces.
 //
 
 import SwiftUI
@@ -12,41 +12,9 @@ struct MMCard<Content: View>: View {
         case elevated
         case standard
         case quiet
-        /// Mint-tinted panel for proof rows and dense lists.
         case artifact
-
-        var fill: Color {
-            switch self {
-            case .elevated, .standard:
-                return MoveMarkTheme.Colors.panel
-            case .quiet:
-                return MoveMarkTheme.Colors.panel.opacity(0.98)
-            case .artifact:
-                return MoveMarkTheme.Colors.panelAlt
-            }
-        }
-
-        var strokeOpacity: Double {
-            switch self {
-            case .elevated:
-                return 1.0
-            case .standard:
-                return 0.92
-            case .quiet, .artifact:
-                return 0.78
-            }
-        }
-
-        var shadowOpacity: Double {
-            switch self {
-            case .elevated:
-                return 0.06
-            case .standard:
-                return 0.04
-            case .quiet, .artifact:
-                return 0.02
-            }
-        }
+        case cream
+        case inset
     }
 
     let tone: Tone
@@ -71,17 +39,9 @@ struct MMCard<Content: View>: View {
             content
         }
         .padding(padding)
-        .background(tone.fill)
-        .overlay(
-            RoundedRectangle(
-                cornerRadius: MoveMarkTheme.Spacing.cornerRadius,
-                style: .continuous
-            )
-            .stroke(
-                MoveMarkTheme.Colors.panelStroke.opacity(tone.strokeOpacity),
-                lineWidth: 1
-            )
-        )
+        .background(cardFill)
+        .overlay(topHighlight)
+        .overlay(cardStroke)
         .clipShape(
             RoundedRectangle(
                 cornerRadius: MoveMarkTheme.Spacing.cornerRadius,
@@ -89,10 +49,83 @@ struct MMCard<Content: View>: View {
             )
         )
         .shadow(
-            color: MoveMarkTheme.Colors.textPrimary.opacity(tone.shadowOpacity),
-            radius: tone == .elevated ? 16 : 10,
+            color: MoveMarkTheme.Colors.primary.opacity(shadowOpacity),
+            radius: shadowRadius,
             x: 0,
-            y: tone == .elevated ? 6 : 3
+            y: shadowY
         )
+    }
+
+    private var cardFill: some View {
+        RoundedRectangle(cornerRadius: MoveMarkTheme.Spacing.cornerRadius, style: .continuous)
+            .fill(fillColor)
+    }
+
+    private var topHighlight: some View {
+        RoundedRectangle(cornerRadius: MoveMarkTheme.Spacing.cornerRadius, style: .continuous)
+            .stroke(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(highlightOpacity),
+                        Color.white.opacity(0.04),
+                        .clear
+                    ],
+                    startPoint: .top,
+                    endPoint: UnitPoint(x: 0.5, y: 0.35)
+                ),
+                lineWidth: 1.2
+            )
+    }
+
+    private var cardStroke: some View {
+        RoundedRectangle(cornerRadius: MoveMarkTheme.Spacing.cornerRadius, style: .continuous)
+            .stroke(MoveMarkTheme.Colors.cardStroke.opacity(strokeOpacity), lineWidth: 1)
+    }
+
+    private var fillColor: Color {
+        switch tone {
+        case .elevated, .cream:
+            return MoveMarkTheme.Colors.cardRaised
+        case .standard:
+            return MoveMarkTheme.Colors.card
+        case .quiet:
+            return MoveMarkTheme.Colors.card.opacity(0.92)
+        case .artifact:
+            return MoveMarkTheme.Colors.surface
+        case .inset:
+            return MoveMarkTheme.Colors.fieldFill
+        }
+    }
+
+    private var strokeOpacity: Double {
+        switch tone {
+        case .elevated, .cream: return 1.0
+        case .standard: return 0.88
+        case .quiet, .artifact, .inset: return 0.7
+        }
+    }
+
+    private var highlightOpacity: Double {
+        switch tone {
+        case .elevated, .cream: return 0.16
+        case .standard: return 0.11
+        default: return 0.07
+        }
+    }
+
+    private var shadowOpacity: Double {
+        switch tone {
+        case .elevated, .cream: return 0.26
+        case .standard: return 0.16
+        case .quiet, .artifact, .inset: return 0.08
+        }
+    }
+
+    private var shadowRadius: CGFloat {
+        tone == .elevated || tone == .cream ? 20 : 12
+    }
+
+    private var shadowY: CGFloat {
+        tone == .elevated || tone == .cream ? 9 : 5
     }
 }

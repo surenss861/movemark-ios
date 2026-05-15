@@ -114,19 +114,46 @@ final class SubscriptionManager {
 
     func remainingFreeMoveInExportsText(forUser userId: UUID?) -> String {
         if hasPro {
-            return "Unlimited move-in exports with Pro"
+            return "Unlimited move-in reports with Pro"
         }
 
         guard let userId else {
-            return "Sign in to use your free move-in export"
+            return "Sign in to use your free move-in report"
         }
 
         let count = freeMoveInExportCount(forUser: userId)
         let remaining = max(0, 1 - count)
         if remaining == 1 {
-            return "1 free move-in export remaining"
+            return "1 free move-in report left"
         }
-        return "Free move-in export used"
+        return "Free move-in report used"
+    }
+
+    /// Short copy for Account / Paywall — never surfaces RevenueCat or config jargon.
+    var userFacingPlansErrorMessage: String? {
+        guard let lastErrorMessage else { return nil }
+        let trimmed = lastErrorMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return Self.sanitizedPlansErrorMessage(trimmed)
+    }
+
+    static func sanitizedPlansErrorMessage(_ raw: String) -> String {
+        let lower = raw.lowercased()
+        if lower.contains("revenuecat")
+            || lower.contains("offering")
+            || lower.contains("app store connect")
+            || lower.contains("appl_")
+            || lower.contains("test_")
+            || lower.contains("entitlement")
+            || lower.contains("package")
+            || lower.contains("metadata")
+            || lower.contains("credential") {
+            return "Plans didn't load. Try again."
+        }
+        if raw.count > 120 {
+            return "Plans didn't load. Try again."
+        }
+        return raw
     }
 
     func configure(appUserID: String? = nil) {
@@ -330,31 +357,7 @@ final class SubscriptionManager {
 
     /// Maps RevenueCat / StoreKit errors to short paywall-safe copy (details go to logs).
     private static func userFacingRevenueCatOperationError(_ error: Error) -> String {
-        let raw = error.localizedDescription
-        let lower = raw.lowercased()
-
-        if lower.contains("missing app store connect api credentials")
-            || (lower.contains("app store connect") && lower.contains("credential") && lower.contains("missing")) {
-            return "Plans aren’t loading. Finish App Store Connect API setup in RevenueCat, then try again."
-        }
-
-        if lower.contains("could not fetch") && lower.contains("app store connect") {
-            return "Plans couldn’t load. Check RevenueCat and App Store Connect, then try again."
-        }
-
-        if lower.contains("missing_metadata") || lower.contains("missing metadata") {
-            return "Plans aren’t ready in App Store Connect yet. Complete subscription metadata, then try again."
-        }
-
-        if lower.contains("not found") && (lower.contains("app store") || lower.contains("product")) {
-            return "Plans aren’t available. Remove stale products in RevenueCat and match App Store Connect IDs."
-        }
-
-        if raw.count > 160 {
-            return "Plans couldn’t load. Try again later."
-        }
-
-        return raw
+        "Plans didn't load. Try again."
     }
 
     /// Debug-only plist override for a specific offering id. Ignored in Release so TestFlight/App Store always use `offerings.current` from the dashboard.
@@ -507,13 +510,13 @@ final class SubscriptionManager {
 
                 if current.availablePackages.isEmpty {
                     subscriptionLog.notice("refresh resolved offering has zero packages (check RevenueCat packages / App Store Connect / Paid Apps Agreement)")
-                    lastErrorMessage = "Plans aren’t available yet. Check your default offering and packages in RevenueCat."
+                    lastErrorMessage = "Plans didn't load. Try again."
                 } else {
                     lastErrorMessage = nil
                 }
             } else {
                 subscriptionLog.notice("refresh resolved offering=nil (no current offering in RevenueCat)")
-                lastErrorMessage = "No default subscription offering in RevenueCat. Set a current offering with packages."
+                lastErrorMessage = "Plans didn't load. Try again."
             }
         } catch {
             lastErrorMessage = Self.userFacingRevenueCatOperationError(error)

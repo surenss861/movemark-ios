@@ -130,11 +130,11 @@ struct VaultCoverBottomBand: View {
     }
 
     private var bandBackground: some View {
-        MoveMarkTheme.Colors.panel
-            .opacity(0.97)
+        MoveMarkTheme.Colors.cardRaised
+            .opacity(0.98)
             .overlay(alignment: .top) {
                 Rectangle()
-                    .fill(MoveMarkTheme.Colors.panelStroke)
+                    .fill(MoveMarkTheme.Colors.cardStroke.opacity(0.7))
                     .frame(height: 0.5)
             }
     }

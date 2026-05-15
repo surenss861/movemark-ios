@@ -2,7 +2,7 @@
 //  MMButton.swift
 //  movemork
 //
-//  MoveMark — Chunky primary (green), secondary (white), quiet actions.
+//  MoveMark — Premium primary CTA with glow and press depth.
 //
 
 import SwiftUI
@@ -21,7 +21,7 @@ struct MMButton: View {
 
         var height: CGFloat {
             switch self {
-            case .hero: return 58
+            case .hero: return MoveMarkTheme.Spacing.heroButtonHeight
             case .standard: return 48
             case .compact: return 38
             }
@@ -29,7 +29,7 @@ struct MMButton: View {
 
         var horizontalPadding: CGFloat {
             switch self {
-            case .hero: return 18
+            case .hero: return 20
             case .standard: return 16
             case .compact: return 12
             }
@@ -37,7 +37,7 @@ struct MMButton: View {
 
         var cornerRadius: CGFloat {
             switch self {
-            case .hero: return 16
+            case .hero: return 18
             case .standard: return 14
             case .compact: return 12
             }
@@ -62,6 +62,7 @@ struct MMButton: View {
     var size: Size = .hero
     var isDisabled: Bool = false
     var expandsToFillWidth: Bool = true
+    var showsTrailingArrow: Bool = false
 
     init(
         title: String,
@@ -75,6 +76,7 @@ struct MMButton: View {
         self.size = .hero
         self.isDisabled = isDisabled
         self.expandsToFillWidth = true
+        self.showsTrailingArrow = false
     }
 
     init(
@@ -83,7 +85,8 @@ struct MMButton: View {
         kind: Kind = .primary,
         size: Size = .hero,
         isDisabled: Bool = false,
-        expandsToFillWidth: Bool = true
+        expandsToFillWidth: Bool = true,
+        showsTrailingArrow: Bool = false
     ) {
         self.title = title
         self.action = action
@@ -91,24 +94,46 @@ struct MMButton: View {
         self.size = size
         self.isDisabled = isDisabled
         self.expandsToFillWidth = expandsToFillWidth
+        self.showsTrailingArrow = showsTrailingArrow
     }
 
     var body: some View {
         Button(action: action) {
+            labelContent
+                .frame(maxWidth: expandsToFillWidth ? .infinity : nil)
+                .frame(height: size.height)
+                .padding(.horizontal, expandsToFillWidth ? size.horizontalPadding : size.horizontalPadding)
+                .background(backgroundView)
+                .clipShape(RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous))
+                .shadow(
+                    color: primaryGlowColor,
+                    radius: kind == .primary && size == .hero ? 16 : 0,
+                    y: kind == .primary && size == .hero ? 8 : 0
+                )
+        }
+        .buttonStyle(MMButtonPressStyle(kind: kind))
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.48 : 1.0)
+    }
+
+    private var labelContent: some View {
+        HStack(spacing: 10) {
             Text(title)
                 .font(size.font)
                 .foregroundStyle(foregroundColor)
-                .frame(maxWidth: expandsToFillWidth ? .infinity : nil)
-                .frame(height: size.height)
-                .padding(.horizontal, expandsToFillWidth ? 0 : size.horizontalPadding)
-                .background(backgroundView)
-                .clipShape(
-                    RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
-                )
+
+            if showsTrailingArrow {
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(foregroundColor.opacity(0.95))
+            }
         }
-        .buttonStyle(MMButtonPressStyle())
-        .disabled(isDisabled)
-        .opacity(isDisabled ? 0.48 : 1.0)
+    }
+
+    private var primaryGlowColor: Color {
+        guard kind == .primary, !isDisabled else { return .clear }
+        return MoveMarkTheme.Colors.primary.opacity(size == .hero ? 0.38 : 0.2)
     }
 
     private var foregroundColor: Color {
@@ -116,7 +141,7 @@ struct MMButton: View {
         case .primary:
             return MoveMarkTheme.Colors.textOnPrimary
         case .secondary, .quiet:
-            return MoveMarkTheme.Colors.textDarkGreen
+            return MoveMarkTheme.Colors.textPrimary
         }
     }
 
@@ -125,32 +150,53 @@ struct MMButton: View {
         switch kind {
         case .primary:
             RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
-                .fill(MoveMarkTheme.Colors.primary)
+                .fill(
+                    LinearGradient(
+                        colors: [MoveMarkTheme.Colors.primary, MoveMarkTheme.Colors.primary.opacity(0.92)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
+                        .stroke(MoveMarkTheme.Colors.limeAccent.opacity(0.25), lineWidth: 1)
+                )
 
         case .secondary:
             RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
-                .fill(MoveMarkTheme.Colors.panel)
+                .fill(MoveMarkTheme.Colors.cardRaised)
                 .overlay(
                     RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
-                        .stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 1.2)
+                        .stroke(MoveMarkTheme.Colors.cardStroke, lineWidth: 1)
                 )
 
         case .quiet:
             RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
-                .fill(MoveMarkTheme.Colors.mint.opacity(0.65))
+                .fill(MoveMarkTheme.Colors.surface.opacity(0.9))
                 .overlay(
                     RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
-                        .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.7), lineWidth: 0.8)
+                        .stroke(MoveMarkTheme.Colors.subtleStroke, lineWidth: 1)
                 )
         }
     }
 }
 
 private struct MMButtonPressStyle: ButtonStyle {
+    let kind: MMButton.Kind
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
             .opacity(configuration.isPressed ? 0.9 : 1)
-            .animation(.easeInOut(duration: 0.14), value: configuration.isPressed)
+            .background {
+                if configuration.isPressed, kind == .primary {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(MoveMarkTheme.Colors.primaryPressed.opacity(0.35))
+                        .blur(radius: 8)
+                        .offset(y: 2)
+                }
+            }
+            .animation(reduceMotion ? nil : MMMotion.press, value: configuration.isPressed)
     }
 }
