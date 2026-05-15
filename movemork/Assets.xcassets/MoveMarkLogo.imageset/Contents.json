@@ -4,6 +4,16 @@
       "filename" : "MoveMarkLogo.png",
       "idiom" : "universal",
       "scale" : "1x"
+    },
+    {
+      "filename" : "MoveMarkLogo@2x.png",
+      "idiom" : "universal",
+      "scale" : "2x"
+    },
+    {
+      "filename" : "MoveMarkLogo@3x.png",
+      "idiom" : "universal",
+      "scale" : "3x"
     }
   ],
   "info" : {
