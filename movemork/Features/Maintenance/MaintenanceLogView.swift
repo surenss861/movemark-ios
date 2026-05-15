@@ -111,7 +111,7 @@ struct MaintenanceLogView: View {
                 .font(MoveMarkTheme.Typography.screenTitle)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-            Text("Track incidents, landlord follow-up, and supporting evidence as part of the record.")
+            Text("Track incidents, landlord follow-up, and photo proof as part of the record.")
                 .font(MoveMarkTheme.Typography.body)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 

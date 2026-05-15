@@ -55,26 +55,16 @@ struct VaultCoverCard: View {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
                         model.isEmphasized
-                            ? MoveMarkTheme.Colors.primary.opacity(0.20)
-                            : Color.white.opacity(0.04),
-                        lineWidth: model.isEmphasized ? 1.0 : 0.5
+                            ? MoveMarkTheme.Colors.primary.opacity(0.28)
+                            : MoveMarkTheme.Colors.panelStroke,
+                        lineWidth: model.isEmphasized ? 1.0 : 0.8
                     )
             )
-            .overlay(alignment: .top) {
-                if model.isEmphasized {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.04))
-                        .frame(height: 1)
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 1)
-                        .allowsHitTesting(false)
-                }
-            }
             .shadow(
-                color: .black.opacity(
+                color: MoveMarkTheme.Colors.textPrimary.opacity(
                     isPressed
-                        ? (model.isEmphasized ? 0.22 : 0.1)
-                        : (model.isEmphasized ? 0.28 : 0.08)
+                        ? (model.isEmphasized ? 0.08 : 0.04)
+                        : (model.isEmphasized ? 0.10 : 0.05)
                 ),
                 radius: isPressed
                     ? (model.isEmphasized ? 12 : 6)
@@ -137,26 +127,17 @@ struct VaultCoverCard: View {
         } label: {
             Image(systemName: "chevron.down")
                 .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(.white.opacity(0.30))
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 .animation(MMMotion.expand, value: isExpanded)
                 .frame(maxWidth: .infinity)
                 .frame(height: chevronStripHeight)
         }
         .buttonStyle(.plain)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color.black.opacity(0.18),
-                    Color.black.opacity(0.26)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
+        .background(MoveMarkTheme.Colors.panelAlt)
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(Color.white.opacity(0.04))
+                .fill(MoveMarkTheme.Colors.panelStroke)
                 .frame(height: 0.5)
         }
     }

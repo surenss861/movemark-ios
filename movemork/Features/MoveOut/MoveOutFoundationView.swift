@@ -112,7 +112,7 @@ struct MoveOutFoundationView: View {
                     }
                 }
 
-                Text("Check off as you go. These steps strengthen your move-out record.")
+                Text("Check off as you go. Each step adds move-out proof.")
                     .font(MoveMarkTheme.Typography.subheadline)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
@@ -183,7 +183,7 @@ struct MoveOutFoundationView: View {
             if rooms.isEmpty {
                 MMEmptyState(
                     systemImage: "arrow.left.arrow.right.circle",
-                    title: "Add rooms in Walkthrough first",
+                    title: "Add rooms in Room proof first",
                     message: "Move-out compares each room to your move-in baseline. Create rooms and capture move-in proof, then return here for move-out photos and notes."
                 )
             }
@@ -318,7 +318,7 @@ struct MoveOutFoundationView: View {
             VStack(alignment: .leading, spacing: 14) {
                 SectionLabel(text: "Export")
 
-                Text("Generate a move-out report with your before-and-after room proof. Keep it, share it, or attach it to a dispute.")
+                Text("Make a move-out report with your before-and-after room proof. Keep it, share it, or attach it to a dispute.")
                     .font(MoveMarkTheme.Typography.subheadline)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
@@ -344,7 +344,7 @@ struct MoveOutFoundationView: View {
 
     private var moveOutExportFootnote: String {
         if rooms.isEmpty {
-            return "Add rooms in Walkthrough first"
+            return "Add rooms in Room proof first"
         }
         let roomsWithMoveOutProof = rooms.filter { !$0.moveOutEvidence.isEmpty }.count
         if roomsWithMoveOutProof == 0 {

@@ -109,7 +109,7 @@ struct AuthContainerView: View {
                     .font(MoveMarkTheme.Typography.button)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .frame(width: 46, height: 46)
-                    .background(Color.white.opacity(0.05))
+                    .background(MoveMarkTheme.Colors.mint.opacity(0.55))
                     .clipShape(Circle())
                     .overlay(
                         Circle()
@@ -297,11 +297,11 @@ struct AuthContainerView: View {
                 } label: {
                     ZStack {
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(hasAcceptedLegal ? Color.white.opacity(0.14) : Color.white.opacity(0.04))
+                            .fill(hasAcceptedLegal ? MoveMarkTheme.Colors.primary.opacity(0.18) : MoveMarkTheme.Colors.mint.opacity(0.45))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                                     .stroke(
-                                        hasAcceptedLegal ? Color.white.opacity(0.30) : Color.white.opacity(0.12),
+                                        hasAcceptedLegal ? MoveMarkTheme.Colors.primary.opacity(0.5) : MoveMarkTheme.Colors.panelStroke,
                                         lineWidth: 1
                                     )
                             )
@@ -353,10 +353,10 @@ struct AuthContainerView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white.opacity(0.035))
+                .fill(MoveMarkTheme.Colors.mint.opacity(0.4))
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                        .stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 1)
                 )
         )
     }

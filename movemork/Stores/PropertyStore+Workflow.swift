@@ -34,7 +34,7 @@ extension PropertyStore {
             case .openDisputeBuilder:
                 return "Open dispute builder"
             case .openExports:
-                return "Open exports"
+                return "Make report"
             case .reviewVault:
                 return "Review vault"
             }
@@ -43,15 +43,15 @@ extension PropertyStore {
         var shortCTA: String {
             switch self {
             case .captureRoom:
-                return "Resume"
+                return "Continue proof"
             case .uploadDocument:
-                return "Add"
+                return "Add docs"
             case .reviewMaintenance:
-                return "Review"
+                return "Review issues"
             case .openDisputeBuilder:
-                return "Build"
+                return "Open dispute"
             case .openExports:
-                return "Export"
+                return "Make report"
             case .reviewVault:
                 return "Open"
             }
@@ -197,16 +197,16 @@ extension PropertyStore {
             ? "1 open issue"
             : "\(openIssueCount(for: property)) open issues"
         let docsMissing = missingSupportingRecordCount(for: property)
-        let docs = docsMissing == 0 ? "All records uploaded" : "\(docsMissing) records missing"
+        let docs = docsMissing == 0 ? "All docs uploaded" : "\(docsMissing) docs missing"
         return [rooms, issues, docs].joined(separator: " · ")
     }
 
     func heroStatusLine(for property: PropertyRecord) -> String {
         var parts: [String] = []
-        parts.append("\(documentedRoomCount(for: property)) of \(totalRoomCount(for: property)) rooms documented")
+        parts.append("\(documentedRoomCount(for: property)) of \(totalRoomCount(for: property)) rooms done")
         let missingDocs = missingSupportingRecordCount(for: property)
         if missingDocs > 0 {
-            parts.append("\(missingDocs) supporting records missing")
+            parts.append("\(missingDocs) docs missing")
         }
         return parts.joined(separator: " · ")
     }
@@ -220,22 +220,22 @@ extension PropertyStore {
             return "Add rooms to begin move-in proof"
         }
         if documented == 0 {
-            return "Move-in walkthrough not started"
+            return "Move-in proof not started"
         }
         if documented < total {
-            return "Move-in walkthrough in progress"
+            return "Move-in proof in progress"
         }
         if missingSupportingRecordCount(for: property) > 0 {
-            return "Room proof captured · finish supporting records"
+            return "Rooms done · add receipts & lease docs"
         }
         let issues = openIssueCount(for: property)
         if issues > 0 {
             return issues == 1 ? "1 open maintenance issue" : "\(issues) open maintenance issues"
         }
         if isExportReady(for: property) {
-            return "Move-in proof ready to export"
+            return "Ready to make your report"
         }
-        return "Vault in good shape · keep records current"
+        return "Proof looks good · keep docs current"
     }
 
     /// Short proof metrics for the active card (photos + room progress).

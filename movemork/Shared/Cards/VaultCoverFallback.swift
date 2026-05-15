@@ -2,7 +2,7 @@
 //  VaultCoverFallback.swift
 //  movemork
 //
-//  Non-featured + featured cover surfaces share the same “proof workspace” language.
+//  Mint placeholder covers when no preview image is available.
 //
 
 import SwiftUI
@@ -23,51 +23,22 @@ struct VaultCoverFallback: View {
         .opacity(isPressed ? 0.94 : 1.0)
     }
 
-    // MARK: - Featured: editorial cover slot with subtle vault-health signals.
-
     private var featuredCoverZone: some View {
         ZStack {
-            // Base: richer tonal separation so it doesn’t read as flat gray.
             LinearGradient(
                 colors: featuredBaseGradient,
-                startPoint: .top,
-                endPoint: .bottom
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
 
-            // Key light: one strong top-left so it reads as “stage” / hero image slot.
             RadialGradient(
                 colors: [
-                    Color.white.opacity(0.28),
-                    Color.white.opacity(0.06),
+                    MoveMarkTheme.Colors.primary.opacity(0.18),
                     .clear
                 ],
                 center: .topLeading,
                 startRadius: 0,
                 endRadius: 200
-            )
-
-            // Soft horizon: mid-zone transition so upper half reads as distinct “cover” plane.
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0),
-                    .init(color: .clear, location: 0.44),
-                    .init(color: Color.black.opacity(0.1), location: 0.5),
-                    .init(color: .clear, location: 0.56),
-                    .init(color: .clear, location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
-            // Edge falloff: corners and bottom pull in so the center reads as the focal area.
-            RadialGradient(
-                colors: [
-                    .clear,
-                    Color.black.opacity(0.35)
-                ],
-                center: .bottom,
-                startRadius: 40,
-                endRadius: 260
             )
 
             featuredStatusRows
@@ -81,39 +52,25 @@ struct VaultCoverFallback: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 7) {
                 capsule("ROOM PROOF")
-                capsule(style == .ready ? "EXPORT READY" : "IN PROGRESS")
+                capsule(style == .ready ? "READY" : "IN PROGRESS")
             }
 
             meter(width: 0.64)
             meter(width: 0.82)
         }
-        .opacity(0.56)
+        .opacity(0.72)
     }
 
     private var featuredBaseGradient: [Color] {
         switch style {
         case .empty:
-            return [
-                Color(white: 0.14),
-                Color(white: 0.09),
-                Color(white: 0.06)
-            ]
+            return [MoveMarkTheme.Colors.mint, MoveMarkTheme.Colors.panelAlt, MoveMarkTheme.Colors.backgroundAlt]
         case .started:
-            return [
-                Color(white: 0.13),
-                Color(white: 0.08),
-                MoveMarkTheme.Colors.primary.opacity(0.04)
-            ]
+            return [MoveMarkTheme.Colors.panelAlt, MoveMarkTheme.Colors.mint.opacity(0.8), MoveMarkTheme.Colors.primary.opacity(0.08)]
         case .ready:
-            return [
-                Color(white: 0.14),
-                Color(white: 0.08),
-                MoveMarkTheme.Colors.primary.opacity(0.06)
-            ]
+            return [MoveMarkTheme.Colors.mint, MoveMarkTheme.Colors.primary.opacity(0.12), MoveMarkTheme.Colors.panelAlt]
         }
     }
-
-    // MARK: - Non-featured: compact placeholder that still reads like a live vault.
 
     private var standardCoverZone: some View {
         ZStack {
@@ -121,31 +78,6 @@ struct VaultCoverFallback: View {
                 colors: gradientColors,
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
-            )
-
-            RadialGradient(
-                colors: [
-                    Color.white.opacity(0.16),
-                    Color.white.opacity(0.04),
-                    .clear
-                ],
-                center: .topLeading,
-                startRadius: 0,
-                endRadius: 140
-            )
-
-            RadialGradient(
-                colors: [.clear, Color.black.opacity(0.18)],
-                center: .center,
-                startRadius: 30,
-                endRadius: 160
-            )
-
-            RadialGradient(
-                colors: [.clear, Color.black.opacity(0.5)],
-                center: .bottom,
-                startRadius: 20,
-                endRadius: 180
             )
 
             VStack(alignment: .leading, spacing: 8) {
@@ -160,18 +92,18 @@ struct VaultCoverFallback: View {
             .padding(.horizontal, 14)
             .padding(.top, 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .opacity(0.5)
+            .opacity(0.65)
         }
     }
 
     private var gradientColors: [Color] {
         switch style {
         case .empty:
-            return [Color(white: 0.17), Color(white: 0.11), Color(white: 0.07)]
+            return [MoveMarkTheme.Colors.backgroundAlt, MoveMarkTheme.Colors.mint.opacity(0.5)]
         case .started:
-            return [Color(white: 0.16), MoveMarkTheme.Colors.primary.opacity(0.06), Color(white: 0.08)]
+            return [MoveMarkTheme.Colors.mint.opacity(0.7), MoveMarkTheme.Colors.panelAlt]
         case .ready:
-            return [Color(white: 0.17), MoveMarkTheme.Colors.primary.opacity(0.08), Color(white: 0.07)]
+            return [MoveMarkTheme.Colors.panelAlt, MoveMarkTheme.Colors.primary.opacity(0.14)]
         }
     }
 
@@ -179,20 +111,24 @@ struct VaultCoverFallback: View {
         Text(text)
             .font(.system(size: 9, weight: .semibold))
             .tracking(0.7)
-            .foregroundStyle(Color.white.opacity(0.58))
+            .foregroundStyle(MoveMarkTheme.Colors.textDarkGreen.opacity(0.75))
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(Color.white.opacity(0.05))
+            .background(MoveMarkTheme.Colors.panel.opacity(0.85))
             .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 0.6)
+            )
     }
 
     private func meter(width: CGFloat) -> some View {
         GeometryReader { proxy in
             Capsule()
-                .fill(Color.white.opacity(0.1))
+                .fill(MoveMarkTheme.Colors.panelStroke.opacity(0.8))
                 .overlay(alignment: .leading) {
                     Capsule()
-                        .fill(MoveMarkTheme.Colors.primary.opacity(0.3))
+                        .fill(MoveMarkTheme.Colors.primary.opacity(0.55))
                         .frame(width: proxy.size.width * width)
                 }
         }

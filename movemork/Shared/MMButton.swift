@@ -2,7 +2,7 @@
 //  MMButton.swift
 //  movemork
 //
-//  MoveMark — Primary, secondary, quiet; hero / standard / compact.
+//  MoveMark — Chunky primary (green), secondary (white), quiet actions.
 //
 
 import SwiftUI
@@ -63,7 +63,6 @@ struct MMButton: View {
     var isDisabled: Bool = false
     var expandsToFillWidth: Bool = true
 
-    /// Backward compatibility for legacy isSecondary call sites.
     init(
         title: String,
         action: @escaping () -> Void,
@@ -107,17 +106,17 @@ struct MMButton: View {
                     RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MMButtonPressStyle())
         .disabled(isDisabled)
-        .opacity(isDisabled ? 0.52 : 1.0)
+        .opacity(isDisabled ? 0.48 : 1.0)
     }
 
     private var foregroundColor: Color {
         switch kind {
         case .primary:
-            return .white
+            return MoveMarkTheme.Colors.textOnPrimary
         case .secondary, .quiet:
-            return MoveMarkTheme.Colors.textPrimary
+            return MoveMarkTheme.Colors.textDarkGreen
         }
     }
 
@@ -130,19 +129,28 @@ struct MMButton: View {
 
         case .secondary:
             RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
-                .fill(MoveMarkTheme.Colors.fieldFill)
+                .fill(MoveMarkTheme.Colors.panel)
                 .overlay(
                     RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
-                        .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.9), lineWidth: 1)
+                        .stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 1.2)
                 )
 
         case .quiet:
             RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
-                .fill(Color.white.opacity(0.045))
+                .fill(MoveMarkTheme.Colors.mint.opacity(0.65))
                 .overlay(
                     RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
-                        .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.55), lineWidth: 0.8)
+                        .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.7), lineWidth: 0.8)
                 )
         }
+    }
+}
+
+private struct MMButtonPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .opacity(configuration.isPressed ? 0.9 : 1)
+            .animation(.easeInOut(duration: 0.14), value: configuration.isPressed)
     }
 }

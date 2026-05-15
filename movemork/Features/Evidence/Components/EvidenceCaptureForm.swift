@@ -159,8 +159,8 @@ struct EvidenceCaptureForm: View {
                     Capsule()
                         .fill(
                             isSelected
-                                ? Color.white.opacity(0.10)
-                                : Color.white.opacity(0.03)
+                                ? MoveMarkTheme.Colors.primary.opacity(0.18)
+                                : MoveMarkTheme.Colors.mint.opacity(0.5)
                         )
                 )
                 .overlay(

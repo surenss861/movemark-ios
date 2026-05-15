@@ -2,7 +2,7 @@
 //  MMCard.swift
 //  movemork
 //
-//  MoveMark — Elevated / standard / quiet surface tiers.
+//  MoveMark — Clean financial card surfaces (white / mint tiers).
 //
 
 import SwiftUI
@@ -12,45 +12,39 @@ struct MMCard<Content: View>: View {
         case elevated
         case standard
         case quiet
-        /// Dense lists / proof rows: lifted from background, calm stroke (artifact-like).
+        /// Mint-tinted panel for proof rows and dense lists.
         case artifact
 
         var fill: Color {
             switch self {
-            case .elevated:
-                return MoveMarkTheme.Colors.panel.opacity(0.98)
-            case .standard:
-                return MoveMarkTheme.Colors.panel.opacity(0.94)
+            case .elevated, .standard:
+                return MoveMarkTheme.Colors.panel
             case .quiet:
-                return MoveMarkTheme.Colors.panel.opacity(0.82)
+                return MoveMarkTheme.Colors.panel.opacity(0.98)
             case .artifact:
-                return MoveMarkTheme.Colors.surfaceInset.opacity(0.96)
+                return MoveMarkTheme.Colors.panelAlt
             }
         }
 
         var strokeOpacity: Double {
             switch self {
             case .elevated:
-                return 0.95
+                return 1.0
             case .standard:
-                return 0.75
-            case .quiet:
-                return 0.45
-            case .artifact:
-                return 0.58
+                return 0.92
+            case .quiet, .artifact:
+                return 0.78
             }
         }
 
         var shadowOpacity: Double {
             switch self {
             case .elevated:
-                return 0.20
+                return 0.06
             case .standard:
-                return 0.10
-            case .quiet:
-                return 0.0
-            case .artifact:
-                return 0.08
+                return 0.04
+            case .quiet, .artifact:
+                return 0.02
             }
         }
     }
@@ -85,7 +79,7 @@ struct MMCard<Content: View>: View {
             )
             .stroke(
                 MoveMarkTheme.Colors.panelStroke.opacity(tone.strokeOpacity),
-                lineWidth: (tone == .quiet || tone == .artifact) ? 0.8 : 1
+                lineWidth: 1
             )
         )
         .clipShape(
@@ -95,10 +89,10 @@ struct MMCard<Content: View>: View {
             )
         )
         .shadow(
-            color: .black.opacity(tone.shadowOpacity),
-            radius: tone == .elevated ? 18 : (tone == .artifact ? 12 : 10),
+            color: MoveMarkTheme.Colors.textPrimary.opacity(tone.shadowOpacity),
+            radius: tone == .elevated ? 16 : 10,
             x: 0,
-            y: tone == .elevated ? 8 : (tone == .artifact ? 5 : 4)
+            y: tone == .elevated ? 6 : 3
         )
     }
 }

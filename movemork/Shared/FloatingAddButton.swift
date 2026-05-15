@@ -27,7 +27,7 @@ struct FloatingAddButton: View {
                     .fill(MoveMarkTheme.Colors.background.opacity(0.98))
                     .overlay(
                         Circle()
-                            .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5)
+                            .strokeBorder(MoveMarkTheme.Colors.panelStroke, lineWidth: 0.5)
                     )
                     .frame(width: 52, height: 52)
 

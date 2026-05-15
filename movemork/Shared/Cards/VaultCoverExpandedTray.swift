@@ -2,7 +2,7 @@
 //  VaultCoverExpandedTray.swift
 //  movemork
 //
-//  Fold-out continuation: one metadata row, progress, next step, one primary action.
+//  Fold-out tray: metadata, progress, next step, primary action.
 //
 
 import SwiftUI
@@ -19,7 +19,7 @@ struct VaultCoverExpandedTray: View {
             if let next = content.nextRoomLine, !next.isEmpty {
                 Text(next)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.78))
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
             }
             primaryAction
         }
@@ -41,7 +41,7 @@ struct VaultCoverExpandedTray: View {
             }
         }
         .font(.system(size: 9, weight: .medium))
-        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.65))
+        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
         .lineLimit(1)
     }
 
@@ -49,35 +49,36 @@ struct VaultCoverExpandedTray: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 1)
-                    .fill(Color.white.opacity(0.05))
-                    .frame(height: 2)
+                    .fill(MoveMarkTheme.Colors.panelStroke)
+                    .frame(height: 3)
                 RoundedRectangle(cornerRadius: 1)
-                    .fill(MoveMarkTheme.Colors.primary.opacity(0.6))
-                    .frame(width: max(0, geo.size.width * content.progress), height: 2)
+                    .fill(MoveMarkTheme.Colors.primary)
+                    .frame(width: max(0, geo.size.width * content.progress), height: 3)
                     .animation(MMMotion.proofProgress, value: content.progress)
             }
         }
-        .frame(height: 2)
+        .frame(height: 3)
     }
 
     private var primaryAction: some View {
         Button(action: content.onPrimaryAction) {
             Text(content.primaryActionTitle)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(MoveMarkTheme.Colors.primary)
+                .foregroundStyle(MoveMarkTheme.Colors.textOnPrimary)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .padding(.vertical, 9)
+                .background(MoveMarkTheme.Colors.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
     }
 
     private var trayBackground: some View {
-        Color(white: 0.09)
-            .overlay(
+        MoveMarkTheme.Colors.panelAlt
+            .overlay(alignment: .top) {
                 Rectangle()
-                    .fill(Color.white.opacity(0.01))
-                    .frame(height: 1),
-                alignment: .top
-            )
+                    .fill(MoveMarkTheme.Colors.panelStroke)
+                    .frame(height: 0.5)
+            }
     }
 }

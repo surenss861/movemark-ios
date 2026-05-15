@@ -111,13 +111,13 @@ struct NewPropertyView: View {
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                             DatePicker("Move-in date", selection: $moveInDate, displayedComponents: .date)
-                                .colorScheme(.dark)
+                                .colorScheme(.light)
                                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                             DatePicker("Lease start", selection: $leaseStartDate, displayedComponents: .date)
-                                .colorScheme(.dark)
+                                .colorScheme(.light)
                                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                             DatePicker("Lease end", selection: $leaseEndDate, displayedComponents: .date)
-                                .colorScheme(.dark)
+                                .colorScheme(.light)
                                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                         }
                     }

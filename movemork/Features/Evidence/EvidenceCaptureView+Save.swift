@@ -91,7 +91,11 @@ extension EvidenceCaptureView {
                 }
                 successMessage = msg
 
-                MMHaptics.success()
+                MMProofToastPresenter.show(
+                    .proofSaved(moveOut: moveOutMode),
+                    message: $proofToast,
+                    isVisible: $proofToastVisible
+                )
 
                 withAnimation(MMMotion.fastFade) {
                     didJustSave = true

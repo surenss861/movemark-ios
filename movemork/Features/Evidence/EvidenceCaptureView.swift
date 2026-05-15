@@ -48,6 +48,8 @@ struct EvidenceCaptureView: View {
     @State var didJustSave = false
     @State var wasDocumentedOnLoad = false
     @State private var showCameraPermissionAlert = false
+    @State var proofToast: MMProofToastMessage? = nil
+    @State var proofToastVisible = false
 
     var room: RoomRecord? {
         propertyStore.currentProperty?.rooms.first(where: { $0.id == roomID })
@@ -189,6 +191,7 @@ struct EvidenceCaptureView: View {
         .navigationTitle(roomName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
+        .mmProofToast(message: proofToast, isVisible: proofToastVisible)
         .onAppear {
             wasDocumentedOnLoad = isRoomCurrentlyDocumented
         }
@@ -382,16 +385,16 @@ private struct EditEvidenceSheet: View {
                     Capsule()
                         .fill(
                             isSelected
-                                ? Color.white.opacity(0.10)
-                                : Color.white.opacity(0.03)
+                                ? MoveMarkTheme.Colors.primary.opacity(0.18)
+                                : MoveMarkTheme.Colors.mint.opacity(0.5)
                         )
                 )
                 .overlay(
                     Capsule()
                         .stroke(
                             isSelected
-                                ? MoveMarkTheme.Colors.primary.opacity(0.22)
-                                : MoveMarkTheme.Colors.panelStroke.opacity(0.38),
+                                ? MoveMarkTheme.Colors.primary.opacity(0.45)
+                                : MoveMarkTheme.Colors.panelStroke,
                             lineWidth: 0.8
                         )
                 )
@@ -418,31 +421,26 @@ private struct EditEvidenceSheet: View {
             } label: {
                 Text(isSaving ? "Saving…" : "Save changes")
                     .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.98))
-                    .padding(.horizontal, 16)
-                    .frame(height: 40)
-                    .background(
-                        Capsule()
-                            .fill(MoveMarkTheme.Colors.primary.opacity(isSaving ? 0.72 : 0.90))
-                    )
+                .foregroundStyle(MoveMarkTheme.Colors.textOnPrimary)
+                .padding(.horizontal, 16)
+                .frame(height: 40)
+                .background(
+                    Capsule()
+                        .fill(MoveMarkTheme.Colors.primary.opacity(isSaving ? 0.72 : 1.0))
+                )
             }
             .buttonStyle(.plain)
             .disabled(isSaving)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
-        .background(
-            ZStack {
-                MoveMarkTheme.Colors.surfaceInset.opacity(0.88)
-                MoveMarkTheme.Colors.background.opacity(0.55)
-            }
-        )
+        .background(MoveMarkTheme.Colors.panel)
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(Color.white.opacity(0.055))
-                .frame(height: 0.6)
+                .fill(MoveMarkTheme.Colors.panelStroke)
+                .frame(height: 0.5)
         }
-        .shadow(color: .black.opacity(0.35), radius: 14, y: -4)
+        .shadow(color: MoveMarkTheme.Colors.textPrimary.opacity(0.06), radius: 8, y: -2)
     }
 
     private var editPrimaryChromeLine: String {
@@ -615,15 +613,15 @@ private struct AppendPhotosSheet: View {
             } label: {
                 Text(isUploading ? "Adding…" : "Add to entry")
                     .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(.white.opacity(loadedImages.isEmpty ? 0.72 : 0.98))
+                    .foregroundStyle(loadedImages.isEmpty ? MoveMarkTheme.Colors.textSecondary : MoveMarkTheme.Colors.textOnPrimary)
                     .padding(.horizontal, 14)
                     .frame(height: 40)
                     .background(
                         Capsule()
                             .fill(
                                 loadedImages.isEmpty
-                                    ? Color.white.opacity(0.10)
-                                    : MoveMarkTheme.Colors.primary.opacity(isUploading ? 0.72 : 0.90)
+                                    ? MoveMarkTheme.Colors.mint.opacity(0.6)
+                                    : MoveMarkTheme.Colors.primary.opacity(isUploading ? 0.72 : 1.0)
                             )
                     )
             }
@@ -632,18 +630,13 @@ private struct AppendPhotosSheet: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
-        .background(
-            ZStack {
-                MoveMarkTheme.Colors.surfaceInset.opacity(0.88)
-                MoveMarkTheme.Colors.background.opacity(0.55)
-            }
-        )
+        .background(MoveMarkTheme.Colors.panel)
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(Color.white.opacity(0.055))
-                .frame(height: 0.6)
+                .fill(MoveMarkTheme.Colors.panelStroke)
+                .frame(height: 0.5)
         }
-        .shadow(color: .black.opacity(0.35), radius: 14, y: -4)
+        .shadow(color: MoveMarkTheme.Colors.textPrimary.opacity(0.06), radius: 8, y: -2)
     }
 
     private var bottomPrimaryLine: String {

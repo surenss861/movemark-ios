@@ -164,26 +164,17 @@ struct VaultRootView: View {
         }
     }
 
-    /// Staged entrance: eyebrow → title → operational subhead → accent → system context strip.
+    /// Staged entrance: title → subhead → proof progress card.
     private var stagedHeader: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("MoveMark")
-                .font(.system(size: 11, weight: .bold))
-                .tracking(1.2)
-                .foregroundStyle(MoveMarkTheme.Colors.accent)
-                .opacity(hasAnimatedIn ? 1 : 0)
-                .offset(y: hasAnimatedIn ? 0 : 8)
-                .animation(.easeOut(duration: 0.4).delay(0), value: hasAnimatedIn)
-
-            Text("Vaults")
-                .font(.system(size: 42, weight: .bold))
+            Text("Your proof")
+                .font(.system(size: 36, weight: .bold))
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 .opacity(hasAnimatedIn ? 1 : 0)
                 .offset(y: hasAnimatedIn ? 0 : 12)
-                .blur(radius: hasAnimatedIn ? 0 : 6)
                 .animation(.easeOut(duration: 0.45).delay(0.04), value: hasAnimatedIn)
 
-            Text("Move-in proof, exports, and records — organized per rental.")
+            Text("Finish each room before move-out.")
                 .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -192,7 +183,7 @@ struct VaultRootView: View {
                 .animation(.easeOut(duration: 0.4).delay(0.06), value: hasAnimatedIn)
 
             Rectangle()
-                .fill(MoveMarkTheme.Colors.accent)
+                .fill(MoveMarkTheme.Colors.primary)
                 .frame(width: hasAnimatedIn ? 40 : 0, height: 3)
                 .clipShape(Capsule())
                 .animation(.easeOut(duration: 0.45).delay(0.08), value: hasAnimatedIn)
@@ -207,54 +198,87 @@ struct VaultRootView: View {
 
     /// Inline system state — not a summary card; bridges hero → workspace.
     private var vaultSystemContextStrip: some View {
-        MMCard(tone: .quiet, padding: 12, spacing: 10) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .center, spacing: 8) {
-                    Text(vaultContextStripTitle)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+        VStack(spacing: 12) {
+            MMProofMeter(
+                title: "Proof meter",
+                valueLine: vaultProofProgressHeadline,
+                subtitle: vaultContextNextLine != nil ? "What’s next" : vaultContextPhaseLine,
+                progress: vaultProofProgressValue,
+                tone: vaultProofMeterTone
+            )
 
-                    Text("·")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.45))
-
-                    Text(vaultContextWorkspaceName)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.88))
-                        .lineLimit(1)
-                }
-
-                Text(vaultContextPhaseLine)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .lineLimit(2)
-
-                if let next = vaultContextNextLine {
-                    HStack(spacing: 6) {
-                        Capsule()
-                            .fill(MoveMarkTheme.Colors.primary.opacity(0.9))
-                            .frame(width: 4, height: 4)
-                        Text(next)
-                            .font(.system(size: 11.5, weight: .semibold))
-                            .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.94))
-                    }
-                }
+            if let next = vaultContextNextLine {
+                MMNextActionCard(
+                    title: "Next",
+                    message: next,
+                    metric: vaultProofProgressShortMetric,
+                    primaryTitle: featuredContinueProofTitle,
+                    onPrimary: { openFeaturedVaultOrContinue() }
+                )
             }
         }
     }
 
-    private var vaultContextStripTitle: String {
-        let count = propertyStore.properties.count
-        return count == 1 ? "1 vault" : "\(count) vaults"
+    private var vaultProofProgressHeadline: String {
+        guard let prop = propertyStore.currentProperty else {
+            let count = propertyStore.properties.count
+            return count == 1 ? "1 vault" : "\(count) vaults"
+        }
+        let documented = propertyStore.documentedRoomCount(for: prop)
+        let total = propertyStore.totalRoomCount(for: prop)
+        if total == 0 {
+            return "Add rooms to start proof"
+        }
+        return "\(documented) of \(total) rooms done"
     }
 
-    private var vaultContextWorkspaceName: String {
-        guard let activeId = propertyStore.activePropertyId,
-              let active = propertyStore.properties.first(where: { $0.id == activeId }) else {
-            return "No workspace"
+    private var vaultProofProgressValue: Double {
+        guard let prop = propertyStore.currentProperty else { return 0 }
+        let total = propertyStore.totalRoomCount(for: prop)
+        guard total > 0 else { return 0 }
+        let done = propertyStore.documentedRoomCount(for: prop)
+        return Double(done) / Double(total)
+    }
+
+    private var vaultProofMeterTone: MMProofMeter.Tone {
+        guard let prop = propertyStore.currentProperty else { return .neutral }
+        let total = propertyStore.totalRoomCount(for: prop)
+        if total == 0 { return .warning }
+        let done = propertyStore.documentedRoomCount(for: prop)
+        return done == total ? .primary : .primary
+    }
+
+    private var vaultProofProgressShortMetric: String? {
+        guard let prop = propertyStore.currentProperty else { return nil }
+        let total = propertyStore.totalRoomCount(for: prop)
+        guard total > 0 else { return nil }
+        let done = propertyStore.documentedRoomCount(for: prop)
+        return "\(done)/\(total) rooms"
+    }
+
+    private var featuredContinueProofTitle: String {
+        guard let fid = featuredPropertyId,
+              let prop = propertyStore.currentProperty, prop.id == fid else {
+            return MMNextBestAction.continueProof.title
         }
-        return displayName(for: active)
+        return MMNextBestActionMapper.from(
+            propertyNextAction: propertyStore.primaryNextAction(for: prop)
+        ).title
+    }
+
+    private func openFeaturedVaultOrContinue() {
+        guard let fid = featuredPropertyId,
+              let row = propertyStore.properties.first(where: { $0.id == fid }) else { return }
+        if let prop = propertyStore.currentProperty, prop.id == fid {
+            switch propertyStore.primaryNextAction(for: prop) {
+            case .captureRoom:
+                path.append(.walkthrough)
+            default:
+                openVaultDetail(for: row)
+            }
+        } else {
+            openVaultDetail(for: row)
+        }
     }
 
     private var vaultContextPhaseLine: String {
@@ -374,7 +398,7 @@ struct VaultRootView: View {
     private var vaultHealthFooter: some View {
         MMCard(tone: .quiet, padding: 14, spacing: 10) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Vault health")
+                Text("Proof progress")
                     .font(MoveMarkTheme.Typography.subheadlineMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 Text(vaultHealthLine)
@@ -387,16 +411,16 @@ struct VaultRootView: View {
 
     private var vaultHealthLine: String {
         guard let prop = propertyStore.currentProperty else {
-            return "Open a vault to view proof progress, supporting records, and next recommended action."
+            return "Open a vault to see proof progress, docs, and what to do next."
         }
         let documented = propertyStore.documentedRoomCount(for: prop)
         let total = propertyStore.totalRoomCount(for: prop)
         let docs = prop.vaultDocuments.count
         let action = cleanedNextLine(propertyStore.primaryNextAction(for: prop).title)
         if total == 0 {
-            return "\(docs) records uploaded · Next: \(action)"
+            return "\(docs) receipts & docs · Next: \(action)"
         }
-        return "\(documented)/\(total) rooms documented · \(docs) records uploaded · Next: \(action)"
+        return "\(documented)/\(total) rooms done · \(docs) receipts & docs · Next: \(action)"
     }
 
     private func cleanedNextLine(_ raw: String) -> String {
@@ -439,7 +463,7 @@ struct VaultRootView: View {
 
         switch nextAction {
         case .captureRoom:
-            primaryActionTitle = "Continue walkthrough"
+            primaryActionTitle = "Continue proof"
             onPrimaryAction = { path.append(.walkthrough) }
 
         case .uploadDocument:
@@ -501,7 +525,7 @@ struct VaultRootView: View {
                     MMEmptyState(
                         systemImage: "building.columns.fill",
                         title: "Your first vault",
-                        message: "Create a property vault for your rental, then run the move-in walkthrough room by room. Everything you save stays organized for exports and disputes.",
+                        message: "Add your rental. Take room photos. Make a report when you need it.",
                         primaryTitle: "Add property",
                         primaryAction: {
                             if subscriptionManager.canCreateProperty(currentCount: propertyStore.properties.count) {
@@ -524,8 +548,8 @@ struct VaultRootView: View {
     private var vaultHeader: some View {
         MMEditorialHeader(
             eyebrow: "MoveMark",
-            title: "Vault",
-            subtitle: "Your renter proof system starts here."
+            title: "Your proof",
+            subtitle: "Add a rental to start protecting your deposit."
         )
     }
 

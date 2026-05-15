@@ -19,6 +19,8 @@ struct ProPaywallView: View {
     @State private var restoreOutcomeMessage: String? = nil
     /// False until the first `refresh()` tied to this paywall presentation finishes (avoids a one-frame “fake” plan placeholder).
     @State private var initialOfferingsFetchCompleted = false
+    @State private var proofToast: MMProofToastMessage? = nil
+    @State private var proofToastVisible = false
 
     /// Store product IDs — must match RevenueCat package products (App Store: monthly/yearly_subscription; Test Store mirror: testmonthly/testyearly).
     private static let monthlyProductIDs = ["monthly_subscription", "testmonthly"]
@@ -46,17 +48,26 @@ struct ProPaywallView: View {
                 await subscriptionManager.refresh()
                 initialOfferingsFetchCompleted = true
             }
+            .mmProofToast(message: proofToast, isVisible: proofToastVisible)
+            .onChange(of: paywallPlansUnavailable) { wasUnavailable, isUnavailable in
+                guard isUnavailable, !wasUnavailable else { return }
+                MMProofToastPresenter.show(
+                    .plansDidNotLoad(),
+                    message: $proofToast,
+                    isVisible: $proofToastVisible
+                )
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: onClose) {
                         ZStack {
                             Circle()
-                                .fill(Color.white.opacity(0.05))
+                                .fill(MoveMarkTheme.Colors.mint.opacity(0.65))
                                 .frame(width: 42, height: 42)
 
                             Image(systemName: "xmark")
                                 .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.86))
+                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         }
                     }
                     .buttonStyle(.plain)
@@ -264,11 +275,11 @@ struct ProPaywallView: View {
 
     private var plansUnavailableRecoveryBlock: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Plans unavailable")
+            Text("Plans didn’t load")
                 .font(MoveMarkTheme.Typography.cardTitle)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-            Text("MoveMark couldn’t load subscription plans right now. You can continue on Free and try again later.")
+            Text("Try again in a minute. You can keep using Free for now.")
                 .font(MoveMarkTheme.Typography.subheadline)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -279,7 +290,9 @@ struct ProPaywallView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             MMButton(
-                title: subscriptionManager.isRefreshingOfferings ? "Trying…" : "Try again",
+                title: subscriptionManager.isRefreshingOfferings
+                    ? "Trying…"
+                    : MMNextBestActionMapper.paywallPlansUnavailable().title,
                 action: {
                     localErrorMessage = nil
                     restoreOutcomeMessage = nil
@@ -492,7 +505,7 @@ struct ProPaywallView: View {
                     .padding(.top, 2)
             }
             .padding(14)
-            .background(MoveMarkTheme.Colors.fieldFill)
+            .background(isSelected ? MoveMarkTheme.Colors.mint.opacity(0.45) : MoveMarkTheme.Colors.panel)
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(

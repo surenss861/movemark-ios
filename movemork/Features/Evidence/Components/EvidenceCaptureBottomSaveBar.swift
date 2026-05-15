@@ -54,22 +54,23 @@ struct EvidenceCaptureBottomSaveBar: View {
 
             Button(action: onSave) {
                 Text(
-                    didJustSave
-                        ? "Saved"
-                        : (isUploading
-                            ? "Saving…"
-                            : (moveOutMode ? "Save move-out" : "Save proof"))
+                    MMNextBestActionMapper.evidenceSaveBarTitle(
+                        photoCount: photoCount,
+                        isUploading: isUploading,
+                        didJustSave: didJustSave,
+                        moveOutMode: moveOutMode
+                    )
                 )
                 .font(.system(size: 13.5, weight: .semibold))
-                .foregroundStyle(.white.opacity(photoCount == 0 ? 0.72 : 0.98))
+                .foregroundStyle(photoCount == 0 ? MoveMarkTheme.Colors.textSecondary : MoveMarkTheme.Colors.textOnPrimary)
                 .padding(.horizontal, 14)
                 .frame(height: 40)
                 .background(
                     Capsule()
                         .fill(
                             photoCount == 0
-                                ? Color.white.opacity(0.10)
-                                : MoveMarkTheme.Colors.primary.opacity(isUploading ? 0.72 : 0.90)
+                                ? MoveMarkTheme.Colors.mint.opacity(0.6)
+                                : MoveMarkTheme.Colors.primary.opacity(isUploading ? 0.72 : 1.0)
                         )
                 )
             }
@@ -78,17 +79,12 @@ struct EvidenceCaptureBottomSaveBar: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
-        .background(
-            ZStack {
-                MoveMarkTheme.Colors.surfaceInset.opacity(0.88)
-                MoveMarkTheme.Colors.background.opacity(0.55)
-            }
-        )
+        .background(MoveMarkTheme.Colors.panel)
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(Color.white.opacity(0.055))
-                .frame(height: 0.6)
+                .fill(MoveMarkTheme.Colors.panelStroke)
+                .frame(height: 0.5)
         }
-        .shadow(color: .black.opacity(0.35), radius: 14, y: -4)
+        .shadow(color: MoveMarkTheme.Colors.textPrimary.opacity(0.06), radius: 8, y: -2)
     }
 }

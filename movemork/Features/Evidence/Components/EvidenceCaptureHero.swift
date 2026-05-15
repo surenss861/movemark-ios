@@ -35,7 +35,7 @@ struct EvidenceCaptureHero: View {
             Text(
                 moveOutMode
                     ? "Re-capture condition at move-out. Compare with move-in proof."
-                    : "Capture proof clearly while the condition is still fresh."
+                    : "Take clear photos of every wall, floor, and fixture."
             )
             .font(MoveMarkTheme.Typography.body)
             .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
@@ -82,7 +82,7 @@ struct EvidenceCaptureHero: View {
             VStack(alignment: .leading, spacing: 14) {
                 ZStack(alignment: .topTrailing) {
                     LinearGradient(
-                        colors: [Color.white.opacity(0.06), Color.white.opacity(0.02)],
+                        colors: [MoveMarkTheme.Colors.mint.opacity(0.7), MoveMarkTheme.Colors.panelAlt],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -110,7 +110,7 @@ struct EvidenceCaptureHero: View {
                             .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 7)
-                            .background(Color.black.opacity(0.34))
+                            .background(MoveMarkTheme.Colors.panel.opacity(0.92))
                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                             .padding(12)
                     }

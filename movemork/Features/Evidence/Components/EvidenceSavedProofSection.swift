@@ -236,8 +236,8 @@ private struct SavedProofPhotoThumbnails: View {
                 .id("\(photo.id.uuidString)-\(nonce)")
             } else {
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white.opacity(0.08))
-                    .overlay { ProgressView() }
+                    .fill(MoveMarkTheme.Colors.mint.opacity(0.5))
+                    .overlay { ProgressView().tint(MoveMarkTheme.Colors.primary) }
             }
         }
         .frame(width: 76, height: 76)

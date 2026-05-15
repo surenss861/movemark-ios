@@ -2,7 +2,7 @@
 //  VaultCoverBackground.swift
 //  movemork
 //
-//  Cover area: image from URL or designed fallback. Zoom on press, overlay shade.
+//  Cover area: image from URL or mint fallback. Light bottom fade for text band.
 //
 
 import SwiftUI
@@ -14,7 +14,6 @@ struct VaultCoverBackground: View {
     let fallbackStyle: VaultFallbackStyle
     let isPressed: Bool
     var isEmphasized: Bool = false
-    /// Mint fresh signed URLs and reload Nuke when the cover image fails (e.g. expired token).
     var onPreviewReloadRequested: (() -> Void)? = nil
 
     var body: some View {
@@ -39,21 +38,18 @@ struct VaultCoverBackground: View {
         .animation(MMMotion.press, value: isPressed)
     }
 
-    /// Featured: cinematic transition so band feels like the base of one object. Non-featured: standard.
     private var coverShade: some View {
         LinearGradient(
-            stops: isEmphasized
+            stops: imageURL != nil
                 ? [
-                    .init(color: .white.opacity(0.05), location: 0),
-                    .init(color: .clear, location: 0.35),
-                    .init(color: .black.opacity(0.65), location: 0.5),
-                    .init(color: .black.opacity(isPressed ? 0.98 : 0.96), location: 1)
+                    .init(color: .clear, location: 0),
+                    .init(color: .clear, location: 0.45),
+                    .init(color: MoveMarkTheme.Colors.panel.opacity(0.55), location: 0.72),
+                    .init(color: MoveMarkTheme.Colors.panel.opacity(0.92), location: 1)
                 ]
                 : [
-                    .init(color: .white.opacity(0.03), location: 0),
-                    .init(color: .clear, location: 0.42),
-                    .init(color: .black.opacity(0.5), location: 0.6),
-                    .init(color: .black.opacity(isPressed ? 0.94 : 0.9), location: 1)
+                    .init(color: .clear, location: 0),
+                    .init(color: MoveMarkTheme.Colors.panel.opacity(0.35), location: 1)
                 ],
             startPoint: .top,
             endPoint: .bottom

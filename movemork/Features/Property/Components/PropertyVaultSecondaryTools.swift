@@ -77,7 +77,7 @@ struct PropertyVaultSecondaryTools: View {
                 HStack(alignment: .top) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.white.opacity(0.045))
+                            .fill(MoveMarkTheme.Colors.mint.opacity(0.55))
                             .frame(width: 36, height: 36)
 
                         Image(systemName: systemImage)
@@ -123,7 +123,7 @@ struct PropertyVaultSecondaryTools: View {
                     )
             )
             .shadow(
-                color: .black.opacity(isPulsing ? 0.14 : 0.06),
+                color: MoveMarkTheme.Colors.textPrimary.opacity(isPulsing ? 0.10 : 0.05),
                 radius: isPulsing ? 14 : 8,
                 y: isPulsing ? 6 : 3
             )

@@ -2,7 +2,7 @@
 //  ExportHistoryView.swift
 //  movemork
 //
-//  MoveMark — Export history with artifact-led empty state and quiet row cards.
+//  MoveMark — Reports history with proof trail and quiet row cards.
 //
 
 import SwiftUI
@@ -22,6 +22,10 @@ struct ExportHistoryView: View {
     @State private var shareItems: [Any] = []
     @State private var showShareSheet = false
     @State private var verificationStatus: [UUID: ExportVerificationStatus] = [:]
+    @State private var proofToast: MMProofToastMessage? = nil
+    @State private var proofToastVisible = false
+    @State private var reportUnlockPulse = false
+    @State private var lastReportReadiness: MMNextBestActionMapper.ReportReadiness? = nil
 
     private var apiBaseURL: String? {
         guard
@@ -81,6 +85,14 @@ struct ExportHistoryView: View {
                     if hasActiveVault {
                         exportContextStrip
                         exportReadinessHero
+
+                        if shouldShowReportProofTrail {
+                            MMProofTimeline(
+                                title: "Proof trail",
+                                rows: reportProofTrailRows,
+                                appeared: !isLoading
+                            )
+                        }
                     }
 
                     if let successBanner {
@@ -137,6 +149,13 @@ struct ExportHistoryView: View {
                 await loadExports()
             }
         }
+        .mmProofToast(message: proofToast, isVisible: proofToastVisible)
+        .onChange(of: reportReadinessSnapshot) { _, _ in
+            handleReportReadinessChange()
+        }
+        .onAppear {
+            lastReportReadiness = currentReportReadiness
+        }
         .sheet(isPresented: $showShareSheet) {
             if !shareItems.isEmpty {
                 ShareSheet(activityItems: shareItems)
@@ -171,16 +190,16 @@ struct ExportHistoryView: View {
     private var header: some View {
         MMEditorialHeader(
             eyebrow: "MoveMark",
-            title: "Exports",
+            title: "Reports",
             subtitle: headerSubtitle
         )
     }
 
     private var headerSubtitle: String {
         if let name = activeVaultDisplayTitle, !name.isEmpty {
-            return "Generate, verify, and share reports for \(name)."
+            return "Make and share reports for \(name)."
         }
-        return "Generate, verify, and share reports for your current vault."
+        return "Make and share proof reports."
     }
 
     private var exportContextStrip: some View {
@@ -206,83 +225,155 @@ struct ExportHistoryView: View {
 
     private var exportContextLine: String {
         if resolvedPropertyRecord == nil {
-            return "Open this vault once to load readiness and included evidence."
+            return "Open your vault once to see if a report is ready."
         }
         let reports = exports.count
         if reports == 0 {
-            return "No generated reports yet."
+            return "No reports yet."
         }
-        return reports == 1 ? "1 export artifact available." : "\(reports) export artifacts available."
+        return reports == 1 ? "1 report ready to share." : "\(reports) reports ready to share."
+    }
+
+    private var shouldShowReportProofTrail: Bool {
+        switch currentReportReadiness {
+        case .notReady, .readyToMake, .readyToShare, .processing, .failed:
+            return true
+        case .noVault:
+            return false
+        }
+    }
+
+    private var reportProofTrailRows: [MMProofTimelineRow] {
+        let latestReady = exports.first(where: { verificationStatus[$0.id] == .ready })
+        let label: String? = {
+            guard let latestReady else { return nil }
+            return "Move-in report · \(formattedDate(latestReady.createdAt))"
+        }()
+        return MMProofTimelineBuilder.reportTrail(
+            property: resolvedPropertyRecord,
+            readiness: currentReportReadiness,
+            latestExportLabel: label
+        )
     }
 
     private var exportReadinessHero: some View {
-        MMCard(tone: .artifact, padding: 16, spacing: 12) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Move-in report")
-                            .font(MoveMarkTheme.Typography.cardTitle)
-                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                        Text(readinessSubline)
-                            .font(MoveMarkTheme.Typography.footnote)
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer()
-                    MMPill(text: readinessPillText, tone: readinessPillTone)
-                }
+        MMReportPreviewCard(
+            title: "Move-in report",
+            metrics: readinessMetricsLine,
+            status: reportPreviewStatus,
+            primaryTitle: reportPrimaryCTA.title,
+            onPrimary: reportPrimaryCTA.action,
+            unlockPulse: reportUnlockPulse
+        )
+        .animation(MMMotion.reportUnlock, value: reportPreviewStatus)
+    }
 
-                HStack(spacing: 8) {
-                    statusPill(readinessRoomsChip)
-                    statusPill(readinessPhotosChip)
-                    statusPill(readinessRecordsChip)
-                    statusPill(readinessIssuesChip)
-                }
+    /// Drives readiness transitions (unlock motion + toasts).
+    private var reportReadinessSnapshot: String {
+        "\(hasActiveVault)-\(isExportReadyForResolvedVault.map { $0 ? 1 : 0 } ?? -1)-\(exports.count)-\(readinessPillText)"
+    }
 
-                if hasActiveVault && exports.isEmpty {
-                    MMCompactCallout(
-                        systemImage: isExportReadyForResolvedVault == false ? "exclamationmark.triangle.fill" : "doc.badge.plus",
-                        title: isExportReadyForResolvedVault == false ? "Strengthen vault before export" : "Ready to generate your first report",
-                        message: isExportReadyForResolvedVault == false
-                            ? "Add room proof and supporting records, then generate from Walkthrough."
-                            : "Generate a move-in report from Walkthrough. It will appear here with status and sharing actions."
-                    )
-                }
+    private var currentReportReadiness: MMNextBestActionMapper.ReportReadiness {
+        MMNextBestActionMapper.reportReadiness(
+            hasVault: hasActiveVault,
+            isExportReady: isExportReadyForResolvedVault,
+            hasReadyExport: exports.contains { verificationStatus[$0.id] == .ready },
+            isProcessing: readinessPillText == "Processing" || readinessPillText == "Loading",
+            isFailed: readinessPillText == "Failed"
+        )
+    }
+
+    private func handleReportReadinessChange() {
+        let readiness = currentReportReadiness
+        defer { lastReportReadiness = readiness }
+
+        guard let previous = lastReportReadiness else { return }
+
+        if previous == .notReady, readiness == .readyToMake {
+            reportUnlockPulse = true
+            MMHaptics.medium()
+            presentProofToast(.exportsUnlocked())
+
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(0.55))
+                reportUnlockPulse = false
             }
         }
     }
 
+    private func presentProofToast(_ message: MMProofToastMessage) {
+        MMProofToastPresenter.show(
+            message,
+            message: $proofToast,
+            isVisible: $proofToastVisible
+        )
+    }
+
+    private var reportPrimaryCTA: (title: String, action: () -> Void) {
+        let action = MMNextBestActionMapper.report(currentReportReadiness)
+        let title = action.title
+        let handler: () -> Void = {
+            switch currentReportReadiness {
+            case .readyToShare:
+                if let row = exports.first(where: { verificationStatus[$0.id] == .ready }) {
+                    share(row)
+                }
+            case .failed:
+                Task { await loadExports() }
+            case .readyToMake, .notReady, .noVault, .processing:
+                onOpenVaults?()
+            }
+        }
+        return (title, handler)
+    }
+
+    private var reportPreviewStatus: MMReportPreviewCard.Status {
+        if readinessPillText == "Processing" { return .processing }
+        if readinessPillText == "Failed" { return .failed }
+        if exports.contains(where: { verificationStatus[$0.id] == .ready }) { return .readyToShare }
+        if isExportReadyForResolvedVault == false { return .notReady }
+        if isExportReadyForResolvedVault == true && exports.isEmpty { return .readyToMake }
+        return .notReady
+    }
+
+    private var readinessHeroTitle: String {
+        if exports.contains(where: { $0.exportType == "move_in_report" && verificationStatus[$0.id] == .ready }) {
+            return "Report ready"
+        }
+        if isExportReadyForResolvedVault == false {
+            return "Report not ready"
+        }
+        if isExportReadyForResolvedVault == true && exports.isEmpty {
+            return "Move-in report ready"
+        }
+        return "Move-in report"
+    }
+
+    private var readinessMetricsLine: String? {
+        guard let p = resolvedPropertyRecord else { return nil }
+        let rooms = p.rooms.filter { !$0.evidence.isEmpty }.count
+        let total = p.rooms.count
+        let photos = p.rooms.flatMap(\.evidence).reduce(0) { $0 + $1.photoCount }
+        let issues = propertyStore.openIssueCount(for: p)
+        guard total > 0 || photos > 0 else { return nil }
+        return "\(rooms) rooms · \(photos) photos · \(issues) issues"
+    }
+
     private var readinessSubline: String {
-        if isLoading { return "Checking export readiness…" }
+        if isLoading { return "Checking your report…" }
+        if isExportReadyForResolvedVault == false {
+            return "Add proof for at least 1 room."
+        }
+        if exports.contains(where: { verificationStatus[$0.id] == .ready }) {
+            return "Your report is ready to share."
+        }
+        if isExportReadyForResolvedVault == true && exports.isEmpty {
+            return "You can make your move-in report from Room proof."
+        }
         if let p = resolvedPropertyRecord {
             return propertyStore.proofWorkspaceHeadline(for: p)
         }
-        return "Select and open a vault to load export readiness."
-    }
-
-    private var readinessRoomsChip: String {
-        guard let p = resolvedPropertyRecord else { return "Rooms —" }
-        let total = p.rooms.count
-        let withProof = p.rooms.filter { !$0.evidence.isEmpty }.count
-        return total > 0 ? "Rooms \(withProof)/\(total)" : "Rooms 0"
-    }
-
-    private var readinessPhotosChip: String {
-        guard let p = resolvedPropertyRecord else { return "Photos —" }
-        let photos = p.rooms
-            .flatMap(\.evidence)
-            .reduce(0) { $0 + $1.photoCount }
-        return "Photos \(photos)"
-    }
-
-    private var readinessRecordsChip: String {
-        guard let p = resolvedPropertyRecord else { return "Records —" }
-        return "Records \(p.vaultDocuments.count)"
-    }
-
-    private var readinessIssuesChip: String {
-        guard let p = resolvedPropertyRecord else { return "Issues —" }
-        return "Issues \(propertyStore.openIssueCount(for: p))"
+        return "Open a vault to see report status."
     }
 
     private var readinessPillText: String {
@@ -293,7 +384,7 @@ struct ExportHistoryView: View {
         if exports.contains(where: { ($0.exportType == "move_in_report") && ((verificationStatus[$0.id] == .serverFailed) || (verificationStatus[$0.id]?.isProblem == true)) }) {
             return "Failed"
         }
-        if isExportReadyForResolvedVault == false { return "Needs proof" }
+        if isExportReadyForResolvedVault == false { return "Not ready" }
         if exports.contains(where: { $0.exportType == "move_in_report" }) { return "Ready" }
         return hasActiveVault ? "Ready" : "No vault"
     }
@@ -311,14 +402,14 @@ struct ExportHistoryView: View {
     private var noVaultSelectedState: some View {
         MMCard(tone: .quiet, padding: 18, spacing: 16) {
             VStack(alignment: .leading, spacing: 14) {
-                exportArtifactPreview
+                reportPreviewMock
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Choose a vault to see exports")
+                    Text("Pick a vault first")
                         .font(MoveMarkTheme.Typography.cardTitle)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                    Text("Exports are tied to a property. Choose a vault on the Vaults tab, then come back here to generate and share reports.")
+                    Text("Reports belong to one rental. Open a vault on the Vaults tab, then come back here.")
                         .font(MoveMarkTheme.Typography.subheadline)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -326,9 +417,9 @@ struct ExportHistoryView: View {
 
                 if showOpenVaultsCTA {
                     MMButton(
-                        title: "Open a vault",
+                        title: "Open vaults",
                         action: { onOpenVaults?() },
-                        kind: .secondary,
+                        kind: .primary,
                         size: .standard
                     )
                     .padding(.top, 2)
@@ -341,10 +432,10 @@ struct ExportHistoryView: View {
     private var emptyStateNoExportsYet: some View {
         MMCard(tone: .quiet, padding: 18, spacing: 16) {
             VStack(alignment: .leading, spacing: 14) {
-                exportArtifactPreview
+                reportPreviewMock
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("No reports for this vault yet")
+                    Text("No reports yet")
                         .font(MoveMarkTheme.Typography.cardTitle)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
@@ -359,19 +450,22 @@ struct ExportHistoryView: View {
 
     private var emptyStateNoExportsBody: String {
         if resolvedPropertyRecord == nil {
-            return "Generate a move-in report from Walkthrough (export button on the move-in screen) or open this property’s vault. Move-out reports and dispute packets appear here as you create them."
+            return "Open your vault, add room photos, then make a report from Room proof."
         }
-        return "This vault is ready for report generation. Queue from Walkthrough, then verify and share from this screen."
+        if isExportReadyForResolvedVault == false {
+            return "Add room photos first. Then you can make a report."
+        }
+        return "Your vault is ready. Make a move-in report from Room proof."
     }
 
-    private var exportArtifactPreview: some View {
+    private var reportPreviewMock: some View {
         MMArtifactSurface {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("REPORT PREVIEW")
+                    Text("Report preview")
                         .font(.system(size: 11, weight: .bold))
-                        .tracking(1.1)
-                        .foregroundStyle(MoveMarkTheme.Colors.accent)
+                        .tracking(0.4)
+                        .foregroundStyle(MoveMarkTheme.Colors.textDarkGreen)
 
                     Spacer()
 
@@ -382,19 +476,19 @@ struct ExportHistoryView: View {
 
                 VStack(alignment: .leading, spacing: 5) {
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(Color.white.opacity(0.85))
+                        .fill(MoveMarkTheme.Colors.textPrimary.opacity(0.18))
                         .frame(width: 118, height: 8)
 
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(Color.white.opacity(0.24))
+                        .fill(MoveMarkTheme.Colors.panelStroke)
                         .frame(width: 160, height: 6)
 
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(Color.white.opacity(0.18))
+                        .fill(MoveMarkTheme.Colors.panelStroke.opacity(0.7))
                         .frame(height: 6)
 
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(Color.white.opacity(0.18))
+                        .fill(MoveMarkTheme.Colors.panelStroke.opacity(0.7))
                         .frame(height: 6)
                 }
 
@@ -414,7 +508,7 @@ struct ExportHistoryView: View {
             .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
             .padding(.horizontal, 10)
             .frame(height: 26)
-            .background(Color.white.opacity(0.05))
+            .background(MoveMarkTheme.Colors.mint.opacity(0.5))
             .clipShape(Capsule())
     }
 
@@ -501,9 +595,9 @@ struct ExportHistoryView: View {
 
                 HStack(spacing: 8) {
                     MMButton(
-                        title: "Share",
+                        title: MMNextBestAction.shareReport.title,
                         action: { share(row) },
-                        kind: .secondary,
+                        kind: .primary,
                         size: .compact,
                         isDisabled: !canShareExport(status),
                         expandsToFillWidth: false
@@ -530,8 +624,8 @@ struct ExportHistoryView: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(0.08),
-                            Color.white.opacity(0.03)
+                            MoveMarkTheme.Colors.mint,
+                            MoveMarkTheme.Colors.panelAlt
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -545,15 +639,15 @@ struct ExportHistoryView: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(Color.white.opacity(0.78))
+                    .fill(MoveMarkTheme.Colors.textPrimary.opacity(0.2))
                     .frame(width: 22, height: 4)
 
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(Color.white.opacity(0.20))
+                    .fill(MoveMarkTheme.Colors.panelStroke)
                     .frame(width: 30, height: 3)
 
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(Color.white.opacity(0.16))
+                    .fill(MoveMarkTheme.Colors.panelStroke.opacity(0.7))
                     .frame(width: 26, height: 3)
 
                 Spacer()
@@ -786,8 +880,14 @@ struct ExportHistoryView: View {
                 shareItems = [url]
                 showShareSheet = true
                 verificationStatus[row.id] = .ready
-                successBanner = "Download link ready — use Share to save or send."
-                MMHaptics.success()
+                successBanner = nil
+                presentProofToast(
+                    MMProofToastMessage(
+                        kind: .success,
+                        title: "Ready to share",
+                        message: "Use Share to save or send."
+                    )
+                )
             } catch let api as APIClientError {
                 if case .exportNotReady = api {
                     verificationStatus[row.id] = .processing
@@ -797,7 +897,7 @@ struct ExportHistoryView: View {
                     verificationStatus[row.id] = .serverFailed
                     successBanner = nil
                     errorMessage = MoveMarkFlowMessage.exportServerFailedHint
-                    MMHaptics.error()
+                    presentProofToast(.reportFailed())
                 } else {
                     let mapped = MoveMarkFlowMessage.exportOrAPIFailed(
                         api,

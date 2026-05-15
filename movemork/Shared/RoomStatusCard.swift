@@ -46,8 +46,8 @@ struct RoomStatusCard: View {
             ]
         } else if isDone {
             return [
-                Color.white.opacity(0.08),
-                Color.white.opacity(0.025)
+                MoveMarkTheme.Colors.primary.opacity(0.14),
+                MoveMarkTheme.Colors.mint.opacity(0.5)
             ]
         } else {
             return [
@@ -71,7 +71,7 @@ struct RoomStatusCard: View {
                     LinearGradient(
                         colors: [
                             .clear,
-                            Color.black.opacity(isNext ? 0.48 : 0.56)
+                            MoveMarkTheme.Colors.textPrimary.opacity(isNext ? 0.06 : 0.1)
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -142,7 +142,7 @@ struct RoomStatusCard: View {
             Text("NEXT")
                 .font(.system(size: 10, weight: .bold))
                 .tracking(1.0)
-                .foregroundStyle(.white)
+                .foregroundStyle(MoveMarkTheme.Colors.textOnPrimary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
                 .background(MoveMarkTheme.Colors.primary)

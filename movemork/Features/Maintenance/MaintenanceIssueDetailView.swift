@@ -89,7 +89,7 @@ struct MaintenanceIssueDetailView: View {
                 .font(MoveMarkTheme.Typography.screenTitle)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-            Text("Issue detail, timeline, and supporting evidence.")
+            Text("Issue detail, timeline, and photo proof.")
                 .font(MoveMarkTheme.Typography.body)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 

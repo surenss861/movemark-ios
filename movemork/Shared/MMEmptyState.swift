@@ -29,11 +29,11 @@ struct MMEmptyState: View {
     }
 
     var body: some View {
-        MMCard(tone: .quiet, padding: 22, spacing: 16) {
+        MMCard(tone: .artifact, padding: 22, spacing: 16) {
             VStack(alignment: .leading, spacing: 14) {
                 Image(systemName: systemImage)
                     .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(MoveMarkTheme.Colors.accent.opacity(0.92))
+                    .foregroundStyle(MoveMarkTheme.Colors.primary)
                     .symbolRenderingMode(.hierarchical)
 
                 Text(title)

@@ -83,7 +83,7 @@ enum APIClientError: LocalizedError {
         case .exportNotReady:
             return "Export is still processing."
         case .exportFailed:
-            return "This export failed on the server. Generate a new report."
+            return "This report failed on the server. Try making a new report."
         }
     }
 }

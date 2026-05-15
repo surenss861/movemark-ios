@@ -159,7 +159,7 @@ struct DisputeBuilderView: View {
                 .font(MoveMarkTheme.Typography.screenTitle)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-            Text("Assemble the case packet when charges or deposit problems show up. Calm, evidence-backed, export-ready.")
+            Text("Assemble the case packet when charges or deposit problems show up. Calm, evidence-backed, ready to share.")
                 .font(MoveMarkTheme.Typography.body)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
@@ -191,7 +191,7 @@ struct DisputeBuilderView: View {
                 )
 
                 DatePicker("Move-out date", selection: $moveOutDate, displayedComponents: .date)
-                    .colorScheme(.dark)
+                    .colorScheme(.light)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
                 Toggle(isOn: $receivedItemized) {
@@ -203,7 +203,7 @@ struct DisputeBuilderView: View {
 
                 if receivedItemized {
                     DatePicker("Charge date", selection: $chargeDate, displayedComponents: .date)
-                        .colorScheme(.dark)
+                        .colorScheme(.light)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 }
             }
@@ -215,14 +215,14 @@ struct DisputeBuilderView: View {
             VStack(alignment: .leading, spacing: 14) {
                 SectionLabel(text: "What goes in the packet")
 
-                Text("Choose the proof you want included. This becomes the record you export.")
+                Text("Choose the proof you want included. This becomes the record you share.")
                     .font(MoveMarkTheme.Typography.subheadline)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
                 selectionGroup(
                     title: "Room photos",
                     count: selectedEvidenceFileIds.count,
-                    emptyText: "No room photos yet. Add move-in or move-out evidence from Walkthrough or Move-out.",
+                    emptyText: "No room photos yet. Add move-in or move-out proof from Room proof or Move-out.",
                     rows: evidenceFiles.map { photoSelectionRow(for: $0) },
                     selectedIDs: Binding(
                         get: { selectedEvidenceFileIds },
@@ -264,7 +264,7 @@ struct DisputeBuilderView: View {
                     MMPill(text: readinessLabel, tone: readinessTone)
                 }
 
-                Text("A stronger packet usually includes room photos, supporting documents, and any relevant maintenance history.")
+                Text("A strong packet usually includes room photos, receipts & lease docs, and any relevant maintenance history.")
                     .font(MoveMarkTheme.Typography.subheadline)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
@@ -284,9 +284,9 @@ struct DisputeBuilderView: View {
     private var exportCard: some View {
         MMCard {
             VStack(alignment: .leading, spacing: 14) {
-                SectionLabel(text: "Export your case")
+                SectionLabel(text: "Share your case")
 
-                Text("Save the draft, export a simple PDF, or generate the formal packet.")
+                Text("Save the draft, make a simple PDF, or make the formal packet.")
                     .font(MoveMarkTheme.Typography.subheadline)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
@@ -300,7 +300,7 @@ struct DisputeBuilderView: View {
                 }
 
                 ZStack {
-                    MMButton(title: "Export simple PDF", action: exportSimplePDF, isSecondary: true, isDisabled: isGeneratingPDF)
+                    MMButton(title: "Make simple PDF", action: exportSimplePDF, isSecondary: true, isDisabled: isGeneratingPDF)
                         .opacity(isGeneratingPDF ? 0.6 : 1.0)
 
                     if isGeneratingPDF {
@@ -309,7 +309,7 @@ struct DisputeBuilderView: View {
                 }
 
                 ZStack {
-                    MMButton(title: "Generate formal packet", action: generateFormalPacket, isDisabled: isGeneratingPacket)
+                    MMButton(title: "Make formal packet", action: generateFormalPacket, isDisabled: isGeneratingPacket)
                         .opacity(isGeneratingPacket ? 0.6 : 1.0)
 
                     if isGeneratingPacket {
@@ -469,7 +469,7 @@ struct DisputeBuilderView: View {
         if let type = VaultDocumentType(rawValue: norm) {
             return type.displayTitle
         }
-        if norm.isEmpty { return "Supporting document" }
+        if norm.isEmpty { return "Proof document" }
         return norm.replacingOccurrences(of: "_", with: " ").capitalized
     }
 
@@ -583,12 +583,12 @@ struct DisputeBuilderView: View {
                 shareItems = [packetData]
                 openExportsOnShareDismiss = true
                 showShareSheet = true
-                successMessage = "Simple PDF exported."
+                successMessage = "Simple PDF ready."
                 MMHaptics.success()
             } catch {
                 errorMessage = MoveMarkFlowMessage.disputeOperationFailed(
                     error,
-                    fallback: "Couldn’t export PDF. Try again."
+                    fallback: "Couldn’t make PDF. Try again."
                 )
                 retryAction = { exportSimplePDF() }
             }
@@ -644,7 +644,7 @@ struct DisputeBuilderView: View {
             } catch {
                 errorMessage = MoveMarkFlowMessage.disputeOperationFailed(
                     error,
-                    fallback: "Couldn’t generate formal packet. Try again."
+                    fallback: "Couldn’t make formal packet. Try again."
                 )
                 retryAction = { generateFormalPacket() }
             }
@@ -792,7 +792,7 @@ struct DisputeBuilderView: View {
         if let type = VaultDocumentType(rawValue: norm) {
             return type.displayTitle
         }
-        if norm.isEmpty { return "Supporting document" }
+        if norm.isEmpty { return "Proof document" }
         return norm.replacingOccurrences(of: "_", with: " ").capitalized
     }
 }

@@ -2,8 +2,7 @@
 //  VaultCoverBottomBand.swift
 //  movemork
 //
-//  Featured: property → proof workspace headline → metrics → next step + CTA.
-//  Non-featured: compact summary row + Open (quiet secondary vault).
+//  Property summary band — light panel on cover cards.
 //
 
 import SwiftUI
@@ -21,7 +20,6 @@ struct VaultCoverBottomBand: View {
     var namespace: Namespace.ID? = nil
     var vaultId: UUID? = nil
 
-    /// When we don't show a separate workflow headline, primary line is next action or status.
     private var fallbackPrimaryLine: String {
         if let next = nextAction, !next.isEmpty { return next }
         return statusLine
@@ -31,7 +29,7 @@ struct VaultCoverBottomBand: View {
         VStack(alignment: .leading, spacing: isEmphasized ? 7 : 4) {
             if isEmphasized {
                 Capsule()
-                    .fill(MoveMarkTheme.Colors.primary.opacity(0.58))
+                    .fill(MoveMarkTheme.Colors.primary)
                     .frame(width: 30, height: 2)
                     .padding(.bottom, 1)
             }
@@ -41,14 +39,14 @@ struct VaultCoverBottomBand: View {
             if !city.isEmpty {
                 Text(city)
                     .font(.system(size: isEmphasized ? 11.5 : 11, weight: .regular))
-                    .foregroundStyle(.white.opacity(isEmphasized ? 0.72 : 0.60))
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     .lineLimit(1)
             }
 
             if let headline = workflowHeadline, !headline.isEmpty {
                 Text(headline)
                     .font(.system(size: isEmphasized ? 14 : 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(isEmphasized ? 0.96 : 0.86))
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                     .lineLimit(2)
                     .padding(.top, 2)
@@ -57,11 +55,7 @@ struct VaultCoverBottomBand: View {
             if let metrics = proofMetricsLine, !metrics.isEmpty {
                 Text(metrics)
                     .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(
-                        isEmphasized
-                            ? MoveMarkTheme.Colors.primary.opacity(0.88)
-                            : .white.opacity(0.7)
-                    )
+                    .foregroundStyle(MoveMarkTheme.Colors.textDarkGreen)
                     .lineLimit(2)
             }
 
@@ -75,7 +69,7 @@ struct VaultCoverBottomBand: View {
         .padding(.horizontal, isEmphasized ? 17 : 14)
         .padding(.top, isEmphasized ? 14 : 8)
         .padding(.bottom, isEmphasized ? 14 : 8)
-        .background(bandGradient)
+        .background(bandBackground)
         .offset(y: isPressed ? -1 : 0)
         .animation(MMMotion.press, value: isPressed)
     }
@@ -90,20 +84,20 @@ struct VaultCoverBottomBand: View {
 
             HStack(alignment: .top, spacing: 7) {
                 Circle()
-                    .fill(MoveMarkTheme.Colors.primary.opacity(0.92))
+                    .fill(MoveMarkTheme.Colors.primary)
                     .frame(width: 4, height: 4)
                     .padding(.top, 5)
 
                 Text(line)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.94))
+                    .foregroundStyle(MoveMarkTheme.Colors.textDarkGreen)
                     .fixedSize(horizontal: false, vertical: true)
                     .lineLimit(2)
             }
         } else {
             Text(fallbackPrimaryLine)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white.opacity(0.78))
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 .lineLimit(2)
         }
     }
@@ -112,7 +106,7 @@ struct VaultCoverBottomBand: View {
     private var ctaView: some View {
         Text(ctaTitle ?? "Open")
             .font(.system(size: isEmphasized ? 12.5 : 11, weight: .semibold))
-            .foregroundStyle(isEmphasized ? .white.opacity(0.98) : .white.opacity(0.9))
+            .foregroundStyle(isEmphasized ? MoveMarkTheme.Colors.textOnPrimary : MoveMarkTheme.Colors.textDarkGreen)
             .padding(.horizontal, isEmphasized ? 14 : 10)
             .padding(.vertical, isEmphasized ? 7 : 5)
             .background(
@@ -121,48 +115,35 @@ struct VaultCoverBottomBand: View {
             )
             .overlay(
                 Capsule()
-                    .stroke(
-                        isEmphasized
-                            ? MoveMarkTheme.Colors.primary.opacity(0.14)
-                            : Color.white.opacity(0.1),
-                        lineWidth: 0.75
-                    )
+                    .stroke(ctaStroke, lineWidth: 0.75)
             )
             .scaleEffect(isPressed && isEmphasized ? 0.985 : 1.0)
     }
 
     private var ctaFill: Color {
-        if isEmphasized && !isPressed { return MoveMarkTheme.Colors.primary.opacity(0.11) }
-        if isEmphasized && isPressed { return MoveMarkTheme.Colors.primary.opacity(0.18) }
-        if isPressed { return Color.white.opacity(0.16) }
-        return Color.white.opacity(0.1)
+        if isEmphasized { return MoveMarkTheme.Colors.primary }
+        return MoveMarkTheme.Colors.mint.opacity(0.7)
     }
 
-    private var bandGradient: some View {
-        LinearGradient(
-            colors: isEmphasized
-                ? [
-                    .clear,
-                    .black.opacity(0.28),
-                    .black.opacity(0.78),
-                    .black.opacity(0.96)
-                ]
-                : [
-                    .clear,
-                    .black.opacity(0.2),
-                    .black.opacity(0.68),
-                    .black.opacity(0.92)
-                ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
+    private var ctaStroke: Color {
+        isEmphasized ? MoveMarkTheme.Colors.primary.opacity(0.2) : MoveMarkTheme.Colors.panelStroke
+    }
+
+    private var bandBackground: some View {
+        MoveMarkTheme.Colors.panel
+            .opacity(0.97)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(MoveMarkTheme.Colors.panelStroke)
+                    .frame(height: 0.5)
+            }
     }
 
     @ViewBuilder
     private var titleLabel: some View {
         let text = Text(title)
             .font(.system(size: isEmphasized ? 17.5 : 14, weight: .bold))
-            .foregroundStyle(.white)
+            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
             .lineLimit(isEmphasized ? 2 : 1)
 
         if let ns = namespace, let id = vaultId {

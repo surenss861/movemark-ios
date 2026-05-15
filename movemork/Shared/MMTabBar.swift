@@ -2,8 +2,7 @@
 //  MMTabBar.swift
 //  movemork
 //
-//  Quiet native rail — root-only, low chrome. Dark flat band, hairline separation,
-//  icon + label; active = stronger icon/label + tiny marker. No glass, blur, or lift.
+//  Light root tab rail — white band, green active state, obvious labels.
 //
 
 import SwiftUI
@@ -11,41 +10,36 @@ import SwiftUI
 struct MMTabBar: View {
     @Binding var selectedTab: RootTab
 
-    private let iconSize: CGFloat = 20
-    private let iconLabelSpacing: CGFloat = 2
-    private let markerWidth: CGFloat = 12
-    private let markerHeight: CGFloat = 1.5
+    private let iconSize: CGFloat = 22
+    private let iconLabelSpacing: CGFloat = 3
+    private let markerWidth: CGFloat = 20
+    private let markerHeight: CGFloat = 2.5
 
     private var labelFont: Font {
-        .system(size: 9.5, weight: .medium, design: .default)
+        .system(size: 10, weight: .medium, design: .default)
     }
     private var labelFontSelected: Font {
-        .system(size: 9.5, weight: .semibold, design: .default)
-    }
-
-    /// Barely lifted from page background — infrastructure, not a footer “object.”
-    private var railFill: Color {
-        Color(red: 0.038, green: 0.038, blue: 0.042)
+        .system(size: 10, weight: .semibold, design: .default)
     }
 
     var body: some View {
         VStack(spacing: 0) {
             Rectangle()
-                .fill(Color.white.opacity(0.055))
+                .fill(MoveMarkTheme.Colors.panelStroke)
                 .frame(height: 0.5)
                 .frame(maxWidth: .infinity)
 
             HStack(spacing: 0) {
                 tabItem(.vaults, title: "Vaults", systemImage: "archivebox.fill")
-                tabItem(.exports, title: "Exports", systemImage: "arrow.up.doc.fill")
+                tabItem(.exports, title: "Reports", systemImage: "doc.text.fill")
                 tabItem(.account, title: "Account", systemImage: "person.crop.circle.fill")
             }
             .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-            .padding(.top, 3)
-            .padding(.bottom, 4)
+            .padding(.top, 4)
+            .padding(.bottom, 6)
         }
         .frame(maxWidth: .infinity)
-        .background(railFill)
+        .background(MoveMarkTheme.Colors.panel.ignoresSafeArea(edges: .bottom))
     }
 
     @ViewBuilder
@@ -58,7 +52,7 @@ struct MMTabBar: View {
         } label: {
             VStack(spacing: 0) {
                 ZStack {
-                    Color.clear.frame(height: 1)
+                    Color.clear.frame(height: 2)
 
                     if isSelected {
                         Capsule()
@@ -75,16 +69,16 @@ struct MMTabBar: View {
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(
                             isSelected
-                                ? AnyShapeStyle(MoveMarkTheme.Colors.primary)
-                                : AnyShapeStyle(Color.white.opacity(0.52))
+                                ? MoveMarkTheme.Colors.primary
+                                : MoveMarkTheme.Colors.textSecondary
                         )
 
                     Text(title)
                         .font(isSelected ? labelFontSelected : labelFont)
                         .foregroundStyle(
                             isSelected
-                                ? AnyShapeStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.92))
-                                : AnyShapeStyle(Color.white.opacity(0.56))
+                                ? MoveMarkTheme.Colors.textDarkGreen
+                                : MoveMarkTheme.Colors.textSecondary
                         )
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)

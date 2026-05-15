@@ -21,6 +21,8 @@ struct RoomListView: View {
     @State private var errorMessage: String? = nil
     @State private var lastErrorFromExport = false
     @State private var exportSuccessBanner: String? = nil
+    @State private var proofToast: MMProofToastMessage? = nil
+    @State private var proofToastVisible = false
     @State private var roomsListAppeared = false
 
     private var rooms: [RoomRecord] {
@@ -46,9 +48,16 @@ struct RoomListView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    walkthroughHeader
+                    roomProofHeader
 
                     progressCard
+
+                    MMProofTimeline(
+                        title: "Proof trail",
+                        rows: roomProofTrailRows,
+                        highlightedRowID: highlightedRoomTrailRowID,
+                        appeared: roomsListAppeared
+                    )
 
                     if let exportSuccessBanner {
                         MMCard(tone: .quiet, padding: 14, spacing: 8) {
@@ -88,13 +97,14 @@ struct RoomListView: View {
                 roomsListAppeared = true
             }
         }
+        .mmProofToast(message: proofToast, isVisible: proofToastVisible)
         .sheet(isPresented: $showPaywall) {
             ProPaywallView(
                 reason: activePaywallReason,
                 onClose: { showPaywall = false }
             )
         }
-        .navigationTitle("Walkthrough")
+        .navigationTitle("Room proof")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -124,81 +134,73 @@ struct RoomListView: View {
         }
     }
 
-    private var walkthroughHeader: some View {
+    private var roomProofTrailRows: [MMProofTimelineRow] {
+        MMProofTimelineBuilder.roomProofTrail(rooms: rooms, nextRoom: nextRoom)
+    }
+
+    private var highlightedRoomTrailRowID: String? {
+        guard let nextRoom else { return nil }
+        return "room-\(nextRoom.id.uuidString)"
+    }
+
+    private var roomProofHeader: some View {
         MMEditorialHeader(
             eyebrow: "MoveMark",
-            title: "Walkthrough",
-            subtitle: "Build your move-in record one room at a time."
+            title: "Room proof",
+            subtitle: "Photo each room. Build your move-in record."
         )
     }
 
     private var progressCard: some View {
-        MMCard(tone: .elevated, padding: 18, spacing: 16) {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .center, spacing: 16) {
-                    ProgressRingView(
-                        progress: progress,
-                        size: 64,
-                        lineWidth: 4,
-                        label: rooms.isEmpty ? "0" : "\(completedCount)"
-                    )
+        VStack(spacing: 12) {
+            MMProofMeter(
+                title: "Proof meter",
+                valueLine: rooms.isEmpty ? "0 rooms done" : "\(completedCount) of \(rooms.count) rooms done",
+                subtitle: rooms.isEmpty
+                    ? "Add your first room below."
+                    : (completedCount >= rooms.count
+                        ? "All rooms done."
+                        : (nextRoom != nil ? "Next: \(nextRoom?.name ?? "")" : "Keep going.")),
+                progress: progress,
+                tone: rooms.isEmpty ? .warning : .primary
+            )
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Proof progress")
-                            .font(.system(size: 11, weight: .bold))
-                            .tracking(1.1)
-                            .foregroundStyle(MoveMarkTheme.Colors.accent)
-                            .textCase(.uppercase)
-
-                        if rooms.isEmpty {
-                            Text("No rooms yet")
-                                .font(MoveMarkTheme.Typography.cardTitle)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                            Text("Add your first room below.")
-                                .font(MoveMarkTheme.Typography.subheadline)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        } else if completedCount >= rooms.count {
-                            Text("\(completedCount) of \(rooms.count) rooms documented")
-                                .font(MoveMarkTheme.Typography.cardTitle)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                            Text("Move-in record complete. Export a report or review your rooms.")
-                                .font(MoveMarkTheme.Typography.subheadline)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        } else {
-                            Text("\(completedCount) of \(rooms.count) rooms documented")
-                                .font(MoveMarkTheme.Typography.cardTitle)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                            if let nextRoom {
-                                Text("Next room to capture: \(nextRoom.name)")
-                                    .font(MoveMarkTheme.Typography.subheadline)
-                                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            }
-                        }
-                    }
-
-                    Spacer()
-                }
-
-                if let nextRoom, !rooms.isEmpty {
-                    if completedCount >= rooms.count {
-                        MMButton(
-                            title: "Review rooms",
-                            action: { path.append(.roomDetail(roomID: rooms[0].id)) },
-                            kind: .secondary,
-                            size: .standard
-                        )
-                    } else {
-                        MMButton(
-                            title: "Open next room — \(nextRoom.name)",
-                            action: { path.append(.roomDetail(roomID: nextRoom.id)) },
-                            kind: .primary,
-                            size: .hero
-                        )
-                    }
-                }
+            if rooms.isEmpty {
+                MMNextActionCard(
+                    title: "Next",
+                    message: "Add a room to start proof.",
+                    metric: nil,
+                    primaryTitle: MMNextBestActionMapper.roomProof(
+                        roomsEmpty: true,
+                        allRoomsDone: false,
+                        hasNextRoom: false
+                    ).title,
+                    onPrimary: { showAddRoom = true }
+                )
+            } else if completedCount >= rooms.count {
+                MMNextActionCard(
+                    title: "Next",
+                    message: "Make a report or review your rooms.",
+                    metric: "\(completedCount)/\(rooms.count) rooms",
+                    primaryTitle: MMNextBestActionMapper.roomProof(
+                        roomsEmpty: false,
+                        allRoomsDone: true,
+                        hasNextRoom: false
+                    ).title,
+                    onPrimary: { path.append(.roomDetail(roomID: rooms[0].id)) }
+                )
+            } else if let nextRoom {
+                MMNextActionCard(
+                    title: "Next room",
+                    message: nextRoom.name,
+                    metric: "\(completedCount)/\(rooms.count) rooms",
+                    primaryTitle: MMNextBestActionMapper.roomProof(
+                        roomsEmpty: false,
+                        allRoomsDone: false,
+                        hasNextRoom: true
+                    ).title,
+                    onPrimary: { path.append(.roomDetail(roomID: nextRoom.id)) }
+                )
             }
         }
     }
@@ -214,7 +216,7 @@ struct RoomListView: View {
                 Spacer()
 
                 if !rooms.isEmpty {
-                    Text("\(completedCount) of \(rooms.count) documented")
+                    Text("\(completedCount) of \(rooms.count) rooms done")
                         .font(MoveMarkTheme.Typography.footnote)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 }
@@ -223,8 +225,8 @@ struct RoomListView: View {
             if rooms.isEmpty {
                 MMEmptyState(
                     systemImage: "door.left.hand.open",
-                    title: "Start with your move-in walkthrough",
-                    message: "Add rooms for this rental, then open each one to capture dated photos and notes. That record is your baseline if anything is disputed later."
+                    title: "Start move-in proof",
+                    message: "Add rooms, then take clear photos in each one. That proof helps if your deposit is questioned."
                 )
             }
 
@@ -244,14 +246,14 @@ struct RoomListView: View {
                     .font(MoveMarkTheme.Typography.sectionTitle)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                Text("Export a PDF of your move-in evidence by room. Use it as your baseline record.")
+                Text("Make a PDF of your move-in photos by room. Share it if you need proof.")
                     .font(MoveMarkTheme.Typography.subheadline)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
                 MMButton(
-                    title: isExporting ? "Exporting…" : "Export move-in report",
+                    title: isExporting ? "Making report…" : MMNextBestAction.makeReport.title,
                     action: handleMoveInExportTap,
-                    kind: .secondary,
+                    kind: completedCount > 0 ? .primary : .secondary,
                     size: .standard,
                     isDisabled: isExporting || rooms.isEmpty || completedCount == 0
                 )
@@ -274,7 +276,7 @@ struct RoomListView: View {
                             .font(MoveMarkTheme.Typography.sectionTitle)
                             .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                        Text("Re-capture the same rooms later with checklist and export.")
+                        Text("Re-capture the same rooms later with checklist and reports.")
                             .font(MoveMarkTheme.Typography.subheadline)
                             .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     }
@@ -306,7 +308,7 @@ struct RoomListView: View {
                             .fill(
                                 isNext && !isComplete
                                     ? MoveMarkTheme.Colors.accent.opacity(0.16)
-                                    : Color.white.opacity(0.05)
+                                    : MoveMarkTheme.Colors.mint.opacity(0.55)
                             )
                             .frame(width: 34, height: 34)
 
@@ -376,7 +378,7 @@ struct RoomListView: View {
 
     private var moveInExportFootnote: String {
         if rooms.isEmpty {
-            return "Add rooms to Walkthrough first"
+            return "Add rooms first"
         }
         if completedCount == 0 {
             return "Capture room proof before exporting"
@@ -422,8 +424,12 @@ struct RoomListView: View {
                 }
 
                 lastErrorFromExport = false
-                exportSuccessBanner = MoveMarkFlowMessage.exportQueuedHint
-                MMHaptics.success()
+                exportSuccessBanner = nil
+                MMProofToastPresenter.show(
+                    .reportQueued(),
+                    message: $proofToast,
+                    isVisible: $proofToastVisible
+                )
                 NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
             } catch {
                 exportSuccessBanner = nil

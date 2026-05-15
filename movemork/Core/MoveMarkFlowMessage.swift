@@ -78,7 +78,7 @@ enum MoveMarkFlowMessage {
 
     static let documentVaultRefreshHint = " File is saved. If the row doesn’t update, leave this vault and open it again."
 
-    static let exportQueuedHint = "Export queued. Open Exports to download when it’s ready—verification can take a moment."
+    static let exportQueuedHint = "Report queued. Open Reports to share when it’s ready—verification can take a moment."
 
     /// Railway vault summary (`GET /api/vaults/.../summary`) failed; local ``PropertyStore`` data is still shown.
     static let vaultSummaryRefreshFailed =
@@ -166,7 +166,7 @@ enum MoveMarkFlowMessage {
         UserFacingDatabaseError.message(from: error, fallback: "Couldn’t update status. Try again.", intent: .mutate)
     }
 
-    // MARK: - Supporting documents
+    // MARK: - Receipts & lease docs
 
     static func documentUploadFailed(_ error: Error) -> String {
         if isLikelyStorageFailure(error) {
@@ -200,7 +200,7 @@ enum MoveMarkFlowMessage {
 
     // MARK: - Exports / API
 
-    static let exportServerFailedHint = "This export didn’t finish on the server. Start a new export from your vault."
+    static let exportServerFailedHint = "This report didn’t finish on the server. Make a new report from Room proof."
 
     static func exportOrAPIFailed(_ error: Error, fallback: String, intent: UserFacingDatabaseError.Intent = .load) -> String {
         UserFacingDatabaseError.message(from: error, fallback: fallback, intent: intent)
@@ -214,9 +214,9 @@ enum MoveMarkFlowMessage {
     /// Client-side move-out PDF upload to Supabase `exports` (not Railway API).
     static func moveOutReportExportFailed(_ error: Error) -> String {
         if isLikelyStorageFailure(error) {
-            return "Export storage is unavailable right now. Try again soon."
+            return "Report storage is unavailable right now. Try again soon."
         }
-        return UserFacingDatabaseError.message(from: error, fallback: "Couldn’t export move-out report. Try again.", intent: .mutate)
+        return UserFacingDatabaseError.message(from: error, fallback: "Couldn’t make move-out report. Try again.", intent: .mutate)
     }
 
     /// Local verify (signed URL) failure for an export row — distinct from API verify/download.
@@ -224,13 +224,13 @@ enum MoveMarkFlowMessage {
         if isLikelyStorageFailure(error) {
             return "Couldn’t verify the file in storage yet. It may still be processing—tap Verify again in a moment."
         }
-        return UserFacingDatabaseError.message(from: error, fallback: "Couldn’t verify this export. Try again.", intent: .load)
+        return UserFacingDatabaseError.message(from: error, fallback: "Couldn’t verify this report. Try again.", intent: .load)
     }
 
     // MARK: - Dispute builder
 
     private static func disputeStorageCopy() -> String {
-        "Export storage is unavailable right now. Try again soon."
+        "Report storage is unavailable right now. Try again soon."
     }
 
     static func disputeOperationFailed(_ error: Error, fallback: String, intent: UserFacingDatabaseError.Intent = .mutate) -> String {

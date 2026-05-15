@@ -64,7 +64,7 @@ struct PhotoStripView: View {
         HStack(spacing: 10) {
             ForEach(0..<min(max(count, 1), 4), id: \.self) { idx in
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.white.opacity(idx == 0 ? 0.10 : 0.04))
+                    .fill(MoveMarkTheme.Colors.mint.opacity(idx == 0 ? 0.85 : 0.45))
                     .frame(width: 64, height: 64)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)

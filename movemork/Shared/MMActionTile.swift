@@ -70,7 +70,7 @@ struct MMActionTile: View {
 
                 ZStack {
                     Circle()
-                        .fill(isPrimary ? tint.opacity(0.12) : Color.white.opacity(0.04))
+                        .fill(isPrimary ? tint.opacity(0.12) : MoveMarkTheme.Colors.mint.opacity(0.5))
                         .frame(width: isPrimary ? 30 : 26, height: isPrimary ? 30 : 26)
 
                     Image(systemName: "chevron.right")

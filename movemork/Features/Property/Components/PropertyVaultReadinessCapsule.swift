@@ -59,7 +59,7 @@ struct PropertyVaultReadinessCapsule: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.52), lineWidth: 0.8)
         )
-        .shadow(color: .black.opacity(0.16), radius: 14, y: 7)
+        .shadow(color: MoveMarkTheme.Colors.textPrimary.opacity(0.08), radius: 14, y: 7)
     }
 
     private var readinessBand: String {

@@ -16,6 +16,28 @@ enum MMMotion {
     static let tabSwitch = Animation.easeOut(duration: 0.22)
     /// Proof strength / walkthrough progress — ease only, no bounce.
     static let proofProgress = Animation.easeOut(duration: 0.42)
+    static let proofToastIn = Animation.easeOut(duration: 0.28)
+    static let proofToastOut = Animation.easeIn(duration: 0.2)
+    /// Report card unlock — soft scale, no bounce.
+    static let reportUnlock = Animation.easeOut(duration: 0.45)
+}
+
+extension View {
+    /// Gentle lift when a report becomes ready (respects Reduce Motion).
+    func mmReportUnlockPulse(active: Bool) -> some View {
+        modifier(MMReportUnlockPulseModifier(active: active))
+    }
+}
+
+private struct MMReportUnlockPulseModifier: ViewModifier {
+    let active: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(active && !reduceMotion ? 1.02 : 1.0)
+            .animation(reduceMotion ? nil : MMMotion.reportUnlock, value: active)
+    }
 }
 
 extension View {

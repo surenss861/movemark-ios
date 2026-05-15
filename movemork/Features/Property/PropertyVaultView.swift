@@ -40,8 +40,8 @@ struct PropertyVaultView: View {
     @State private var showReplacePhotoSheet = false
     @State private var pendingPhotoDocType: String? = nil
 
-    @State private var feedbackMessage: VaultFeedbackMessage? = nil
-    @State private var feedbackVisible = false
+    @State private var proofToast: MMProofToastMessage? = nil
+    @State private var proofToastVisible = false
     @State private var lastKnownReadinessScore: Int? = nil
     @State private var lastKnownUploadedDocumentCount: Int? = nil
     @State private var lastKnownExportReady: Bool? = nil
@@ -123,13 +123,31 @@ struct PropertyVaultView: View {
             return "Open \(next.name) to capture proof"
         }
         if totalRooms == 0 { return "Start documenting the property" }
-        return "Review documented rooms"
+        return "Review finished rooms"
     }
 
     private var exportsSubtitle: String {
         propertyStore.isExportReady(for: property)
-            ? "Generate reports"
-            : "Add proof before exporting"
+            ? "Make and share reports"
+            : "Add proof before making a report"
+    }
+
+    private var vaultProofTrailRows: [MMProofTimelineRow] {
+        MMProofTimelineBuilder.vaultTrail(
+            property: property,
+            nextRoom: nextRoom,
+            isExportReady: exportReady
+        )
+    }
+
+    private var highlightedTrailRowID: String? {
+        if let doc = highlightedDocumentType {
+            return "doc-\(doc.rawValue)"
+        }
+        if let roomId = pulseQueueHeadRoomId {
+            return "room-\(roomId.uuidString)"
+        }
+        return nil
     }
 
     private var uploadedDocumentCount: Int {
@@ -177,12 +195,23 @@ struct PropertyVaultView: View {
 
                     PropertyVaultWalkthroughBar(
                         subtitle: walkthroughSubtitle,
-                        progressText: "\(completedRooms) of \(totalRooms) documented",
+                        progressText: "\(completedRooms) of \(totalRooms) rooms done",
                         onTap: { path.append(.walkthrough) }
                     )
                     .opacity(contentVisible ? 1 : 0)
                     .offset(y: contentVisible ? 0 : 8)
                     .animation(MMMotion.screenTransition.delay(0.08), value: contentVisible)
+                    .padding(.bottom, 14)
+
+                    MMProofTimeline(
+                        title: "Proof trail",
+                        rows: vaultProofTrailRows,
+                        highlightedRowID: highlightedTrailRowID,
+                        appeared: contentVisible
+                    )
+                    .opacity(contentVisible ? 1 : 0)
+                    .offset(y: contentVisible ? 0 : 8)
+                    .animation(MMMotion.screenTransition.delay(0.10), value: contentVisible)
                     .padding(.bottom, 14)
 
                     PropertyVaultRoomQueue(
@@ -239,15 +268,7 @@ struct PropertyVaultView: View {
                 .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
             }
         }
-        .overlay(alignment: .top) {
-            if let feedbackMessage, feedbackVisible {
-                VaultFeedbackToast(message: feedbackMessage)
-                    .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                    .padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .zIndex(10)
-            }
-        }
+        .mmProofToast(message: proofToast, isVisible: proofToastVisible)
         .background(MoveMarkTheme.Colors.background.ignoresSafeArea())
         .sheet(isPresented: $showEditProperty) {
             NavigationStack {
@@ -343,7 +364,7 @@ struct PropertyVaultView: View {
         .overlay {
             if isPreparingDocumentPreview {
                 ZStack {
-                    Color.black.opacity(0.35).ignoresSafeArea()
+                    MoveMarkTheme.Colors.textPrimary.opacity(0.25).ignoresSafeArea()
                     ProgressView("Opening…")
                         .tint(MoveMarkTheme.Colors.primary)
                 }
@@ -355,7 +376,7 @@ struct PropertyVaultView: View {
         MMCard(tone: .quiet, padding: 16, spacing: 12) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Proof strength")
+                    Text("Proof progress")
                         .font(MoveMarkTheme.Typography.cardTitle)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     Spacer()
@@ -371,13 +392,15 @@ struct PropertyVaultView: View {
 
                 HStack(spacing: 10) {
                     MMButton(
-                        title: "Continue walkthrough",
+                        title: MMNextBestActionMapper.from(
+                            propertyNextAction: propertyStore.primaryNextAction(for: property)
+                        ).title,
                         action: { path.append(.walkthrough) },
                         kind: .primary,
                         size: .compact
                     )
                     MMButton(
-                        title: "Upload records",
+                        title: MMNextBestAction.addDocs.title,
                         action: { showAllSupportingRecords = true },
                         kind: .secondary,
                         size: .compact
@@ -396,25 +419,25 @@ struct PropertyVaultView: View {
             return "Start by adding rooms, then capture move-in proof."
         }
         if completedRooms < totalRooms {
-            return "Capture remaining rooms to strengthen your record."
+            return "Finish the rooms that are still missing photos."
         }
         if missingRecordsCount > 0 {
-            return "Upload key supporting records to become dispute-ready."
+            return "Add receipts & lease docs to finish your proof."
         }
-        return "Your property is in strong shape. Keep records current."
+        return "Your proof looks strong. Keep docs up to date."
     }
 
     private var documentsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Supporting records")
+                    Text("Receipts & lease docs")
                         .font(.system(size: 12, weight: .bold))
                         .tracking(0.8)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         .textCase(.uppercase)
 
-                    Text("Lease, deposit, receipts, and other proof.")
+                    Text("Lease, deposit receipt, and other papers.")
                         .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.86))
                 }
@@ -546,7 +569,7 @@ struct PropertyVaultView: View {
             .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
             .padding(.horizontal, 10)
             .frame(height: 30)
-            .background(Color.white.opacity(0.05))
+            .background(MoveMarkTheme.Colors.mint.opacity(0.55))
             .overlay(
                 Capsule()
                     .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.55), lineWidth: 0.8)
@@ -727,30 +750,17 @@ struct PropertyVaultView: View {
     }
 
     private func showFeedback(_ event: VaultFeedbackEvent) {
-        let message = VaultFeedbackMessage.from(event)
-        feedbackMessage = message
-
-        withAnimation(.easeOut(duration: 0.24)) {
-            feedbackVisible = true
-        }
-
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(2.2))
-            withAnimation(.easeIn(duration: 0.20)) {
-                feedbackVisible = false
-            }
-
-            try? await Task.sleep(for: .seconds(0.22))
-            if feedbackMessage?.id == message.id {
-                feedbackMessage = nil
-            }
-        }
+        let toast = MMProofToastMessage.fromVaultFeedback(event)
+        MMProofToastPresenter.show(
+            toast,
+            message: $proofToast,
+            isVisible: $proofToastVisible
+        )
     }
 
     private func consumePendingVaultFeedbackIfNeeded() {
         guard let event = propertyStore.pendingVaultFeedback else { return }
         propertyStore.pendingVaultFeedback = nil
-        MMHaptics.success()
         showFeedback(event)
 
         let shouldPulseNextRoom: Bool = {

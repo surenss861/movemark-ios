@@ -2,40 +2,44 @@
 //  MoveMarkTheme.swift
 //  movemork
 //
-//  MoveMark — Dark premium design system.
+//  MoveMark — Wise-inspired green + white financial-protection design system.
 //
 
 import SwiftUI
 
 enum MoveMarkTheme {
     enum Colors {
-        static let background = Color(red: 0.03, green: 0.03, blue: 0.04)
-        static let panel = Color(red: 0.08, green: 0.08, blue: 0.09)
-        static let panelStroke = Color.white.opacity(0.08)
+        // Surfaces (60% white/cream, 30% mint, 10% strong green)
+        static let background = Color(red: 0.973, green: 0.984, blue: 0.961)   // #F8FBF5
+        static let backgroundAlt = Color(red: 0.965, green: 0.980, blue: 0.953) // #F6FAF3
+        static let panel = Color.white
+        static let panelAlt = Color(red: 0.918, green: 0.969, blue: 0.910)     // #EAF7E8
+        static let panelStroke = Color(red: 0.843, green: 0.910, blue: 0.847)  // #D7E8D8
+        static let mint = Color(red: 0.875, green: 0.961, blue: 0.890)       // #DFF5E3
 
-        static let primary = Color(red: 0.25, green: 0.66, blue: 0.45)   // emerald
-        static let primaryPressed = Color(red: 0.20, green: 0.58, blue: 0.39)
+        // Brand green
+        static let primary = Color(red: 0.173, green: 0.765, blue: 0.420)    // #2CC36B
+        static let primaryPressed = Color(red: 0.137, green: 0.647, blue: 0.353)
 
-        static let textPrimary = Color(red: 0.95, green: 0.93, blue: 0.90) // ivory
-        static let textSecondary = Color(red: 0.60, green: 0.57, blue: 0.54) // stone
-        static let accent = Color(red: 0.81, green: 0.68, blue: 0.43) // muted gold
+        // Text
+        static let textPrimary = Color(red: 0.063, green: 0.125, blue: 0.082)  // #102015
+        static let textSecondary = Color(red: 0.369, green: 0.420, blue: 0.380) // #5E6B61
+        static let textOnPrimary = Color.white
+        static let textDarkGreen = Color(red: 0.071, green: 0.239, blue: 0.145) // #123D25
+        static let textDeepGreen = Color(red: 0.024, green: 0.208, blue: 0.122) // #06351F
 
-        static let divider = Color.white.opacity(0.10)
-        static let fieldFill = Color(red: 0.05, green: 0.05, blue: 0.06)
+        /// Editorial eyebrow / accent rule — brand green (replaces gold).
+        static let accent = primary
 
-        // MARK: Semantic (meaningful color only — not decoration)
+        static let divider = panelStroke.opacity(0.85)
+        static let fieldFill = mint.opacity(0.55)
+        static let surfaceInset = panelAlt
 
-        /// Proof saved, export ready, verified, resolved.
+        // MARK: Semantic
+
         static let semanticSuccess = primary
-
-        /// Missing records, open maintenance, needs attention.
-        static let semanticWarning = Color(red: 0.93, green: 0.72, blue: 0.32)
-
-        /// Failed upload, destructive action, server-side export failure.
-        static let semanticDanger = Color(red: 0.94, green: 0.36, blue: 0.38)
-
-        /// Dark-mode depth: surface slightly above `background`, below `panel`.
-        static let surfaceInset = Color(red: 0.10, green: 0.10, blue: 0.11)
+        static let semanticWarning = Color(red: 0.961, green: 0.722, blue: 0.294) // #F5B84B
+        static let semanticDanger = Color(red: 0.851, green: 0.290, blue: 0.290)  // #D94A4A
     }
 
     enum Spacing {
@@ -45,26 +49,19 @@ enum MoveMarkTheme {
         static let fieldHeight: CGFloat = 58
         static let buttonHeight: CGFloat = 58
 
-        /// Scroll tail when the root tab bar is visible (Vaults / Exports / Account roots only).
         static let scrollTailRootTabChrome: CGFloat = 32
-
-        /// Scroll tail when the tab bar is hidden (property detail, walkthrough, capture, move-out, etc.).
         static let scrollTailFocusedFlow: CGFloat = 24
-
-        /// Extra scroll bottom inset on Vaults when the featured card expansion tray is open.
         static let vaultExpansionScrollExtra: CGFloat = 72
     }
 
-    /// SF Pro (system font). Sharper, more serious; not bubbly.
     enum Typography {
-        // Sharper, more serious display
-        static let hero = Font.system(size: 32, weight: .heavy, design: .default)
-        static let heroLarge = Font.system(size: 36, weight: .heavy, design: .default)
+        static let hero = Font.system(size: 34, weight: .heavy, design: .default)
+        static let heroLarge = Font.system(size: 38, weight: .heavy, design: .default)
         static let screenTitle = Font.system(size: 28, weight: .bold, design: .default)
         static let cardTitle = Font.system(size: 20, weight: .bold, design: .default)
+        static let cardValue = Font.system(size: 28, weight: .bold, design: .default)
         static let sectionTitle = Font.system(size: 18, weight: .semibold, design: .default)
 
-        // Body
         static let body = Font.system(size: 17, weight: .regular, design: .default)
         static let bodyMedium = Font.system(size: 17, weight: .medium, design: .default)
         static let subheadline = Font.system(size: 15, weight: .regular, design: .default)

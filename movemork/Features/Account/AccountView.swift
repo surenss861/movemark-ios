@@ -70,7 +70,7 @@ struct AccountView: View {
                     MMEditorialHeader(
                         eyebrow: "MoveMark",
                         title: "Account",
-                        subtitle: "Manage your profile, security, and app settings."
+                        subtitle: "Your plan, profile, and settings."
                     )
                     profileCard
                     subscriptionCard
@@ -161,14 +161,14 @@ struct AccountView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    subscriptionBenefitRow(subscriptionManager.hasPro ? "Unlimited property vaults" : "1 property vault included")
+                    subscriptionBenefitRow(subscriptionManager.hasPro ? "More property vaults" : "1 property vault")
                     subscriptionBenefitRow(
                         subscriptionManager.hasPro
-                            ? "Unlimited move-in and move-out exports"
+                            ? "More move-in and move-out reports"
                             : subscriptionManager.remainingFreeMoveInExportsText(forUser: sessionManager.userId)
                     )
-                    subscriptionBenefitRow(subscriptionManager.hasPro ? "Move-out exports included" : "Move-out exports require Pro")
-                    subscriptionBenefitRow(subscriptionManager.hasPro ? "Case builder included" : "Case builder requires Pro")
+                    subscriptionBenefitRow(subscriptionManager.hasPro ? "Move-out proof included" : "Move-out proof needs Pro")
+                    subscriptionBenefitRow(subscriptionManager.hasPro ? "Dispute tools included" : "Dispute tools need Pro")
                 }
 
                 if let subscriptionRestoreFeedback {
@@ -262,9 +262,9 @@ struct AccountView: View {
 
     private var planSummaryText: String {
         if subscriptionManager.hasPro {
-            return "Full renter protection access across every vault, export, and dispute workflow."
+            return "More reports, move-out proof, and dispute tools."
         } else {
-            return "Start free, then upgrade when you need more exports, move-out proof, or dispute tools."
+            return "1 property. 1 move-in report."
         }
     }
 

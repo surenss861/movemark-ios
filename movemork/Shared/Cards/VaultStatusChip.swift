@@ -2,14 +2,13 @@
 //  VaultStatusChip.swift
 //  movemork
 //
-//  Top-right status chip: dot + label. Premium, not loud.
+//  Top-right status chip on vault covers.
 //
 
 import SwiftUI
 
 struct VaultStatusChip: View {
     let text: String
-    /// When true (e.g. "Recent"), show the accent dot.
     var showDot: Bool = true
 
     var body: some View {
@@ -22,9 +21,13 @@ struct VaultStatusChip: View {
             Text(text)
                 .font(.system(size: 9, weight: .semibold))
         }
-        .foregroundStyle(.white.opacity(0.92))
+        .foregroundStyle(MoveMarkTheme.Colors.textDarkGreen)
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
-        .background(Color.white.opacity(0.05), in: Capsule())
+        .background(MoveMarkTheme.Colors.panel.opacity(0.92), in: Capsule())
+        .overlay(
+            Capsule()
+                .stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 0.6)
+        )
     }
 }

@@ -31,7 +31,7 @@ enum PaywallReason: Equatable {
         case .extraProperty:
             return "Track multiple rentals and keep each proof trail organized."
         case .unlimitedExports:
-            return "Generate professional proof PDFs whenever you need them."
+            return "Make professional proof PDFs whenever you need them."
         case .disputePacket:
             return "Stronger dispute-ready proof and premium export tools."
         case .moveOutExport:

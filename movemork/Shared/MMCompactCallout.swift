@@ -2,7 +2,7 @@
 //  MMCompactCallout.swift
 //  movemork
 //
-//  Small guidance block (MMEmptyState–family) for dense flows like capture chrome.
+//  Small guidance block for dense flows.
 //
 
 import SwiftUI
@@ -16,7 +16,7 @@ struct MMCompactCallout: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: systemImage)
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(MoveMarkTheme.Colors.accent.opacity(0.88))
+                .foregroundStyle(MoveMarkTheme.Colors.primary)
                 .frame(width: 28, alignment: .center)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -36,11 +36,11 @@ struct MMCompactCallout: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(MoveMarkTheme.Colors.surfaceInset.opacity(0.72))
+                .fill(MoveMarkTheme.Colors.mint.opacity(0.5))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.42), lineWidth: 0.8)
+                .stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 0.8)
         )
     }
 }
