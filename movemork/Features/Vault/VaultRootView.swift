@@ -566,6 +566,8 @@ struct VaultRootView: View {
 
     private var loadingState: some View {
         MMLoadingState(message: MMCopy.loadingProofTrail)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .mmProofShellBackground(heroFocus: true)
     }
 
     // MARK: - Helpers

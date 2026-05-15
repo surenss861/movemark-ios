@@ -100,6 +100,7 @@ extension EvidenceCaptureView {
                 withAnimation(MMMotion.fastFade) {
                     didJustSave = true
                 }
+                proofScanlineTrigger += 1
 
                 Task {
                     try? await Task.sleep(nanoseconds: 1_200_000_000)

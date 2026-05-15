@@ -63,7 +63,8 @@ struct AccountView: View {
 
     var body: some View {
         ZStack {
-            MMEmeraldBackground()
+            Color.clear
+                .mmProofShellBackground(ctaBloom: true)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {

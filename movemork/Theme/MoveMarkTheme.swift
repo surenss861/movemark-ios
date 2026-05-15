@@ -134,7 +134,7 @@ struct MMEmeraldBackground: View {
                 endRadius: reduceMotion ? 260 : (emphasizesHeroZone ? 520 : 400)
             )
 
-            proofGridLayer.opacity(emphasizesHeroZone ? 0.42 : 0.32)
+            proofGridLayer.opacity(emphasizesHeroZone ? 0.22 : 0.14)
 
             grainLayer.opacity(0.045)
 

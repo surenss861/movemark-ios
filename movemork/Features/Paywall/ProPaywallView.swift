@@ -29,7 +29,8 @@ struct ProPaywallView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
-                MMEmeraldBackground()
+                Color.clear
+                    .mmProofShellBackground(heroFocus: true, ctaBloom: true)
 
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 18) {

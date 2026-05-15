@@ -44,7 +44,8 @@ struct RoomListView: View {
 
     var body: some View {
         ZStack {
-            MMEmeraldBackground()
+            Color.clear
+                .mmProofShellBackground(heroFocus: true, ctaBloom: true)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {

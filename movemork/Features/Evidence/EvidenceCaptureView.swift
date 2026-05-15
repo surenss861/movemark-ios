@@ -50,6 +50,7 @@ struct EvidenceCaptureView: View {
     @State private var showCameraPermissionAlert = false
     @State var proofToast: MMProofToastMessage? = nil
     @State var proofToastVisible = false
+    @State var proofScanlineTrigger = 0
 
     var room: RoomRecord? {
         propertyStore.currentProperty?.rooms.first(where: { $0.id == roomID })
@@ -70,7 +71,8 @@ struct EvidenceCaptureView: View {
 
     var body: some View {
         ZStack {
-            MMEmeraldBackground()
+            Color.clear
+                .mmProofShellBackground(heroFocus: true, ctaBloom: true)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -94,6 +96,7 @@ struct EvidenceCaptureView: View {
                         moveOutMode: moveOutMode
                     )
                     .padding(.bottom, 18)
+                    .mmScanline(trigger: proofScanlineTrigger, intensity: 0.1)
 
                     EvidenceCaptureForm(
                         title: $title,
