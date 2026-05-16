@@ -64,14 +64,14 @@ struct AccountView: View {
     var body: some View {
         ZStack {
             Color.clear
-                .mmProofShellBackground(heroFocus: true, ctaBloom: false)
+                .mmProofShellBackground(heroFocus: false, ctaBloom: false)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     MMEditorialHeader(
-                        eyebrow: "Case file",
+                        eyebrow: "Settings",
                         title: "Account",
-                        subtitle: "Plan, profile, and vault access for your deposit cases."
+                        subtitle: "Plan, profile, and access to your proof vaults."
                     )
                     profileCard
                     subscriptionCard
@@ -90,7 +90,8 @@ struct AccountView: View {
                     )
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.top, 18)
+                .padding(.top, 12)
+                .mmScrollContentTopInset(2)
                 .padding(
                     .bottom,
                     rootTabBarVisible

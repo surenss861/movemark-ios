@@ -2,7 +2,7 @@
 //  MMDepositProtectionCard.swift
 //  movemork
 //
-//  Deposit protection — emerald premium card.
+//  Deposit protection — quiet supporting card (not a finance hero).
 //
 
 import SwiftUI
@@ -15,22 +15,20 @@ struct MMDepositProtectionCard: View {
     var style: MMProofHeroCard.Style = .premium
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Image(systemName: "checkmark.shield.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(MoveMarkTheme.Colors.limeAccent)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 8) {
+                Image(systemName: "lock.shield")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.85))
                 Text("Deposit protection")
-                    .font(MoveMarkTheme.Typography.caption)
-                    .tracking(0.8)
-                    .foregroundStyle(MoveMarkTheme.Colors.limeAccent.opacity(0.9))
-                    .textCase(.uppercase)
+                    .font(MoveMarkTheme.Typography.footnote)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 Spacer()
                 MMPill(text: proofScoreLabel, tone: .success)
             }
 
             Text(depositDisplay)
-                .font(MoveMarkTheme.Typography.cardValue)
+                .font(MoveMarkTheme.Typography.cardTitle)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
             Text(summaryLine)
@@ -40,23 +38,19 @@ struct MMDepositProtectionCard: View {
             if let roomsLine, !roomsLine.isEmpty {
                 Text(roomsLine)
                     .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.proofMint)
+                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
             }
         }
-        .padding(20)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            LinearGradient(
-                colors: [MoveMarkTheme.Colors.cardRaised, MoveMarkTheme.Colors.card],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(MoveMarkTheme.Colors.card.opacity(0.95))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.limeAccent.opacity(0.22), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.7), lineWidth: 0.8)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: MoveMarkTheme.Colors.primary.opacity(0.2), radius: 16, y: 8)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }

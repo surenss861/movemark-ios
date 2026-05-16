@@ -216,7 +216,7 @@ struct PropertyVaultView: View {
                     }
 
                     MMProofTimeline(
-                        title: "Case file trail",
+                        title: "Proof trail",
                         rows: vaultProofTrailRows,
                         highlightedRowID: highlightedTrailRowID,
                         appeared: contentVisible
@@ -276,12 +276,13 @@ struct PropertyVaultView: View {
                         .animation(MMMotion.screenTransition.delay(0.20), value: contentVisible)
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.top, 0)
+                .padding(.top, 4)
+                .mmScrollContentTopInset(2)
                 .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
             }
         }
         .mmProofToast(message: proofToast, isVisible: proofToastVisible)
-        .mmProofShellBackground(heroFocus: true, ctaBloom: false)
+        .mmProofShellBackground(heroFocus: false, ctaBloom: false)
         .sheet(isPresented: $showEditProperty) {
             NavigationStack {
                 EditPropertyView(property: property)
@@ -413,15 +414,15 @@ struct PropertyVaultView: View {
             return label
         }
         if totalRooms == 0 {
-            return "Add rooms to your case file, then capture evidence."
+            return "Add rooms, then capture photos for each one."
         }
         if completedRooms < totalRooms {
             return "Finish rooms that still need photos for this case."
         }
         if missingRecordsCount > 0 {
-            return "Add lease and receipts so the case file is complete."
+            return "Add your lease and deposit receipt when you can."
         }
-        return "Case file looks strong. Keep documents current."
+        return "Your proof looks strong. Keep documents current."
     }
 
     private var documentsSection: some View {

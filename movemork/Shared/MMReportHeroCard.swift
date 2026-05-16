@@ -16,8 +16,8 @@ enum MMReportCardStatus {
 
     var label: String {
         switch self {
-        case .notReady: return "Report locked"
-        case .readyToMake: return "Case file ready for export"
+        case .notReady: return "Needs more proof"
+        case .readyToMake: return "Report ready"
         case .readyToShare: return "Report ready"
         case .processing: return "Processing"
         case .failed: return "Failed"
@@ -90,12 +90,7 @@ struct MMReportHeroCard: View {
         .background(cardBackground)
         .overlay(cardBorder)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: Color.black.opacity(0.38), radius: 20, y: 10)
-        .shadow(
-            color: MoveMarkTheme.Colors.primary.opacity(usesPremiumReady ? 0.12 : 0.06),
-            radius: 14,
-            y: 6
-        )
+        .shadow(color: Color.black.opacity(0.28), radius: 14, y: 6)
         .mmReportUnlockPulse(active: unlockPulse)
     }
 
@@ -116,7 +111,7 @@ struct MMReportHeroCard: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(MoveMarkTheme.Colors.artifactPaper.opacity(0.92))
                 .frame(width: 62, height: 82)
-                .shadow(color: MoveMarkTheme.Colors.primary.opacity(usesPremiumReady ? 0.14 : 0.08), radius: 8, y: 3)
+                .shadow(color: Color.black.opacity(0.12), radius: 6, y: 2)
                 .overlay {
                     VStack(alignment: .leading, spacing: 5) {
                         RoundedRectangle(cornerRadius: 2)

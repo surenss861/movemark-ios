@@ -30,7 +30,7 @@ struct MMTabBar: View {
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
                         .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.85), lineWidth: 1)
                 )
-                .shadow(color: MoveMarkTheme.Colors.primary.opacity(0.2), radius: 22, y: 8)
+                .shadow(color: Color.black.opacity(0.22), radius: 12, y: 4)
         )
         .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
         .padding(.top, 8)
@@ -85,7 +85,7 @@ struct MMTabBar: View {
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .fill(MoveMarkTheme.Colors.primary)
                         .matchedGeometryEffect(id: "tabPill", in: tabNamespace)
-                        .shadow(color: MoveMarkTheme.Colors.primary.opacity(0.45), radius: 10, y: 3)
+                        .shadow(color: MoveMarkTheme.Colors.primary.opacity(0.18), radius: 6, y: 2)
                 }
             }
             .contentShape(Rectangle())

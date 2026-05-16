@@ -39,8 +39,8 @@ struct EvidenceCaptureHero: View {
 
             Text(
                 moveOutMode
-                    ? "Re-capture condition at move-out. Compare with move-in entries in this case file."
-                    : "Photo intake for your case file — walls, floors, and fixtures. Add notes and condition before you save."
+                    ? "Re-capture condition at move-out. Compare with your move-in photos."
+                    : "Capture walls, floors, and fixtures for this room. Add notes and condition before you save."
             )
             .font(MoveMarkTheme.Typography.body)
             .foregroundStyle(MoveMarkTheme.Colors.textSecondary)

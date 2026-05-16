@@ -78,7 +78,7 @@ struct ExportHistoryView: View {
     var body: some View {
         ZStack {
             Color.clear
-                .mmProofShellBackground(heroFocus: true, ctaBloom: false)
+                .mmProofShellBackground(heroFocus: false, ctaBloom: false)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
@@ -89,7 +89,7 @@ struct ExportHistoryView: View {
 
                         if shouldShowReportProofTrail {
                             MMProofTimeline(
-                                title: "Case file trail",
+                                title: "Proof trail",
                                 rows: reportProofTrailRows,
                                 appeared: !isLoading
                             )
@@ -138,7 +138,8 @@ struct ExportHistoryView: View {
                     }
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.top, 18)
+                .padding(.top, 12)
+                .mmScrollContentTopInset(2)
                 .padding(
                     .bottom,
                     rootTabBarVisible
@@ -190,7 +191,7 @@ struct ExportHistoryView: View {
 
     private var header: some View {
         MMEditorialHeader(
-            eyebrow: "Case file",
+            eyebrow: "Proof file",
             title: "Reports",
             subtitle: headerSubtitle
         )
@@ -200,14 +201,14 @@ struct ExportHistoryView: View {
         if let name = activeVaultDisplayTitle, !name.isEmpty {
             return "Build and share reports for \(name)."
         }
-        return "Build and share PDF reports from your deposit case file."
+        return "Build and share PDF reports from your proof file."
     }
 
     private var exportContextStrip: some View {
         MMCard(tone: .quiet, padding: 12, spacing: 8) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    Text("Case file")
+                    Text("Proof file")
                         .font(.system(size: 10, weight: .bold))
                         .tracking(0.8)
                         .foregroundStyle(MoveMarkTheme.Colors.proofMint.opacity(0.88))
@@ -376,7 +377,7 @@ struct ExportHistoryView: View {
             return "Your proof file can now be shared."
         }
         if isExportReadyForResolvedVault == true && exports.isEmpty {
-            return "Finish the case file checklist in Room proof, then generate your report."
+            return "Finish room proof, then make your move-in report."
         }
         if let p = resolvedPropertyRecord {
             return propertyStore.proofWorkspaceHeadline(for: p)
@@ -458,12 +459,12 @@ struct ExportHistoryView: View {
 
     private var emptyStateNoExportsBody: String {
         if resolvedPropertyRecord == nil {
-            return "Open your vault, add room photos, then make a report from Room proof."
+            return "Open your vault, add room photos, then make your move-in report."
         }
         if isExportReadyForResolvedVault == false {
-            return "Add room photos first. Then you can make a report."
+            return "Finish room proof, then make your move-in report."
         }
-        return "Your vault is ready. Make a move-in report from Room proof."
+        return "Your proof is ready. Make your move-in report from Room proof."
     }
 
     private var reportPreviewMock: some View {

@@ -82,10 +82,9 @@ struct ProPaywallView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("DEPOSIT PROTECTION")
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1.1)
-                .foregroundStyle(MoveMarkTheme.Colors.proofMint.opacity(0.9))
+            Text("Deposit protection")
+                .font(MoveMarkTheme.Typography.footnote)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.95))
 
             Text(reason.headline)
                 .font(.system(size: 28, weight: .bold))
@@ -589,8 +588,8 @@ struct ProPaywallView: View {
         switch reason {
         case .extraProperty:
             return [
-                ("More property vaults", "One deposit case vault per rental, kept separate."),
-                ("Unlimited reports", "PDF reports from your case file whenever you need them."),
+                ("More property vaults", "One proof vault per rental, kept separate."),
+                ("Unlimited reports", "PDF reports from your proof file whenever you need them."),
                 ("Case builder included", "Stronger dispute workflow from the same evidence."),
             ]
         case .unlimitedExports:

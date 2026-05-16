@@ -2,7 +2,7 @@
 //  PropertyVaultHeroStage.swift
 //  movemork
 //
-//  Property vault header — deposit case file identity, rooms + next step.
+//  Property vault header — rental proof folder, rooms + next step.
 //
 
 import SwiftUI
@@ -30,43 +30,38 @@ struct PropertyVaultHeroStage: View {
 
     private func header(namespace: Namespace.ID?) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("DEPOSIT CASE")
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1.1)
-                .foregroundStyle(MoveMarkTheme.Colors.proofMint.opacity(0.88))
+            Text("Deposit proof")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
 
             titleView(namespace: namespace)
 
             if let line = contextLine, !line.isEmpty {
                 Text(line)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.62))
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.75))
                     .lineLimit(1)
             }
 
             Text(roomsProgressLine)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.95))
-                .fixedSize(horizontal: false, vertical: true)
 
             if let next = nextRoomName, !next.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                totalRooms > 0, documentedRooms < totalRooms {
                 Text("Next: \(next)")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.92))
             }
 
             if missingSupportingDocs > 0 {
                 Text(
                     missingSupportingDocs == 1
-                        ? "1 supporting record still needed"
-                        : "\(missingSupportingDocs) supporting records still needed"
+                        ? "Add your lease or deposit receipt when you can."
+                        : "A few supporting records are still missing."
                 )
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.85))
-                .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.horizontal, 18)
@@ -76,7 +71,7 @@ struct PropertyVaultHeroStage: View {
             Group {
                 if let namespace {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(MoveMarkTheme.Colors.panel.opacity(0.78))
+                        .fill(MoveMarkTheme.Colors.card.opacity(0.92))
                         .matchedGeometryEffect(
                             id: "vault-bg-\(property.id.uuidString)",
                             in: namespace,
@@ -84,13 +79,13 @@ struct PropertyVaultHeroStage: View {
                         )
                 } else {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(MoveMarkTheme.Colors.panel.opacity(0.78))
+                        .fill(MoveMarkTheme.Colors.card.opacity(0.92))
                 }
             }
         }
         .overlay {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.34), lineWidth: 0.6)
+                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.55), lineWidth: 0.75)
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
@@ -98,7 +93,7 @@ struct PropertyVaultHeroStage: View {
     @ViewBuilder
     private func titleView(namespace: Namespace.ID?) -> some View {
         let baseTitle = Text(displayTitle)
-            .font(.system(size: 24, weight: .bold))
+            .font(.system(size: 22, weight: .bold))
             .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
             .lineLimit(2)
             .minimumScaleFactor(0.88)
@@ -119,32 +114,23 @@ struct PropertyVaultHeroStage: View {
     private var displayTitle: String {
         let title = property.title.trimmingCharacters(in: .whitespacesAndNewlines)
         if !title.isEmpty { return title }
-
         let address = property.addressLine1.trimmingCharacters(in: .whitespacesAndNewlines)
         if !address.isEmpty { return address }
-
         return "Property"
     }
 
     private var contextLine: String? {
         let city = property.city.trimmingCharacters(in: .whitespacesAndNewlines)
         let province = property.provinceState.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if !city.isEmpty && !province.isEmpty {
-            return "\(city), \(province)"
-        }
-
+        if !city.isEmpty && !province.isEmpty { return "\(city), \(province)" }
         if !city.isEmpty { return city }
         if !province.isEmpty { return province }
-
         let country = property.country.trimmingCharacters(in: .whitespacesAndNewlines)
         return country.isEmpty ? nil : country
     }
 
     private var roomsProgressLine: String {
-        if totalRooms == 0 {
-            return "Add rooms to open this case file"
-        }
+        if totalRooms == 0 { return "Add rooms to start move-in proof" }
         return "\(documentedRooms) of \(totalRooms) rooms ready"
     }
 }

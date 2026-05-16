@@ -124,7 +124,8 @@ struct VaultRootView: View {
                         .animation(.easeOut(duration: 0.35).delay(0.2), value: hasAnimatedIn)
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.top, 12)
+                .padding(.top, 8)
+                .mmScrollContentTopInset(2)
                 .padding(
                     .bottom,
                     MoveMarkTheme.Spacing.scrollTailRootTabChrome
@@ -132,7 +133,7 @@ struct VaultRootView: View {
                 )
             }
             .scrollIndicators(.hidden, axes: .vertical)
-            .mmProofShellBackground(heroFocus: true, ctaBloom: false)
+            .mmProofShellBackground(heroFocus: false, ctaBloom: false)
             .task {
                 await loadPreviewURLs()
             }
@@ -167,14 +168,14 @@ struct VaultRootView: View {
     /// Staged entrance: title → subhead → proof progress card.
     private var stagedHeader: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("Deposit cases")
+            Text("Your proof")
                 .font(.system(size: 36, weight: .bold))
                 .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
                 .opacity(hasAnimatedIn ? 1 : 0)
                 .offset(y: hasAnimatedIn ? 0 : 12)
                 .animation(.easeOut(duration: 0.45).delay(0.04), value: hasAnimatedIn)
 
-            Text("Each vault is one case file: rooms, lease, photos, then reports.")
+            Text("Each rental keeps photos, lease docs, and reports together.")
                 .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(MoveMarkTheme.Colors.textOnDarkMuted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -183,7 +184,7 @@ struct VaultRootView: View {
                 .animation(.easeOut(duration: 0.4).delay(0.06), value: hasAnimatedIn)
 
             Rectangle()
-                .fill(MoveMarkTheme.Colors.limeAccent)
+                .fill(MoveMarkTheme.Colors.primary.opacity(0.75))
                 .frame(width: hasAnimatedIn ? 40 : 0, height: 3)
                 .clipShape(Capsule())
                 .animation(.easeOut(duration: 0.45).delay(0.08), value: hasAnimatedIn)
@@ -571,7 +572,7 @@ struct VaultRootView: View {
             .padding(.top, 18)
             .padding(.bottom, MoveMarkTheme.Spacing.scrollTailRootTabChrome)
         }
-        .mmProofShellBackground(heroFocus: true, ctaBloom: false)
+        .mmProofShellBackground(heroFocus: false, ctaBloom: false)
     }
 
     private var vaultHeader: some View {
@@ -585,7 +586,7 @@ struct VaultRootView: View {
     private var loadingState: some View {
         MMLoadingState(message: MMCopy.loadingProofTrail)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .mmProofShellBackground(heroFocus: true, ctaBloom: false)
+            .mmProofShellBackground(heroFocus: false, ctaBloom: false)
     }
 
     // MARK: - Helpers

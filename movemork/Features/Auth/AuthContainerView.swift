@@ -106,8 +106,8 @@ struct AuthContainerView: View {
 
                 Text(
                     mode == .signIn
-                        ? "Sign in to continue your case file."
-                        : "Your proof stays private in your account. Start a deposit case file."
+                        ? "Sign in to continue your proof file."
+                        : "Your proof stays private in your account. Start protecting your deposit."
                 )
                 .font(MoveMarkTheme.Typography.body)
                 .foregroundStyle(MoveMarkTheme.Colors.textOnDarkMuted)

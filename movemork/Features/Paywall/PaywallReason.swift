@@ -16,9 +16,9 @@ enum PaywallReason: Equatable {
     var headline: String {
         switch self {
         case .extraProperty:
-            return "More deposit case vaults"
+            return "More proof vaults"
         case .unlimitedExports:
-            return "Unlimited case file reports"
+            return "Unlimited reports"
         case .disputePacket:
             return "Dispute packet & case tools"
         case .moveOutExport:
@@ -29,9 +29,9 @@ enum PaywallReason: Equatable {
     var subheadline: String {
         switch self {
         case .extraProperty:
-            return "Add another deposit case file when you change rentals."
+            return "Add another rental proof vault when you move."
         case .unlimitedExports:
-            return "Generate reports from your case file whenever you need them."
+            return "Make and share reports whenever you need them."
         case .disputePacket:
             return "Dispute-ready exports and tools built from the same proof vault."
         case .moveOutExport:

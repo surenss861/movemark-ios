@@ -2,23 +2,23 @@
 //  MoveMarkTheme.swift
 //  movemork
 //
-//  MoveMark — Emerald Proof Vault (dark surfaces, light text, paper previews only).
+//  MoveMark — Dark Rental Proof Desk (warm charcoal, calm green, paper artifacts).
 //
 
 import SwiftUI
 
 enum MoveMarkTheme {
     enum Colors {
-        // Shell
-        static let appBackground = Color(red: 0.024, green: 0.071, blue: 0.051)           // #06120D
-        static let appBackgroundRaised = Color(red: 0.031, green: 0.102, blue: 0.071)   // #081A12
-        static let surface = Color(red: 0.047, green: 0.125, blue: 0.090)               // #0C2017
+        // Shell — warm charcoal green
+        static let appBackground = Color(red: 0.031, green: 0.075, blue: 0.059)           // #08130F
+        static let appBackgroundRaised = Color(red: 0.051, green: 0.102, blue: 0.082)   // #0D1A15
+        static let surface = Color(red: 0.071, green: 0.137, blue: 0.106)               // #12231B
 
         // Cards
-        static let card = Color(red: 0.063, green: 0.161, blue: 0.114)                  // #10291D
-        static let cardRaised = Color(red: 0.078, green: 0.208, blue: 0.145)            // #143525
-        static let cardStroke = Color(red: 0.141, green: 0.290, blue: 0.212)            // #244A36
-        static let subtleStroke = Color(red: 0.102, green: 0.227, blue: 0.165)           // #1A3A2A
+        static let card = Color(red: 0.071, green: 0.137, blue: 0.106)                  // #12231B
+        static let cardRaised = Color(red: 0.090, green: 0.165, blue: 0.129)            // #172A21
+        static let cardStroke = Color(red: 0.125, green: 0.220, blue: 0.169)            // subtle edge
+        static let subtleStroke = Color(red: 0.102, green: 0.188, blue: 0.145)
 
         // Legacy aliases
         static let background = appBackground
@@ -35,41 +35,41 @@ enum MoveMarkTheme {
         static let mint = cardRaised
         static let mintSurface = cardRaised
 
-        // Brand
-        static let primary = Color(red: 0.086, green: 0.639, blue: 0.290)               // #16A34A
-        static let primaryPressed = Color(red: 0.059, green: 0.478, blue: 0.227)       // #0F7A3A
+        // Brand — calm green, lime only for tiny success accents
+        static let primary = Color(red: 0.129, green: 0.722, blue: 0.400)               // #21B866
+        static let primaryPressed = Color(red: 0.094, green: 0.588, blue: 0.310)       // #18A957-ish pressed
         static let primaryGreenDark = primaryPressed
-        static let limeAccent = Color(red: 0.718, green: 0.969, blue: 0.455)           // #B7F774
-        static let proofMint = Color(red: 0.545, green: 0.906, blue: 0.651)             // #8BE7A6
+        static let limeAccent = Color(red: 0.608, green: 0.788, blue: 0.604)           // muted sage accent
+        static let proofMint = Color(red: 0.545, green: 0.722, blue: 0.600)
         static let accent = primary
 
         // Text (dark UI)
-        static let textPrimary = Color(red: 0.949, green: 0.973, blue: 0.945)          // #F2F8F1
-        static let textSecondary = Color(red: 0.659, green: 0.722, blue: 0.678)       // #A8B8AD
-        static let textMuted = Color(red: 0.435, green: 0.514, blue: 0.463)             // #6F8376
+        static let textPrimary = Color(red: 0.949, green: 0.973, blue: 0.945)
+        static let textSecondary = Color(red: 0.659, green: 0.722, blue: 0.678)
+        static let textMuted = Color(red: 0.435, green: 0.514, blue: 0.463)
         static let textOnPrimary = Color.white
         static let textOnDark = textPrimary
         static let textOnDarkMuted = textSecondary
-        static let textOnLight = textPrimary
+        static let textOnLight = Color(red: 0.12, green: 0.18, blue: 0.14)
         static let textDarkGreen = proofMint
-        static let textDeepGreen = limeAccent
+        static let textDeepGreen = proofMint
 
-        /// Report paper / photo preview only — never main card fill.
-        static let paperSurface = Color(red: 0.949, green: 0.973, blue: 0.945)
+        /// Report / lease preview only — warm paper, never main card fill.
+        static let paperSurface = Color(red: 0.910, green: 0.937, blue: 0.898)          // #E8EFE5
         static let creamSurface = paperSurface
         static let whiteSurface = paperSurface
 
-        /// Muted sage paper for document/report artifacts on emerald (Welcome, Reports).
-        static let artifactPaper = Color(red: 0.69, green: 0.78, blue: 0.72)
+        /// Muted warm sage for thumbnails on dark cards.
+        static let artifactPaper = Color(red: 0.867, green: 0.910, blue: 0.855)         // #DDE8DA
 
-        static let divider = subtleStroke.opacity(0.85)
-        static let fieldFill = Color(red: 0.055, green: 0.149, blue: 0.106)
+        static let divider = subtleStroke.opacity(0.75)
+        static let fieldFill = Color(red: 0.055, green: 0.118, blue: 0.090)
         static let surfaceInset = fieldFill
 
         // Semantic
         static let semanticSuccess = primary
-        static let semanticWarning = Color(red: 0.847, green: 0.604, blue: 0.118)        // #D89A1E
-        static let semanticDanger = Color(red: 0.937, green: 0.357, blue: 0.357)        // #EF5B5B
+        static let semanticWarning = Color(red: 0.847, green: 0.604, blue: 0.118)
+        static let semanticDanger = Color(red: 0.937, green: 0.357, blue: 0.357)
     }
 
     enum Spacing {
@@ -87,11 +87,11 @@ enum MoveMarkTheme {
     }
 
     enum Typography {
-        static let hero = Font.system(size: 40, weight: .bold, design: .default)
-        static let heroLarge = Font.system(size: 44, weight: .bold, design: .default)
+        static let hero = Font.system(size: 34, weight: .bold, design: .default)
+        static let heroLarge = Font.system(size: 38, weight: .bold, design: .default)
         static let screenTitle = Font.system(size: 28, weight: .bold, design: .default)
         static let cardTitle = Font.system(size: 20, weight: .bold, design: .default)
-        static let cardValue = Font.system(size: 36, weight: .bold, design: .default)
+        static let cardValue = Font.system(size: 28, weight: .bold, design: .default)
         static let sectionTitle = Font.system(size: 18, weight: .semibold, design: .default)
 
         static let body = Font.system(size: 17, weight: .regular, design: .default)
@@ -100,16 +100,14 @@ enum MoveMarkTheme {
         static let subheadlineMedium = Font.system(size: 15, weight: .semibold, design: .default)
         static let button = Font.system(size: 17, weight: .semibold, design: .default)
         static let footnote = Font.system(size: 13, weight: .medium, design: .default)
-        static let caption = Font.system(size: 11, weight: .bold, design: .default)
+        static let caption = Font.system(size: 12, weight: .medium, design: .default)
     }
 }
 
-// MARK: - Emerald vault background
+// MARK: - Rental proof desk background
 
 struct MMEmeraldBackground: View {
-    /// Stronger hero-zone glow (Welcome, vault dashboard).
     var emphasizesHeroZone: Bool = false
-    /// Stronger bottom bloom behind primary CTA.
     var emphasizesCTABloom: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -128,29 +126,30 @@ struct MMEmeraldBackground: View {
 
             RadialGradient(
                 colors: [
-                    MoveMarkTheme.Colors.primary.opacity(emphasizesHeroZone ? 0.22 : 0.12),
-                    MoveMarkTheme.Colors.proofMint.opacity(emphasizesHeroZone ? 0.08 : 0.04),
+                    MoveMarkTheme.Colors.primary.opacity(emphasizesHeroZone ? 0.08 : 0.04),
+                    MoveMarkTheme.Colors.proofMint.opacity(emphasizesHeroZone ? 0.03 : 0.02),
                     .clear
                 ],
-                center: UnitPoint(x: 0.42, y: emphasizesHeroZone ? 0.32 : 0.22),
-                startRadius: 16,
-                endRadius: reduceMotion ? 260 : (emphasizesHeroZone ? 520 : 400)
-            )
-
-            proofGridLayer.opacity(emphasizesHeroZone ? 0.22 : 0.14)
-
-            grainLayer.opacity(0.045)
-
-            RadialGradient(
-                colors: [
-                    MoveMarkTheme.Colors.primary.opacity(emphasizesCTABloom ? 0.16 : 0.08),
-                    MoveMarkTheme.Colors.limeAccent.opacity(0.03),
-                    .clear
-                ],
-                center: UnitPoint(x: 0.5, y: 1.0),
+                center: UnitPoint(x: 0.42, y: emphasizesHeroZone ? 0.28 : 0.2),
                 startRadius: 20,
-                endRadius: emphasizesCTABloom ? 380 : 300
+                endRadius: reduceMotion ? 240 : (emphasizesHeroZone ? 420 : 340)
             )
+
+            proofGridLayer.opacity(emphasizesHeroZone ? 0.08 : 0.05)
+
+            grainLayer.opacity(0.03)
+
+            if emphasizesCTABloom {
+                RadialGradient(
+                    colors: [
+                        MoveMarkTheme.Colors.primary.opacity(0.06),
+                        .clear
+                    ],
+                    center: UnitPoint(x: 0.5, y: 1.0),
+                    startRadius: 24,
+                    endRadius: 280
+                )
+            }
 
             edgeVignette
         }
@@ -161,18 +160,18 @@ struct MMEmeraldBackground: View {
         RadialGradient(
             colors: [
                 .clear,
-                MoveMarkTheme.Colors.appBackground.opacity(0.35),
-                MoveMarkTheme.Colors.appBackground.opacity(0.72)
+                MoveMarkTheme.Colors.appBackground.opacity(0.28),
+                MoveMarkTheme.Colors.appBackground.opacity(0.55)
             ],
             center: .center,
-            startRadius: 140,
+            startRadius: 160,
             endRadius: 560
         )
     }
 
     private var proofGridLayer: some View {
         Canvas { context, size in
-            let spacing: CGFloat = 26
+            let spacing: CGFloat = 28
             var path = Path()
             var x: CGFloat = 0
             while x <= size.width {
@@ -188,8 +187,8 @@ struct MMEmeraldBackground: View {
             }
             context.stroke(
                 path,
-                with: .color(MoveMarkTheme.Colors.cardStroke.opacity(0.28)),
-                lineWidth: 0.5
+                with: .color(MoveMarkTheme.Colors.cardStroke.opacity(0.18)),
+                lineWidth: 0.45
             )
         }
         .allowsHitTesting(false)
@@ -197,16 +196,16 @@ struct MMEmeraldBackground: View {
 
     private var grainLayer: some View {
         Canvas { context, size in
-            let step: CGFloat = 3
+            let step: CGFloat = 4
             var y: CGFloat = 0
             while y < size.height {
                 var x: CGFloat = 0
                 while x < size.width {
-                    if Int((x + y) / step) % 7 == 0 {
+                    if Int((x + y) / step) % 9 == 0 {
                         let rect = CGRect(x: x, y: y, width: 1, height: 1)
                         context.fill(
                             Path(ellipseIn: rect),
-                            with: .color(Color.white.opacity(0.04))
+                            with: .color(Color.white.opacity(0.025))
                         )
                     }
                     x += step
@@ -242,5 +241,10 @@ extension View {
 
     func mmProofShellBackground(heroFocus: Bool = false, ctaBloom: Bool = false) -> some View {
         mmEmeraldBackground(heroFocus: heroFocus, ctaBloom: ctaBloom)
+    }
+
+    /// Keeps scroll content below status bar / TestFlight chrome.
+    func mmScrollContentTopInset(_ extra: CGFloat = 0) -> some View {
+        safeAreaPadding(.top, extra)
     }
 }

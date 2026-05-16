@@ -2,454 +2,346 @@
 //  WelcomeDepositCaseFile.swift
 //  movemork
 //
-//  Dark evidence desk — deposit case file hero (no lifestyle photo).
+//  Evidence Capture — camera-proof snapshot (“before they blame you”).
 //
 
 import SwiftUI
 
 struct WelcomeDepositCaseFile: View {
     let maxWidth: CGFloat
+    let heroHeight: CGFloat
     var cardVisible: Bool = true
-    var statsVisible: Bool = true
-    var scanlineTrigger: Int = 0
+    var tagsVisible: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let cornerRadius: CGFloat = 30
+    private let cornerRadius: CGFloat = 22
+    private let proofBarHeight: CGFloat = 58
+
+    private var photoHeight: CGFloat {
+        max(heroHeight - proofBarHeight, 160)
+    }
+
+    private let issueTags: [(id: String, label: String, isPrior: Bool)] = [
+        ("paint", "Chipped paint", false),
+        ("stain", "Water stain", false),
+        ("prior", "Already there", true)
+    ]
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            caseFileDropShadow
-                .opacity(cardVisible ? 1 : 0)
-
-            backingReportLayer
-                .opacity(cardVisible ? 0.92 : 0)
-                .offset(x: 10, y: 18)
-                .rotationEffect(.degrees(-3.5))
-
-            backingPaperSlab
-                .opacity(cardVisible ? 1 : 0)
-                .offset(x: 4, y: 12)
-                .rotationEffect(.degrees(-1.4))
-
-            VStack(alignment: .leading, spacing: 0) {
-                folderTab
-                    .padding(.leading, 22)
-                    .padding(.bottom, -7)
-                    .opacity(cardVisible ? 1 : 0)
-
-                mainCaseFile
-            }
+        evidenceCaptureCard
+            .frame(width: maxWidth, height: heroHeight)
             .opacity(cardVisible ? 1 : 0)
-            .offset(y: cardVisible ? 0 : 12)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.5).delay(0.04), value: cardVisible)
+            .offset(y: cardVisible ? 0 : 14)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.48), value: cardVisible)
+    }
+
+    // MARK: - Card
+
+    private var evidenceCaptureCard: some View {
+        VStack(spacing: 0) {
+            photoCaptureZone
+                .frame(height: photoHeight)
+
+            proofCaptureBar
+                .frame(height: proofBarHeight)
         }
-        .frame(maxWidth: maxWidth)
+        .background(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(MoveMarkTheme.Colors.card.opacity(0.98))
+        )
+        .overlay(cardBorder)
+        .overlay(cardTopHighlight)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .shadow(color: Color.black.opacity(0.24), radius: 14, y: 6)
     }
 
-    private var caseFileDropShadow: some View {
+    private var cardBorder: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color.black.opacity(0.55))
-            .frame(maxWidth: maxWidth)
-            .frame(minHeight: 228)
-            .blur(radius: 22)
-            .offset(y: 16)
-            .padding(.horizontal, 6)
-    }
-
-    private var backingReportLayer: some View {
-        RoundedRectangle(cornerRadius: cornerRadius - 6, style: .continuous)
-            .fill(MoveMarkTheme.Colors.paperSurface.opacity(0.055))
-            .frame(maxWidth: maxWidth * 0.9, minHeight: 194)
-            .overlay(reportLineTexture(opacity: 0.12))
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius - 6, style: .continuous)
-                    .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.4), lineWidth: 0.7)
-            )
-    }
-
-    private var backingPaperSlab: some View {
-        RoundedRectangle(cornerRadius: cornerRadius - 4, style: .continuous)
-            .fill(
+            .stroke(
                 LinearGradient(
                     colors: [
-                        MoveMarkTheme.Colors.paperSurface.opacity(0.07),
-                        MoveMarkTheme.Colors.cardRaised.opacity(0.35)
+                        MoveMarkTheme.Colors.primary.opacity(0.38),
+                        MoveMarkTheme.Colors.cardStroke.opacity(0.7)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
-                )
-            )
-            .frame(maxWidth: maxWidth * 0.96, minHeight: 204)
-            .overlay(reportLineTexture(opacity: 0.08))
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius - 4, style: .continuous)
-                    .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.42), lineWidth: 0.65)
+                ),
+                lineWidth: 1
             )
     }
 
-    private var folderTab: some View {
-        ZStack(alignment: .leading) {
-            WelcomeFolderTabShape()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            MoveMarkTheme.Colors.cardRaised,
-                            MoveMarkTheme.Colors.card.opacity(0.96)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+    private var cardTopHighlight: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+            .padding(0.5)
+            .mask(
+                LinearGradient(
+                    colors: [.white, .clear],
+                    startPoint: .top,
+                    endPoint: UnitPoint(x: 0.5, y: 0.35)
                 )
-                .frame(width: 84, height: 20)
-                .overlay(
-                    WelcomeFolderTabShape()
-                        .stroke(MoveMarkTheme.Colors.limeAccent.opacity(0.22), lineWidth: 0.8)
-                )
+            )
+    }
 
-            Text("CASE")
-                .font(.system(size: 8, weight: .bold))
-                .tracking(0.9)
-                .foregroundStyle(MoveMarkTheme.Colors.proofMint.opacity(0.85))
-                .padding(.leading, 14)
-                .padding(.bottom, 2)
+    // MARK: - Photo capture zone
+
+    private var photoCaptureZone: some View {
+        ZStack(alignment: .topLeading) {
+            Image("welcome-kitchen-main")
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .zIndex(0)
+
+            photoBottomScrim
+                .zIndex(1)
+
+            focusBrackets
+                .zIndex(2)
+
+            photoOverlays
+                .zIndex(10)
+        }
+        .clipShape(
+            UnevenRoundedRectangle(
+                topLeadingRadius: cornerRadius,
+                topTrailingRadius: cornerRadius
+            )
+        )
+    }
+
+    private var photoBottomScrim: some View {
+        VStack {
+            Spacer(minLength: 0)
+            LinearGradient(
+                colors: [.clear, Color.black.opacity(0.35), Color.black.opacity(0.62)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: min(photoHeight * 0.55, 120))
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var photoOverlays: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 5) {
+                    kitchenLabel
+                    Text("Move-in proof")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.88))
+                }
+
+                Spacer(minLength: 8)
+
+                beforeMoveInBadge
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+
+            Spacer(minLength: 0)
+
+            issueTagsStack
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+
+            timestampStrip
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var kitchenLabel: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(MoveMarkTheme.Colors.primary)
+                .frame(width: 8, height: 8)
+                .overlay(Circle().stroke(Color.white.opacity(0.4), lineWidth: 0.5))
+
+            Text("Kitchen")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(Color.white)
+        }
+        .shadow(color: Color.black.opacity(0.5), radius: 4, y: 1)
+    }
+
+    private var beforeMoveInBadge: some View {
+        Text("Before move-in")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(Color.white.opacity(0.95))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                Capsule()
+                    .fill(Color.black.opacity(0.55))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(Color.white.opacity(0.22), lineWidth: 0.8)
+            )
+    }
+
+    private var issueTagsStack: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(issueTags.enumerated()), id: \.element.id) { index, tag in
+                issueTag(label: tag.label, isPrior: tag.isPrior)
+                    .scaleEffect(tagScale(for: index))
+                    .animation(
+                        reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.78)
+                            .delay(0.05 + Double(index) * 0.06),
+                        value: tagsVisible
+                    )
+            }
         }
     }
 
-    private var mainCaseFile: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("DEPOSIT CASE")
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(1.25)
-                    .foregroundStyle(MoveMarkTheme.Colors.proofMint.opacity(0.9))
+    private func tagScale(for index: Int) -> CGFloat {
+        guard !reduceMotion else { return 1 }
+        return tagsVisible ? 1 : 0.88
+    }
 
-                Spacer(minLength: 0)
-
-                Text("MM-2401")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.88))
+    @ViewBuilder
+    private func issueTag(label: String, isPrior: Bool) -> some View {
+        Text(label)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 6)
+            .background {
+                if isPrior {
+                    Capsule()
+                        .fill(Color.black.opacity(0.75))
+                    Capsule()
+                        .stroke(Color.white, lineWidth: 1.25)
+                } else {
+                    Capsule()
+                        .fill(MoveMarkTheme.Colors.primary)
+                }
             }
+            .shadow(color: Color.black.opacity(0.45), radius: 5, y: 2)
+    }
 
-            Text("Move-in proof · Apr 14")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.82))
-                .padding(.top, 4)
+    private var timestampStrip: some View {
+        Text("Move-in · Apr 14 · 5:42 PM")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(Color.white.opacity(0.95))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Color.black.opacity(0.42))
+    }
 
-            Text("$2,400")
-                .font(.system(size: 42, weight: .bold))
-                .tracking(-1.1)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                .padding(.top, 12)
+    private var focusBrackets: some View {
+        let len: CGFloat = 18
+        let pad: CGFloat = 12
+        return ZStack {
+            bracketView(length: len, corner: .topLeft)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(pad)
+            bracketView(length: len, corner: .topRight)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .padding(pad)
+            bracketView(length: len, corner: .bottomLeft)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .padding(pad)
+            bracketView(length: len, corner: .bottomRight)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(pad)
+        }
+        .allowsHitTesting(false)
+    }
 
-            Text("Ready to defend")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.98))
-                .padding(.top, 5)
+    private func bracketView(length: CGFloat, corner: WelcomeBracketCorner) -> some View {
+        WelcomeFocusBracket(length: length, corner: corner)
+            .stroke(Color.white.opacity(0.58), lineWidth: 1.5)
+            .frame(width: length, height: length)
+    }
 
-            Text("Proof file prepared")
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.98))
-                .padding(.top, 3)
+    // MARK: - Proof bar
 
+    private var proofCaptureBar: some View {
+        VStack(alignment: .leading, spacing: 0) {
             Rectangle()
                 .fill(MoveMarkTheme.Colors.divider.opacity(0.55))
                 .frame(height: 1)
-                .padding(.top, 14)
-                .padding(.bottom, 11)
 
-            evidenceStatsRow
-                .opacity(statsVisible ? 1 : 0)
-                .offset(y: statsVisible ? 0 : 6)
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.42).delay(0.12), value: statsVisible)
+            HStack(alignment: .center, spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(MoveMarkTheme.Colors.primary)
 
-            evidenceArtifactRow
-                .padding(.top, 10)
-                .opacity(statsVisible ? 1 : 0)
-                .offset(y: statsVisible ? 0 : 6)
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.42).delay(0.16), value: statsVisible)
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 17)
-        .padding(.bottom, 18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background { caseFileRuledTexture }
-        .background(
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(MoveMarkTheme.Colors.card.opacity(0.99))
-        )
-        .overlay { welcomeCaseFileTopHighlight }
-        .overlay { welcomeCaseFileBorder }
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .shadow(color: Color.black.opacity(0.48), radius: 26, y: 14)
-        .shadow(color: MoveMarkTheme.Colors.primary.opacity(0.12), radius: 18, y: 8)
-        .mmScanline(trigger: reduceMotion ? 0 : scanlineTrigger, intensity: 0.1)
-    }
+                Text("Saved to your vault")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-    private var caseFileRuledTexture: some View {
-        Canvas { context, size in
-            let spacing: CGFloat = 16
-            var y: CGFloat = 72
-            while y < size.height - 10 {
-                var path = Path()
-                path.move(to: CGPoint(x: 14, y: y))
-                path.addLine(to: CGPoint(x: size.width - 14, y: y))
-                context.stroke(
-                    path,
-                    with: .color(MoveMarkTheme.Colors.cardStroke.opacity(0.16)),
-                    lineWidth: 0.45
-                )
-                y += spacing
-            }
-        }
-        .allowsHitTesting(false)
-    }
+                Spacer(minLength: 4)
 
-    private func reportLineTexture(opacity: Double) -> some View {
-        Canvas { context, size in
-            let spacing: CGFloat = 11
-            var y: CGFloat = 18
-            while y < size.height - 12 {
-                var path = Path()
-                path.move(to: CGPoint(x: 16, y: y))
-                path.addLine(to: CGPoint(x: size.width - 16, y: y))
-                context.stroke(
-                    path,
-                    with: .color(MoveMarkTheme.Colors.cardStroke.opacity(opacity)),
-                    lineWidth: 0.4
-                )
-                y += spacing
-            }
-        }
-        .allowsHitTesting(false)
-    }
-
-    private var welcomeCaseFileTopHighlight: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .stroke(
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(0.22),
-                        Color.white.opacity(0.08),
-                        .clear
-                    ],
-                    startPoint: .top,
-                    endPoint: UnitPoint(x: 0.5, y: 0.32)
-                ),
-                lineWidth: 1.2
-            )
-    }
-
-    private var welcomeCaseFileBorder: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .stroke(
-                LinearGradient(
-                    colors: [
-                        MoveMarkTheme.Colors.limeAccent.opacity(0.32),
-                        MoveMarkTheme.Colors.cardStroke.opacity(0.95),
-                        MoveMarkTheme.Colors.primary.opacity(0.18)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                lineWidth: 1.15
-            )
-    }
-
-    private var evidenceStatsRow: some View {
-        HStack(spacing: 0) {
-            statLabel("12 photos", emphasized: false)
-            statSeparator
-            statLabel("Lease saved", emphasized: true)
-            statSeparator
-            statLabel("Report ready", emphasized: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func statLabel(_ text: String, emphasized: Bool) -> some View {
-        Text(text)
-            .font(.system(size: 13, weight: emphasized ? .semibold : .medium))
-            .foregroundStyle(
-                emphasized
-                    ? MoveMarkTheme.Colors.textPrimary.opacity(0.94)
-                    : MoveMarkTheme.Colors.textSecondary.opacity(0.96)
-            )
-    }
-
-    private var statSeparator: some View {
-        Text("·")
-            .font(.system(size: 13, weight: .bold))
-            .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.75))
-            .padding(.horizontal, 8)
-    }
-
-    private var evidenceArtifactRow: some View {
-        HStack(spacing: 9) {
-            photosArtifactTile
-            leaseArtifactTile
-            reportArtifactTile
-        }
-    }
-
-    private var photosArtifactTile: some View {
-        artifactTileShell(label: "Photos") {
-            ZStack(alignment: .bottomTrailing) {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.fieldFill)
-                    .frame(width: 34, height: 42)
-                    .offset(x: 8, y: 4)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                Text("Report ready")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(MoveMarkTheme.Colors.primary)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(MoveMarkTheme.Colors.primary.opacity(0.18))
                     )
-
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.surface)
-                    .frame(width: 36, height: 44)
-                    .offset(x: 4, y: 2)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
-                    )
-
-                Image("welcome-kitchen-main")
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 38, height: 44)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(Color.white.opacity(0.14), lineWidth: 0.65)
+                        Capsule()
+                            .stroke(MoveMarkTheme.Colors.primary.opacity(0.5), lineWidth: 1)
                     )
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.top, 6)
-            .padding(.horizontal, 8)
+            .padding(.top, 8)
+
+            Text("12 photos · 3 issues")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.85))
+                .padding(.top, 4)
         }
-    }
-
-    private var leaseArtifactTile: some View {
-        artifactTileShell(label: "Lease") {
-            VStack(alignment: .leading, spacing: 5) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(MoveMarkTheme.Colors.primary.opacity(0.55))
-                    .frame(width: 22, height: 3)
-
-                docPreviewLine(width: 52, onPaper: true)
-                docPreviewLine(width: 44, onPaper: true)
-                docPreviewLine(width: 36, onPaper: true)
-
-                Spacer(minLength: 0)
-            }
-            .padding(9)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(MoveMarkTheme.Colors.artifactPaper.opacity(0.88))
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .padding(6)
-        }
-    }
-
-    private var reportArtifactTile: some View {
-        artifactTileShell(label: "Report") {
-            ZStack(alignment: .topTrailing) {
-                VStack(alignment: .leading, spacing: 5) {
-                    docPreviewLine(width: 50, onPaper: true)
-                    docPreviewLine(width: 42, onPaper: true)
-                    docPreviewLine(width: 32, onPaper: true)
-                    Spacer(minLength: 0)
-                }
-                .padding(9)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .background(MoveMarkTheme.Colors.artifactPaper.opacity(0.86))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .padding(6)
-
-                ZStack {
-                    Circle()
-                        .stroke(MoveMarkTheme.Colors.primary.opacity(0.45), lineWidth: 1)
-                        .background(Circle().fill(MoveMarkTheme.Colors.primary.opacity(0.12)))
-                    Text("PDF")
-                        .font(.system(size: 6, weight: .bold))
-                        .foregroundStyle(MoveMarkTheme.Colors.primaryPressed)
-                }
-                .frame(width: 22, height: 22)
-                .offset(x: -10, y: 10)
-            }
-        }
-    }
-
-    private func docPreviewLine(width: CGFloat, onPaper: Bool = false) -> some View {
-        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-            .fill(
-                onPaper
-                    ? MoveMarkTheme.Colors.cardStroke.opacity(0.55)
-                    : MoveMarkTheme.Colors.textMuted.opacity(0.35)
-            )
-            .frame(width: width, height: 3)
-    }
-
-    private func artifactTileShell<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(spacing: 0) {
-            content()
-                .frame(height: 52)
-
-            Text(label)
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.95))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 5)
-                .background(MoveMarkTheme.Colors.surface.opacity(0.55))
-        }
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.88))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.subtleStroke.opacity(0.75), lineWidth: 0.7)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .padding(.horizontal, 14)
+        .padding(.bottom, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(MoveMarkTheme.Colors.card.opacity(0.98))
     }
 }
 
-// MARK: - Folder tab shape
+// MARK: - Focus bracket shape
 
-private struct WelcomeFolderTabShape: Shape {
+private enum WelcomeBracketCorner {
+    case topLeft, topRight, bottomLeft, bottomRight
+}
+
+private struct WelcomeFocusBracket: Shape {
+    let length: CGFloat
+    let corner: WelcomeBracketCorner
+
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let r: CGFloat = 6
-        path.move(to: CGPoint(x: rect.minX + r, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
-        path.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.minY + r), control: CGPoint(x: rect.maxX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.closeSubpath()
+        let l = min(length, min(rect.width, rect.height))
+
+        switch corner {
+        case .topLeft:
+            path.move(to: CGPoint(x: 0, y: l))
+            path.addLine(to: .zero)
+            path.addLine(to: CGPoint(x: l, y: 0))
+        case .topRight:
+            path.move(to: CGPoint(x: rect.width - l, y: 0))
+            path.addLine(to: CGPoint(x: rect.width, y: 0))
+            path.addLine(to: CGPoint(x: rect.width, y: l))
+        case .bottomLeft:
+            path.move(to: CGPoint(x: 0, y: rect.height - l))
+            path.addLine(to: CGPoint(x: 0, y: rect.height))
+            path.addLine(to: CGPoint(x: l, y: rect.height))
+        case .bottomRight:
+            path.move(to: CGPoint(x: rect.width, y: rect.height - l))
+            path.addLine(to: CGPoint(x: rect.width, y: rect.height))
+            path.addLine(to: CGPoint(x: rect.width - l, y: rect.height))
+        }
         return path
     }
 }
 
-// MARK: - Desk ruled paper (screen backdrop)
-
 struct WelcomeEvidenceDeskRuledPaper: View {
-    var body: some View {
-        Canvas { context, size in
-            let spacing: CGFloat = 22
-            var y: CGFloat = size.height * 0.1
-            let endY = size.height * 0.5
-            while y < endY {
-                var path = Path()
-                path.move(to: CGPoint(x: 28, y: y))
-                path.addLine(to: CGPoint(x: size.width - 28, y: y))
-                context.stroke(
-                    path,
-                    with: .color(MoveMarkTheme.Colors.cardStroke.opacity(0.1)),
-                    lineWidth: 0.5
-                )
-                y += spacing
-            }
-        }
-        .allowsHitTesting(false)
-    }
+    var body: some View { EmptyView() }
 }

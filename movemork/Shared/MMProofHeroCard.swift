@@ -2,7 +2,7 @@
 //  MMProofHeroCard.swift
 //  movemork
 //
-//  Dominant vault proof hero — verified record on emerald.
+//  Vault proof folder card — calm progress, no dashboard chrome.
 //
 
 import SwiftUI
@@ -26,9 +26,9 @@ struct MMProofHeroCard: View {
     private var clampedProgress: Double { min(1, max(0, progress)) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 14) {
-                proofGlyph
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
+                folderGlyph
                 headlineBlock
             }
 
@@ -44,100 +44,62 @@ struct MMProofHeroCard: View {
                 size: .hero
             )
         }
-        .padding(18)
-        .background { cardBackground }
-        .background { caseFileRuledTexture }
-        .overlay { proofPattern }
-        .overlay(cardBorder)
-        .overlay(caseFileTopHighlight)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: Color.black.opacity(0.42), radius: 22, y: 11)
-        .shadow(color: MoveMarkTheme.Colors.primary.opacity(0.1), radius: 14, y: 6)
-        .safeAreaPadding(.top, MoveMarkTheme.Spacing.heroTopInset)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(MoveMarkTheme.Colors.card.opacity(0.98))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.8), lineWidth: 0.85)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: Color.black.opacity(0.28), radius: 14, y: 6)
     }
 
-    private var proofPattern: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .topTrailing) {
-                Circle()
-                    .stroke(MoveMarkTheme.Colors.limeAccent.opacity(0.08), lineWidth: 1)
-                    .frame(width: geo.size.width * 0.7)
-                    .offset(x: geo.size.width * 0.2, y: -geo.size.width * 0.15)
-
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.35), lineWidth: 0.8)
-                    .frame(width: 72, height: 92)
-                    .rotationEffect(.degrees(12))
-                    .offset(x: geo.size.width * 0.58, y: geo.size.height * 0.12)
-            }
-        }
-        .allowsHitTesting(false)
-    }
-
-    private var proofGlyph: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(MoveMarkTheme.Colors.cardRaised.opacity(0.9))
-                .frame(width: 52, height: 64)
-                .offset(x: 6, y: 6)
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(MoveMarkTheme.Colors.limeAccent.opacity(0.1))
-                .frame(width: 48, height: 58)
-                .offset(x: -4, y: -4)
-
-            Circle()
-                .fill(MoveMarkTheme.Colors.limeAccent.opacity(0.14))
-                .frame(width: 48, height: 48)
-            Image(systemName: "checkmark.shield.fill")
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(MoveMarkTheme.Colors.limeAccent)
-        }
-        .frame(width: 56, height: 56)
+    private var folderGlyph: some View {
+        Image(systemName: "folder.fill")
+            .font(.system(size: 28, weight: .medium))
+            .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.85))
+            .frame(width: 44, height: 44)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.8))
+            )
     }
 
     private var headlineBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Deposit case")
-                .font(MoveMarkTheme.Typography.caption)
-                .tracking(0.9)
-                .foregroundStyle(MoveMarkTheme.Colors.limeAccent.opacity(0.9))
-                .textCase(.uppercase)
+            Text("Deposit proof")
+                .font(MoveMarkTheme.Typography.footnote)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.95))
 
             Text(headline)
-                .font(MoveMarkTheme.Typography.hero)
-                .tracking(-0.5)
+                .font(MoveMarkTheme.Typography.cardTitle)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                .shadow(color: MoveMarkTheme.Colors.limeAccent.opacity(0.12), radius: 0, y: 0)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(nextLine)
-                .font(MoveMarkTheme.Typography.subheadlineMedium)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .font(MoveMarkTheme.Typography.subheadline)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.96))
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private var progressBlock: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.white.opacity(0.1))
-                        .frame(height: 10)
+                        .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.9))
+                        .frame(height: 6)
                     Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [MoveMarkTheme.Colors.primary, MoveMarkTheme.Colors.limeAccent],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: max(10, geo.size.width * clampedProgress), height: 10)
-                        .shadow(color: MoveMarkTheme.Colors.limeAccent.opacity(0.22), radius: 4, y: 0)
+                        .fill(MoveMarkTheme.Colors.primary.opacity(0.9))
+                        .frame(width: max(8, geo.size.width * clampedProgress), height: 6)
                         .animation(reduceMotion ? nil : MMMotion.proofProgress, value: clampedProgress)
                 }
             }
-            .frame(height: 10)
+            .frame(height: 6)
 
             if let progressLabel, !progressLabel.isEmpty {
                 Text(progressLabel)
@@ -145,64 +107,5 @@ struct MMProofHeroCard: View {
                     .foregroundStyle(MoveMarkTheme.Colors.textMuted)
             }
         }
-    }
-
-    private var cardBackground: some View {
-        LinearGradient(
-            colors: [
-                MoveMarkTheme.Colors.cardRaised,
-                MoveMarkTheme.Colors.card,
-                MoveMarkTheme.Colors.surface
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
-    private var cardBorder: some View {
-        RoundedRectangle(cornerRadius: 24, style: .continuous)
-            .stroke(
-                LinearGradient(
-                    colors: [
-                        MoveMarkTheme.Colors.limeAccent.opacity(0.3),
-                        MoveMarkTheme.Colors.cardStroke.opacity(0.92),
-                        MoveMarkTheme.Colors.primary.opacity(0.14)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                lineWidth: 1.1
-            )
-    }
-
-    private var caseFileTopHighlight: some View {
-        RoundedRectangle(cornerRadius: 24, style: .continuous)
-            .stroke(
-                LinearGradient(
-                    colors: [Color.white.opacity(0.18), Color.white.opacity(0.06), .clear],
-                    startPoint: .top,
-                    endPoint: UnitPoint(x: 0.5, y: 0.3)
-                ),
-                lineWidth: 1.1
-            )
-    }
-
-    private var caseFileRuledTexture: some View {
-        Canvas { context, size in
-            let spacing: CGFloat = 18
-            var y: CGFloat = 64
-            while y < size.height - 12 {
-                var path = Path()
-                path.move(to: CGPoint(x: 16, y: y))
-                path.addLine(to: CGPoint(x: size.width - 16, y: y))
-                context.stroke(
-                    path,
-                    with: .color(MoveMarkTheme.Colors.cardStroke.opacity(0.12)),
-                    lineWidth: 0.45
-                )
-                y += spacing
-            }
-        }
-        .allowsHitTesting(false)
     }
 }

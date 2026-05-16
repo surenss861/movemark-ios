@@ -54,7 +54,7 @@ struct RoomListView: View {
                     progressCard
 
                     MMProofTimeline(
-                        title: "Case file trail",
+                        title: "Proof trail",
                         rows: roomProofTrailRows,
                         highlightedRowID: highlightedRoomTrailRowID,
                         appeared: roomsListAppeared
@@ -91,7 +91,8 @@ struct RoomListView: View {
                     moveOutCard
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.top, 22)
+                .padding(.top, 12)
+                .mmScrollContentTopInset(2)
                 .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
             }
             .onAppear {
@@ -146,9 +147,9 @@ struct RoomListView: View {
 
     private var roomProofHeader: some View {
         MMEditorialHeader(
-            eyebrow: "Case file",
+            eyebrow: "Proof file",
             title: "Room proof",
-            subtitle: "Each room is a section in your deposit case — capture it once, reuse it later."
+            subtitle: "Each room is part of your move-in proof — capture it once, reuse it later."
         )
     }
 

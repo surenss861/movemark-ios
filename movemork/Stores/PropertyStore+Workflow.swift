@@ -233,7 +233,7 @@ extension PropertyStore {
             return issues == 1 ? "1 open maintenance issue" : "\(issues) open maintenance issues"
         }
         if isExportReady(for: property) {
-            return "Case file ready — you can build a report"
+            return "Proof ready — you can make a report"
         }
         return "Proof looks good · keep docs current"
     }
