@@ -59,6 +59,9 @@ enum MoveMarkTheme {
         static let creamSurface = paperSurface
         static let whiteSurface = paperSurface
 
+        /// Muted sage paper for document/report artifacts on emerald (Welcome, Reports).
+        static let artifactPaper = Color(red: 0.69, green: 0.78, blue: 0.72)
+
         static let divider = subtleStroke.opacity(0.85)
         static let fieldFill = Color(red: 0.055, green: 0.149, blue: 0.106)
         static let surfaceInset = fieldFill

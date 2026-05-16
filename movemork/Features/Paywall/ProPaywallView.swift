@@ -30,7 +30,7 @@ struct ProPaywallView: View {
         NavigationStack {
             ZStack(alignment: .top) {
                 Color.clear
-                    .mmProofShellBackground(heroFocus: true, ctaBloom: true)
+                    .mmProofShellBackground(heroFocus: true, ctaBloom: false)
 
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 18) {
@@ -62,7 +62,7 @@ struct ProPaywallView: View {
                     Button(action: onClose) {
                         ZStack {
                             Circle()
-                                .fill(MoveMarkTheme.Colors.mint.opacity(0.65))
+                                .fill(MoveMarkTheme.Colors.card.opacity(0.92))
                                 .frame(width: 42, height: 42)
 
                             Image(systemName: "xmark")
@@ -82,10 +82,10 @@ struct ProPaywallView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("MoveMark Pro")
-                .font(.system(size: 11, weight: .bold))
-                .tracking(1.2)
-                .foregroundStyle(MoveMarkTheme.Colors.accent)
+            Text("DEPOSIT PROTECTION")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.1)
+                .foregroundStyle(MoveMarkTheme.Colors.proofMint.opacity(0.9))
 
             Text(reason.headline)
                 .font(.system(size: 28, weight: .bold))
@@ -197,7 +197,8 @@ struct ProPaywallView: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(MoveMarkTheme.Colors.limeAccent.opacity(0.2), lineWidth: 1)
         )
-        .shadow(color: MoveMarkTheme.Colors.textPrimary.opacity(0.12), radius: 18, y: 8)
+        .shadow(color: Color.black.opacity(0.32), radius: 16, y: 8)
+        .shadow(color: MoveMarkTheme.Colors.primary.opacity(0.08), radius: 10, y: 4)
     }
 
     /// Empty catalog after at least one paywall fetch finished — never show silent placeholders.
@@ -218,8 +219,8 @@ struct ProPaywallView: View {
                 restorePurchases()
             } label: {
                 Text(subscriptionManager.isStoreKitBusy ? "Restoring purchases…" : "Restore purchases")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.92))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.95))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
@@ -524,7 +525,7 @@ struct ProPaywallView: View {
                     .padding(.top, 2)
             }
             .padding(14)
-            .background(isSelected ? MoveMarkTheme.Colors.mint.opacity(0.45) : MoveMarkTheme.Colors.panel)
+            .background(isSelected ? MoveMarkTheme.Colors.cardRaised.opacity(0.95) : MoveMarkTheme.Colors.card.opacity(0.92))
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(
@@ -588,9 +589,9 @@ struct ProPaywallView: View {
         switch reason {
         case .extraProperty:
             return [
-                ("More property vaults", "Separate proof trails for each rental."),
-                ("Unlimited reports", "Save, share, or send proof PDFs anytime."),
-                ("Case builder included", "Stronger dispute workflow from your evidence."),
+                ("More property vaults", "One deposit case vault per rental, kept separate."),
+                ("Unlimited reports", "PDF reports from your case file whenever you need them."),
+                ("Case builder included", "Stronger dispute workflow from the same evidence."),
             ]
         case .unlimitedExports:
             return [

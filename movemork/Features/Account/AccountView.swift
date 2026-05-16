@@ -64,14 +64,14 @@ struct AccountView: View {
     var body: some View {
         ZStack {
             Color.clear
-                .mmProofShellBackground(ctaBloom: true)
+                .mmProofShellBackground(heroFocus: true, ctaBloom: false)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     MMEditorialHeader(
-                        eyebrow: "MoveMark",
+                        eyebrow: "Case file",
                         title: "Account",
-                        subtitle: "Your plan, profile, and settings."
+                        subtitle: "Plan, profile, and vault access for your deposit cases."
                     )
                     profileCard
                     subscriptionCard
@@ -118,11 +118,7 @@ struct AccountView: View {
     }
 
     private var subscriptionCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Subscription")
-                .font(MoveMarkTheme.Typography.cardTitle)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
+        accountSection(title: "Subscription") {
             if let err = subscriptionManager.userFacingPlansErrorMessage, !err.isEmpty {
                 MMErrorBanner(
                     message: err,
@@ -234,14 +230,9 @@ struct AccountView: View {
                 .font(MoveMarkTheme.Typography.footnote)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
         }
-        .padding(18)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(MoveMarkTheme.Colors.cardRaised)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.cardStroke, lineWidth: 1)
-        )
+        .mmProofCardSurface(.standard, cornerRadius: 18)
         .opacity(subscriptionManager.hasPro ? 0.72 : 1)
     }
 
@@ -264,21 +255,10 @@ struct AccountView: View {
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(18)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            LinearGradient(
-                colors: [MoveMarkTheme.Colors.cardRaised, MoveMarkTheme.Colors.card, MoveMarkTheme.Colors.surface],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.limeAccent.opacity(0.28), lineWidth: 1)
-        )
-        .shadow(color: MoveMarkTheme.Colors.primary.opacity(0.22), radius: 14, y: 6)
+        .mmProofCardSurface(.depositPayoff, cornerRadius: 18)
+        .shadow(color: Color.black.opacity(0.28), radius: 12, y: 5)
     }
 
     private func runSubscriptionRestore() {

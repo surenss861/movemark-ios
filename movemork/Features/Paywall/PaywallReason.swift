@@ -16,26 +16,26 @@ enum PaywallReason: Equatable {
     var headline: String {
         switch self {
         case .extraProperty:
-            return "Unlock more property vaults"
+            return "More deposit case vaults"
         case .unlimitedExports:
-            return "Unlock unlimited exports"
+            return "Unlimited case file reports"
         case .disputePacket:
-            return "Unlock case-ready dispute tools"
+            return "Dispute packet & case tools"
         case .moveOutExport:
-            return "Unlock move-out protection"
+            return "Move-out case exports"
         }
     }
 
     var subheadline: String {
         switch self {
         case .extraProperty:
-            return "Track multiple rentals and keep each proof trail organized."
+            return "Add another deposit case file when you change rentals."
         case .unlimitedExports:
-            return "Make professional proof PDFs whenever you need them."
+            return "Generate reports from your case file whenever you need them."
         case .disputePacket:
-            return "Stronger dispute-ready proof and premium export tools."
+            return "Dispute-ready exports and tools built from the same proof vault."
         case .moveOutExport:
-            return "Export move-out proof when deposit risk is real."
+            return "Lock in move-out evidence while deposit risk is on the table."
         }
     }
 

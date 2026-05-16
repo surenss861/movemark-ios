@@ -2,7 +2,7 @@
 //  PropertyVaultHeroStage.swift
 //  movemork
 //
-//  Compact vault header: title always visible, context optional, status secondary.
+//  Property vault header — deposit case file identity, rooms + next step.
 //
 
 import SwiftUI
@@ -10,7 +10,10 @@ import SwiftUI
 struct PropertyVaultHeroStage: View {
     let property: PropertyRecord
     let namespace: Namespace.ID?
-    let heroStatusLine: String
+    let documentedRooms: Int
+    let totalRooms: Int
+    let nextRoomName: String?
+    let missingSupportingDocs: Int
 
     private let cornerRadius: CGFloat = 18
 
@@ -27,6 +30,11 @@ struct PropertyVaultHeroStage: View {
 
     private func header(namespace: Namespace.ID?) -> some View {
         VStack(alignment: .leading, spacing: 8) {
+            Text("DEPOSIT CASE")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.1)
+                .foregroundStyle(MoveMarkTheme.Colors.proofMint.opacity(0.88))
+
             titleView(namespace: namespace)
 
             if let line = contextLine, !line.isEmpty {
@@ -36,12 +44,30 @@ struct PropertyVaultHeroStage: View {
                     .lineLimit(1)
             }
 
-            Text(heroStatusLine)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
+            Text(roomsProgressLine)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.95))
                 .fixedSize(horizontal: false, vertical: true)
+
+            if let next = nextRoomName, !next.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               totalRooms > 0, documentedRooms < totalRooms {
+                Text("Next: \(next)")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if missingSupportingDocs > 0 {
+                Text(
+                    missingSupportingDocs == 1
+                        ? "1 supporting record still needed"
+                        : "\(missingSupportingDocs) supporting records still needed"
+                )
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.85))
+                .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
@@ -113,5 +139,12 @@ struct PropertyVaultHeroStage: View {
 
         let country = property.country.trimmingCharacters(in: .whitespacesAndNewlines)
         return country.isEmpty ? nil : country
+    }
+
+    private var roomsProgressLine: String {
+        if totalRooms == 0 {
+            return "Add rooms to open this case file"
+        }
+        return "\(documentedRooms) of \(totalRooms) rooms ready"
     }
 }

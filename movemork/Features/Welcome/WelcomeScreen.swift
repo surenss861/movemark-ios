@@ -2,7 +2,7 @@
 //  WelcomeScreen.swift
 //  movemork
 //
-//  MoveMark — Cinematic proof-over-apartment welcome.
+//  MoveMark — Dark evidence desk welcome (deposit case file, no photo hero).
 //
 
 import SwiftUI
@@ -11,14 +11,9 @@ struct WelcomeScreen: View {
     @State private var showAuth = false
     @State private var authInitialMode: AuthContainerView.Mode = .signUp
 
-    @State private var atmosphereVisible = false
-    @State private var metalAnimating = true
-    @State private var depthActive = true
-    @State private var depthReveal: CGFloat = 0
-    @State private var imageVisible = false
-    @State private var evidenceVisible = false
-    @State private var depositVisible = false
-    @State private var ringProgress: CGFloat = 0
+    @State private var deskVisible = false
+    @State private var cardVisible = false
+    @State private var statsVisible = false
     @State private var scanlineTrigger = 0
     @State private var copyVisible = false
     @State private var ctaVisible = false
@@ -31,55 +26,43 @@ struct WelcomeScreen: View {
     var body: some View {
         NavigationStack {
             GeometryReader { geo in
-                let heroHeight = geo.size.height * 0.48
+                let maxCard = min(geo.size.width - contentPadding * 2, 420)
 
-                ZStack(alignment: .top) {
-                    MoveMarkTheme.Colors.appBackground
-                        .ignoresSafeArea()
+                ZStack {
+                    MMEmeraldBackground(emphasizesHeroZone: true, emphasizesCTABloom: false)
 
-                    VStack(spacing: 0) {
-                        ZStack(alignment: .topLeading) {
-                            WelcomeProofHeroZone(
-                                width: geo.size.width,
-                                height: heroHeight,
-                                metalAnimating: metalAnimating,
-                                depthActive: depthActive,
-                                depthReveal: depthReveal,
-                                imageVisible: imageVisible,
-                                evidenceVisible: evidenceVisible,
-                                depositVisible: depositVisible,
-                                ringProgress: ringProgress,
+                    WelcomeEvidenceDeskRuledPaper()
+                        .opacity(deskVisible ? 1 : 0)
+                        .animation(reduceMotion ? nil : .easeOut(duration: 0.55), value: deskVisible)
+
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            brandWordmarkChip
+                                .padding(.top, max(4, geo.safeAreaInsets.top - 28))
+
+                            WelcomeDepositCaseFile(
+                                maxWidth: maxCard,
+                                cardVisible: cardVisible,
+                                statsVisible: statsVisible,
                                 scanlineTrigger: scanlineTrigger
                             )
-                            .opacity(atmosphereVisible ? 1 : 0)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 12)
 
-                            Text("MoveMark")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.92))
-                                .padding(.horizontal, contentPadding)
-                                .padding(.top, max(12, geo.safeAreaInsets.top + 6))
-                                .opacity(imageVisible ? 1 : 0)
+                            headlineBlock
+                                .padding(.top, 24)
+
+                            ctaBlock(glowWidth: min(420, geo.size.width * 0.96))
+                                .padding(.top, 22)
+                                .padding(.bottom, max(28, geo.safeAreaInsets.bottom + 20))
                         }
-
-                        ScrollView(showsIndicators: false) {
-                            VStack(alignment: .leading, spacing: 0) {
-                                headlineBlock
-                                    .padding(.horizontal, contentPadding)
-                                    .padding(.top, 20)
-
-                                ctaBlock
-                                    .padding(.horizontal, contentPadding)
-                                    .padding(.top, 22)
-                                    .padding(.bottom, max(20, geo.safeAreaInsets.bottom + 12))
-                            }
-                        }
-                        .background(bottomFade)
+                        .padding(.horizontal, contentPadding)
                     }
                 }
+                .ignoresSafeArea(edges: .bottom)
             }
             .onAppear {
                 playEntrance()
-                scheduleAtmosphereSettle()
             }
             .navigationDestination(isPresented: $showAuth) {
                 AuthContainerView(initialMode: authInitialMode)
@@ -87,101 +70,122 @@ struct WelcomeScreen: View {
         }
     }
 
-    private var bottomFade: some View {
-        LinearGradient(
-            colors: [
-                MoveMarkTheme.Colors.appBackground.opacity(0),
-                MoveMarkTheme.Colors.appBackground.opacity(0.92),
-                MoveMarkTheme.Colors.appBackground
-            ],
-            startPoint: .top,
-            endPoint: UnitPoint(x: 0.5, y: 0.12)
+    private var brandWordmarkChip: some View {
+        HStack(spacing: 7) {
+            Image("MoveMarkLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 20, height: 20)
+                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .stroke(Color.white.opacity(0.14), lineWidth: 0.6)
+                )
+            Text("MoveMark")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.96))
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(MoveMarkTheme.Colors.card.opacity(0.88))
         )
-        .allowsHitTesting(false)
+        .overlay(
+            Capsule()
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            MoveMarkTheme.Colors.limeAccent.opacity(0.18),
+                            MoveMarkTheme.Colors.cardStroke.opacity(0.85)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.85
+                )
+        )
+        .shadow(color: Color.black.opacity(0.32), radius: 8, y: 3)
+        .opacity(deskVisible ? 1 : 0)
+        .offset(y: deskVisible ? 0 : 6)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.45), value: deskVisible)
     }
 
     private func playEntrance() {
         if reduceMotion {
-            atmosphereVisible = true
-            metalAnimating = false
-            depthActive = false
-            depthReveal = 1
-            imageVisible = true
-            evidenceVisible = true
-            depositVisible = true
-            ringProgress = 0.82
+            deskVisible = true
+            cardVisible = true
+            statsVisible = true
             copyVisible = true
             ctaVisible = true
             return
         }
 
-        withAnimation(.easeOut(duration: 0.5)) { atmosphereVisible = true }
-        withAnimation(.easeOut(duration: 0.55).delay(0.08)) {
-            depthReveal = 1
-            imageVisible = true
-        }
-        withAnimation(.easeOut(duration: 0.5).delay(0.16)) { evidenceVisible = true }
-        withAnimation(.easeOut(duration: 0.45).delay(0.24)) {
-            depositVisible = true
-        }
-        withAnimation(.easeOut(duration: 0.6).delay(0.24)) {
-            ringProgress = 0.82
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+        withAnimation(.easeOut(duration: 0.5)) { deskVisible = true }
+        withAnimation(.easeOut(duration: 0.52).delay(0.06)) { cardVisible = true }
+        withAnimation(.easeOut(duration: 0.44).delay(0.14)) { statsVisible = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
             scanlineTrigger += 1
         }
-        withAnimation(.easeOut(duration: 0.45).delay(0.34)) { copyVisible = true }
-        withAnimation(.easeOut(duration: 0.4).delay(0.42)) {
-            ctaVisible = true
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        withAnimation(.easeOut(duration: 0.45).delay(0.22)) { copyVisible = true }
+        withAnimation(.easeOut(duration: 0.42).delay(0.32)) { ctaVisible = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.52) {
             ctaGlintTrigger += 1
         }
     }
 
-    private func scheduleAtmosphereSettle() {
-        guard !reduceMotion else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
-            metalAnimating = false
-            depthActive = false
-        }
-    }
-
     private var headlineBlock: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Get your deposit back.")
-                .font(.system(size: 36, weight: .bold))
-                .tracking(-0.8)
+                .font(.system(size: 38, weight: .bold))
+                .tracking(-0.9)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text("Take photos now. Make a report later.")
                 .font(MoveMarkTheme.Typography.body)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.98))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .opacity(copyVisible ? 1 : 0)
         .offset(y: copyVisible ? 0 : 6)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.45).delay(0.34), value: copyVisible)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.45).delay(0.22), value: copyVisible)
     }
 
-    private var ctaBlock: some View {
+    private func ctaBlock(glowWidth: CGFloat) -> some View {
         VStack(spacing: 12) {
             ZStack {
                 Ellipse()
                     .fill(
                         RadialGradient(
                             colors: [
-                                MoveMarkTheme.Colors.primary.opacity(0.09),
+                                MoveMarkTheme.Colors.primary.opacity(0.08),
+                                MoveMarkTheme.Colors.primary.opacity(0.03),
                                 .clear
                             ],
                             center: .center,
                             startRadius: 10,
-                            endRadius: 88
+                            endRadius: 96
                         )
                     )
-                    .frame(height: 50)
+                    .frame(width: glowWidth, height: 68)
+                    .offset(y: 8)
+                    .opacity(ctaVisible ? 1 : 0)
+
+                Ellipse()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                MoveMarkTheme.Colors.limeAccent.opacity(0.025),
+                                .clear
+                            ],
+                            center: .center,
+                            startRadius: 4,
+                            endRadius: 48
+                        )
+                    )
+                    .frame(width: 160, height: 36)
                     .offset(y: 6)
                     .opacity(ctaVisible ? 1 : 0)
 
@@ -194,14 +198,14 @@ struct WelcomeScreen: View {
                     },
                     showsTrailingArrow: true
                 )
-                .mmCTAGlint(trigger: ctaGlintTrigger)
+                .mmCTAGlint(trigger: reduceMotion ? 0 : ctaGlintTrigger)
             }
 
             HStack(spacing: 6) {
                 Spacer(minLength: 0)
                 Text("Already have an account?")
                     .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
                 Button {
                     MMHaptics.soft()
                     authInitialMode = .signIn
@@ -217,6 +221,6 @@ struct WelcomeScreen: View {
         }
         .opacity(ctaVisible ? 1 : 0)
         .offset(y: ctaVisible ? 0 : 6)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.4).delay(0.42), value: ctaVisible)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.42).delay(0.32), value: ctaVisible)
     }
 }

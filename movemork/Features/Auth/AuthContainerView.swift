@@ -48,7 +48,7 @@ struct AuthContainerView: View {
     var body: some View {
         ZStack {
             Color.clear
-                .mmProofShellBackground(ctaBloom: true)
+                .mmProofShellBackground(heroFocus: true, ctaBloom: false)
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -106,8 +106,8 @@ struct AuthContainerView: View {
 
                 Text(
                     mode == .signIn
-                        ? "Pick up where your proof trail left off."
-                        : "Start building your proof trail."
+                        ? "Sign in to continue your case file."
+                        : "Your proof stays private in your account. Start a deposit case file."
                 )
                 .font(MoveMarkTheme.Typography.body)
                 .foregroundStyle(MoveMarkTheme.Colors.textOnDarkMuted)

@@ -346,8 +346,8 @@ enum MMProofTimelineBuilder {
             MMProofTimelineRow(
                 id: "rooms-progress",
                 iconName: documented == total && total > 0 ? "checkmark.circle.fill" : "camera.fill",
-                title: total == 0 ? "No rooms yet" : "\(documented) of \(total) rooms done",
-                message: photos == 0 ? "Add room proof first." : photoIssueLine(photos: photos, issues: property.rooms.flatMap(\.evidence).flatMap(\.issueTags).count),
+                title: total == 0 ? "No rooms yet" : "\(documented) of \(total) rooms ready",
+                message: photos == 0 ? "Add room photos to the case file." : photoIssueLine(photos: photos, issues: property.rooms.flatMap(\.evidence).flatMap(\.issueTags).count),
                 timestamp: nil,
                 status: documented > 0 ? .done : .missing
             )

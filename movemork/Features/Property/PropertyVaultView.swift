@@ -164,15 +164,15 @@ struct PropertyVaultView: View {
 
     var body: some View {
         ZStack {
-            Color.clear
-                .mmProofShellBackground(heroFocus: true, ctaBloom: true)
-
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     PropertyVaultHeroStage(
                         property: property,
                         namespace: namespace,
-                        heroStatusLine: propertyStore.heroStatusLine(for: property)
+                        documentedRooms: completedRooms,
+                        totalRooms: totalRooms,
+                        nextRoomName: nextRoom?.name,
+                        missingSupportingDocs: missingRecordsCount
                     )
                     .id(property.id)
                     .padding(.bottom, 8)
@@ -181,7 +181,7 @@ struct PropertyVaultView: View {
                         depositDisplay: depositDisplayText,
                         proofScoreLabel: proofScoreLabel,
                         summaryLine: propertyStore.readinessSummaryLine(for: property),
-                        roomsLine: "\(completedRooms) of \(totalRooms) rooms · \(totalPhotos) photos"
+                        roomsLine: "\(completedRooms) of \(totalRooms) rooms ready · \(totalPhotos) photos"
                     )
                     .opacity(contentVisible ? 1 : 0)
                     .offset(y: contentVisible ? 0 : 8)
@@ -189,8 +189,8 @@ struct PropertyVaultView: View {
                     .padding(.bottom, 12)
 
                     MMProofHeroCard(
-                        headline: "\(completedRooms) of \(totalRooms) rooms done",
-                        nextLine: readinessGuidanceLine,
+                        headline: "\(completedRooms) of \(totalRooms) rooms ready",
+                        nextLine: propertyVaultProofHeroNextLine,
                         progress: progress,
                         progressLabel: "\(readinessScore)% proof score",
                         primaryTitle: MMNextBestActionMapper.from(
@@ -216,7 +216,7 @@ struct PropertyVaultView: View {
                     }
 
                     MMProofTimeline(
-                        title: "Proof trail",
+                        title: "Case file trail",
                         rows: vaultProofTrailRows,
                         highlightedRowID: highlightedTrailRowID,
                         appeared: contentVisible
@@ -281,7 +281,7 @@ struct PropertyVaultView: View {
             }
         }
         .mmProofToast(message: proofToast, isVisible: proofToastVisible)
-        .mmEmeraldBackground()
+        .mmProofShellBackground(heroFocus: true, ctaBloom: false)
         .sheet(isPresented: $showEditProperty) {
             NavigationStack {
                 EditPropertyView(property: property)
@@ -397,21 +397,31 @@ struct PropertyVaultView: View {
         return "Early proof"
     }
 
+    private var propertyVaultProofHeroNextLine: String {
+        if totalRooms > 0,
+           completedRooms < totalRooms,
+           let name = nextRoom?.name,
+           !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "Next: \(name)"
+        }
+        return readinessGuidanceLine
+    }
+
     private var readinessGuidanceLine: String {
         if let label = vaultSummary?.readiness.primaryNextAction?.label,
            !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return label
         }
         if totalRooms == 0 {
-            return "Start by adding rooms, then capture move-in proof."
+            return "Add rooms to your case file, then capture evidence."
         }
         if completedRooms < totalRooms {
-            return "Finish the rooms that are still missing photos."
+            return "Finish rooms that still need photos for this case."
         }
         if missingRecordsCount > 0 {
-            return "Add receipts & lease docs to finish your proof."
+            return "Add lease and receipts so the case file is complete."
         }
-        return "Your proof looks strong. Keep docs up to date."
+        return "Case file looks strong. Keep documents current."
     }
 
     private var documentsSection: some View {

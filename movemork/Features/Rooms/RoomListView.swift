@@ -54,7 +54,7 @@ struct RoomListView: View {
                     progressCard
 
                     MMProofTimeline(
-                        title: "Proof trail",
+                        title: "Case file trail",
                         rows: roomProofTrailRows,
                         highlightedRowID: highlightedRoomTrailRowID,
                         appeared: roomsListAppeared
@@ -146,9 +146,9 @@ struct RoomListView: View {
 
     private var roomProofHeader: some View {
         MMEditorialHeader(
-            eyebrow: "MoveMark",
+            eyebrow: "Case file",
             title: "Room proof",
-            subtitle: "Photo each room. Build your move-in record."
+            subtitle: "Each room is a section in your deposit case — capture it once, reuse it later."
         )
     }
 
@@ -156,7 +156,7 @@ struct RoomListView: View {
         VStack(spacing: 12) {
             if !rooms.isEmpty {
                 MMProofHeroCard(
-                    headline: "\(completedCount) of \(rooms.count) rooms done",
+                    headline: "\(completedCount) of \(rooms.count) rooms ready",
                     nextLine: nextRoom.map { "Next: \($0.name)" } ?? "Review your rooms.",
                     progress: progress,
                     primaryTitle: MMNextBestActionMapper.roomProof(
@@ -198,7 +198,7 @@ struct RoomListView: View {
                 Spacer()
 
                 if !rooms.isEmpty {
-                    Text("\(completedCount) of \(rooms.count) rooms done")
+                    Text("\(completedCount) of \(rooms.count) rooms ready")
                         .font(MoveMarkTheme.Typography.footnote)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 }

@@ -12,6 +12,7 @@ struct MMReportPreviewCard: View {
 
     let title: String
     let metrics: String?
+    var statusDetail: String? = nil
     let status: Status
     let primaryTitle: String
     let onPrimary: () -> Void
@@ -21,6 +22,7 @@ struct MMReportPreviewCard: View {
         MMReportHeroCard(
             title: title,
             metrics: metrics,
+            statusDetail: statusDetail,
             status: status,
             primaryTitle: primaryTitle,
             onPrimary: onPrimary,

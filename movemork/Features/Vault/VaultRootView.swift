@@ -132,7 +132,7 @@ struct VaultRootView: View {
                 )
             }
             .scrollIndicators(.hidden, axes: .vertical)
-            .mmProofShellBackground(heroFocus: true)
+            .mmProofShellBackground(heroFocus: true, ctaBloom: false)
             .task {
                 await loadPreviewURLs()
             }
@@ -167,14 +167,14 @@ struct VaultRootView: View {
     /// Staged entrance: title → subhead → proof progress card.
     private var stagedHeader: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("Your proof")
+            Text("Deposit cases")
                 .font(.system(size: 36, weight: .bold))
                 .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
                 .opacity(hasAnimatedIn ? 1 : 0)
                 .offset(y: hasAnimatedIn ? 0 : 12)
                 .animation(.easeOut(duration: 0.45).delay(0.04), value: hasAnimatedIn)
 
-            Text("Finish each room before move-out.")
+            Text("Each vault is one case file: rooms, lease, photos, then reports.")
                 .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(MoveMarkTheme.Colors.textOnDarkMuted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -201,7 +201,7 @@ struct VaultRootView: View {
         VStack(spacing: 12) {
             MMProofHeroCard(
                 headline: vaultProofProgressHeadline,
-                nextLine: vaultContextNextLine ?? vaultContextPhaseLine,
+                nextLine: vaultHeroNextLine,
                 progress: vaultProofProgressValue,
                 progressLabel: vaultProofProgressShortMetric,
                 primaryTitle: featuredContinueProofTitle,
@@ -240,7 +240,7 @@ struct VaultRootView: View {
         if total == 0 {
             return "Add rooms to start proof"
         }
-        return "\(documented) of \(total) rooms done"
+        return "\(documented) of \(total) rooms ready"
     }
 
     private var vaultProofProgressValue: Double {
@@ -309,6 +309,21 @@ struct VaultRootView: View {
         return cleanedNextLine(propertyStore.primaryNextAction(for: prop).title)
     }
 
+    /// One clear next step — avoid repeating phase + next on the hero card.
+    private var vaultHeroNextLine: String {
+        guard let next = vaultContextNextLine, !next.isEmpty else {
+            return vaultContextPhaseLine
+        }
+        let phase = vaultContextPhaseLine
+        if phase == next || phase.localizedCaseInsensitiveContains(next) {
+            return next
+        }
+        if next.localizedCaseInsensitiveContains(phase) {
+            return next
+        }
+        return next
+    }
+
     /// Secondary vaults: honest copy when we don’t have that property hydrated.
     private func secondaryStatusLine(for row: PropertyRow) -> String {
         if let prop = propertyStore.currentProperty, prop.id == row.id {
@@ -373,6 +388,9 @@ struct VaultRootView: View {
             guard isFeatured, let p = prop else { return nil }
             let line = propertyStore.proofWorkspaceHeadline(for: p)
             if line == bandStatusLine { return nil }
+            if let n = next, cleanedNextLine(n) == line || line.localizedCaseInsensitiveContains(cleanedNextLine(n)) {
+                return nil
+            }
             return line
         }()
 
@@ -431,7 +449,7 @@ struct VaultRootView: View {
         if total == 0 {
             return "\(docs) receipts & docs · Next: \(action)"
         }
-        return "\(documented)/\(total) rooms done · \(docs) receipts & docs · Next: \(action)"
+        return "\(documented)/\(total) rooms ready · \(docs) records on file · Next: \(action)"
     }
 
     private func cleanedNextLine(_ raw: String) -> String {
@@ -454,7 +472,7 @@ struct VaultRootView: View {
 
         let roomsText = total == 0
             ? "No rooms yet"
-            : "\(documented) of \(total) rooms documented"
+            : "\(documented) of \(total) rooms ready"
 
         let openIssuesText = openIssues == 0
             ? "0 open issues"
@@ -464,7 +482,7 @@ struct VaultRootView: View {
 
         let nextRoomLine: String? = {
             guard let nextRoom, nextRoom.evidence.isEmpty else { return nil }
-            return "Next room: \(nextRoom.name)"
+            return "Next: \(nextRoom.name)"
         }()
 
         let nextAction = propertyStore.primaryNextAction(for: prop)
@@ -553,7 +571,7 @@ struct VaultRootView: View {
             .padding(.top, 18)
             .padding(.bottom, MoveMarkTheme.Spacing.scrollTailRootTabChrome)
         }
-        .mmProofShellBackground(heroFocus: true)
+        .mmProofShellBackground(heroFocus: true, ctaBloom: false)
     }
 
     private var vaultHeader: some View {
@@ -567,7 +585,7 @@ struct VaultRootView: View {
     private var loadingState: some View {
         MMLoadingState(message: MMCopy.loadingProofTrail)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .mmProofShellBackground(heroFocus: true)
+            .mmProofShellBackground(heroFocus: true, ctaBloom: false)
     }
 
     // MARK: - Helpers

@@ -16,8 +16,8 @@ enum MMReportCardStatus {
 
     var label: String {
         switch self {
-        case .notReady: return "Report not ready"
-        case .readyToMake: return "Move-in report ready"
+        case .notReady: return "Report locked"
+        case .readyToMake: return "Case file ready for export"
         case .readyToShare: return "Report ready"
         case .processing: return "Processing"
         case .failed: return "Failed"
@@ -41,6 +41,7 @@ enum MMReportCardStatus {
 struct MMReportHeroCard: View {
     let title: String
     let metrics: String?
+    var statusDetail: String? = nil
     let status: MMReportCardStatus
     let primaryTitle: String
     let onPrimary: () -> Void
@@ -63,6 +64,13 @@ struct MMReportHeroCard: View {
                             .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     }
 
+                    if let statusDetail, !statusDetail.isEmpty {
+                        Text(statusDetail)
+                            .font(MoveMarkTheme.Typography.subheadline)
+                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.95))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
                     MMPill(text: status.label, tone: status.pillTone)
                 }
                 Spacer(minLength: 0)
@@ -82,10 +90,11 @@ struct MMReportHeroCard: View {
         .background(cardBackground)
         .overlay(cardBorder)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .shadow(color: Color.black.opacity(0.38), radius: 20, y: 10)
         .shadow(
-            color: MoveMarkTheme.Colors.primary.opacity(usesPremiumReady ? 0.28 : 0.14),
-            radius: 18,
-            y: 8
+            color: MoveMarkTheme.Colors.primary.opacity(usesPremiumReady ? 0.12 : 0.06),
+            radius: 14,
+            y: 6
         )
         .mmReportUnlockPulse(active: unlockPulse)
     }
@@ -105,19 +114,19 @@ struct MMReportHeroCard: View {
                 .rotationEffect(.degrees(3))
 
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(MoveMarkTheme.Colors.paperSurface)
+                .fill(MoveMarkTheme.Colors.artifactPaper.opacity(0.92))
                 .frame(width: 62, height: 82)
-                .shadow(color: MoveMarkTheme.Colors.primary.opacity(usesPremiumReady ? 0.25 : 0.12), radius: 10, y: 4)
+                .shadow(color: MoveMarkTheme.Colors.primary.opacity(usesPremiumReady ? 0.14 : 0.08), radius: 8, y: 3)
                 .overlay {
                     VStack(alignment: .leading, spacing: 5) {
                         RoundedRectangle(cornerRadius: 2)
                             .fill(usesPremiumReady ? MoveMarkTheme.Colors.primary : MoveMarkTheme.Colors.semanticWarning)
                             .frame(width: 30, height: 5)
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.black.opacity(0.12))
+                            .fill(MoveMarkTheme.Colors.cardStroke.opacity(0.5))
                             .frame(width: 38, height: 4)
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.black.opacity(0.08))
+                            .fill(MoveMarkTheme.Colors.cardStroke.opacity(0.38))
                             .frame(width: 34, height: 4)
                         Spacer(minLength: 0)
                         Image(systemName: usesPremiumReady ? "lock.open.fill" : "lock.fill")

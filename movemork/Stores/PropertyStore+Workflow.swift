@@ -203,7 +203,7 @@ extension PropertyStore {
 
     func heroStatusLine(for property: PropertyRecord) -> String {
         var parts: [String] = []
-        parts.append("\(documentedRoomCount(for: property)) of \(totalRoomCount(for: property)) rooms done")
+        parts.append("\(documentedRoomCount(for: property)) of \(totalRoomCount(for: property)) rooms ready")
         let missingDocs = missingSupportingRecordCount(for: property)
         if missingDocs > 0 {
             parts.append("\(missingDocs) docs missing")
@@ -233,7 +233,7 @@ extension PropertyStore {
             return issues == 1 ? "1 open maintenance issue" : "\(issues) open maintenance issues"
         }
         if isExportReady(for: property) {
-            return "Ready to make your report"
+            return "Case file ready — you can build a report"
         }
         return "Proof looks good · keep docs current"
     }

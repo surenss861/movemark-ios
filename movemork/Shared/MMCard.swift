@@ -115,9 +115,9 @@ struct MMCard<Content: View>: View {
 
     private var shadowOpacity: Double {
         switch tone {
-        case .elevated, .cream: return 0.26
-        case .standard: return 0.16
-        case .quiet, .artifact, .inset: return 0.08
+        case .elevated, .cream: return 0.14
+        case .standard: return 0.1
+        case .quiet, .artifact, .inset: return 0.06
         }
     }
 

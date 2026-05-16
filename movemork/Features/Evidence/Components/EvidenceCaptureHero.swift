@@ -28,14 +28,19 @@ struct EvidenceCaptureHero: View {
 
     private var roomHeader: some View {
         VStack(alignment: .leading, spacing: 8) {
+            Text("EVIDENCE SECTION")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.1)
+                .foregroundStyle(MoveMarkTheme.Colors.proofMint.opacity(0.85))
+
             Text(roomName)
                 .font(MoveMarkTheme.Typography.screenTitle)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
             Text(
                 moveOutMode
-                    ? "Re-capture condition at move-out. Compare with move-in proof."
-                    : "Take clear photos of every wall, floor, and fixture."
+                    ? "Re-capture condition at move-out. Compare with move-in entries in this case file."
+                    : "Photo intake for your case file — walls, floors, and fixtures. Add notes and condition before you save."
             )
             .font(MoveMarkTheme.Typography.body)
             .foregroundStyle(MoveMarkTheme.Colors.textSecondary)

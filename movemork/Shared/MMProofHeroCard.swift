@@ -44,12 +44,15 @@ struct MMProofHeroCard: View {
                 size: .hero
             )
         }
-        .padding(20)
+        .padding(18)
         .background { cardBackground }
+        .background { caseFileRuledTexture }
         .overlay { proofPattern }
         .overlay(cardBorder)
+        .overlay(caseFileTopHighlight)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: MoveMarkTheme.Colors.primary.opacity(0.25), radius: 22, y: 10)
+        .shadow(color: Color.black.opacity(0.42), radius: 22, y: 11)
+        .shadow(color: MoveMarkTheme.Colors.primary.opacity(0.1), radius: 14, y: 6)
         .safeAreaPadding(.top, MoveMarkTheme.Spacing.heroTopInset)
     }
 
@@ -94,7 +97,7 @@ struct MMProofHeroCard: View {
 
     private var headlineBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Proof progress")
+            Text("Deposit case")
                 .font(MoveMarkTheme.Typography.caption)
                 .tracking(0.9)
                 .foregroundStyle(MoveMarkTheme.Colors.limeAccent.opacity(0.9))
@@ -130,7 +133,7 @@ struct MMProofHeroCard: View {
                             )
                         )
                         .frame(width: max(10, geo.size.width * clampedProgress), height: 10)
-                        .shadow(color: MoveMarkTheme.Colors.limeAccent.opacity(0.45), radius: 6, y: 0)
+                        .shadow(color: MoveMarkTheme.Colors.limeAccent.opacity(0.22), radius: 4, y: 0)
                         .animation(reduceMotion ? nil : MMMotion.proofProgress, value: clampedProgress)
                 }
             }
@@ -161,13 +164,45 @@ struct MMProofHeroCard: View {
             .stroke(
                 LinearGradient(
                     colors: [
-                        MoveMarkTheme.Colors.limeAccent.opacity(0.35),
-                        MoveMarkTheme.Colors.cardStroke.opacity(0.6)
+                        MoveMarkTheme.Colors.limeAccent.opacity(0.3),
+                        MoveMarkTheme.Colors.cardStroke.opacity(0.92),
+                        MoveMarkTheme.Colors.primary.opacity(0.14)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ),
-                lineWidth: 1
+                lineWidth: 1.1
             )
+    }
+
+    private var caseFileTopHighlight: some View {
+        RoundedRectangle(cornerRadius: 24, style: .continuous)
+            .stroke(
+                LinearGradient(
+                    colors: [Color.white.opacity(0.18), Color.white.opacity(0.06), .clear],
+                    startPoint: .top,
+                    endPoint: UnitPoint(x: 0.5, y: 0.3)
+                ),
+                lineWidth: 1.1
+            )
+    }
+
+    private var caseFileRuledTexture: some View {
+        Canvas { context, size in
+            let spacing: CGFloat = 18
+            var y: CGFloat = 64
+            while y < size.height - 12 {
+                var path = Path()
+                path.move(to: CGPoint(x: 16, y: y))
+                path.addLine(to: CGPoint(x: size.width - 16, y: y))
+                context.stroke(
+                    path,
+                    with: .color(MoveMarkTheme.Colors.cardStroke.opacity(0.12)),
+                    lineWidth: 0.45
+                )
+                y += spacing
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
