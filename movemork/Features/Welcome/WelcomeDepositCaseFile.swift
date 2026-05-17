@@ -290,35 +290,35 @@ struct WelcomeDepositCaseFile: View {
                     .foregroundStyle(MoveMarkTheme.Colors.primary)
 
                 Text("Saved to your vault")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
                 Spacer(minLength: 4)
 
                 Text("Report ready")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.95))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.92))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
                     .background(
                         Capsule()
-                            .fill(MoveMarkTheme.Colors.primary.opacity(0.14))
+                            .fill(MoveMarkTheme.Colors.primary.opacity(0.16))
                     )
                     .overlay(
                         Capsule()
-                            .stroke(MoveMarkTheme.Colors.primary.opacity(0.42), lineWidth: 0.8)
+                            .stroke(MoveMarkTheme.Colors.primary.opacity(0.48), lineWidth: 0.85)
                     )
             }
-            .padding(.top, 9)
+            .padding(.top, 10)
 
             Text("Move-in · Apr 14 · 5:42 PM")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.72))
-                .padding(.top, 3)
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.78))
+                .padding(.top, 5)
 
             Text("12 photos · 3 issues")
-                .font(.system(size: 10, weight: .regular))
-                .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.65))
+                .font(.system(size: 10.5, weight: .regular))
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.72))
                 .padding(.top, 2)
         }
         .padding(.horizontal, 14)
@@ -334,7 +334,7 @@ private enum WelcomeIssueTagRole {
 
     var fontSize: CGFloat {
         switch self {
-        case .priorDamage: return 13
+        case .priorDamage: return 12
         case .damage: return 11
         }
     }
@@ -348,14 +348,14 @@ private enum WelcomeIssueTagRole {
 
     var horizontalPadding: CGFloat {
         switch self {
-        case .priorDamage: return 11
+        case .priorDamage: return 10
         case .damage: return 9
         }
     }
 
     var verticalPadding: CGFloat {
         switch self {
-        case .priorDamage: return 6
+        case .priorDamage: return 5
         case .damage: return 5
         }
     }

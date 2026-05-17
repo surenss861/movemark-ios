@@ -19,6 +19,8 @@ struct WelcomeScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let contentPadding: CGFloat = 20
+    /// Screen-edge inset for the bottom launch dock (38–40pt total).
+    private let launchDockHorizontalInset: CGFloat = 38
 
     var body: some View {
         NavigationStack {
@@ -29,6 +31,7 @@ struct WelcomeScreen: View {
                     safeBottom: geo.safeAreaInsets.bottom
                 )
                 let cardWidth = min(geo.size.width - contentPadding * 2, 420)
+                let dockSideInset = max(0, launchDockHorizontalInset - contentPadding)
 
                 ZStack {
                     MMEmeraldBackground(emphasizesHeroZone: false, emphasizesCTABloom: false)
@@ -47,17 +50,16 @@ struct WelcomeScreen: View {
                         .frame(height: layout.heroHeight)
 
                         headlineBlock
-                            .frame(height: layout.copyHeight, alignment: .topLeading)
                             .padding(.top, layout.heroToCopyGap)
 
-                        ctaBlock
-                            .frame(height: layout.ctaHeight, alignment: .top)
+                        Spacer(minLength: layout.minFlexGap)
 
-                        Spacer(minLength: 0)
+                        bottomLaunchDock
+                            .padding(.horizontal, dockSideInset)
                     }
                     .padding(.horizontal, contentPadding)
                     .padding(.top, layout.topPadding)
-                    .padding(.bottom, max(8, geo.safeAreaInsets.bottom))
+                    .padding(.bottom, layout.bottomDockPadding(safeBottom: geo.safeAreaInsets.bottom))
                 }
             }
             .onAppear { playEntrance() }
@@ -87,7 +89,7 @@ struct WelcomeScreen: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.4), value: cardVisible)
     }
 
-    // MARK: - Copy
+    // MARK: - Copy (hero explains; dock launches)
 
     private var headlineBlock: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -104,6 +106,12 @@ struct WelcomeScreen: View {
                 .font(MoveMarkTheme.Typography.body)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.98))
                 .fixedSize(horizontal: false, vertical: true)
+
+            Text("Old damage becomes saved proof.")
+                .font(MoveMarkTheme.Typography.subheadline)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.92))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .opacity(copyVisible ? 1 : 0)
@@ -111,16 +119,10 @@ struct WelcomeScreen: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.44).delay(0.22), value: copyVisible)
     }
 
-    // MARK: - CTA
+    // MARK: - Bottom launch dock
 
-    private var ctaBlock: some View {
+    private var bottomLaunchDock: some View {
         VStack(spacing: 0) {
-            Text("Old damage becomes saved proof.")
-                .font(MoveMarkTheme.Typography.footnote)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.95))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, 11)
-
             MMButton(
                 title: "Start move-in proof",
                 action: {
@@ -130,7 +132,6 @@ struct WelcomeScreen: View {
                 },
                 showsTrailingArrow: true
             )
-            .padding(.top, 4)
 
             HStack(spacing: 6) {
                 Spacer(minLength: 0)
@@ -149,6 +150,7 @@ struct WelcomeScreen: View {
                 .buttonStyle(.plain)
                 Spacer(minLength: 0)
             }
+            .padding(.top, 20)
         }
         .opacity(ctaVisible ? 1 : 0)
         .offset(y: ctaVisible ? 0 : 10)
@@ -179,24 +181,25 @@ struct WelcomeScreen: View {
     }
 }
 
-// MARK: - Zone layout (percent of usable screen)
+// MARK: - Zone layout
 
 private struct WelcomeZoneLayout {
     let heroHeight: CGFloat
-    let copyHeight: CGFloat
-    let ctaHeight: CGFloat
     let topPadding: CGFloat
     let brandToHeroGap: CGFloat
     let heroToCopyGap: CGFloat
+    let minFlexGap: CGFloat
 
     init(screenHeight: CGFloat, safeTop: CGFloat, safeBottom: CGFloat) {
         let usable = screenHeight - safeTop - safeBottom - 12
         heroHeight = usable * 0.38
-        copyHeight = usable * 0.20
-        ctaHeight = usable * 0.18
-        // Pull brand + hero up ~60pt vs prior safeTop+4 layout.
-        topPadding = max(4, safeTop - 56)
+        topPadding = max(4, safeTop - 71)
         brandToHeroGap = 14
         heroToCopyGap = 20
+        minFlexGap = 16
+    }
+
+    func bottomDockPadding(safeBottom: CGFloat) -> CGFloat {
+        max(38, safeBottom + 34)
     }
 }
