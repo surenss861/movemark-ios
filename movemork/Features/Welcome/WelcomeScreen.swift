@@ -89,10 +89,10 @@ struct WelcomeScreen: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: layout.heroHeight)
 
-            headlineBlock
+            primaryCopyBlock
                 .padding(.top, layout.heroToCopyGap)
 
-            Spacer(minLength: layout.minFlexGap)
+            Spacer(minLength: 24)
 
             bottomLaunchDock
                 .padding(.horizontal, dockSideInset)
@@ -154,11 +154,11 @@ struct WelcomeScreen: View {
             Image("MoveMarkLogo")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 26, height: 26)
-                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .frame(width: 35, height: 35)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             Text("MoveMark")
-                .font(.system(size: 17, weight: .bold))
+                .font(.system(size: 20.5, weight: .semibold))
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
             Spacer(minLength: 0)
@@ -169,8 +169,8 @@ struct WelcomeScreen: View {
 
     // MARK: - Copy (hero explains; dock launches)
 
-    private var headlineBlock: some View {
-        VStack(alignment: .leading, spacing: 14) {
+    private var primaryCopyBlock: some View {
+        VStack(alignment: .leading, spacing: 16) {
             Text("Prove what was already there.")
                 .font(.system(size: 32, weight: .bold))
                 .tracking(-0.7)
@@ -186,10 +186,9 @@ struct WelcomeScreen: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Text("Old damage becomes saved proof.")
-                .font(MoveMarkTheme.Typography.subheadline)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.92))
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .opacity(copyVisible ? 1 : 0)
@@ -224,7 +223,7 @@ struct WelcomeScreen: View {
                 .buttonStyle(.plain)
                 Spacer(minLength: 0)
             }
-            .padding(.top, 20)
+            .padding(.top, 22)
         }
         .opacity(ctaVisible ? 1 : 0)
         .offset(y: ctaVisible ? 0 : 10)
@@ -262,18 +261,16 @@ private struct WelcomeZoneLayout {
     let topPadding: CGFloat
     let brandToHeroGap: CGFloat
     let heroToCopyGap: CGFloat
-    let minFlexGap: CGFloat
 
     init(screenHeight: CGFloat, safeTop: CGFloat, safeBottom: CGFloat) {
         let usable = screenHeight - safeTop - safeBottom - 12
         heroHeight = usable * 0.38
         topPadding = max(4, safeTop - 71)
         brandToHeroGap = 14
-        heroToCopyGap = 20
-        minFlexGap = 16
+        heroToCopyGap = 34
     }
 
     func bottomDockPadding(safeBottom: CGFloat) -> CGFloat {
-        max(18, safeBottom + 14)
+        max(36, safeBottom + 18)
     }
 }

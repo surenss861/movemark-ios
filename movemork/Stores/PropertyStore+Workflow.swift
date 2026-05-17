@@ -89,7 +89,7 @@ extension PropertyStore {
         if roomCount == 0 { return "Setup needed" }
         if evidenceCount == 0 { return "Start capture" }
         if evidenceCount < roomCount { return "In progress" }
-        return "Case building"
+        return "Proof saved"
     }
 
     func totalRoomCount(for property: PropertyRecord) -> Int {

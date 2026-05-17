@@ -81,7 +81,7 @@ enum MoveMarkTheme {
         static let heroButtonHeight: CGFloat = 68
         static let heroTopInset: CGFloat = 4
 
-        static let scrollTailRootTabChrome: CGFloat = 32
+        static let scrollTailRootTabChrome: CGFloat = 96
         static let scrollTailFocusedFlow: CGFloat = 24
         static let vaultExpansionScrollExtra: CGFloat = 72
     }

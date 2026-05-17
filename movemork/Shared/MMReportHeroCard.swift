@@ -83,14 +83,14 @@ struct MMReportHeroCard: View {
                     onPrimary()
                 },
                 kind: .primary,
-                size: .hero
+                size: .standard
             )
         }
-        .padding(20)
+        .padding(18)
         .background(cardBackground)
         .overlay(cardBorder)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: Color.black.opacity(0.28), radius: 14, y: 6)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .shadow(color: Color.black.opacity(0.16), radius: 8, y: 3)
         .mmReportUnlockPulse(active: unlockPulse)
     }
 

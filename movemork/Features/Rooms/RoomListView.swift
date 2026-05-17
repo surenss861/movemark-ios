@@ -146,17 +146,16 @@ struct RoomListView: View {
     }
 
     private var roomProofHeader: some View {
-        MMEditorialHeader(
-            eyebrow: "Move-in proof",
-            title: "Rooms with evidence",
-            subtitle: "Tag old damage in each room so it cannot be blamed on you later."
+        MMRenterHeader(
+            title: "Room proof",
+            subtitle: "Mark what was already there in each room before you get blamed later."
         )
     }
 
     private var progressCard: some View {
         VStack(spacing: 12) {
             if !rooms.isEmpty {
-                MMProofHeroCard(
+                MMRoomProgressCard(
                     headline: "\(completedCount) of \(rooms.count) rooms ready",
                     nextLine: nextRoom.map { "Next: \($0.name)" } ?? "Review your rooms.",
                     progress: progress,
@@ -171,16 +170,14 @@ struct RoomListView: View {
                         } else if let first = rooms.first {
                             path.append(.roomDetail(roomID: first.id))
                         }
-                    },
-                    style: .light
+                    }
                 )
             }
 
             if rooms.isEmpty {
-                MMProofTaskCard(
-                    systemImage: "door.left.hand.open",
+                MMMissingItemCard(
                     title: "Add your first room",
-                    message: "Start move-in proof for each room.",
+                    message: "Start with the room you are in — Kitchen works well.",
                     actionTitle: MMNextBestAction.addRoom.title,
                     onAction: { showAddRoom = true }
                 )

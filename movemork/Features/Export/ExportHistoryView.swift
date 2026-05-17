@@ -190,18 +190,17 @@ struct ExportHistoryView: View {
     }
 
     private var header: some View {
-        MMEditorialHeader(
-            eyebrow: "Move-in report",
-            title: "Reports",
+        MMRenterHeader(
+            title: "Move-in report",
             subtitle: headerSubtitle
         )
     }
 
     private var headerSubtitle: String {
         if let name = activeVaultDisplayTitle, !name.isEmpty {
-            return "Build and share reports for \(name)."
+            return "Build a report from saved room proof for \(name)."
         }
-        return "Turn saved room photos into a move-in report when you need it."
+        return "Build a report from your saved room proof."
     }
 
     private var exportContextStrip: some View {

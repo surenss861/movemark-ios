@@ -118,10 +118,6 @@ struct VaultRootView: View {
                         .animation(MMMotion.cardReveal.delay(0.12 + Double(index) * 0.05), value: hasAnimatedIn)
                     }
 
-                    vaultHealthFooter
-                        .opacity(hasAnimatedIn ? 1 : 0)
-                        .offset(y: hasAnimatedIn ? 0 : 8)
-                        .animation(.easeOut(duration: 0.35).delay(0.2), value: hasAnimatedIn)
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
                 .padding(.top, 8)
@@ -165,49 +161,34 @@ struct VaultRootView: View {
         }
     }
 
-    /// Staged entrance: title → subhead → proof progress card.
+    /// Staged entrance: header → proof progress → missing docs.
     private var stagedHeader: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text("Your proof")
-                .font(.system(size: 36, weight: .bold))
-                .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
-                .opacity(hasAnimatedIn ? 1 : 0)
-                .offset(y: hasAnimatedIn ? 0 : 12)
-                .animation(.easeOut(duration: 0.45).delay(0.04), value: hasAnimatedIn)
-
-            Text("Room photos, old damage tags, and reports for each rental.")
-                .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(MoveMarkTheme.Colors.textOnDarkMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                .opacity(hasAnimatedIn ? 1 : 0)
-                .offset(y: hasAnimatedIn ? 0 : 10)
-                .animation(.easeOut(duration: 0.4).delay(0.06), value: hasAnimatedIn)
-
-            Rectangle()
-                .fill(MoveMarkTheme.Colors.primary.opacity(0.75))
-                .frame(width: hasAnimatedIn ? 40 : 0, height: 3)
-                .clipShape(Capsule())
-                .animation(.easeOut(duration: 0.45).delay(0.08), value: hasAnimatedIn)
+        VStack(alignment: .leading, spacing: 16) {
+            MMRenterHeader(
+                title: "Your proof",
+                subtitle: "Room photos, old damage tags, and reports for each rental."
+            )
+            .opacity(hasAnimatedIn ? 1 : 0)
+            .offset(y: hasAnimatedIn ? 0 : 10)
+            .animation(.easeOut(duration: 0.45).delay(0.04), value: hasAnimatedIn)
 
             vaultSystemContextStrip
                 .opacity(hasAnimatedIn ? 1 : 0)
                 .offset(y: hasAnimatedIn ? 0 : 8)
                 .animation(.easeOut(duration: 0.4).delay(0.1), value: hasAnimatedIn)
         }
-        .padding(.bottom, 4)
     }
 
     /// Dominant proof hero — replaces stacked meter + next cards.
     private var vaultSystemContextStrip: some View {
         VStack(spacing: 12) {
-            MMProofHeroCard(
+            MMRoomProgressCard(
                 headline: vaultProofProgressHeadline,
                 nextLine: vaultHeroNextLine,
                 progress: vaultProofProgressValue,
                 progressLabel: vaultProofProgressShortMetric,
                 primaryTitle: featuredContinueProofTitle,
-                onPrimary: { openFeaturedVaultOrContinue() },
-                style: .premium
+                onPrimary: { openFeaturedVaultOrContinue() }
             )
 
             if let prop = propertyStore.currentProperty,
@@ -216,8 +197,7 @@ struct VaultRootView: View {
                    !DocumentRepository.documentTypeQueryKeys(type.rawValue)
                        .contains { prop.vaultDocuments.contains($0) }
                }) {
-                MMProofTaskCard(
-                    systemImage: "doc.badge.plus",
+                MMMissingItemCard(
                     title: "Add \(missing.displayTitle)",
                     message: "Helps if your deposit is questioned later.",
                     actionTitle: MMNextBestAction.addDocs.title,
@@ -423,34 +403,6 @@ struct VaultRootView: View {
     private func featuredCtaTitle(for row: PropertyRow) -> String {
         guard let prop = propertyStore.currentProperty, prop.id == row.id else { return "Open" }
         return propertyStore.primaryNextAction(for: prop).shortCTA
-    }
-
-    private var vaultHealthFooter: some View {
-        MMCard(tone: .standard, padding: 14, spacing: 10) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("All vaults")
-                    .font(MoveMarkTheme.Typography.subheadlineMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                Text(vaultHealthLine)
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private var vaultHealthLine: String {
-        guard let prop = propertyStore.currentProperty else {
-            return "Open a vault to see proof progress, docs, and what to do next."
-        }
-        let documented = propertyStore.documentedRoomCount(for: prop)
-        let total = propertyStore.totalRoomCount(for: prop)
-        let docs = prop.vaultDocuments.count
-        let action = cleanedNextLine(propertyStore.primaryNextAction(for: prop).title)
-        if total == 0 {
-            return "\(docs) receipts & docs · Next: \(action)"
-        }
-        return "\(documented)/\(total) rooms ready · \(docs) records on file · Next: \(action)"
     }
 
     private func cleanedNextLine(_ raw: String) -> String {

@@ -65,45 +65,41 @@ struct AuthContainerView: View {
             Color.clear
                 .mmProofShellBackground(heroFocus: false, ctaBloom: false)
 
-            GeometryReader { proxy in
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 18) {
-                        headerBlock
-                        titleBlock
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    headerBlock
 
-                        proofSummarySection
-                            .opacity(surfaceAppeared ? 1 : 0)
-                            .offset(y: surfaceAppeared ? 0 : 10)
+                    titleBlock
+                        .padding(.top, 20)
+                        .padding(.bottom, 28)
 
-                        if mode == .signIn {
-                            Spacer(minLength: 20)
-                        }
+                    proofSummarySection
+                        .padding(.bottom, 24)
+                        .opacity(surfaceAppeared ? 1 : 0)
+                        .offset(y: surfaceAppeared ? 0 : 8)
 
-                        authFormSection
+                    authFormSection
+                        .opacity(formFieldsAppeared ? 1 : 0)
+                        .offset(y: formFieldsAppeared ? 0 : 8)
+
+                    if mode == .signUp {
+                        legalFinePrint
+                            .padding(.top, 18)
                             .opacity(formFieldsAppeared ? 1 : 0)
-                            .offset(y: formFieldsAppeared ? 0 : 14)
-
-                        if mode == .signUp {
-                            legalFinePrint
-                                .opacity(formFieldsAppeared ? 1 : 0)
-                                .transition(fieldTransition)
-                        }
-
-                        if mode == .signUp {
-                            modeSwitchRow
-                                .opacity(formFieldsAppeared ? 1 : 0)
-                        }
-
-                        if mode == .signIn {
-                            Spacer(minLength: 24)
-                        }
+                            .transition(fieldTransition)
                     }
-                    .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                    .padding(.bottom, 24 + keyboardBottomInset)
-                    .frame(minHeight: proxy.size.height, alignment: .top)
+
+                    if mode == .signUp {
+                        modeSwitchRow
+                            .padding(.top, 18)
+                            .opacity(formFieldsAppeared ? 1 : 0)
+                    }
                 }
-                .scrollDismissesKeyboard(.interactively)
+                .frame(maxWidth: .infinity, alignment: .top)
+                .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
+                .padding(.bottom, 24 + keyboardBottomInset)
             }
+            .scrollDismissesKeyboard(.interactively)
             .safeAreaPadding(.top, 6)
         }
         .offset(y: surfaceAppeared ? 0 : 28)
@@ -215,7 +211,7 @@ struct AuthContainerView: View {
     }
 
     private var createFormSurface: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 18) {
             authInputFields
             authStatusMessages
             primaryActionButton

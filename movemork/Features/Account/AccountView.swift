@@ -67,9 +67,8 @@ struct AccountView: View {
                 .mmProofShellBackground(heroFocus: false, ctaBloom: false)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    MMEditorialHeader(
-                        eyebrow: "Settings",
+                VStack(alignment: .leading, spacing: 16) {
+                    MMRenterHeader(
                         title: "Account",
                         subtitle: "Plan, profile, and access to your proof vaults."
                     )
@@ -439,10 +438,10 @@ struct AccountView: View {
         title: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        MMCard(tone: .elevated, padding: 18, spacing: 14) {
-            VStack(alignment: .leading, spacing: 14) {
+        MMCard(tone: .quiet, padding: 14, spacing: 12) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text(title)
-                    .font(MoveMarkTheme.Typography.cardTitle)
+                    .font(MoveMarkTheme.Typography.sectionTitle)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
                 content()

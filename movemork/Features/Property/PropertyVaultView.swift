@@ -177,27 +177,15 @@ struct PropertyVaultView: View {
                     .id(property.id)
                     .padding(.bottom, 8)
 
-                    MMDepositProtectionCard(
-                        depositDisplay: depositDisplayText,
-                        proofScoreLabel: proofScoreLabel,
-                        summaryLine: propertyStore.readinessSummaryLine(for: property),
-                        roomsLine: "\(completedRooms) of \(totalRooms) rooms ready · \(totalPhotos) photos"
-                    )
-                    .opacity(contentVisible ? 1 : 0)
-                    .offset(y: contentVisible ? 0 : 8)
-                    .animation(MMMotion.screenTransition.delay(0.05), value: contentVisible)
-                    .padding(.bottom, 12)
-
-                    MMProofHeroCard(
+                    MMRoomProgressCard(
                         headline: "\(completedRooms) of \(totalRooms) rooms ready",
                         nextLine: propertyVaultProofHeroNextLine,
                         progress: progress,
-                        progressLabel: "\(readinessScore)% proof score",
+                        progressLabel: "\(totalPhotos) photos saved",
                         primaryTitle: MMNextBestActionMapper.from(
                             propertyNextAction: propertyStore.primaryNextAction(for: property)
                         ).title,
-                        onPrimary: { path.append(.walkthrough) },
-                        style: .light
+                        onPrimary: { path.append(.walkthrough) }
                     )
                     .opacity(contentVisible ? 1 : 0)
                     .offset(y: contentVisible ? 0 : 8)
