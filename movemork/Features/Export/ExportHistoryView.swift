@@ -124,19 +124,12 @@ struct ExportHistoryView: View {
                         if isExportReadyForResolvedVault != false {
                             emptyStateNoExportsYet
                         }
-                    } else {
+                    } else if !isLoading {
                         VStack(alignment: .leading, spacing: 18) {
                             exportSection(title: "Move-in reports", rows: rows(for: "move_in_report"))
                             exportSection(title: "Move-out reports", rows: rows(for: "move_out_report"))
                             exportSection(title: "Dispute packets", rows: disputeRows)
                         }
-                    }
-
-                    if isLoading {
-                        ProgressView()
-                            .tint(MoveMarkTheme.Colors.primary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 8)
                     }
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
@@ -254,15 +247,16 @@ struct ExportHistoryView: View {
     private var exportReadinessHero: some View {
         MMProofPrimaryCard(
             title: readinessHeroTitle,
-            subtitle: readinessMetricsLine,
+            subtitle: isLoading ? nil : readinessMetricsLine,
             leadingSystemImage: "doc.richtext",
             headline: readinessSubline,
-            nextLine: reportNextStepLine,
-            statusPill: readinessPillDisplay,
+            nextLine: isLoading ? "This only takes a moment." : reportNextStepLine,
+            statusPill: isLoading ? nil : readinessPillDisplay,
             statusPillTone: readinessPillTone,
-            bodyText: reportBodyLine,
+            bodyText: isLoading ? nil : reportBodyLine,
             primaryTitle: reportPrimaryCTA.title,
-            isPrimaryDisabled: isLoading || isExporting || currentReportReadiness == .processing,
+            isPrimaryDisabled: isExporting || currentReportReadiness == .processing,
+            inlineLoadingStatus: isLoading ? "Checking saved proof…" : nil,
             onPrimary: reportPrimaryCTA.action
         )
         .scaleEffect(reportUnlockPulse ? 1.01 : 1)
@@ -271,7 +265,7 @@ struct ExportHistoryView: View {
 
     private var reportNextStepLine: String {
         if isLoading {
-            return "Checking saved room proof for this rental…"
+            return "Gathering your saved room proof."
         }
         if isExportReadyForResolvedVault == false {
             return "Complete each room before creating your report."
@@ -489,7 +483,7 @@ struct ExportHistoryView: View {
     }
 
     private var readinessSubline: String {
-        if isLoading { return "Checking your report…" }
+        if isLoading { return "Checking saved proof…" }
         if isExportReadyForResolvedVault == false {
             return "Finish room proof first."
         }

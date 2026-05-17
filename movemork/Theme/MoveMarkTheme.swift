@@ -90,7 +90,7 @@ enum MoveMarkTheme {
         /// Scroll tail when root tab bar is visible (Vaults, Reports).
         static let scrollTailRootTabChrome: CGFloat = 148
         /// Extra tail for Account — plan buttons sit low on screen.
-        static let scrollTailAccountTabChrome: CGFloat = 160
+        static let scrollTailAccountTabChrome: CGFloat = 220
         static let scrollTailFocusedFlow: CGFloat = 24
         static let vaultExpansionScrollExtra: CGFloat = 0
     }

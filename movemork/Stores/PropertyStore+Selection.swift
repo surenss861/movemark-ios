@@ -19,6 +19,23 @@ extension PropertyStore {
         return currentProperty
     }
 
+    /// Move-in room counts for list rows without switching the active property.
+    func moveInProofCounts(for propertyId: UUID, userId: UUID) async -> (documented: Int, total: Int) {
+        if let record = currentProperty, record.id == propertyId {
+            return (
+                documentedRoomCount(for: record),
+                totalRoomCount(for: record)
+            )
+        }
+        guard let row = properties.first(where: { $0.id == propertyId }) else {
+            return (0, 0)
+        }
+        guard let (record, _) = try? await hydrateProperty(row, userId: userId) else {
+            return (0, 0)
+        }
+        return (documentedRoomCount(for: record), totalRoomCount(for: record))
+    }
+
     /// First evidence image URL for a property (inspection or maintenance). Use for vault card hero.
     func previewImageURL(for propertyId: UUID) async -> URL? {
         let files = try? await inspectionRepo.fetchEvidenceFiles(propertyId: propertyId)

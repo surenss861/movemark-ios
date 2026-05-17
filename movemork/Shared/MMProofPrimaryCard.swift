@@ -20,6 +20,7 @@ struct MMProofPrimaryCard: View {
     var bodyText: String? = nil
     let primaryTitle: String
     var isPrimaryDisabled: Bool = false
+    var inlineLoadingStatus: String? = nil
     let onPrimary: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -105,16 +106,30 @@ struct MMProofPrimaryCard: View {
                 .frame(height: 5)
             }
 
-            MMButton(
-                title: primaryTitle,
-                action: {
-                    MMHaptics.soft()
-                    onPrimary()
-                },
-                kind: .primary,
-                size: .standard,
-                isDisabled: isPrimaryDisabled
-            )
+            if let inlineLoadingStatus, !inlineLoadingStatus.isEmpty {
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(MoveMarkTheme.Colors.textSecondary)
+
+                    Text(inlineLoadingStatus)
+                        .font(MoveMarkTheme.Typography.subheadline)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.92))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            } else {
+                MMButton(
+                    title: primaryTitle,
+                    action: {
+                        MMHaptics.soft()
+                        onPrimary()
+                    },
+                    kind: .primary,
+                    size: .standard,
+                    isDisabled: isPrimaryDisabled
+                )
+            }
         }
         .padding(MoveMarkTheme.Spacing.panelPadding)
         .mmProofCardSurface(.standard, cornerRadius: 22)

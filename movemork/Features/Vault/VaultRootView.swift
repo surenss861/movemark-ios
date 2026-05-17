@@ -19,6 +19,7 @@ struct VaultRootView: View {
     @State private var activePaywallReason: PaywallReason = .extraProperty
     @State private var previewURLByPropertyId: [UUID: URL] = [:]
     @State private var hasAnimatedIn = false
+    @State private var otherRentalSummaries: [UUID: (documented: Int, total: Int)] = [:]
 
     /// Only the featured (recent/first) card is expandable; others are static. Ensures chevron is always on the same card.
     private var featuredPropertyId: UUID? {
@@ -154,6 +155,7 @@ struct VaultRootView: View {
         .mmProofShellBackground(heroFocus: false, ctaBloom: false)
         .task { await loadPreviewURLs() }
         .task(id: featuredPropertyId) { await ensureFeaturedPropertyLoaded() }
+        .task(id: otherProperties.map(\.id)) { await loadOtherRentalSummaries() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await loadPreviewURLs() } }
         }
@@ -230,23 +232,37 @@ struct VaultRootView: View {
         }
     }
 
+    private func loadOtherRentalSummaries() async {
+        guard let userId = sessionManager.userId else { return }
+        var summaries: [UUID: (documented: Int, total: Int)] = [:]
+        for row in otherProperties {
+            let counts = await propertyStore.moveInProofCounts(for: row.id, userId: userId)
+            summaries[row.id] = counts
+        }
+        otherRentalSummaries = summaries
+    }
+
     private func otherRentalStatusLine(for row: PropertyRow) -> String {
+        let documented: Int
+        let total: Int
+
         if let prop = propertyStore.currentProperty, prop.id == row.id {
-            let documented = propertyStore.documentedRoomCount(for: prop)
-            let total = propertyStore.totalRoomCount(for: prop)
-            if total == 0 {
-                return "No rooms yet · Tap to set up"
-            }
-            if documented == 0 {
-                return "0 rooms ready · Start move-in proof"
-            }
-            return "\(documented) of \(total) rooms ready"
+            documented = propertyStore.documentedRoomCount(for: prop)
+            total = propertyStore.totalRoomCount(for: prop)
+        } else if let summary = otherRentalSummaries[row.id] {
+            documented = summary.documented
+            total = summary.total
+        } else {
+            return "Loading proof status…"
         }
-        let city = locationText(for: row)
-        if !city.isEmpty {
-            return "\(city) · Tap to open"
+
+        if total == 0 {
+            return "No rooms yet · Tap to set up"
         }
-        return "Tap to view proof status"
+        if documented == 0 {
+            return "0 of \(total) rooms ready · Start move-in proof"
+        }
+        return "\(documented) of \(total) rooms ready"
     }
 
     private var vaultProofProgressHeadline: String {
