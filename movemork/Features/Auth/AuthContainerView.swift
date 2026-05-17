@@ -2,20 +2,24 @@
 //  AuthContainerView.swift
 //  movemork
 //
-//  MoveMark — One premium auth surface. Morph between create/sign in.
+//  Proof-first auth — continuation of Welcome “Start move-in proof”.
 //
 
 import SwiftUI
+import UIKit
 
 struct AuthContainerView: View {
-    enum Mode {
+    enum Mode: Equatable {
         case signIn
         case signUp
     }
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(SessionManager.self) private var sessionManager
+
+    @Namespace private var authCardNamespace
 
     @State private var mode: Mode
     @State private var email = ""
@@ -25,6 +29,8 @@ struct AuthContainerView: View {
     @State private var infoMessage = ""
     @State private var isLoading = false
     @State private var hasAcceptedLegal = false
+    @State private var surfaceAppeared = false
+    @State private var keyboardBottomInset: CGFloat = 0
 
     private var privacyPolicyURL: URL? {
         legalURL(forInfoKey: "LegalPrivacyPolicyURL")
@@ -41,6 +47,20 @@ struct AuthContainerView: View {
         return isLoading
     }
 
+    private var authSpring: Animation? {
+        reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.86)
+    }
+
+    private var headerTitle: String {
+        mode == .signIn ? "Welcome back." : "Start your move-in proof."
+    }
+
+    private var headerSubtitle: String {
+        mode == .signIn
+            ? "Continue your proof vault."
+            : "Save your photos, notes, lease, and reports in one private vault."
+    }
+
     init(initialMode: Mode) {
         _mode = State(initialValue: initialMode)
     }
@@ -48,22 +68,59 @@ struct AuthContainerView: View {
     var body: some View {
         ZStack {
             Color.clear
-                .mmProofShellBackground(heroFocus: true, ctaBloom: false)
+                .mmProofShellBackground(heroFocus: false, ctaBloom: false)
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
                     headerBlock
                     trustChip
                         .padding(.bottom, 14)
-                    authPanel
+                    authProofCard
                     Spacer(minLength: 24)
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.vertical, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 28 + keyboardBottomInset)
             }
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .offset(y: surfaceAppeared ? 0 : 24)
+        .opacity(surfaceAppeared ? 1 : 0)
+        .onAppear { playSurfaceEntrance() }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
+            applyKeyboardInset(from: note, visible: true)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { note in
+            applyKeyboardInset(from: note, visible: false)
         }
         .navigationBarBackButtonHidden(true)
     }
+
+    private func applyKeyboardInset(from note: Notification, visible: Bool) {
+        let duration = (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
+        let animation: Animation? = reduceMotion ? nil : .easeOut(duration: duration)
+
+        withAnimation(animation) {
+            if visible,
+               let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                keyboardBottomInset = max(0, frame.height - 24)
+            } else {
+                keyboardBottomInset = 0
+            }
+        }
+    }
+
+    private func playSurfaceEntrance() {
+        if reduceMotion {
+            surfaceAppeared = true
+            return
+        }
+        withAnimation(.spring(response: 0.48, dampingFraction: 0.88)) {
+            surfaceAppeared = true
+        }
+    }
+
+    // MARK: - Header
 
     private var headerBlock: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -73,13 +130,13 @@ struct AuthContainerView: View {
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                         .frame(width: 42, height: 42)
-                        .background(MoveMarkTheme.Colors.deepCard.opacity(0.9))
+                        .background(MoveMarkTheme.Colors.card.opacity(0.92))
                         .clipShape(Circle())
                         .overlay(
                             Circle()
-                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.8), lineWidth: 0.85)
                         )
                 }
                 .buttonStyle(.plain)
@@ -87,31 +144,28 @@ struct AuthContainerView: View {
                 Image("MoveMarkLogo")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 40, height: 40)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.white.opacity(0.12), lineWidth: 0.8)
-                    )
+                    .frame(width: 36, height: 36)
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                     .accessibilityHidden(true)
 
                 Spacer(minLength: 0)
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(mode == .signIn ? "Welcome back" : "Create your account")
+                Text(headerTitle)
                     .font(MoveMarkTheme.Typography.screenTitle)
                     .tracking(-0.6)
-                    .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .id("auth-title-\(mode == .signIn ? "in" : "up")")
 
-                Text(
-                    mode == .signIn
-                        ? "Sign in to continue your move-in proof."
-                        : "Your photos stay private. Start documenting what was already there."
-                )
-                .font(MoveMarkTheme.Typography.body)
-                .foregroundStyle(MoveMarkTheme.Colors.textOnDarkMuted)
+                Text(headerSubtitle)
+                    .font(MoveMarkTheme.Typography.body)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.96))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .id("auth-subtitle-\(mode == .signIn ? "in" : "up")")
             }
+            .animation(authSpring, value: mode)
         }
         .padding(.bottom, 8)
     }
@@ -120,22 +174,24 @@ struct AuthContainerView: View {
         HStack(spacing: 8) {
             Image(systemName: "lock.shield.fill")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(MoveMarkTheme.Colors.limeAccent)
+                .foregroundStyle(MoveMarkTheme.Colors.primary)
             Text("Your proof stays private.")
                 .font(MoveMarkTheme.Typography.footnote)
-                .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.95))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(MoveMarkTheme.Colors.deepCard.opacity(0.85))
+        .background(MoveMarkTheme.Colors.card.opacity(0.88))
         .clipShape(Capsule())
         .overlay(
             Capsule()
-                .stroke(MoveMarkTheme.Colors.limeAccent.opacity(0.22), lineWidth: 1)
+                .stroke(MoveMarkTheme.Colors.primary.opacity(0.28), lineWidth: 0.85)
         )
     }
 
-    private var authPanel: some View {
+    // MARK: - Form card
+
+    private var authProofCard: some View {
         MMCard(tone: .elevated, padding: 22, spacing: 18) {
             VStack(alignment: .leading, spacing: 18) {
                 MMTextField(title: "Email", placeholder: "you@example.com", text: $email, keyboardType: .emailAddress)
@@ -154,6 +210,7 @@ struct AuthContainerView: View {
                         text: $confirmPassword,
                         isSecure: true
                     )
+                    .transition(fieldTransition)
                 }
 
                 if mode == .signIn {
@@ -170,6 +227,7 @@ struct AuthContainerView: View {
                         }
                         .buttonStyle(.plain)
                     }
+                    .transition(fieldTransition)
                 }
 
                 if !infoMessage.isEmpty {
@@ -199,14 +257,25 @@ struct AuthContainerView: View {
                             .tint(MoveMarkTheme.Colors.primary)
                     }
                 }
+                .animation(authSpring, value: mode)
 
                 if mode == .signUp {
                     legalConsentSection
+                        .transition(fieldTransition)
                 }
 
                 modeSwitchRow
             }
+            .animation(authSpring, value: mode)
         }
+        .matchedGeometryEffect(id: "auth-proof-card", in: authCardNamespace)
+    }
+
+    private var fieldTransition: AnyTransition {
+        if reduceMotion {
+            return .opacity
+        }
+        return .opacity.combined(with: .move(edge: .bottom))
     }
 
     private var modeSwitchRow: some View {
@@ -215,26 +284,41 @@ struct AuthContainerView: View {
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
             Button {
-                withAnimation(.easeInOut(duration: 0.22)) {
-                    mode = mode == .signIn ? .signUp : .signIn
-                    errorMessage = ""
-                    infoMessage = ""
-                    if mode == .signIn {
-                        confirmPassword = ""
-                        hasAcceptedLegal = false
-                    }
-                }
+                switchAuthMode()
             } label: {
                 Text(mode == .signIn ? "Create account" : "Sign in")
                     .font(MoveMarkTheme.Typography.subheadlineMedium)
                     .fontWeight(.semibold)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                    .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.95))
             }
             .buttonStyle(.plain)
         }
         .font(MoveMarkTheme.Typography.subheadline)
         .frame(maxWidth: .infinity)
         .padding(.top, 6)
+    }
+
+    private func switchAuthMode() {
+        let next: Mode = mode == .signIn ? .signUp : .signIn
+        if reduceMotion {
+            mode = next
+            errorMessage = ""
+            infoMessage = ""
+            if next == .signIn {
+                confirmPassword = ""
+                hasAcceptedLegal = false
+            }
+            return
+        }
+        withAnimation(authSpring) {
+            mode = next
+            errorMessage = ""
+            infoMessage = ""
+            if next == .signIn {
+                confirmPassword = ""
+                hasAcceptedLegal = false
+            }
+        }
     }
 
     private func requestPasswordReset() async {
@@ -280,22 +364,22 @@ struct AuthContainerView: View {
     private var legalConsentSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Legal")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.95))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
 
             HStack(alignment: .top, spacing: 10) {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.18)) {
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
                         hasAcceptedLegal.toggle()
                     }
                 } label: {
                     ZStack {
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(hasAcceptedLegal ? MoveMarkTheme.Colors.primary.opacity(0.18) : MoveMarkTheme.Colors.mint.opacity(0.45))
+                            .fill(hasAcceptedLegal ? MoveMarkTheme.Colors.primary.opacity(0.18) : MoveMarkTheme.Colors.fieldFill)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                                     .stroke(
-                                        hasAcceptedLegal ? MoveMarkTheme.Colors.primary.opacity(0.5) : MoveMarkTheme.Colors.panelStroke,
+                                        hasAcceptedLegal ? MoveMarkTheme.Colors.primary.opacity(0.5) : MoveMarkTheme.Colors.cardStroke,
                                         lineWidth: 1
                                     )
                             )
@@ -313,8 +397,8 @@ struct AuthContainerView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("I agree to the Terms of Use and acknowledge the Privacy Policy.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.85))
+                        .font(.system(size: 13))
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.92))
                         .fixedSize(horizontal: false, vertical: true)
 
                     HStack(spacing: 14) {
@@ -323,34 +407,30 @@ struct AuthContainerView: View {
                         }
                         .buttonStyle(.plain)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                        .foregroundStyle(MoveMarkTheme.Colors.primary)
 
                         Button("Privacy Policy") {
                             if let privacyPolicyURL { openURL(privacyPolicyURL) }
                         }
                         .buttonStyle(.plain)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                        .foregroundStyle(MoveMarkTheme.Colors.primary)
                     }
 
-                    Text("Required to create a MoveMark account.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
-
                     Text("MoveMark is a renter documentation tool and does not provide legal advice.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.8))
+                        .font(.system(size: 11))
+                        .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.85))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
-        .padding(16)
+        .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(MoveMarkTheme.Colors.surface.opacity(0.85))
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.5))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.65), lineWidth: 0.85)
                 )
         )
     }
@@ -362,5 +442,4 @@ struct AuthContainerView: View {
         else { return nil }
         return URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines))
     }
-
 }

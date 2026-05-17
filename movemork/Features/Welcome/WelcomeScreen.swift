@@ -10,6 +10,9 @@ import SwiftUI
 struct WelcomeScreen: View {
     @State private var showAuth = false
     @State private var authInitialMode: AuthContainerView.Mode = .signUp
+    /// New ID each launch so dismissed auth always reopens in the requested mode with a clean form.
+    @State private var authPresentationID = UUID()
+    @State private var launchCTAPressed = false
 
     @State private var cardVisible = false
     @State private var tagsVisible = false
@@ -63,8 +66,28 @@ struct WelcomeScreen: View {
                 }
             }
             .onAppear { playEntrance() }
-            .navigationDestination(isPresented: $showAuth) {
+            .fullScreenCover(isPresented: $showAuth) {
                 AuthContainerView(initialMode: authInitialMode)
+                    .id(authPresentationID)
+            }
+        }
+    }
+
+    private func launchAuth(mode: AuthContainerView.Mode) {
+        MMHaptics.soft()
+        authInitialMode = mode
+        authPresentationID = UUID()
+        if reduceMotion {
+            showAuth = true
+            return
+        }
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+            launchCTAPressed = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            showAuth = true
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) {
+                launchCTAPressed = false
             }
         }
     }
@@ -125,13 +148,11 @@ struct WelcomeScreen: View {
         VStack(spacing: 0) {
             MMButton(
                 title: "Start move-in proof",
-                action: {
-                    MMHaptics.soft()
-                    authInitialMode = .signUp
-                    showAuth = true
-                },
+                action: { launchAuth(mode: .signUp) },
                 showsTrailingArrow: true
             )
+            .scaleEffect(launchCTAPressed ? 0.97 : 1)
+            .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82), value: launchCTAPressed)
 
             HStack(spacing: 6) {
                 Spacer(minLength: 0)
@@ -139,9 +160,7 @@ struct WelcomeScreen: View {
                     .font(MoveMarkTheme.Typography.footnote)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
                 Button {
-                    MMHaptics.soft()
-                    authInitialMode = .signIn
-                    showAuth = true
+                    launchAuth(mode: .signIn)
                 } label: {
                     Text("Sign in")
                         .font(MoveMarkTheme.Typography.subheadlineMedium)
