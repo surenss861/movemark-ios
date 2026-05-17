@@ -175,7 +175,7 @@ struct VaultRootView: View {
                 .offset(y: hasAnimatedIn ? 0 : 12)
                 .animation(.easeOut(duration: 0.45).delay(0.04), value: hasAnimatedIn)
 
-            Text("Each rental keeps photos, lease docs, and reports together.")
+            Text("Room photos, old damage tags, and reports for each rental.")
                 .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(MoveMarkTheme.Colors.textOnDarkMuted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -219,7 +219,7 @@ struct VaultRootView: View {
                 MMProofTaskCard(
                     systemImage: "doc.badge.plus",
                     title: "Add \(missing.displayTitle)",
-                    message: "Needed for a stronger report.",
+                    message: "Helps if your deposit is questioned later.",
                     actionTitle: MMNextBestAction.addDocs.title,
                     onAction: {
                         if let row = propertyStore.properties.first(where: { $0.id == prop.id }) {
@@ -239,7 +239,7 @@ struct VaultRootView: View {
         let documented = propertyStore.documentedRoomCount(for: prop)
         let total = propertyStore.totalRoomCount(for: prop)
         if total == 0 {
-            return "Add rooms to start proof"
+            return "Add rooms to document damage"
         }
         return "\(documented) of \(total) rooms ready"
     }
@@ -493,7 +493,7 @@ struct VaultRootView: View {
 
         switch nextAction {
         case .captureRoom:
-            primaryActionTitle = "Continue proof"
+            primaryActionTitle = "Finish move-in proof"
             onPrimaryAction = { path.append(.walkthrough) }
 
         case .uploadDocument:
@@ -579,7 +579,7 @@ struct VaultRootView: View {
         MMEditorialHeader(
             eyebrow: "MoveMark",
             title: "Your proof",
-            subtitle: "Add a rental to start protecting your deposit."
+            subtitle: "Document what was already there before move-in."
         )
     }
 

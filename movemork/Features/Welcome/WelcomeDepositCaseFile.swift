@@ -16,16 +16,20 @@ struct WelcomeDepositCaseFile: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let cornerRadius: CGFloat = 22
-    private let proofBarHeight: CGFloat = 58
+    private let proofBarHeight: CGFloat = 66
 
     private var photoHeight: CGFloat {
         max(heroHeight - proofBarHeight, 160)
     }
 
-    private let issueTags: [(id: String, label: String, isPrior: Bool)] = [
-        ("paint", "Chipped paint", false),
-        ("stain", "Water stain", false),
-        ("prior", "Already there", true)
+    /// Inspection marker green — muted vs CTA primary.
+    private let inspectionGreen = Color(red: 0.10, green: 0.48, blue: 0.32)
+
+    /// Display order: most important first.
+    private let issueTags: [(id: String, label: String, role: WelcomeIssueTagRole)] = [
+        ("prior", "Already there", .priorDamage),
+        ("paint", "Chipped paint", .damage),
+        ("stain", "Water stain", .damage)
     ]
 
     var body: some View {
@@ -116,11 +120,11 @@ struct WelcomeDepositCaseFile: View {
         VStack {
             Spacer(minLength: 0)
             LinearGradient(
-                colors: [.clear, Color.black.opacity(0.35), Color.black.opacity(0.62)],
+                colors: [.clear, Color.black.opacity(0.22), Color.black.opacity(0.45)],
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: min(photoHeight * 0.55, 120))
+            .frame(height: min(photoHeight * 0.45, 96))
         }
         .allowsHitTesting(false)
     }
@@ -144,11 +148,9 @@ struct WelcomeDepositCaseFile: View {
 
             Spacer(minLength: 0)
 
-            issueTagsStack
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
-
-            timestampStrip
+            issueMarkersOnPhoto
+                .padding(.horizontal, 10)
+                .padding(.bottom, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -183,54 +185,69 @@ struct WelcomeDepositCaseFile: View {
             )
     }
 
-    private var issueTagsStack: some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private var issueMarkersOnPhoto: some View {
+        VStack(alignment: .leading, spacing: 5) {
             ForEach(Array(issueTags.enumerated()), id: \.element.id) { index, tag in
-                issueTag(label: tag.label, isPrior: tag.isPrior)
+                evidenceMarker(tag.label, role: tag.role)
+                    .padding(.leading, anchorInset(for: tag.id))
                     .scaleEffect(tagScale(for: index))
                     .animation(
                         reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.78)
-                            .delay(0.05 + Double(index) * 0.06),
+                            .delay(0.04 + Double(index) * 0.05),
                         value: tagsVisible
                     )
             }
         }
     }
 
+    private func anchorInset(for tagID: String) -> CGFloat {
+        switch tagID {
+        case "prior": return 4
+        case "paint": return 22
+        case "stain": return 36
+        default: return 0
+        }
+    }
+
     private func tagScale(for index: Int) -> CGFloat {
         guard !reduceMotion else { return 1 }
-        return tagsVisible ? 1 : 0.88
+        return tagsVisible ? 1 : 0.9
     }
 
-    @ViewBuilder
-    private func issueTag(label: String, isPrior: Bool) -> some View {
-        Text(label)
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(Color.white)
-            .padding(.horizontal, 11)
-            .padding(.vertical, 6)
-            .background {
-                if isPrior {
-                    Capsule()
-                        .fill(Color.black.opacity(0.75))
-                    Capsule()
-                        .stroke(Color.white, lineWidth: 1.25)
-                } else {
-                    Capsule()
-                        .fill(MoveMarkTheme.Colors.primary)
-                }
+    private func evidenceMarker(_ label: String, role: WelcomeIssueTagRole) -> some View {
+        HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                Circle()
+                    .fill(role == .priorDamage ? Color.white : inspectionGreen)
+                    .frame(width: role == .priorDamage ? 7 : 5, height: role == .priorDamage ? 7 : 5)
+                    .shadow(color: Color.black.opacity(0.5), radius: 2, y: 1)
+
+                Rectangle()
+                    .fill(Color.white.opacity(0.65))
+                    .frame(width: 1, height: role == .priorDamage ? 10 : 7)
             }
-            .shadow(color: Color.black.opacity(0.45), radius: 5, y: 2)
-    }
+            .padding(.trailing, 5)
 
-    private var timestampStrip: some View {
-        Text("Move-in · Apr 14 · 5:42 PM")
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(Color.white.opacity(0.95))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(Color.black.opacity(0.42))
+            Text(label)
+                .font(.system(size: role.fontSize, weight: role.fontWeight))
+                .foregroundStyle(Color.white.opacity(role == .priorDamage ? 1 : 0.96))
+                .padding(.horizontal, role.horizontalPadding)
+                .padding(.vertical, role.verticalPadding)
+                .background {
+                    if role == .priorDamage {
+                        Capsule()
+                            .fill(Color.black.opacity(0.82))
+                        Capsule()
+                            .stroke(Color.white.opacity(0.9), lineWidth: 1.15)
+                    } else {
+                        Capsule()
+                            .fill(inspectionGreen.opacity(0.92))
+                        Capsule()
+                            .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
+                    }
+                }
+        }
+        .shadow(color: Color.black.opacity(0.35), radius: 3, y: 1)
     }
 
     private var focusBrackets: some View {
@@ -269,40 +286,78 @@ struct WelcomeDepositCaseFile: View {
 
             HStack(alignment: .center, spacing: 8) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(MoveMarkTheme.Colors.primary)
 
                 Text("Saved to your vault")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
                 Spacer(minLength: 4)
 
                 Text("Report ready")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(MoveMarkTheme.Colors.primary)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.95))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
                     .background(
                         Capsule()
-                            .fill(MoveMarkTheme.Colors.primary.opacity(0.18))
+                            .fill(MoveMarkTheme.Colors.primary.opacity(0.14))
                     )
                     .overlay(
                         Capsule()
-                            .stroke(MoveMarkTheme.Colors.primary.opacity(0.5), lineWidth: 1)
+                            .stroke(MoveMarkTheme.Colors.primary.opacity(0.42), lineWidth: 0.8)
                     )
             }
-            .padding(.top, 8)
+            .padding(.top, 9)
+
+            Text("Move-in · Apr 14 · 5:42 PM")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.72))
+                .padding(.top, 3)
 
             Text("12 photos · 3 issues")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.85))
-                .padding(.top, 4)
+                .font(.system(size: 10, weight: .regular))
+                .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.65))
+                .padding(.top, 2)
         }
         .padding(.horizontal, 14)
-        .padding(.bottom, 10)
+        .padding(.bottom, 9)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(MoveMarkTheme.Colors.card.opacity(0.98))
+    }
+}
+
+private enum WelcomeIssueTagRole {
+    case priorDamage
+    case damage
+
+    var fontSize: CGFloat {
+        switch self {
+        case .priorDamage: return 13
+        case .damage: return 11
+        }
+    }
+
+    var fontWeight: Font.Weight {
+        switch self {
+        case .priorDamage: return .bold
+        case .damage: return .semibold
+        }
+    }
+
+    var horizontalPadding: CGFloat {
+        switch self {
+        case .priorDamage: return 11
+        case .damage: return 9
+        }
+    }
+
+    var verticalPadding: CGFloat {
+        switch self {
+        case .priorDamage: return 6
+        case .damage: return 5
+        }
     }
 }
 

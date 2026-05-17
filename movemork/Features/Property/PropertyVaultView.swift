@@ -417,7 +417,7 @@ struct PropertyVaultView: View {
             return "Add rooms, then capture photos for each one."
         }
         if completedRooms < totalRooms {
-            return "Finish rooms that still need photos for this case."
+            return "Mark what was already there in rooms still missing photos."
         }
         if missingRecordsCount > 0 {
             return "Add your lease and deposit receipt when you can."

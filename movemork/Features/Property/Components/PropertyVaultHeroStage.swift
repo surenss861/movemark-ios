@@ -30,7 +30,7 @@ struct PropertyVaultHeroStage: View {
 
     private func header(namespace: Namespace.ID?) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Deposit proof")
+            Text("Move-in proof")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
 

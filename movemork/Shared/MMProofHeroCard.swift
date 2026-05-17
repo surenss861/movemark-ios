@@ -70,7 +70,7 @@ struct MMProofHeroCard: View {
 
     private var headlineBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Deposit proof")
+            Text("Move-in proof")
                 .font(MoveMarkTheme.Typography.footnote)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.95))
 

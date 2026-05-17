@@ -28,10 +28,9 @@ struct EvidenceCaptureHero: View {
 
     private var roomHeader: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("EVIDENCE SECTION")
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1.1)
-                .foregroundStyle(MoveMarkTheme.Colors.proofMint.opacity(0.85))
+            Text("Room evidence")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.95))
 
             Text(roomName)
                 .font(MoveMarkTheme.Typography.screenTitle)
@@ -40,7 +39,7 @@ struct EvidenceCaptureHero: View {
             Text(
                 moveOutMode
                     ? "Re-capture condition at move-out. Compare with your move-in photos."
-                    : "Capture walls, floors, and fixtures for this room. Add notes and condition before you save."
+                    : "Mark what was already there — walls, floors, and fixtures. Add notes before you save."
             )
             .font(MoveMarkTheme.Typography.body)
             .foregroundStyle(MoveMarkTheme.Colors.textSecondary)

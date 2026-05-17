@@ -191,7 +191,7 @@ struct ExportHistoryView: View {
 
     private var header: some View {
         MMEditorialHeader(
-            eyebrow: "Proof file",
+            eyebrow: "Move-in report",
             title: "Reports",
             subtitle: headerSubtitle
         )
@@ -201,17 +201,16 @@ struct ExportHistoryView: View {
         if let name = activeVaultDisplayTitle, !name.isEmpty {
             return "Build and share reports for \(name)."
         }
-        return "Build and share PDF reports from your proof file."
+        return "Turn saved room photos into a move-in report when you need it."
     }
 
     private var exportContextStrip: some View {
         MMCard(tone: .quiet, padding: 12, spacing: 8) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    Text("Proof file")
-                        .font(.system(size: 10, weight: .bold))
-                        .tracking(0.8)
-                        .foregroundStyle(MoveMarkTheme.Colors.proofMint.opacity(0.88))
+                    Text("Rental proof")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
                     Text("·")
                         .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.6))
                     Text("Current vault")
@@ -350,12 +349,12 @@ struct ExportHistoryView: View {
             return "Move-in report"
         }
         if isExportReadyForResolvedVault == false {
-            return "Deposit report"
+            return "Move-in report"
         }
         if isExportReadyForResolvedVault == true && exports.isEmpty {
-            return "Deposit report"
+            return "Move-in report"
         }
-        return "Deposit report"
+        return "Move-in report"
     }
 
     private var readinessMetricsLine: String? {
@@ -371,10 +370,10 @@ struct ExportHistoryView: View {
     private var readinessSubline: String {
         if isLoading { return "Checking your report…" }
         if isExportReadyForResolvedVault == false {
-            return "Add photos for at least one room to unlock reports for this case."
+            return "Document old damage in at least one room first."
         }
         if exports.contains(where: { verificationStatus[$0.id] == .ready }) {
-            return "Your proof file can now be shared."
+            return "Damage already recorded — report ready to share."
         }
         if isExportReadyForResolvedVault == true && exports.isEmpty {
             return "Finish room proof, then make your move-in report."

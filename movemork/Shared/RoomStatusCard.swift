@@ -35,7 +35,7 @@ struct RoomStatusCard: View {
         if isNext { return "Next" }
         if !isDone { return "Not started" }
         if needsMoreProof { return "Needs more proof" }
-        return "Captured"
+        return "Damage recorded"
     }
 
     private var topSurfaceColors: [Color] {

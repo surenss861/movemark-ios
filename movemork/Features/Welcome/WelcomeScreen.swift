@@ -35,7 +35,7 @@ struct WelcomeScreen: View {
 
                     VStack(alignment: .leading, spacing: 0) {
                         brandIdentityRow
-                            .frame(height: layout.brandHeight, alignment: .bottomLeading)
+                            .padding(.bottom, layout.brandToHeroGap)
 
                         WelcomeDepositCaseFile(
                             maxWidth: cardWidth,
@@ -48,11 +48,10 @@ struct WelcomeScreen: View {
 
                         headlineBlock
                             .frame(height: layout.copyHeight, alignment: .topLeading)
-                            .padding(.top, 4)
+                            .padding(.top, layout.heroToCopyGap)
 
                         ctaBlock
                             .frame(height: layout.ctaHeight, alignment: .top)
-                            .padding(.top, 2)
 
                         Spacer(minLength: 0)
                     }
@@ -75,18 +74,12 @@ struct WelcomeScreen: View {
             Image("MoveMarkLogo")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 28, height: 28)
+                .frame(width: 26, height: 26)
                 .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text("MoveMark")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                Text("Move-in proof")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.95))
-            }
+            Text("MoveMark")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
             Spacer(minLength: 0)
         }
@@ -107,16 +100,10 @@ struct WelcomeScreen: View {
                 .minimumScaleFactor(0.92)
                 .fixedSize(horizontal: false, vertical: true)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Take move-in photos now. Make a report when you need it.")
-                    .font(MoveMarkTheme.Typography.body)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.98))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text("Old damage becomes saved proof.")
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.92))
-            }
+            Text("Take move-in photos now. Make a report when you need it.")
+                .font(MoveMarkTheme.Typography.body)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.98))
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .opacity(copyVisible ? 1 : 0)
@@ -127,7 +114,13 @@ struct WelcomeScreen: View {
     // MARK: - CTA
 
     private var ctaBlock: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 0) {
+            Text("Old damage becomes saved proof.")
+                .font(MoveMarkTheme.Typography.footnote)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.95))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 11)
+
             MMButton(
                 title: "Start move-in proof",
                 action: {
@@ -137,6 +130,7 @@ struct WelcomeScreen: View {
                 },
                 showsTrailingArrow: true
             )
+            .padding(.top, 4)
 
             HStack(spacing: 6) {
                 Spacer(minLength: 0)
@@ -188,18 +182,21 @@ struct WelcomeScreen: View {
 // MARK: - Zone layout (percent of usable screen)
 
 private struct WelcomeZoneLayout {
-    let brandHeight: CGFloat
     let heroHeight: CGFloat
     let copyHeight: CGFloat
     let ctaHeight: CGFloat
     let topPadding: CGFloat
+    let brandToHeroGap: CGFloat
+    let heroToCopyGap: CGFloat
 
     init(screenHeight: CGFloat, safeTop: CGFloat, safeBottom: CGFloat) {
         let usable = screenHeight - safeTop - safeBottom - 12
-        brandHeight = usable * 0.11
-        heroHeight = usable * 0.37
-        copyHeight = usable * 0.21
-        ctaHeight = usable * 0.17
-        topPadding = safeTop + 4
+        heroHeight = usable * 0.38
+        copyHeight = usable * 0.20
+        ctaHeight = usable * 0.18
+        // Pull brand + hero up ~60pt vs prior safeTop+4 layout.
+        topPadding = max(4, safeTop - 56)
+        brandToHeroGap = 14
+        heroToCopyGap = 20
     }
 }

@@ -147,9 +147,9 @@ struct RoomListView: View {
 
     private var roomProofHeader: some View {
         MMEditorialHeader(
-            eyebrow: "Proof file",
-            title: "Room proof",
-            subtitle: "Each room is part of your move-in proof — capture it once, reuse it later."
+            eyebrow: "Move-in proof",
+            title: "Rooms with evidence",
+            subtitle: "Tag old damage in each room so it cannot be blamed on you later."
         )
     }
 
@@ -209,7 +209,7 @@ struct RoomListView: View {
                 MMEmptyState(
                     systemImage: "door.left.hand.open",
                     title: "Start move-in proof",
-                    message: "Add rooms, then take clear photos in each one. That proof helps if your deposit is questioned."
+                    message: "Add rooms, then photograph walls, floors, and anything already damaged."
                 )
             }
 
@@ -229,7 +229,7 @@ struct RoomListView: View {
                     .font(MoveMarkTheme.Typography.sectionTitle)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                Text("Make a PDF of your move-in photos by room. Share it if you need proof.")
+                Text("Bundle room photos and damage tags into one report if your deposit is questioned.")
                     .font(MoveMarkTheme.Typography.subheadline)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 

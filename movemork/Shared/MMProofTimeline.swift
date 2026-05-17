@@ -253,7 +253,7 @@ enum MMProofTimelineBuilder {
                     id: "report-ready",
                     iconName: "doc.richtext.fill",
                     title: "Report ready to make",
-                    message: "You have enough proof for a move-in report.",
+                    message: "Old damage is documented — you can make your report.",
                     timestamp: nil,
                     status: .next
                 )
@@ -273,7 +273,7 @@ enum MMProofTimelineBuilder {
                     id: "rooms-empty",
                     iconName: "door.left.hand.open",
                     title: "No rooms yet",
-                    message: "Add a room to start proof.",
+                    message: "Add a room to photograph move-in condition.",
                     timestamp: nil,
                     status: .missing
                 )
@@ -347,7 +347,7 @@ enum MMProofTimelineBuilder {
                 id: "rooms-progress",
                 iconName: documented == total && total > 0 ? "checkmark.circle.fill" : "camera.fill",
                 title: total == 0 ? "No rooms yet" : "\(documented) of \(total) rooms ready",
-                message: photos == 0 ? "Add room photos to your proof file." : photoIssueLine(photos: photos, issues: property.rooms.flatMap(\.evidence).flatMap(\.issueTags).count),
+                message: photos == 0 ? "Photograph what was already there in each room." : photoIssueLine(photos: photos, issues: property.rooms.flatMap(\.evidence).flatMap(\.issueTags).count),
                 timestamp: nil,
                 status: documented > 0 ? .done : .missing
             )
@@ -385,8 +385,8 @@ enum MMProofTimelineBuilder {
                 MMProofTimelineRow(
                     id: "report-ready",
                     iconName: "sparkles",
-                    title: "Ready to make report",
-                    message: "Your proof is strong enough.",
+                    title: "Report ready to make",
+                    message: "Your move-in evidence is strong enough.",
                     timestamp: nil,
                     status: .next
                 )

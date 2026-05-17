@@ -34,7 +34,7 @@ extension PropertyStore {
             case .openDisputeBuilder:
                 return "Open dispute builder"
             case .openExports:
-                return "Make report"
+                return "Make your move-in report"
             case .reviewVault:
                 return "Review vault"
             }
@@ -43,7 +43,7 @@ extension PropertyStore {
         var shortCTA: String {
             switch self {
             case .captureRoom:
-                return "Continue proof"
+                return "Finish move-in proof"
             case .uploadDocument:
                 return "Add docs"
             case .reviewMaintenance:
@@ -51,7 +51,7 @@ extension PropertyStore {
             case .openDisputeBuilder:
                 return "Open dispute"
             case .openExports:
-                return "Make report"
+                return "Make your move-in report"
             case .reviewVault:
                 return "Open"
             }
@@ -233,9 +233,9 @@ extension PropertyStore {
             return issues == 1 ? "1 open maintenance issue" : "\(issues) open maintenance issues"
         }
         if isExportReady(for: property) {
-            return "Proof ready — you can make a report"
+            return "Damage recorded — report ready when you need it"
         }
-        return "Proof looks good · keep docs current"
+        return "Your move-in proof looks strong"
     }
 
     /// Short proof metrics for the active card (photos + room progress).

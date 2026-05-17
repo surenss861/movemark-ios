@@ -26,11 +26,11 @@ enum MMNextBestAction: Equatable {
     var title: String {
         switch self {
         case .createVault: return "Create vault"
-        case .continueProof: return "Continue proof"
+        case .continueProof: return "Finish move-in proof"
         case .addPhotos: return "Add photos"
         case .saveProof: return "Save proof"
         case .addDocs: return "Add docs"
-        case .makeReport: return "Make report"
+        case .makeReport: return "Make your move-in report"
         case .shareReport: return "Share report"
         case .tryAgain: return "Try again"
         case .openVault: return "Open"
