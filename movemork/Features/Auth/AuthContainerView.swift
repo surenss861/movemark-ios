@@ -30,6 +30,7 @@ struct AuthContainerView: View {
     @State private var infoMessage = ""
     @State private var isLoading = false
     @State private var surfaceAppeared = false
+    @State private var formFieldsAppeared = false
     @State private var keyboardBottomInset: CGFloat = 0
 
     private var privacyPolicyURL: URL? {
@@ -64,26 +65,46 @@ struct AuthContainerView: View {
             Color.clear
                 .mmProofShellBackground(heroFocus: false, ctaBloom: false)
 
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 18) {
-                    headerBlock
-                    titleBlock
-                    proofSummarySection
-                    authFormSection
+            GeometryReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        headerBlock
+                        titleBlock
 
-                    if mode == .signUp {
-                        legalFinePrint
-                            .transition(fieldTransition)
+                        proofSummarySection
+                            .opacity(surfaceAppeared ? 1 : 0)
+                            .offset(y: surfaceAppeared ? 0 : 10)
+
+                        if mode == .signIn {
+                            Spacer(minLength: 20)
+                        }
+
+                        authFormSection
+                            .opacity(formFieldsAppeared ? 1 : 0)
+                            .offset(y: formFieldsAppeared ? 0 : 14)
+
+                        if mode == .signUp {
+                            legalFinePrint
+                                .opacity(formFieldsAppeared ? 1 : 0)
+                                .transition(fieldTransition)
+                        }
+
+                        if mode == .signUp {
+                            modeSwitchRow
+                                .opacity(formFieldsAppeared ? 1 : 0)
+                        }
+
+                        if mode == .signIn {
+                            Spacer(minLength: 24)
+                        }
                     }
-
-                    modeSwitchRow
-                    Spacer(minLength: 16)
+                    .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
+                    .padding(.bottom, 24 + keyboardBottomInset)
+                    .frame(minHeight: proxy.size.height, alignment: .top)
                 }
-                .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.bottom, 24 + keyboardBottomInset)
+                .scrollDismissesKeyboard(.interactively)
             }
             .safeAreaPadding(.top, 6)
-            .scrollDismissesKeyboard(.interactively)
         }
         .offset(y: surfaceAppeared ? 0 : 28)
         .opacity(surfaceAppeared ? 1 : 0)
@@ -113,10 +134,16 @@ struct AuthContainerView: View {
     private func playSurfaceEntrance() {
         if reduceMotion {
             surfaceAppeared = true
+            formFieldsAppeared = true
             return
         }
         withAnimation(.spring(response: 0.48, dampingFraction: 0.88)) {
             surfaceAppeared = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+            withAnimation(.spring(response: 0.44, dampingFraction: 0.9)) {
+                formFieldsAppeared = true
+            }
         }
     }
 
@@ -168,7 +195,7 @@ struct AuthContainerView: View {
         .animation(authSpring, value: mode)
     }
 
-    // MARK: - Proof receipt (stable across morph)
+    // MARK: - Proof receipt (anchor during morph)
 
     private var proofSummarySection: some View {
         AuthProofSummaryCard(mode: mode)
@@ -181,26 +208,46 @@ struct AuthContainerView: View {
     @ViewBuilder
     private var authFormSection: some View {
         if mode == .signUp {
-            createFormCard
+            createFormSurface
         } else {
-            signInFormStack
+            signInFormSurface
         }
     }
 
-    private var createFormCard: some View {
-        MMCard(tone: .quiet, padding: 18, spacing: 10) {
-            authFieldsStack
+    private var createFormSurface: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            authInputFields
+            authStatusMessages
+            primaryActionButton
         }
+        .padding(16)
+        .background(authSurfaceBackground(cornerRadius: 26, fillOpacity: 0.9))
         .matchedGeometryEffect(id: "auth-proof-form", in: authCardNamespace)
     }
 
-    private var signInFormStack: some View {
-        authFieldsStack
-            .matchedGeometryEffect(id: "auth-proof-form", in: authCardNamespace)
+    private var signInFormSurface: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            authInputFields
+            authStatusMessages
+            primaryActionButton
+            modeSwitchRow
+        }
+        .padding(18)
+        .background(authSurfaceBackground(cornerRadius: 28, fillOpacity: 0.78))
+        .matchedGeometryEffect(id: "auth-proof-form", in: authCardNamespace)
     }
 
-    private var authFieldsStack: some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private func authSurfaceBackground(cornerRadius: CGFloat, fillOpacity: Double) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(MoveMarkTheme.Colors.card.opacity(fillOpacity))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.42), lineWidth: 0.75)
+            )
+    }
+
+    private var authInputFields: some View {
+        VStack(alignment: .leading, spacing: 12) {
             MMTextField(
                 title: "Email",
                 placeholder: "you@example.com",
@@ -244,7 +291,12 @@ struct AuthContainerView: View {
                 }
                 .transition(fieldTransition)
             }
+        }
+        .animation(authSpring, value: mode)
+    }
 
+    private var authStatusMessages: some View {
+        VStack(alignment: .leading, spacing: 6) {
             if !infoMessage.isEmpty {
                 Text(infoMessage)
                     .font(MoveMarkTheme.Typography.footnote)
@@ -256,12 +308,7 @@ struct AuthContainerView: View {
                     .font(MoveMarkTheme.Typography.footnote)
                     .foregroundStyle(.red.opacity(0.9))
             }
-
-            primaryActionButton
-                .padding(.top, 4)
-                .animation(authSpring, value: mode)
         }
-        .animation(authSpring, value: mode)
     }
 
     private var primaryActionButton: some View {
@@ -280,6 +327,7 @@ struct AuthContainerView: View {
                     .tint(MoveMarkTheme.Colors.primary)
             }
         }
+        .animation(authSpring, value: mode)
     }
 
     private var fieldTransition: AnyTransition {
@@ -314,6 +362,7 @@ struct AuthContainerView: View {
             .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.88))
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
+            .padding(.top, 2)
     }
 
     private var legalAttributedLine: AttributedString {

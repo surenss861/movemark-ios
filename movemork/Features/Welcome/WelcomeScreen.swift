@@ -274,6 +274,6 @@ private struct WelcomeZoneLayout {
     }
 
     func bottomDockPadding(safeBottom: CGFloat) -> CGFloat {
-        max(38, safeBottom + 34)
+        max(18, safeBottom + 14)
     }
 }

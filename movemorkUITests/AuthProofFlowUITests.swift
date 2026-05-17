@@ -38,7 +38,7 @@ final class AuthProofFlowUITests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["Start your move-in proof."].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Kitchen proof"].exists)
-        XCTAssertTrue(app.staticTexts["Ready to save"].exists)
+        XCTAssertTrue(app.staticTexts["Ready to save"].waitForExistence(timeout: 2))
         XCTAssertTrue(app.buttons["Create private vault"].exists)
     }
 
@@ -66,7 +66,7 @@ final class AuthProofFlowUITests: XCTestCase {
         app.buttons["Create private vault"].tap()
 
         XCTAssertTrue(app.staticTexts["Start your move-in proof."].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Ready to save"].exists)
+        XCTAssertTrue(app.staticTexts["Ready to save"].waitForExistence(timeout: 2))
         XCTAssertEqual(app.secureTextFields.count, 2, "Create should show password + confirm")
         XCTAssertTrue(
             app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'By continuing'")).firstMatch.exists
@@ -101,7 +101,7 @@ final class AuthProofFlowUITests: XCTestCase {
 
         app.buttons["Start move-in proof"].tap()
         XCTAssertTrue(app.staticTexts["Start your move-in proof."].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Ready to save"].exists)
+        XCTAssertTrue(app.staticTexts["Ready to save"].waitForExistence(timeout: 2))
         XCTAssertEqual(app.secureTextFields.count, 2)
     }
 
