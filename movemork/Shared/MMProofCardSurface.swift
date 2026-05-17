@@ -101,23 +101,23 @@ private struct MMProofCardSurfaceModifier: ViewModifier {
         case .depositPayoff:
             return Color.black.opacity(0.34)
         case .standard:
-            return Color.black.opacity(0.28)
+            return Color.black.opacity(0.18)
         }
     }
 
     private var shadowRadius: CGFloat {
         switch kind {
-        case .evidence: return 18
-        case .depositPayoff: return 14
-        case .standard: return 12
+        case .evidence: return 14
+        case .depositPayoff: return 8
+        case .standard: return 6
         }
     }
 
     private var shadowY: CGFloat {
         switch kind {
-        case .evidence: return 8
-        case .depositPayoff: return 5
-        case .standard: return 6
+        case .evidence: return 6
+        case .depositPayoff: return 3
+        case .standard: return 3
         }
     }
 }

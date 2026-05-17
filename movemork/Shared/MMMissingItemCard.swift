@@ -41,20 +41,26 @@ struct MMMissingItemCard: View {
 
                 Text(actionTitle)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(MoveMarkTheme.Colors.textOnPrimary)
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .padding(.horizontal, 11)
                     .padding(.vertical, 7)
-                    .background(MoveMarkTheme.Colors.semanticWarning.opacity(0.92))
-                    .clipShape(Capsule())
+                    .background(
+                        Capsule()
+                            .fill(MoveMarkTheme.Colors.cardRaised.opacity(0.95))
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(MoveMarkTheme.Colors.semanticWarning.opacity(0.45), lineWidth: 0.75)
+                    )
             }
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.card.opacity(0.92))
+                    .fill(MoveMarkTheme.Colors.card.opacity(0.96))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(MoveMarkTheme.Colors.semanticWarning.opacity(0.35), lineWidth: 0.75)
+                    .stroke(MoveMarkTheme.Colors.semanticWarning.opacity(0.22), lineWidth: 1)
             )
         }
         .buttonStyle(MMCardPressStyle())

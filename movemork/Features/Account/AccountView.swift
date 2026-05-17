@@ -67,14 +67,14 @@ struct AccountView: View {
                 .mmProofShellBackground(heroFocus: false, ctaBloom: false)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    MMRenterHeader(
+                VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardStack) {
+                    MMProofSectionHeader(
                         title: "Account",
                         subtitle: "Plan, profile, and access to your proof vaults."
                     )
                     profileCard
-                    subscriptionCard
-                    legalCard
+                    planSection
+                    privacySupportSection
                     securityCard
                     aboutCard
 
@@ -117,8 +117,8 @@ struct AccountView: View {
         }
     }
 
-    private var subscriptionCard: some View {
-        accountSection(title: "Subscription") {
+    private var planSection: some View {
+        accountSection(title: "Plan") {
             if let err = subscriptionManager.userFacingPlansErrorMessage, !err.isEmpty {
                 MMErrorBanner(
                     message: err,
@@ -201,14 +201,14 @@ struct AccountView: View {
                             subscriptionRestoreError = nil
                             showPaywall = true
                         },
-                        kind: .primary,
+                        kind: .secondary,
                         size: .standard
                     )
 
                     MMButton(
                         title: subscriptionManager.isLoading ? "Restoring…" : "Restore purchases",
                         action: { runSubscriptionRestore() },
-                        kind: .secondary,
+                        kind: .quiet,
                         size: .standard,
                         isDisabled: subscriptionManager.isLoading
                     )
@@ -244,9 +244,9 @@ struct AccountView: View {
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 Spacer()
                 if subscriptionManager.hasPro {
-                    MMPill(text: "Active", tone: .success)
+                    MMPill(text: "Active", tone: .neutral)
                 } else {
-                    MMPill(text: "Recommended", tone: .success)
+                    MMPill(text: "Optional", tone: .neutral)
                 }
             }
 
@@ -257,8 +257,8 @@ struct AccountView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .mmProofCardSurface(.depositPayoff, cornerRadius: 18)
-        .shadow(color: Color.black.opacity(0.28), radius: 12, y: 5)
+        .mmProofCardSurface(.standard, cornerRadius: 18)
+        .opacity(subscriptionManager.hasPro ? 1 : 0.88)
     }
 
     private func runSubscriptionRestore() {
@@ -322,130 +322,88 @@ struct AccountView: View {
     }
 
     private var securityCard: some View {
-        accountSection(title: "Security") {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Password")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Security")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .padding(.leading, 2)
 
-                        Text("Send a reset link to your email")
-                            .font(MoveMarkTheme.Typography.subheadline)
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.84))
-                    }
+            MMProofListRow(
+                title: "Password reset",
+                subtitle: "Send a reset link to your email",
+                meta: isSendingReset ? "Sending…" : nil,
+                onTap: { sendPasswordReset() }
+            )
 
-                    Spacer()
+            if let resetMessage {
+                Text(resetMessage)
+                    .font(MoveMarkTheme.Typography.footnote)
+                    .foregroundStyle(MoveMarkTheme.Colors.primary)
+                    .padding(.horizontal, 4)
+            }
 
-                    MMButton(
-                        title: isSendingReset ? "Sending…" : "Reset",
-                        action: { sendPasswordReset() },
-                        kind: .quiet,
-                        size: .compact,
-                        isDisabled: isSendingReset,
-                        expandsToFillWidth: false
-                    )
-                }
-
-                if let resetMessage {
-                    Text(resetMessage)
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.primary)
-                }
-
-                if let resetError {
-                    MMErrorBanner(message: resetError)
-                }
+            if let resetError {
+                MMErrorBanner(message: resetError)
             }
         }
     }
 
     private var aboutCard: some View {
         accountSection(title: "About") {
-            VStack(alignment: .leading, spacing: 12) {
-                infoRow(
-                    label: "App version",
-                    value: appVersion
-                )
+            infoRow(label: "App version", value: appVersion)
 
-                Text("MoveMark helps renters document proof and records. It does not provide legal advice.")
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            Text("MoveMark helps renters document proof and records. It does not provide legal advice.")
+                .font(MoveMarkTheme.Typography.footnote)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var privacySupportSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Privacy & support")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .padding(.leading, 2)
+
+            VStack(spacing: 8) {
+                settingsLinkRow(title: "Privacy Policy", url: privacyPolicyURL)
+                settingsLinkRow(title: "Terms of Use", url: termsURL)
+                settingsLinkRow(title: "Contact Support", url: supportURL ?? supportEmailURL)
+                settingsLinkRow(title: "Account & Data Deletion", url: accountDeletionURL)
             }
         }
     }
 
-    private var legalCard: some View {
-        accountSection(title: "Privacy, terms & subscriptions") {
-            VStack(alignment: .leading, spacing: 10) {
-                accountActionLinkRow(
-                    title: subscriptionManager.isLoading ? "Restore purchases…" : "Restore purchases",
-                    subtitle: "Sync MoveMark Pro with this Apple ID (same as the Upgrade screen).",
-                    action: { runSubscriptionRestore() },
-                    disabled: subscriptionManager.isLoading
-                )
-
-                Divider()
-                    .background(MoveMarkTheme.Colors.divider.opacity(0.22))
-
-                legalLinkRow(
-                    title: "Subscriptions in App Store",
-                    subtitle: "View, change, or cancel Apple subscriptions for this Apple ID.",
-                    url: Self.appleSubscriptionsURL
-                )
-
-                Divider()
-                    .background(MoveMarkTheme.Colors.divider.opacity(0.22))
-
-                legalLinkRow(
-                    title: "Privacy Policy",
-                    subtitle: "How MoveMark collects, uses, and protects your data.",
-                    url: privacyPolicyURL
-                )
-
-                Divider()
-                    .background(MoveMarkTheme.Colors.divider.opacity(0.22))
-
-                legalLinkRow(
-                    title: "Terms of Use",
-                    subtitle: "Subscriptions, user content, and rules for using MoveMark.",
-                    url: termsURL
-                )
-
-                Divider()
-                    .background(MoveMarkTheme.Colors.divider.opacity(0.22))
-
-                legalLinkRow(
-                    title: "Contact Support",
-                    subtitle: "Get help with account, subscription, exports, or uploads.",
-                    url: supportURL ?? supportEmailURL
-                )
-
-                Divider()
-                    .background(MoveMarkTheme.Colors.divider.opacity(0.22))
-
-                legalLinkRow(
-                    title: "Account & Data Deletion",
-                    subtitle: "How to request account and associated data deletion.",
-                    url: accountDeletionURL
-                )
+    private func settingsLinkRow(title: String, url: URL?) -> some View {
+        MMProofListRow(
+            title: title,
+            subtitle: url == nil ? "Link not configured in this build" : "Opens in browser",
+            onTap: {
+                guard let url else { return }
+                openURL(url)
             }
-        }
+        )
+        .opacity(url == nil ? 0.55 : 1)
+        .disabled(url == nil)
     }
 
     private func accountSection<Content: View>(
         title: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        MMCard(tone: .quiet, padding: 14, spacing: 12) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(title)
-                    .font(MoveMarkTheme.Typography.sectionTitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .padding(.leading, 2)
 
+            VStack(alignment: .leading, spacing: 12) {
                 content()
             }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .mmProofCardSurface(.standard, cornerRadius: 18)
         }
     }
 

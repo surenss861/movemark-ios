@@ -9,16 +9,17 @@ import SwiftUI
 
 enum MoveMarkTheme {
     enum Colors {
-        // Shell — warm charcoal green
-        static let appBackground = Color(red: 0.031, green: 0.075, blue: 0.059)           // #08130F
-        static let appBackgroundRaised = Color(red: 0.051, green: 0.102, blue: 0.082)   // #0D1A15
-        static let surface = Color(red: 0.071, green: 0.137, blue: 0.106)               // #12231B
+        // Shell — Proof System v2 (lighter surfaces for depth, not glow)
+        static let appBackground = Color(red: 0.027, green: 0.071, blue: 0.055)           // #07120E
+        static let appBackgroundRaised = Color(red: 0.039, green: 0.090, blue: 0.071)   // #0A1712
+        static let surface = Color(red: 0.063, green: 0.137, blue: 0.106)               // #10231B
 
         // Cards
-        static let card = Color(red: 0.071, green: 0.137, blue: 0.106)                  // #12231B
-        static let cardRaised = Color(red: 0.090, green: 0.165, blue: 0.129)            // #172A21
-        static let cardStroke = Color(red: 0.125, green: 0.220, blue: 0.169)            // subtle edge
-        static let subtleStroke = Color(red: 0.102, green: 0.188, blue: 0.145)
+        static let card = Color(red: 0.063, green: 0.137, blue: 0.106)                  // #10231B
+        static let cardRaised = Color(red: 0.075, green: 0.161, blue: 0.122)             // #13291F
+        static let cardStroke = Color.white.opacity(0.08)
+        static let subtleStroke = Color.white.opacity(0.06)
+        static let tabBarFill = Color(red: 0.031, green: 0.075, blue: 0.059).opacity(0.94) // #08130F
 
         // Legacy aliases
         static let background = appBackground
@@ -73,24 +74,30 @@ enum MoveMarkTheme {
     }
 
     enum Spacing {
-        static let screenHorizontal: CGFloat = 24
-        static let panelPadding: CGFloat = 18
+        static let screenHorizontal: CGFloat = 22
+        static let panelPadding: CGFloat = 20
         static let cornerRadius: CGFloat = 22
         static let fieldHeight: CGFloat = 58
         static let buttonHeight: CGFloat = 58
         static let heroButtonHeight: CGFloat = 68
         static let heroTopInset: CGFloat = 4
 
-        static let scrollTailRootTabChrome: CGFloat = 96
+        static let headerToFirstCard: CGFloat = 28
+        static let cardStack: CGFloat = 16
+        static let titleToSubtitle: CGFloat = 8
+        static let subtitleToContent: CGFloat = 24
+
+        static let scrollTailRootTabChrome: CGFloat = 124
         static let scrollTailFocusedFlow: CGFloat = 24
-        static let vaultExpansionScrollExtra: CGFloat = 72
+        static let vaultExpansionScrollExtra: CGFloat = 0
     }
 
     enum Typography {
-        static let hero = Font.system(size: 34, weight: .bold, design: .default)
+        static let hero = Font.system(size: 36, weight: .bold, design: .default)
         static let heroLarge = Font.system(size: 38, weight: .bold, design: .default)
-        static let screenTitle = Font.system(size: 28, weight: .bold, design: .default)
-        static let cardTitle = Font.system(size: 20, weight: .bold, design: .default)
+        static let screenTitle = Font.system(size: 34, weight: .bold, design: .default)
+        static let screenSubtitle = Font.system(size: 18, weight: .regular, design: .default)
+        static let cardTitle = Font.system(size: 22, weight: .semibold, design: .default)
         static let cardValue = Font.system(size: 28, weight: .bold, design: .default)
         static let sectionTitle = Font.system(size: 18, weight: .semibold, design: .default)
 

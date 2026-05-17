@@ -13,7 +13,8 @@ enum MMMotion {
     static let cardReveal = Animation.easeOut(duration: 0.24)
     static let screenTransition = Animation.easeOut(duration: 0.26)
     static let expand = Animation.spring(response: 0.34, dampingFraction: 0.88)
-    static let tabSwitch = Animation.easeOut(duration: 0.22)
+    static let tabSwitch = Animation.easeOut(duration: 0.2)
+    static let tabContentShift: CGFloat = 8
     /// Proof strength / walkthrough progress — ease only, no bounce.
     static let proofProgress = Animation.easeOut(duration: 0.42)
     static let proofToastIn = Animation.easeOut(duration: 0.28)

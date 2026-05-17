@@ -49,7 +49,7 @@ struct MMPill: View {
         case .neutral: return MoveMarkTheme.Colors.surface.opacity(0.9)
         case .accent: return MoveMarkTheme.Colors.primary.opacity(0.18)
         case .success: return MoveMarkTheme.Colors.primary.opacity(0.2)
-        case .warning: return MoveMarkTheme.Colors.semanticWarning.opacity(0.16)
+        case .warning: return MoveMarkTheme.Colors.semanticWarning.opacity(0.12)
         case .danger: return MoveMarkTheme.Colors.semanticDanger.opacity(0.14)
         }
     }
@@ -59,7 +59,7 @@ struct MMPill: View {
         case .neutral: return MoveMarkTheme.Colors.subtleStroke
         case .accent: return MoveMarkTheme.Colors.primary.opacity(0.45)
         case .success: return MoveMarkTheme.Colors.proofMint.opacity(0.5)
-        case .warning: return MoveMarkTheme.Colors.semanticWarning.opacity(0.5)
+        case .warning: return MoveMarkTheme.Colors.semanticWarning.opacity(0.28)
         case .danger: return MoveMarkTheme.Colors.semanticDanger.opacity(0.45)
         }
     }

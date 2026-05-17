@@ -17,6 +17,7 @@ enum RootTab: Hashable {
 
 struct AuthenticatedTabShellView: View {
     @Environment(PropertyStore.self) private var propertyStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var selectedTab: RootTab = .vaults
     /// Vault-tab navigation only; non-empty means workspace/task screens — hide root tab bar.
@@ -37,64 +38,66 @@ struct AuthenticatedTabShellView: View {
             set: { new in
                 guard new != selectedTab else { return }
                 MMHaptics.selection()
-                withAnimation(MMMotion.screenTransition) { selectedTab = new }
+                withAnimation(reduceMotion ? nil : MMMotion.tabSwitch) {
+                    selectedTab = new
+                }
             }
         )
     }
 
     var body: some View {
-        // Tab bar only at root; VStack reserves its height only when visible so task screens use full vertical space.
-        VStack(spacing: 0) {
-            ZStack {
-                switch selectedTab {
-                case .vaults:
-                    AuthenticatedShellView(path: $vaultPath)
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .offset(x: -12)),
-                            removal: .opacity.combined(with: .offset(x: 8))
-                        ))
-                case .exports:
-                    NavigationStack {
-                        ExportHistoryView(
-                            showOpenVaultsCTA: true,
-                            onOpenVaults: { selectedTab = .vaults },
-                            onContinueRoomProof: {
-                                selectedTab = .vaults
-                                vaultPath = [.walkthrough]
-                            }
-                        )
-                            .navigationTitle("")
-                            .navigationBarTitleDisplayMode(.inline)
-                    }
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .offset(x: 14)),
-                        removal: .opacity.combined(with: .offset(x: -8))
-                    ))
-                case .account:
-                    NavigationStack {
-                        AccountView()
-                    }
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .offset(x: 14)),
-                        removal: .opacity.combined(with: .offset(x: -8))
-                    ))
-                }
-            }
-            .animation(MMMotion.screenTransition, value: selectedTab)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .environment(\.mmRootTabBarVisible, showsRootTabBar)
-
+        ZStack {
+            tabContent
+                .id(selectedTab)
+                .transition(tabTransition)
+                .animation(reduceMotion ? nil : MMMotion.tabSwitch, value: selectedTab)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .environment(\.mmRootTabBarVisible, showsRootTabBar)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             if showsRootTabBar {
-                MMTabBar(selectedTab: selectedTabBinding)
+                MMProofTabBarV2(selectedTab: selectedTabBinding)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
-        .animation(.easeOut(duration: 0.22), value: showsRootTabBar)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(.easeOut(duration: 0.2), value: showsRootTabBar)
         .onAppear { consumePendingFirstRunExit() }
         .onChange(of: propertyStore.pendingFirstRunExit != nil) { _, hasPending in
             if hasPending { consumePendingFirstRunExit() }
         }
+    }
+
+    @ViewBuilder
+    private var tabContent: some View {
+        switch selectedTab {
+        case .vaults:
+            AuthenticatedShellView(path: $vaultPath)
+        case .exports:
+            NavigationStack {
+                ExportHistoryView(
+                    showOpenVaultsCTA: true,
+                    onOpenVaults: { selectedTab = .vaults },
+                    onContinueRoomProof: {
+                        selectedTab = .vaults
+                        vaultPath = [.walkthrough]
+                    }
+                )
+                .navigationTitle("")
+                .navigationBarTitleDisplayMode(.inline)
+            }
+        case .account:
+            NavigationStack {
+                AccountView()
+            }
+        }
+    }
+
+    private var tabTransition: AnyTransition {
+        let offset = MMMotion.tabContentShift
+        return .asymmetric(
+            insertion: .opacity.combined(with: .offset(x: offset)),
+            removal: .opacity.combined(with: .offset(x: -offset))
+        )
     }
 
     private func consumePendingFirstRunExit() {

@@ -11,7 +11,6 @@ struct VaultRootView: View {
     @Binding var path: [AppRoute]
     @Environment(SessionManager.self) private var sessionManager
     @Environment(PropertyStore.self) private var propertyStore
-    @Environment(\.vaultTransitionNamespace) private var vaultNamespace
     @Environment(\.scenePhase) private var scenePhase
     @Environment(SubscriptionManager.self) private var subscriptionManager
 
@@ -20,7 +19,6 @@ struct VaultRootView: View {
     @State private var activePaywallReason: PaywallReason = .extraProperty
     @State private var previewURLByPropertyId: [UUID: URL] = [:]
     @State private var hasAnimatedIn = false
-    @State private var expandedVaultId: UUID? = nil
 
     /// Only the featured (recent/first) card is expandable; others are static. Ensures chevron is always on the same card.
     private var featuredPropertyId: UUID? {
@@ -88,127 +86,165 @@ struct VaultRootView: View {
         }
     }
 
-    private var vaultsDashboard: some View {
-        ZStack(alignment: .topTrailing) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    stagedHeader
-
-                    if let error = propertyStore.errorMessage {
-                        MMErrorBanner(
-                            message: error,
-                            retryTitle: MMCopy.tryAgain,
-                            onRetry: { Task { await reload() } }
-                        )
-                    }
-
-                    ForEach(Array(propertyStore.properties.enumerated()), id: \.element.id) { index, row in
-                        VaultCoverCard(
-                            model: coverCardModel(for: row),
-                            expansion: row.id == featuredPropertyId ? expansionContent(for: row) : nil,
-                            expandedVaultId: $expandedVaultId,
-                            namespace: vaultNamespace,
-                            onTap: { openVaultDetail(for: row) },
-                            onPreviewImageFailure: {
-                                Task { await loadPreviewURLs() }
-                            }
-                        )
-                        .opacity(hasAnimatedIn ? 1 : 0)
-                        .offset(y: hasAnimatedIn ? 0 : 18)
-                        .animation(MMMotion.cardReveal.delay(0.12 + Double(index) * 0.05), value: hasAnimatedIn)
-                    }
-
-                }
-                .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.top, 8)
-                .mmScrollContentTopInset(2)
-                .padding(
-                    .bottom,
-                    MoveMarkTheme.Spacing.scrollTailRootTabChrome
-                        + (expandedVaultId != nil ? MoveMarkTheme.Spacing.vaultExpansionScrollExtra : 0)
-                )
-            }
-            .scrollIndicators(.hidden, axes: .vertical)
-            .mmProofShellBackground(heroFocus: false, ctaBloom: false)
-            .task {
-                await loadPreviewURLs()
-            }
-            .task(id: featuredPropertyId) {
-                await ensureFeaturedPropertyLoaded()
-            }
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .active {
-                    Task { await loadPreviewURLs() }
-                }
-            }
-            .onAppear {
-                guard !hasAnimatedIn else { return }
-                withAnimation(.easeOut(duration: 0.5)) {
-                    hasAnimatedIn = true
-                }
-            }
-
-            FloatingAddButton {
-                if subscriptionManager.canCreateProperty(currentCount: propertyStore.properties.count) {
-                    showAddProperty = true
-                } else {
-                    activePaywallReason = .extraProperty
-                    showPaywall = true
-                }
-            }
-                .padding(.top, 8)
-                .padding(.trailing, MoveMarkTheme.Spacing.screenHorizontal)
-        }
+    private var otherProperties: [PropertyRow] {
+        guard let fid = featuredPropertyId else { return [] }
+        return propertyStore.properties.filter { $0.id != fid }
     }
 
-    /// Staged entrance: header → proof progress → missing docs.
-    private var stagedHeader: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            MMRenterHeader(
-                title: "Your proof",
-                subtitle: "Room photos, old damage tags, and reports for each rental."
-            )
-            .opacity(hasAnimatedIn ? 1 : 0)
-            .offset(y: hasAnimatedIn ? 0 : 10)
-            .animation(.easeOut(duration: 0.45).delay(0.04), value: hasAnimatedIn)
+    private var featuredPropertyRow: PropertyRow? {
+        guard let fid = featuredPropertyId else { return nil }
+        return propertyStore.properties.first(where: { $0.id == fid })
+    }
 
-            vaultSystemContextStrip
+    private var vaultsDashboard: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardStack) {
+                MMProofSectionHeader(
+                    title: "Your proof",
+                    subtitle: "Room photos, old damage tags, and reports for each rental."
+                ) {
+                    MMProofHeaderAddButton(action: presentAddProperty)
+                }
                 .opacity(hasAnimatedIn ? 1 : 0)
                 .offset(y: hasAnimatedIn ? 0 : 8)
-                .animation(.easeOut(duration: 0.4).delay(0.1), value: hasAnimatedIn)
+                .animation(MMMotion.cardReveal.delay(0.04), value: hasAnimatedIn)
+
+                if let error = propertyStore.errorMessage {
+                    MMErrorBanner(
+                        message: error,
+                        retryTitle: MMCopy.tryAgain,
+                        onRetry: { Task { await reload() } }
+                    )
+                }
+
+                if let row = featuredPropertyRow {
+                    primaryVaultCard(for: row)
+                        .opacity(hasAnimatedIn ? 1 : 0)
+                        .offset(y: hasAnimatedIn ? 0 : 12)
+                        .animation(MMMotion.cardReveal.delay(0.08), value: hasAnimatedIn)
+
+                    proofPhotoStrip(for: row)
+                }
+
+                missingDocsCard
+                    .opacity(hasAnimatedIn ? 1 : 0)
+                    .animation(MMMotion.cardReveal.delay(0.12), value: hasAnimatedIn)
+
+                if !otherProperties.isEmpty {
+                    Text("Other rentals")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        .padding(.top, 4)
+
+                    ForEach(otherProperties) { row in
+                        MMProofListRow(
+                            title: displayName(for: row),
+                            subtitle: listSubtitle(for: row),
+                            meta: listMeta(for: row),
+                            onTap: { openVaultDetail(for: row) }
+                        )
+                    }
+                }
+            }
+            .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
+            .padding(.top, 10)
+            .mmScrollContentTopInset(2)
+            .padding(.bottom, MoveMarkTheme.Spacing.scrollTailRootTabChrome)
+        }
+        .scrollIndicators(.hidden, axes: .vertical)
+        .mmProofShellBackground(heroFocus: false, ctaBloom: false)
+        .task { await loadPreviewURLs() }
+        .task(id: featuredPropertyId) { await ensureFeaturedPropertyLoaded() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await loadPreviewURLs() } }
+        }
+        .onAppear {
+            guard !hasAnimatedIn else { return }
+            withAnimation(.easeOut(duration: 0.42)) { hasAnimatedIn = true }
         }
     }
 
-    /// Dominant proof hero — replaces stacked meter + next cards.
-    private var vaultSystemContextStrip: some View {
-        VStack(spacing: 12) {
-            MMRoomProgressCard(
-                headline: vaultProofProgressHeadline,
-                nextLine: vaultHeroNextLine,
-                progress: vaultProofProgressValue,
-                progressLabel: vaultProofProgressShortMetric,
-                primaryTitle: featuredContinueProofTitle,
-                onPrimary: { openFeaturedVaultOrContinue() }
-            )
+    @ViewBuilder
+    private func primaryVaultCard(for row: PropertyRow) -> some View {
+        MMProofPrimaryCard(
+            eyebrow: "Move-in proof",
+            title: displayName(for: row),
+            subtitle: locationText(for: row).isEmpty ? nil : locationText(for: row),
+            headline: vaultProofProgressHeadline,
+            nextLine: vaultHeroNextLine,
+            progress: vaultProofProgressValue,
+            primaryTitle: featuredContinueProofTitle,
+            onPrimary: { openFeaturedVaultOrContinue() }
+        )
+    }
 
-            if let prop = propertyStore.currentProperty,
-               propertyStore.missingSupportingRecordCount(for: prop) > 0,
-               let missing = PropertyStore.moveInRequiredDocumentTypes.first(where: { type in
-                   !DocumentRepository.documentTypeQueryKeys(type.rawValue)
-                       .contains { prop.vaultDocuments.contains($0) }
-               }) {
-                MMMissingItemCard(
-                    title: "Add \(missing.displayTitle)",
-                    message: "Helps if your deposit is questioned later.",
-                    actionTitle: MMNextBestAction.addDocs.title,
-                    onAction: {
-                        if let row = propertyStore.properties.first(where: { $0.id == prop.id }) {
-                            openVaultDetail(for: row)
-                        }
+    @ViewBuilder
+    private func proofPhotoStrip(for row: PropertyRow) -> some View {
+        if let url = previewURLByPropertyId[row.id] {
+            HStack(spacing: 8) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    default:
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.9))
                     }
-                )
+                }
+                .frame(width: 56, height: 56)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                Text("Recent room proof")
+                    .font(MoveMarkTheme.Typography.footnote)
+                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
             }
         }
+    }
+
+    @ViewBuilder
+    private var missingDocsCard: some View {
+        if let prop = propertyStore.currentProperty,
+           propertyStore.missingSupportingRecordCount(for: prop) > 0,
+           let missing = PropertyStore.moveInRequiredDocumentTypes.first(where: { type in
+               !DocumentRepository.documentTypeQueryKeys(type.rawValue)
+                   .contains { prop.vaultDocuments.contains($0) }
+           }) {
+            MMMissingItemCard(
+                title: "Add \(missing.displayTitle)",
+                message: "Helps if your deposit is questioned later.",
+                actionTitle: MMNextBestAction.addDocs.title,
+                onAction: {
+                    if let row = propertyStore.properties.first(where: { $0.id == prop.id }) {
+                        openVaultDetail(for: row)
+                    }
+                }
+            )
+        }
+    }
+
+    private func presentAddProperty() {
+        if subscriptionManager.canCreateProperty(currentCount: propertyStore.properties.count) {
+            showAddProperty = true
+        } else {
+            activePaywallReason = .extraProperty
+            showPaywall = true
+        }
+    }
+
+    private func listSubtitle(for row: PropertyRow) -> String {
+        if let prop = propertyStore.currentProperty, prop.id == row.id {
+            return propertyStore.proofWorkspaceHeadline(for: prop)
+        }
+        let city = locationText(for: row)
+        return city.isEmpty ? "Open to see proof progress" : city
+    }
+
+    private func listMeta(for row: PropertyRow) -> String? {
+        guard let prop = propertyStore.currentProperty, prop.id == row.id else { return "Tap to open" }
+        let documented = propertyStore.documentedRoomCount(for: prop)
+        let total = propertyStore.totalRoomCount(for: prop)
+        guard total > 0 else { return nil }
+        return "\(documented) of \(total) rooms ready"
     }
 
     private var vaultProofProgressHeadline: String {
@@ -235,22 +271,6 @@ struct VaultRootView: View {
         return Double(done) / Double(total)
     }
 
-    private var vaultProofMeterTone: MMProofMeter.Tone {
-        guard let prop = propertyStore.currentProperty else { return .neutral }
-        let total = propertyStore.totalRoomCount(for: prop)
-        if total == 0 { return .warning }
-        let done = propertyStore.documentedRoomCount(for: prop)
-        return done == total ? .primary : .primary
-    }
-
-    private var vaultProofProgressShortMetric: String? {
-        guard let prop = propertyStore.currentProperty else { return nil }
-        let total = propertyStore.totalRoomCount(for: prop)
-        guard total > 0 else { return nil }
-        let done = propertyStore.documentedRoomCount(for: prop)
-        return "\(done)/\(total) rooms"
-    }
-
     private var featuredContinueProofTitle: String {
         guard let fid = featuredPropertyId,
               let prop = propertyStore.currentProperty, prop.id == fid else {
@@ -259,9 +279,14 @@ struct VaultRootView: View {
         if propertyStore.documentedRoomCount(for: prop) == 0 {
             return "Start room proof"
         }
-        return MMNextBestActionMapper.from(
-            propertyNextAction: propertyStore.primaryNextAction(for: prop)
-        ).title
+        switch propertyStore.primaryNextAction(for: prop) {
+        case .captureRoom:
+            return "Finish move-in proof"
+        default:
+            return MMNextBestActionMapper.from(
+                propertyNextAction: propertyStore.primaryNextAction(for: prop)
+            ).title
+        }
     }
 
     private func openFeaturedVaultOrContinue() {
@@ -311,179 +336,12 @@ struct VaultRootView: View {
         return next
     }
 
-    /// Secondary vaults: honest copy when we don’t have that property hydrated.
-    private func secondaryStatusLine(for row: PropertyRow) -> String {
-        if let prop = propertyStore.currentProperty, prop.id == row.id {
-            return propertyStore.proofWorkspaceHeadline(for: prop)
-        }
-        return "Open for proof status, rooms, and next steps"
-    }
-
-    /// Top-right chip: Current for active property; Complete / In progress when we have data.
-    private func statusChip(for row: PropertyRow) -> String? {
-        if propertyStore.activePropertyId == row.id {
-            return "Current"
-        }
-
-        guard let prop = propertyStore.currentProperty, prop.id == row.id else {
-            switch fallbackStyle(for: row) {
-            case .ready: return "Ready"
-            case .started: return "In progress"
-            case .empty: return "Open"
-            }
-        }
-
-        let total = propertyStore.totalRoomCount(for: prop)
-        guard total > 0 else { return nil }
-
-        let documented = propertyStore.documentedRoomCount(for: prop)
-        return documented == total ? "Complete" : "In progress"
-    }
-
-    /// Next action title from canonical store.
-    private func nextAction(for row: PropertyRow) -> String? {
-        guard let prop = propertyStore.currentProperty, prop.id == row.id else { return nil }
-        return propertyStore.primaryNextAction(for: prop).title
-    }
-
-    /// Fallback cover style for empty / started / ready states.
-    private func fallbackStyle(for row: PropertyRow) -> VaultFallbackStyle {
-        guard let prop = propertyStore.currentProperty, prop.id == row.id else { return .empty }
-        let total = prop.rooms.count
-        guard total > 0 else { return .empty }
-        let documented = prop.rooms.filter { !$0.evidence.isEmpty }.count
-        if documented == total { return .ready }
-        if documented > 0 { return .started }
-        return .empty
-    }
-
-    /// Build model for VaultCoverCard from a property row. Only featured card gets chip + emphasis + product CTA.
-    private func coverCardModel(for row: PropertyRow) -> VaultCoverCardModel {
-        let isFeatured = row.id == featuredPropertyId
-        let isCurrent = propertyStore.activePropertyId == row.id
-        let next = nextAction(for: row)
-        let prop = (propertyStore.currentProperty?.id == row.id) ? propertyStore.currentProperty : nil
-
-        let bandStatusLine: String = {
-            if isFeatured, let p = prop {
-                return propertyStore.heroStatusLine(for: p)
-            }
-            return secondaryStatusLine(for: row)
-        }()
-
-        let workflow: String? = {
-            guard isFeatured, let p = prop else { return nil }
-            let line = propertyStore.proofWorkspaceHeadline(for: p)
-            if line == bandStatusLine { return nil }
-            if let n = next, cleanedNextLine(n) == line || line.localizedCaseInsensitiveContains(cleanedNextLine(n)) {
-                return nil
-            }
-            return line
-        }()
-
-        let metrics: String? = {
-            guard isFeatured, let p = prop else { return nil }
-            let line = propertyStore.compactProofMetricsLine(for: p)
-            if line.isEmpty || line == bandStatusLine { return nil }
-            return line
-        }()
-
-        return VaultCoverCardModel(
-            id: row.id,
-            title: displayName(for: row),
-            city: locationText(for: row),
-            statusLine: bandStatusLine,
-            workflowHeadline: workflow,
-            proofMetricsLine: metrics,
-            nextAction: isFeatured ? next : nil,
-            ctaTitle: featuredCtaTitle(for: row),
-            chipText: statusChip(for: row),
-            previewImageURL: previewURLByPropertyId[row.id],
-            fallbackStyle: fallbackStyle(for: row),
-            isRecent: isCurrent,
-            isEmphasized: isFeatured
-        )
-    }
-
-    /// Short product-specific CTA for featured card from canonical store. Only used for featured cards.
-    private func featuredCtaTitle(for row: PropertyRow) -> String {
-        guard let prop = propertyStore.currentProperty, prop.id == row.id else { return "Open" }
-        return propertyStore.primaryNextAction(for: prop).shortCTA
-    }
-
     private func cleanedNextLine(_ raw: String) -> String {
         let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if t.lowercased().hasPrefix("next:") {
             return String(t.dropFirst(5)).trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return t
-    }
-
-    /// Expansion tray data when we have full property (currentProperty). Nil for other rows. Uses store workflow.
-    private func expansionContent(for row: PropertyRow) -> VaultCoverExpansionContent? {
-        guard let prop = propertyStore.currentProperty, prop.id == row.id else { return nil }
-
-        let documented = propertyStore.documentedRoomCount(for: prop)
-        let total = propertyStore.totalRoomCount(for: prop)
-        let openIssues = propertyStore.openIssueCount(for: prop)
-        let nextRoom = propertyStore.nextRoomToCapture(for: prop)
-        let progress = propertyStore.roomsCompletionProgress(for: prop)
-
-        let roomsText = total == 0
-            ? "No rooms yet"
-            : "\(documented) of \(total) rooms ready"
-
-        let openIssuesText = openIssues == 0
-            ? "0 open issues"
-            : openIssues == 1
-                ? "1 open issue"
-                : "\(openIssues) open issues"
-
-        let nextRoomLine: String? = {
-            guard let nextRoom, nextRoom.evidence.isEmpty else { return nil }
-            return "Next: \(nextRoom.name)"
-        }()
-
-        let nextAction = propertyStore.primaryNextAction(for: prop)
-
-        let primaryActionTitle: String
-        let onPrimaryAction: () -> Void
-
-        switch nextAction {
-        case .captureRoom:
-            primaryActionTitle = "Finish move-in proof"
-            onPrimaryAction = { path.append(.walkthrough) }
-
-        case .uploadDocument:
-            primaryActionTitle = "Open vault"
-            onPrimaryAction = { openVaultDetail(for: row) }
-
-        case .reviewMaintenance:
-            primaryActionTitle = "Review issues"
-            onPrimaryAction = { path.append(.maintenance) }
-
-        case .openDisputeBuilder:
-            primaryActionTitle = "Open dispute builder"
-            onPrimaryAction = { path.append(.disputeBuilder) }
-
-        case .openExports:
-            primaryActionTitle = "Open exports"
-            onPrimaryAction = { path.append(.exports) }
-
-        case .reviewVault:
-            primaryActionTitle = "Open vault"
-            onPrimaryAction = { openVaultDetail(for: row) }
-        }
-
-        return VaultCoverExpansionContent(
-            roomsText: roomsText,
-            openIssuesText: openIssuesText,
-            lastUpdated: nil,
-            nextRoomLine: nextRoomLine,
-            progress: progress,
-            primaryActionTitle: primaryActionTitle,
-            onPrimaryAction: onPrimaryAction
-        )
     }
 
     private func openVaultDetail(for row: PropertyRow) {
@@ -500,8 +358,13 @@ struct VaultRootView: View {
 
     private var emptyState: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                vaultHeader
+            VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardStack) {
+                MMProofSectionHeader(
+                    title: "Your proof",
+                    subtitle: "Room photos, old damage tags, and reports for each rental."
+                ) {
+                    MMProofHeaderAddButton(action: presentAddProperty)
+                }
 
                 if let error = propertyStore.errorMessage {
                     MMErrorBanner(
@@ -531,14 +394,6 @@ struct VaultRootView: View {
             .padding(.bottom, MoveMarkTheme.Spacing.scrollTailRootTabChrome)
         }
         .mmProofShellBackground(heroFocus: false, ctaBloom: false)
-    }
-
-    private var vaultHeader: some View {
-        MMEditorialHeader(
-            eyebrow: "MoveMark",
-            title: "Your proof",
-            subtitle: "Document what was already there before move-in."
-        )
     }
 
     private var loadingState: some View {

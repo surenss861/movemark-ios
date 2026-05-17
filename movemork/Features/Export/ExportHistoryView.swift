@@ -82,17 +82,15 @@ struct ExportHistoryView: View {
                 .mmProofShellBackground(heroFocus: false, ctaBloom: false)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardStack) {
                     header
                     if hasActiveVault {
-                        exportContextStrip
                         exportReadinessHero
 
                         if shouldShowReportProofTrail {
-                            MMProofTimeline(
-                                title: "Proof trail",
-                                rows: reportProofTrailRows,
-                                appeared: !isLoading
+                            MMProofChecklistCard(
+                                title: "Report readiness",
+                                items: reportChecklistItems
                             )
                         }
                     }
@@ -191,7 +189,7 @@ struct ExportHistoryView: View {
     }
 
     private var header: some View {
-        MMRenterHeader(
+        MMProofSectionHeader(
             title: "Move-in report",
             subtitle: headerSubtitle
         )
@@ -250,30 +248,96 @@ struct ExportHistoryView: View {
         }
     }
 
-    private var reportProofTrailRows: [MMProofTimelineRow] {
-        let latestReady = exports.first(where: { verificationStatus[$0.id] == .ready })
-        let label: String? = {
-            guard let latestReady else { return nil }
-            return "Move-in report · \(formattedDate(latestReady.createdAt))"
-        }()
-        return MMProofTimelineBuilder.reportTrail(
-            property: resolvedPropertyRecord,
-            readiness: currentReportReadiness,
-            latestExportLabel: label
+    private var exportReadinessHero: some View {
+        MMProofPrimaryCard(
+            title: readinessHeroTitle,
+            subtitle: readinessMetricsLine,
+            leadingSystemImage: "doc.richtext",
+            headline: readinessSubline,
+            nextLine: reportNextStepLine,
+            statusPill: readinessPillDisplay,
+            statusPillTone: readinessPillTone,
+            bodyText: reportBodyLine,
+            primaryTitle: reportPrimaryCTA.title,
+            onPrimary: reportPrimaryCTA.action
         )
+        .scaleEffect(reportUnlockPulse ? 1.01 : 1)
+        .animation(MMMotion.reportUnlock, value: reportUnlockPulse)
     }
 
-    private var exportReadinessHero: some View {
-        MMReportHeroCard(
-            title: readinessHeroTitle,
-            metrics: readinessMetricsLine,
-            statusDetail: readinessSubline,
-            status: reportPreviewStatus,
-            primaryTitle: reportPrimaryCTA.title,
-            onPrimary: reportPrimaryCTA.action,
-            unlockPulse: reportUnlockPulse
-        )
-        .animation(MMMotion.reportUnlock, value: reportPreviewStatus)
+    private var reportNextStepLine: String {
+        if isExportReadyForResolvedVault == false {
+            return "Document each room before you create the report."
+        }
+        if isExportReadyForResolvedVault == true && exports.isEmpty {
+            return "Your room proof is ready to compile."
+        }
+        return "Share or download when processing finishes."
+    }
+
+    private var readinessPillDisplay: String? {
+        if readinessPillText == "Loading" { return nil }
+        if readinessPillText == "Not ready" { return "Needs more proof" }
+        return readinessPillText
+    }
+
+    private var reportBodyLine: String? {
+        if isExportReadyForResolvedVault == false {
+            return "Finish room proof before creating your report."
+        }
+        return nil
+    }
+
+    private var reportChecklistItems: [MMProofChecklistItem] {
+        guard let property = resolvedPropertyRecord else {
+            return [
+                MMProofChecklistItem(title: "Room photos", detail: "Open your vault to start room proof", state: .incomplete),
+                MMProofChecklistItem(title: "Lease & docs", detail: "Add lease and deposit records", state: .incomplete),
+                MMProofChecklistItem(title: "Report", detail: "Locked until proof is ready", state: .locked)
+            ]
+        }
+
+        let totalRooms = propertyStore.totalRoomCount(for: property)
+        let documented = propertyStore.documentedRoomCount(for: property)
+        let requiredDocs = PropertyStore.moveInRequiredDocumentTypes.count
+        let missingDocs = propertyStore.missingSupportingRecordCount(for: property)
+        let uploadedDocs = max(0, requiredDocs - missingDocs)
+
+        let roomsState: MMProofChecklistItem.State = {
+            if totalRooms == 0 { return .incomplete }
+            return documented >= max(1, totalRooms / 2) ? .complete : .incomplete
+        }()
+
+        let docsState: MMProofChecklistItem.State = missingDocs == 0 ? .complete : .incomplete
+
+        let reportState: MMProofChecklistItem.State = {
+            if isExportReadyForResolvedVault == true { return .complete }
+            if documented == 0 { return .locked }
+            return .locked
+        }()
+
+        let reportDetail: String = {
+            if isExportReadyForResolvedVault == true { return "Ready to create your move-in report" }
+            return "Locked until room proof is ready"
+        }()
+
+        return [
+            MMProofChecklistItem(
+                title: "Room photos",
+                detail: totalRooms == 0 ? "Add rooms in your vault" : "\(documented) of \(totalRooms) rooms ready",
+                state: roomsState
+            ),
+            MMProofChecklistItem(
+                title: "Lease & docs",
+                detail: "\(uploadedDocs) of \(requiredDocs) key docs uploaded",
+                state: docsState
+            ),
+            MMProofChecklistItem(
+                title: "Report",
+                detail: reportDetail,
+                state: reportState
+            )
+        ]
     }
 
     /// Drives readiness transitions (unlock motion + toasts).
