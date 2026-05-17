@@ -19,6 +19,7 @@ struct MMProofPrimaryCard: View {
     var statusPillTone: MMPill.Tone = .warning
     var bodyText: String? = nil
     let primaryTitle: String
+    var isPrimaryDisabled: Bool = false
     let onPrimary: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -111,7 +112,8 @@ struct MMProofPrimaryCard: View {
                     onPrimary()
                 },
                 kind: .primary,
-                size: .standard
+                size: .standard,
+                isDisabled: isPrimaryDisabled
             )
         }
         .padding(MoveMarkTheme.Spacing.panelPadding)

@@ -139,8 +139,7 @@ struct VaultRootView: View {
                     ForEach(otherProperties) { row in
                         MMProofListRow(
                             title: displayName(for: row),
-                            subtitle: listSubtitle(for: row),
-                            meta: listMeta(for: row),
+                            subtitle: otherRentalStatusLine(for: row),
                             onTap: { openVaultDetail(for: row) }
                         )
                     }
@@ -231,20 +230,23 @@ struct VaultRootView: View {
         }
     }
 
-    private func listSubtitle(for row: PropertyRow) -> String {
+    private func otherRentalStatusLine(for row: PropertyRow) -> String {
         if let prop = propertyStore.currentProperty, prop.id == row.id {
-            return propertyStore.proofWorkspaceHeadline(for: prop)
+            let documented = propertyStore.documentedRoomCount(for: prop)
+            let total = propertyStore.totalRoomCount(for: prop)
+            if total == 0 {
+                return "No rooms yet · Tap to set up"
+            }
+            if documented == 0 {
+                return "0 rooms ready · Start move-in proof"
+            }
+            return "\(documented) of \(total) rooms ready"
         }
         let city = locationText(for: row)
-        return city.isEmpty ? "Open to see proof progress" : city
-    }
-
-    private func listMeta(for row: PropertyRow) -> String? {
-        guard let prop = propertyStore.currentProperty, prop.id == row.id else { return "Tap to open" }
-        let documented = propertyStore.documentedRoomCount(for: prop)
-        let total = propertyStore.totalRoomCount(for: prop)
-        guard total > 0 else { return nil }
-        return "\(documented) of \(total) rooms ready"
+        if !city.isEmpty {
+            return "\(city) · Tap to open"
+        }
+        return "Tap to view proof status"
     }
 
     private var vaultProofProgressHeadline: String {

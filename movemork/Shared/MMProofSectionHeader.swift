@@ -21,7 +21,7 @@ struct MMProofSectionHeader<Trailing: View>: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.titleToSubtitle) {
                 Text(title)
                     .font(MoveMarkTheme.Typography.screenTitle)
@@ -33,11 +33,15 @@ struct MMProofSectionHeader<Trailing: View>: View {
                     .font(MoveMarkTheme.Typography.screenSubtitle)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.92))
                     .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.trailing, 4)
 
             trailing()
+                .padding(.top, 2)
         }
+        .padding(.bottom, 4)
     }
 }
 
@@ -55,7 +59,7 @@ struct MMProofHeaderAddButton: View {
             Image(systemName: "plus")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
-                .frame(width: 40, height: 40)
+                .frame(width: 38, height: 38)
                 .background(
                     Circle()
                         .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.85))

@@ -10,6 +10,8 @@ import Supabase
 
 struct ExportHistoryView: View {
     @Environment(PropertyStore.self) private var propertyStore
+    @Environment(SessionManager.self) private var sessionManager
+    @Environment(SubscriptionManager.self) private var subscriptionManager
     @Environment(\.mmRootTabBarVisible) private var rootTabBarVisible
 
     var showOpenVaultsCTA: Bool = false
@@ -27,6 +29,7 @@ struct ExportHistoryView: View {
     @State private var proofToastVisible = false
     @State private var reportUnlockPulse = false
     @State private var lastReportReadiness: MMNextBestActionMapper.ReportReadiness? = nil
+    @State private var isExporting = false
 
     private var apiBaseURL: String? {
         guard
@@ -259,6 +262,7 @@ struct ExportHistoryView: View {
             statusPillTone: readinessPillTone,
             bodyText: reportBodyLine,
             primaryTitle: reportPrimaryCTA.title,
+            isPrimaryDisabled: isLoading || isExporting || currentReportReadiness == .processing,
             onPrimary: reportPrimaryCTA.action
         )
         .scaleEffect(reportUnlockPulse ? 1.01 : 1)
@@ -266,26 +270,30 @@ struct ExportHistoryView: View {
     }
 
     private var reportNextStepLine: String {
-        if isExportReadyForResolvedVault == false {
-            return "Document each room before you create the report."
+        if isLoading {
+            return "Checking saved room proof for this rental…"
         }
-        if isExportReadyForResolvedVault == true && exports.isEmpty {
-            return "Your room proof is ready to compile."
+        if isExportReadyForResolvedVault == false {
+            return "Complete each room before creating your report."
+        }
+        if currentReportReadiness == .readyToMake {
+            return "Your saved room proof can now be turned into a report."
+        }
+        if currentReportReadiness == .processing {
+            return "Your report is being prepared. This usually takes a minute."
         }
         return "Share or download when processing finishes."
     }
 
     private var readinessPillDisplay: String? {
-        if readinessPillText == "Loading" { return nil }
+        if isLoading { return nil }
         if readinessPillText == "Not ready" { return "Needs more proof" }
-        return readinessPillText
+        if readinessPillText == "Ready", currentReportReadiness == .readyToMake { return "Ready" }
+        return readinessPillText == "Loading" ? nil : readinessPillText
     }
 
     private var reportBodyLine: String? {
-        if isExportReadyForResolvedVault == false {
-            return "Finish room proof before creating your report."
-        }
-        return nil
+        nil
     }
 
     private var reportChecklistItems: [MMProofChecklistItem] {
@@ -306,7 +314,6 @@ struct ExportHistoryView: View {
         let uploadedDocs = max(0, requiredDocs - missingDocs)
 
         let openIssues = propertyStore.openIssueCount(for: property)
-        let photoCount = property.rooms.flatMap(\.evidence).reduce(0) { $0 + $1.photoCount }
 
         let roomsState: MMProofChecklistItem.State = {
             if totalRooms == 0 { return .incomplete }
@@ -327,11 +334,15 @@ struct ExportHistoryView: View {
             return .locked
         }()
 
+        let issuesDetail: String = {
+            if documented == 0 { return "Tag scratches and stains as you photograph" }
+            if openIssues == 0 { return "No issues tagged yet" }
+            return openIssues == 1 ? "1 issue tagged" : "\(openIssues) issues tagged"
+        }()
+
         let reportDetail: String = {
             if isExportReadyForResolvedVault == true { return "Ready to create your move-in report" }
-            if documented == 0 { return "Locked until you save room proof" }
-            if missingDocs > 0 { return "Add lease docs, then create your report" }
-            return "Almost ready — finish remaining room proof"
+            return "Unlocks after room proof + docs"
         }()
 
         return [
@@ -339,28 +350,22 @@ struct ExportHistoryView: View {
                 title: "Room photos",
                 detail: totalRooms == 0
                     ? "Add rooms in your vault"
-                    : "\(documented) of \(totalRooms) rooms · \(photoCount) photos saved",
+                    : "\(documented) of \(totalRooms) rooms ready",
                 state: roomsState
             ),
             MMProofChecklistItem(
                 title: "Lease & docs",
-                detail: "\(uploadedDocs) of \(requiredDocs) key docs uploaded",
+                detail: "\(uploadedDocs) of \(requiredDocs) docs uploaded",
                 state: docsState
             ),
             MMProofChecklistItem(
                 title: "Damage tags",
-                detail: documented == 0
-                    ? "Tag scratches and stains as you photograph rooms"
-                    : openIssues == 0
-                        ? "Issues tagged while you photograph rooms"
-                        : openIssues == 1
-                            ? "1 open issue to review"
-                            : "\(openIssues) open issues to review",
+                detail: issuesDetail,
                 state: issuesState
             ),
             MMProofChecklistItem(
                 title: "Move-out proof",
-                detail: "Optional later — document the unit before you leave",
+                detail: "Optional later",
                 state: moveOutState
             ),
             MMProofChecklistItem(
@@ -413,30 +418,36 @@ struct ExportHistoryView: View {
     }
 
     private var reportPrimaryCTA: (title: String, action: () -> Void) {
-        let action = MMNextBestActionMapper.report(currentReportReadiness)
-        var title = action.title
-        if currentReportReadiness == .notReady {
-            title = "Continue room proof"
+        if isLoading {
+            return ("Checking report…", {})
         }
-        let handler: () -> Void = {
-            switch currentReportReadiness {
-            case .readyToShare:
-                if let row = exports.first(where: { verificationStatus[$0.id] == .ready }) {
-                    share(row)
-                }
-            case .failed:
-                Task { await loadExports() }
-            case .notReady:
+
+        switch currentReportReadiness {
+        case .notReady:
+            return ("Continue room proof", {
                 if let onContinueRoomProof {
                     onContinueRoomProof()
                 } else {
                     onOpenVaults?()
                 }
-            case .readyToMake, .noVault, .processing:
-                onOpenVaults?()
-            }
+            })
+        case .readyToMake:
+            return (isExporting ? "Making report…" : "Make move-in report", {
+                requestMoveInExport()
+            })
+        case .readyToShare:
+            return ("Share report", {
+                if let row = exports.first(where: { verificationStatus[$0.id] == .ready }) {
+                    share(row)
+                }
+            })
+        case .processing:
+            return ("Processing report…", {})
+        case .failed:
+            return ("Try again", { Task { await loadExports() } })
+        case .noVault:
+            return ("Open vaults", { onOpenVaults?() })
         }
-        return (title, handler)
     }
 
     private var reportPreviewStatus: MMReportPreviewCard.Status {
@@ -463,12 +474,18 @@ struct ExportHistoryView: View {
 
     private var readinessMetricsLine: String? {
         guard let p = resolvedPropertyRecord else { return nil }
-        let rooms = p.rooms.filter { !$0.evidence.isEmpty }.count
-        let total = p.rooms.count
-        let photos = p.rooms.flatMap(\.evidence).reduce(0) { $0 + $1.photoCount }
+        let documented = propertyStore.documentedRoomCount(for: p)
+        let total = propertyStore.totalRoomCount(for: p)
         let issues = propertyStore.openIssueCount(for: p)
-        guard total > 0 || photos > 0 else { return nil }
-        return "\(rooms) rooms · \(photos) photos · \(issues) issues"
+
+        var parts: [String] = []
+        if total > 0 {
+            parts.append("\(documented) of \(total) rooms ready")
+        }
+        if issues > 0 {
+            parts.append(issues == 1 ? "1 issue tagged" : "\(issues) issues tagged")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private var readinessSubline: String {
@@ -477,13 +494,10 @@ struct ExportHistoryView: View {
             return "Finish room proof first."
         }
         if exports.contains(where: { verificationStatus[$0.id] == .ready }) {
-            return "Damage already recorded — report ready to share."
+            return "Report ready to share."
         }
         if isExportReadyForResolvedVault == true && exports.isEmpty {
-            return "Finish room proof, then make your move-in report."
-        }
-        if let p = resolvedPropertyRecord {
-            return propertyStore.proofWorkspaceHeadline(for: p)
+            return "Your room proof is ready for a report."
         }
         return "Open a vault to see report status."
     }
@@ -498,7 +512,8 @@ struct ExportHistoryView: View {
         }
         if isExportReadyForResolvedVault == false { return "Not ready" }
         if exports.contains(where: { $0.exportType == "move_in_report" }) { return "Ready" }
-        return hasActiveVault ? "Ready" : "No vault"
+        if isExportReadyForResolvedVault == true { return "Ready" }
+        return hasActiveVault ? "Not ready" : "No vault"
     }
 
     private var readinessPillTone: MMPill.Tone {
@@ -1026,6 +1041,51 @@ struct ExportHistoryView: View {
                 )
                 verificationStatus[row.id] = .verificationFailed(mapped)
                 errorMessage = mapped
+                MMHaptics.error()
+            }
+        }
+    }
+
+    private func requestMoveInExport() {
+        guard let property = resolvedPropertyRecord ?? propertyStore.currentProperty else { return }
+        guard !isExporting else { return }
+        guard isExportReadyForResolvedVault == true else { return }
+        guard let baseURL = apiBaseURL else {
+            errorMessage = "API base URL is missing. Set MoveMarkAPIBaseURL in build settings."
+            return
+        }
+
+        isExporting = true
+        errorMessage = nil
+
+        Task { @MainActor in
+            defer { isExporting = false }
+
+            do {
+                let session = try await supabase.auth.session
+                let apiClient = try ExportAPIClient(baseURLString: baseURL)
+                _ = try await apiClient.requestMoveInExport(
+                    propertyId: property.id,
+                    accessToken: session.accessToken
+                )
+
+                if !subscriptionManager.hasPro, let uid = sessionManager.userId {
+                    subscriptionManager.incrementFreeMoveInExportCount(forUser: uid)
+                }
+
+                MMProofToastPresenter.show(
+                    .reportQueued(),
+                    message: $proofToast,
+                    isVisible: $proofToastVisible
+                )
+                NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
+                await loadExports()
+            } catch {
+                errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(
+                    error,
+                    fallback: "Couldn’t queue move-in report. Try again.",
+                    intent: .mutate
+                )
                 MMHaptics.error()
             }
         }

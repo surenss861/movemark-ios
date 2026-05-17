@@ -2,7 +2,7 @@
 //  MMProofTabBarV2.swift
 //  movemork
 //
-//  Quiet floating nav — active state is subtle, not a primary CTA pill.
+//  Calm utility dock — navigation only, never competes with page CTAs.
 //
 
 import SwiftUI
@@ -13,8 +13,8 @@ struct MMProofTabBarV2: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pressedTab: RootTab? = nil
 
-    private let barHeight: CGFloat = 74
-    private let iconSize: CGFloat = 20
+    private let barHeight: CGFloat = 66
+    private let iconSize: CGFloat = 19
 
     var body: some View {
         HStack(spacing: 0) {
@@ -23,16 +23,17 @@ struct MMProofTabBarV2: View {
             tabItem(.account, title: "Account", systemImage: "person.crop.circle")
         }
         .frame(height: barHeight)
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 8)
         .background(
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(MoveMarkTheme.Colors.tabBarFill)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
                         .stroke(Color.white.opacity(0.08), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 20)
+        .padding(.top, 6)
         .padding(.bottom, 10)
     }
 
@@ -48,41 +49,31 @@ struct MMProofTabBarV2: View {
                 selectedTab = tab
             }
         } label: {
-            VStack(spacing: 5) {
-                ZStack {
-                    if isSelected {
-                        Circle()
-                            .fill(MoveMarkTheme.Colors.primary.opacity(0.14))
-                            .frame(width: 30, height: 30)
-                    }
-
-                    Image(systemName: systemImage)
-                        .font(.system(size: iconSize, weight: isSelected ? .semibold : .regular))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(
-                            isSelected
-                                ? MoveMarkTheme.Colors.textPrimary
-                                : MoveMarkTheme.Colors.limeAccent.opacity(0.62)
-                        )
-                }
-                .frame(height: 30)
-
-                if isSelected {
-                    Capsule()
-                        .fill(MoveMarkTheme.Colors.primary)
-                        .frame(width: 22, height: 2.5)
-                } else {
-                    Circle()
-                        .fill(Color.clear)
-                        .frame(width: 4, height: 4)
-                }
-
-                Text(title)
-                    .font(.system(size: 11.5, weight: isSelected ? .semibold : .medium))
+            VStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.system(size: iconSize, weight: isSelected ? .semibold : .regular))
+                    .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(
                         isSelected
                             ? MoveMarkTheme.Colors.textPrimary
                             : MoveMarkTheme.Colors.limeAccent.opacity(0.58)
+                    )
+                    .frame(height: 22)
+
+                if isSelected {
+                    Capsule()
+                        .fill(MoveMarkTheme.Colors.primary)
+                        .frame(width: 22, height: 2)
+                } else {
+                    Color.clear.frame(width: 22, height: 2)
+                }
+
+                Text(title)
+                    .font(.system(size: 11, weight: isSelected ? .semibold : .medium))
+                    .foregroundStyle(
+                        isSelected
+                            ? MoveMarkTheme.Colors.textPrimary
+                            : MoveMarkTheme.Colors.limeAccent.opacity(0.55)
                     )
                     .lineLimit(1)
             }
