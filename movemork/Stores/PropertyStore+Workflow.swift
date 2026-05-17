@@ -97,11 +97,15 @@ extension PropertyStore {
     }
 
     func documentedRoomCount(for property: PropertyRecord) -> Int {
-        property.rooms.filter { !$0.evidence.isEmpty }.count
+        property.rooms.filter { roomHasMoveInPhotos($0) }.count
     }
 
     func nextRoomToCapture(for property: PropertyRecord) -> RoomRecord? {
-        property.rooms.first(where: { $0.evidence.isEmpty }) ?? property.rooms.first
+        property.rooms.first(where: { !roomHasMoveInPhotos($0) }) ?? property.rooms.first
+    }
+
+    private func roomHasMoveInPhotos(_ room: RoomRecord) -> Bool {
+        room.evidence.contains { $0.photoCount > 0 }
     }
 
     func totalPhotoCount(for property: PropertyRecord) -> Int {
@@ -173,7 +177,7 @@ extension PropertyStore {
     }
 
     func primaryNextAction(for property: PropertyRecord) -> PropertyNextAction {
-        if let room = nextRoomToCapture(for: property), room.evidence.isEmpty {
+        if let room = nextRoomToCapture(for: property), !roomHasMoveInPhotos(room) {
             return .captureRoom(roomID: room.id, roomName: room.name)
         }
         if let missingDoc = Self.moveInRequiredDocumentTypes.first(where: { type in

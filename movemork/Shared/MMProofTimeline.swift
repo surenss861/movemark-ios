@@ -283,7 +283,7 @@ enum MMProofTimelineBuilder {
         return rooms.map { room in
             let photos = room.evidence.reduce(0) { $0 + $1.photoCount }
             let issues = room.evidence.flatMap(\.issueTags).count
-            let isDone = !room.evidence.isEmpty
+            let isDone = photos > 0
             let isNext = nextRoom?.id == room.id && !isDone
 
             if isDone {

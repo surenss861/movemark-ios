@@ -2,27 +2,16 @@
 //  RoomListView.swift
 //  movemork
 //
-//  MoveMark — Walkthrough: elevated progress, quiet room rows, report card.
+//  MoveMark — Room proof: next room, documented rooms, locked report hint.
 //
 
 import SwiftUI
-import Supabase
 
 struct RoomListView: View {
     @Binding var path: [AppRoute]
     @Environment(PropertyStore.self) private var propertyStore
-    @Environment(SessionManager.self) private var sessionManager
-    @Environment(SubscriptionManager.self) private var subscriptionManager
 
     @State private var showAddRoom = false
-    @State private var showPaywall = false
-    @State private var activePaywallReason: PaywallReason = .unlimitedExports
-    @State private var isExporting = false
-    @State private var errorMessage: String? = nil
-    @State private var lastErrorFromExport = false
-    @State private var exportSuccessBanner: String? = nil
-    @State private var proofToast: MMProofToastMessage? = nil
-    @State private var proofToastVisible = false
     @State private var roomsListAppeared = false
 
     private var rooms: [RoomRecord] {
@@ -30,7 +19,7 @@ struct RoomListView: View {
     }
 
     private var completedCount: Int {
-        rooms.filter { !$0.evidence.isEmpty }.count
+        rooms.filter { MMRoomProofMetrics.isDocumented($0) }.count
     }
 
     private var progress: Double {
@@ -39,7 +28,11 @@ struct RoomListView: View {
     }
 
     private var nextRoom: RoomRecord? {
-        rooms.first(where: { $0.evidence.isEmpty }) ?? rooms.first
+        rooms.first(where: { !MMRoomProofMetrics.isDocumented($0) })
+    }
+
+    private var allRoomsDocumented: Bool {
+        !rooms.isEmpty && completedCount >= rooms.count
     }
 
     var body: some View {
@@ -53,42 +46,11 @@ struct RoomListView: View {
 
                     progressCard
 
-                    MMProofTimeline(
-                        title: "Proof trail",
-                        rows: roomProofTrailRows,
-                        highlightedRowID: highlightedRoomTrailRowID,
-                        appeared: roomsListAppeared
-                    )
-
-                    if let exportSuccessBanner {
-                        MMCard(tone: .quiet, padding: 14, spacing: 8) {
-                            HStack(alignment: .top, spacing: 10) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(MoveMarkTheme.Colors.primary)
-                                Text(exportSuccessBanner)
-                                    .font(MoveMarkTheme.Typography.subheadline)
-                                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            }
-                        }
-                    }
-
-                    if let errorMessage {
-                        MMErrorBanner(
-                            message: errorMessage,
-                            retryTitle: MMCopy.tryAgain,
-                            onRetry: {
-                                if lastErrorFromExport {
-                                    exportMoveInReport()
-                                }
-                            }
-                        )
-                    }
-
                     roomsSection
 
                     moveInReportCard
 
-                    moveOutCard
+                    moveOutLink
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
                 .padding(.top, 12)
@@ -98,13 +60,6 @@ struct RoomListView: View {
             .onAppear {
                 roomsListAppeared = true
             }
-        }
-        .mmProofToast(message: proofToast, isVisible: proofToastVisible)
-        .sheet(isPresented: $showPaywall) {
-            ProPaywallView(
-                reason: activePaywallReason,
-                onClose: { showPaywall = false }
-            )
         }
         .navigationTitle("Room proof")
         .navigationBarTitleDisplayMode(.inline)
@@ -120,57 +75,37 @@ struct RoomListView: View {
             }
         }
         .sheet(isPresented: $showAddRoom) {
-            NavigationStack {
-                AddRoomSheetView(onDismiss: { showAddRoom = false })
-                    .navigationTitle("Add room")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
-                            Button("Cancel") {
-                                showAddRoom = false
-                            }
-                            .foregroundStyle(MoveMarkTheme.Colors.primary)
-                        }
-                    }
-            }
+            AddRoomSheetView(onDismiss: { showAddRoom = false })
+                .presentationDetents([.height(430)])
+                .presentationDragIndicator(.visible)
         }
-    }
-
-    private var roomProofTrailRows: [MMProofTimelineRow] {
-        MMProofTimelineBuilder.roomProofTrail(rooms: rooms, nextRoom: nextRoom)
-    }
-
-    private var highlightedRoomTrailRowID: String? {
-        guard let nextRoom else { return nil }
-        return "room-\(nextRoom.id.uuidString)"
     }
 
     private var roomProofHeader: some View {
         MMRenterHeader(
             title: "Room proof",
-            subtitle: "Mark what was already there in each room before you get blamed later."
+            subtitle: "Mark old damage before move-in."
         )
     }
 
     private var progressCard: some View {
-        VStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
+            if let propertyTitle = propertyStore.currentProperty?.title.trimmingCharacters(in: .whitespacesAndNewlines),
+               !propertyTitle.isEmpty,
+               !rooms.isEmpty
+            {
+                Text(propertyTitle)
+                    .font(MoveMarkTheme.Typography.cardTitle)
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+            }
+
             if !rooms.isEmpty {
                 MMRoomProgressCard(
-                    headline: "\(completedCount) of \(rooms.count) rooms ready",
-                    nextLine: nextRoom.map { "Next: \($0.name)" } ?? "Review your rooms.",
+                    headline: "\(completedCount) of \(rooms.count) rooms documented",
+                    nextLine: progressNextLine,
                     progress: progress,
-                    primaryTitle: MMNextBestActionMapper.roomProof(
-                        roomsEmpty: false,
-                        allRoomsDone: completedCount >= rooms.count,
-                        hasNextRoom: nextRoom != nil
-                    ).title,
-                    onPrimary: {
-                        if let nextRoom {
-                            path.append(.roomDetail(roomID: nextRoom.id))
-                        } else if let first = rooms.first {
-                            path.append(.roomDetail(roomID: first.id))
-                        }
-                    }
+                    primaryTitle: progressPrimaryTitle,
+                    onPrimary: openNextRoom
                 )
             }
 
@@ -185,6 +120,34 @@ struct RoomListView: View {
         }
     }
 
+    private var progressNextLine: String {
+        if allRoomsDocumented {
+            return "All rooms documented"
+        }
+        if let nextRoom {
+            return "Next: \(nextRoom.name)"
+        }
+        return "Add a room to start."
+    }
+
+    private var progressPrimaryTitle: String {
+        if allRoomsDocumented {
+            return "Review your rooms"
+        }
+        if let nextRoom {
+            return "Capture \(nextRoom.name)"
+        }
+        return MMNextBestAction.addRoom.title
+    }
+
+    private func openNextRoom() {
+        if let nextRoom {
+            path.append(.roomDetail(roomID: nextRoom.id))
+        } else if let first = rooms.first {
+            path.append(.roomDetail(roomID: first.id))
+        }
+    }
+
     private var roomsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -196,7 +159,7 @@ struct RoomListView: View {
                 Spacer()
 
                 if !rooms.isEmpty {
-                    Text("\(completedCount) of \(rooms.count) rooms ready")
+                    Text("\(completedCount) of \(rooms.count) ready")
                         .font(MoveMarkTheme.Typography.footnote)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 }
@@ -212,223 +175,61 @@ struct RoomListView: View {
 
             VStack(spacing: 10) {
                 ForEach(Array(rooms.enumerated()), id: \.element.id) { idx, room in
-                    roomRow(index: idx + 1, room: room)
+                    roomProofRow(index: idx + 1, room: room)
                         .mmStaggeredAppear(isVisible: roomsListAppeared, index: idx)
                 }
             }
         }
     }
 
+    private func roomProofRow(index: Int, room: RoomRecord) -> some View {
+        let photoCount = MMRoomProofMetrics.photoCount(for: room)
+        let issueCount = MMRoomProofMetrics.issueCount(for: room)
+        let isNext = nextRoom?.id == room.id
+        let status = MMRoomProofStatus.resolve(
+            photoCount: photoCount,
+            issueCount: issueCount,
+            isNext: isNext
+        )
+
+        return MMRoomProofRow(
+            index: index,
+            roomName: room.name,
+            status: status,
+            showsNextBadge: isNext && photoCount == 0,
+            onTap: { path.append(.roomDetail(roomID: room.id)) }
+        )
+    }
+
     private var moveInReportCard: some View {
-        MMCard(tone: .quiet, padding: 18, spacing: 14) {
-            VStack(alignment: .leading, spacing: 12) {
+        MMCard(tone: .quiet, padding: 16, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("Move-in report")
                     .font(MoveMarkTheme.Typography.sectionTitle)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                Text("Bundle room photos and damage tags into one report if your deposit is questioned.")
-                    .font(MoveMarkTheme.Typography.subheadline)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-
-                MMButton(
-                    title: isExporting ? "Making report…" : MMNextBestAction.makeReport.title,
-                    action: handleMoveInExportTap,
-                    kind: completedCount > 0 ? .primary : .secondary,
-                    size: .standard,
-                    isDisabled: isExporting || rooms.isEmpty || completedCount == 0
+                Text(
+                    allRoomsDocumented
+                        ? "Open the Reports tab to make your move-in report."
+                        : "Unlocks after all rooms have photos."
                 )
+                .font(MoveMarkTheme.Typography.subheadline)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
-                Text(moveInExportFootnote)
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-            }
-        }
-    }
-
-    private var moveOutCard: some View {
-        Button {
-            path.append(.moveOut)
-        } label: {
-            MMCard(tone: .quiet, padding: 18, spacing: 8) {
-                HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Open move-out")
-                            .font(MoveMarkTheme.Typography.sectionTitle)
-                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                        Text("Re-capture the same rooms later with checklist and reports.")
-                            .font(MoveMarkTheme.Typography.subheadline)
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                if !rooms.isEmpty {
+                    Text("\(completedCount) of \(rooms.count) rooms documented")
+                        .font(MoveMarkTheme.Typography.footnote)
+                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                 }
             }
         }
-        .buttonStyle(.plain)
     }
 
-    private func roomRow(index: Int, room: RoomRecord) -> some View {
-        let isComplete = !room.evidence.isEmpty
-        let isNext = nextRoom?.id == room.id
-        let photoCount = room.evidence.reduce(0) { $0 + $1.photoCount }
-        let issueCount = room.evidence.flatMap(\.issueTags).count
-
-        return Button {
-            path.append(.roomDetail(roomID: room.id))
-        } label: {
-            MMCard(tone: .artifact, padding: 16, spacing: 0) {
-                HStack(alignment: .center, spacing: 14) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                isNext && !isComplete
-                                    ? MoveMarkTheme.Colors.accent.opacity(0.16)
-                                    : MoveMarkTheme.Colors.mint.opacity(0.55)
-                            )
-                            .frame(width: 34, height: 34)
-
-                        Text("\(index)")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(
-                                isNext && !isComplete
-                                    ? MoveMarkTheme.Colors.accent
-                                    : MoveMarkTheme.Colors.textSecondary
-                            )
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 8) {
-                            Text(room.name)
-                                .font(MoveMarkTheme.Typography.cardTitle)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                                .lineLimit(2)
-
-                            if isNext && !isComplete {
-                                MMPill(text: "Next", tone: .warning)
-                            }
-                        }
-
-                        if isComplete {
-                            let parts: [String] =
-                                (photoCount > 0 ? ["\(photoCount) photos"] : [])
-                                + (issueCount > 0 ? ["\(issueCount) \(issueCount == 1 ? "issue" : "issues")"] : [])
-
-                            Text(parts.isEmpty ? "Ready to review" : parts.joined(separator: " · "))
-                                .font(MoveMarkTheme.Typography.subheadline)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                                .lineLimit(2)
-                        } else {
-                            Text("Not started — tap to capture proof")
-                                .font(MoveMarkTheme.Typography.subheadline)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        }
-                    }
-
-                    Spacer(minLength: 0)
-
-                    Image(systemName: isComplete ? "checkmark.circle.fill" : "chevron.right")
-                        .font(.system(size: isComplete ? 22 : 14, weight: .medium))
-                        .foregroundStyle(
-                            isComplete
-                                ? MoveMarkTheme.Colors.semanticSuccess
-                                : MoveMarkTheme.Colors.textSecondary
-                        )
-                }
-                .frame(minHeight: 60)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func handleMoveInExportTap() {
-        guard !rooms.isEmpty else { return }
-        guard completedCount > 0 else { return }
-        guard subscriptionManager.canExportMoveIn(forUser: sessionManager.userId) else {
-            activePaywallReason = .unlimitedExports
-            showPaywall = true
-            return
-        }
-        exportMoveInReport()
-    }
-
-    private var moveInExportFootnote: String {
-        if rooms.isEmpty {
-            return "Add rooms first"
-        }
-        if completedCount == 0 {
-            return "Capture room proof before exporting"
-        }
-        if subscriptionManager.hasPro {
-            return "Included with Pro"
-        }
-        if subscriptionManager.canExportMoveIn(forUser: sessionManager.userId) {
-            return subscriptionManager.remainingFreeMoveInExportsText(forUser: sessionManager.userId)
-        }
-        return "Upgrade for additional move-in exports"
-    }
-
-    private func exportMoveInReport() {
-        guard let property = propertyStore.currentProperty else { return }
-        guard !isExporting else { return }
-        guard
-            let baseURL = Bundle.main.object(forInfoDictionaryKey: "MoveMarkAPIBaseURL") as? String,
-            !baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else {
-            errorMessage = "API base URL is missing. Set MoveMarkAPIBaseURL in build settings."
-            lastErrorFromExport = true
-            return
-        }
-
-        isExporting = true
-        errorMessage = nil
-        exportSuccessBanner = nil
-
-        Task { @MainActor in
-            defer { isExporting = false }
-
-            do {
-                let session = try await supabase.auth.session
-                let apiClient = try ExportAPIClient(baseURLString: baseURL)
-                _ = try await apiClient.requestMoveInExport(
-                    propertyId: property.id,
-                    accessToken: session.accessToken
-                )
-
-                if !subscriptionManager.hasPro, let uid = sessionManager.userId {
-                    subscriptionManager.incrementFreeMoveInExportCount(forUser: uid)
-                }
-
-                lastErrorFromExport = false
-                exportSuccessBanner = nil
-                MMProofToastPresenter.show(
-                    .reportQueued(),
-                    message: $proofToast,
-                    isVisible: $proofToastVisible
-                )
-                NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
-            } catch {
-                exportSuccessBanner = nil
-                errorMessage = userFacingExportError(from: error)
-                lastErrorFromExport = true
-                MMHaptics.error()
-            }
-        }
-    }
-
-    private func userFacingExportError(from error: Error) -> String {
-        let lower = error.localizedDescription.lowercased()
-        if lower.contains("property not found") {
-            return "Couldn’t queue export for this property. Refresh and try again."
-        }
-        return MoveMarkFlowMessage.exportOrAPIFailed(
-            error,
-            fallback: "Couldn’t queue move-in export. Try again.",
-            intent: .mutate
+    private var moveOutLink: some View {
+        MMProofListRow(
+            title: "Move-out proof",
+            subtitle: "Re-capture the same rooms when you leave.",
+            onTap: { path.append(.moveOut) }
         )
     }
 }
@@ -442,13 +243,65 @@ private struct AddRoomSheetView: View {
     @State private var isAdding = false
     @State private var errorMessage: String? = nil
 
+    private let suggestedRoomNames = [
+        "Office", "Den", "Balcony", "Storage",
+        "Garage", "Locker", "Basement", "Parking",
+    ]
+
+    private var trimmedName: String {
+        roomName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canSubmit: Bool {
+        !trimmedName.isEmpty && !isAdding
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        ScrollView {
+            sheetContent
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .scrollBounceBehavior(.basedOnSize)
+    }
+
+    private var sheetContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Add room")
+                        .font(MoveMarkTheme.Typography.sectionTitle)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+
+                    Text("Add any space you want to document before move-in.")
+                        .font(MoveMarkTheme.Typography.subheadline)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 12)
+
+                Button("Cancel", action: onDismiss)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(MoveMarkTheme.Colors.primary)
+            }
+
             MMTextField(
                 title: "Room name",
-                placeholder: "e.g. Office, Hallway, Balcony",
+                placeholder: "Office",
                 text: $roomName
             )
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Suggested rooms")
+                    .font(MoveMarkTheme.Typography.caption)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+
+                FlowLayout(spacing: 8) {
+                    ForEach(suggestedRoomNames, id: \.self) { name in
+                        suggestionChip(name)
+                    }
+                }
+            }
 
             if let errorMessage {
                 MMErrorBanner(
@@ -464,7 +317,7 @@ private struct AddRoomSheetView: View {
                     action: { submit() },
                     kind: .primary,
                     size: .standard,
-                    isDisabled: isAdding
+                    isDisabled: !canSubmit
                 )
                 .opacity(isAdding ? 0.6 : 1.0)
 
@@ -474,7 +327,41 @@ private struct AddRoomSheetView: View {
                 }
             }
         }
-        .padding(MoveMarkTheme.Spacing.screenHorizontal)
+        .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
+        .padding(.top, 20)
+        .padding(.bottom, 32)
+    }
+
+    @ViewBuilder
+    private func suggestionChip(_ name: String) -> some View {
+        let isSelected = trimmedName.caseInsensitiveCompare(name) == .orderedSame
+
+        Button {
+            roomName = name
+        } label: {
+            Text(name)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(
+                    isSelected
+                        ? MoveMarkTheme.Colors.textPrimary
+                        : MoveMarkTheme.Colors.textSecondary.opacity(0.76)
+                )
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(
+                            isSelected
+                                ? MoveMarkTheme.Colors.primary.opacity(0.18)
+                                : MoveMarkTheme.Colors.card.opacity(0.92)
+                        )
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(Color.white.opacity(isSelected ? 0.14 : 0.08), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     private func submit() {
@@ -488,12 +375,7 @@ private struct AddRoomSheetView: View {
             return
         }
 
-        let name = roomName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else {
-            errorMessage = "Enter a room name."
-            return
-        }
-
+        guard !trimmedName.isEmpty else { return }
         guard !isAdding else { return }
 
         isAdding = true
@@ -502,7 +384,7 @@ private struct AddRoomSheetView: View {
         Task { @MainActor in
             defer { isAdding = false }
             do {
-                try await propertyStore.addRoom(named: name, propertyId: property.id, userId: userId)
+                try await propertyStore.addRoom(named: trimmedName, propertyId: property.id, userId: userId)
                 onDismiss()
             } catch {
                 errorMessage = MoveMarkFlowMessage.roomAddFailed(error)
