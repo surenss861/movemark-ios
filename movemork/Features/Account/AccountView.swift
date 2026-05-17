@@ -70,7 +70,7 @@ struct AccountView: View {
                 VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardStack) {
                     MMProofSectionHeader(
                         title: "Account",
-                        subtitle: "Plan, profile, and access to your proof vaults."
+                        subtitle: "Manage your profile, plan, and proof vaults."
                     )
                     profileCard
                     planSection

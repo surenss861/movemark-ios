@@ -186,7 +186,7 @@ struct ExportHistoryView: View {
 
     private var header: some View {
         MMProofSectionHeader(
-            title: "Move-in report",
+            title: "Your move-in report",
             subtitle: headerSubtitle
         )
     }
@@ -454,16 +454,7 @@ struct ExportHistoryView: View {
     }
 
     private var readinessHeroTitle: String {
-        if exports.contains(where: { $0.exportType == "move_in_report" && verificationStatus[$0.id] == .ready }) {
-            return "Move-in report"
-        }
-        if isExportReadyForResolvedVault == false {
-            return "Move-in report"
-        }
-        if isExportReadyForResolvedVault == true && exports.isEmpty {
-            return "Move-in report"
-        }
-        return "Move-in report"
+        "Your move-in report"
     }
 
     private var readinessMetricsLine: String? {

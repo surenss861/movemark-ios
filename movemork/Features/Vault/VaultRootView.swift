@@ -102,7 +102,7 @@ struct VaultRootView: View {
             VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardStack) {
                 MMProofSectionHeader(
                     title: "Your proof",
-                    subtitle: "Room photos, old damage tags, and reports for each rental."
+                    subtitle: "Room photos, damage tags, and reports for each rental."
                 ) {
                     MMProofHeaderAddButton(action: presentAddProperty)
                 }
@@ -379,7 +379,7 @@ struct VaultRootView: View {
             VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardStack) {
                 MMProofSectionHeader(
                     title: "Your proof",
-                    subtitle: "Room photos, old damage tags, and reports for each rental."
+                    subtitle: "Room photos, damage tags, and reports for each rental."
                 ) {
                     MMProofHeaderAddButton(action: presentAddProperty)
                 }
