@@ -28,6 +28,8 @@ struct EvidenceCaptureView: View {
     private let inspectionRepo = InspectionRepository()
     /// When true, show/save move-out proof; otherwise move-in.
     var moveOutMode: Bool = false
+    /// First-run move-in: after first successful save, hand off to receipt screen.
+    var onFirstProofSaved: ((FirstRunSavedSummary) -> Void)? = nil
 
     @State var title = ""
     @State var notes = ""

@@ -28,10 +28,10 @@ struct AppRouter: View {
                 WelcomeScreen()
 
             case .needsOnboarding:
-                OnboardingNameScreen()
+                FirstRunProofFlowView(requiresOnboarding: true)
 
             case .signedIn:
-                AuthenticatedTabShellView()
+                SignedInRootView()
             }
         }
         /// Single place that clears property context whenever auth ends — not only manual sign-out from Account.

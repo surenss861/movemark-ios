@@ -16,6 +16,8 @@ enum RootTab: Hashable {
 }
 
 struct AuthenticatedTabShellView: View {
+    @Environment(PropertyStore.self) private var propertyStore
+
     @State private var selectedTab: RootTab = .vaults
     /// Vault-tab navigation only; non-empty means workspace/task screens — hide root tab bar.
     @State private var vaultPath: [AppRoute] = []
@@ -53,7 +55,14 @@ struct AuthenticatedTabShellView: View {
                         ))
                 case .exports:
                     NavigationStack {
-                        ExportHistoryView(showOpenVaultsCTA: true, onOpenVaults: { selectedTab = .vaults })
+                        ExportHistoryView(
+                            showOpenVaultsCTA: true,
+                            onOpenVaults: { selectedTab = .vaults },
+                            onContinueRoomProof: {
+                                selectedTab = .vaults
+                                vaultPath = [.walkthrough]
+                            }
+                        )
                             .navigationTitle("")
                             .navigationBarTitleDisplayMode(.inline)
                     }
@@ -82,5 +91,21 @@ struct AuthenticatedTabShellView: View {
         }
         .animation(.easeOut(duration: 0.22), value: showsRootTabBar)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear { consumePendingFirstRunExit() }
+        .onChange(of: propertyStore.pendingFirstRunExit != nil) { _, hasPending in
+            if hasPending { consumePendingFirstRunExit() }
+        }
+    }
+
+    private func consumePendingFirstRunExit() {
+        guard let exit = propertyStore.pendingFirstRunExit else { return }
+        propertyStore.pendingFirstRunExit = nil
+        selectedTab = .vaults
+        switch exit {
+        case .continueNextRoom:
+            vaultPath = [.walkthrough]
+        case .viewVault:
+            vaultPath = []
+        }
     }
 }

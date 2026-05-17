@@ -77,6 +77,22 @@ extension EvidenceCaptureView {
                 }
 
                 errorMessage = nil
+
+                if !moveOutMode, let onFirstProofSaved, let property = propertyStore.currentProperty {
+                    let issueCount = evidence.issueTags.count
+                    onFirstProofSaved(
+                        FirstRunSavedSummary(
+                            propertyId: property.id,
+                            roomName: roomName,
+                            photoCount: photoData.count,
+                            issueCount: issueCount,
+                            savedAt: Date()
+                        )
+                    )
+                    MMHaptics.success()
+                    return
+                }
+
                 title = ""
                 notes = ""
                 selectedTags = []

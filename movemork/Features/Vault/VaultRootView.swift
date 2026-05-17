@@ -221,6 +221,9 @@ struct VaultRootView: View {
         if total == 0 {
             return "Add rooms to document damage"
         }
+        if documented == 0 {
+            return "Start with one room"
+        }
         return "\(documented) of \(total) rooms ready"
     }
 
@@ -252,6 +255,9 @@ struct VaultRootView: View {
         guard let fid = featuredPropertyId,
               let prop = propertyStore.currentProperty, prop.id == fid else {
             return MMNextBestAction.continueProof.title
+        }
+        if propertyStore.documentedRoomCount(for: prop) == 0 {
+            return "Start room proof"
         }
         return MMNextBestActionMapper.from(
             propertyNextAction: propertyStore.primaryNextAction(for: prop)
@@ -507,8 +513,8 @@ struct VaultRootView: View {
                     MMEmptyState(
                         systemImage: "building.columns.fill",
                         title: "Your first vault",
-                        message: "Add your rental. Take room photos. Make a report when you need it.",
-                        primaryTitle: "Add property",
+                        message: "Add your rental, then document each room before you settle in.",
+                        primaryTitle: "Start move-in proof",
                         primaryAction: {
                             if subscriptionManager.canCreateProperty(currentCount: propertyStore.properties.count) {
                                 showAddProperty = true

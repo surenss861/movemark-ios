@@ -28,6 +28,18 @@ final class PropertyStore {
     @ObservationIgnored
     var pendingVaultFeedback: VaultFeedbackEvent? = nil
 
+    /// Keeps first-run receipt visible after the first save even though rooms are now documented.
+    var firstRunAwaitingReceiptDismissal = false
+
+    /// After first-run receipt dismissal, vault tab can open walkthrough or stay on root.
+    @ObservationIgnored
+    var pendingFirstRunExit: FirstRunExitAction? = nil
+
+    enum FirstRunExitAction: Equatable {
+        case continueNextRoom
+        case viewVault
+    }
+
     let propertyRepo = PropertyRepository()
     let inspectionRepo = InspectionRepository()
     let maintenanceRepo = MaintenanceRepository()

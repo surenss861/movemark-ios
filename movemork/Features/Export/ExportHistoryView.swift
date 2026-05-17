@@ -14,6 +14,7 @@ struct ExportHistoryView: View {
 
     var showOpenVaultsCTA: Bool = false
     var onOpenVaults: (() -> Void)? = nil
+    var onContinueRoomProof: (() -> Void)? = nil
 
     @State private var exports: [ExportRow] = []
     @State private var isLoading = false
@@ -318,7 +319,10 @@ struct ExportHistoryView: View {
 
     private var reportPrimaryCTA: (title: String, action: () -> Void) {
         let action = MMNextBestActionMapper.report(currentReportReadiness)
-        let title = action.title
+        var title = action.title
+        if currentReportReadiness == .notReady {
+            title = "Continue room proof"
+        }
         let handler: () -> Void = {
             switch currentReportReadiness {
             case .readyToShare:
@@ -327,7 +331,13 @@ struct ExportHistoryView: View {
                 }
             case .failed:
                 Task { await loadExports() }
-            case .readyToMake, .notReady, .noVault, .processing:
+            case .notReady:
+                if let onContinueRoomProof {
+                    onContinueRoomProof()
+                } else {
+                    onOpenVaults?()
+                }
+            case .readyToMake, .noVault, .processing:
                 onOpenVaults?()
             }
         }
@@ -369,7 +379,7 @@ struct ExportHistoryView: View {
     private var readinessSubline: String {
         if isLoading { return "Checking your report…" }
         if isExportReadyForResolvedVault == false {
-            return "Document old damage in at least one room first."
+            return "Finish room proof first."
         }
         if exports.contains(where: { verificationStatus[$0.id] == .ready }) {
             return "Damage already recorded — report ready to share."
@@ -460,7 +470,7 @@ struct ExportHistoryView: View {
             return "Open your vault, add room photos, then make your move-in report."
         }
         if isExportReadyForResolvedVault == false {
-            return "Finish room proof, then make your move-in report."
+            return "Finish room proof first."
         }
         return "Your proof is ready. Make your move-in report from Room proof."
     }
