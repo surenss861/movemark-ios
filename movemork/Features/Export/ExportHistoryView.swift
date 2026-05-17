@@ -293,6 +293,8 @@ struct ExportHistoryView: View {
             return [
                 MMProofChecklistItem(title: "Room photos", detail: "Open your vault to start room proof", state: .incomplete),
                 MMProofChecklistItem(title: "Lease & docs", detail: "Add lease and deposit records", state: .incomplete),
+                MMProofChecklistItem(title: "Damage tags", detail: "Tag issues while you photograph rooms", state: .locked),
+                MMProofChecklistItem(title: "Move-out proof", detail: "Optional later — before you move out", state: .locked),
                 MMProofChecklistItem(title: "Report", detail: "Locked until proof is ready", state: .locked)
             ]
         }
@@ -303,34 +305,63 @@ struct ExportHistoryView: View {
         let missingDocs = propertyStore.missingSupportingRecordCount(for: property)
         let uploadedDocs = max(0, requiredDocs - missingDocs)
 
+        let openIssues = propertyStore.openIssueCount(for: property)
+        let photoCount = property.rooms.flatMap(\.evidence).reduce(0) { $0 + $1.photoCount }
+
         let roomsState: MMProofChecklistItem.State = {
             if totalRooms == 0 { return .incomplete }
-            return documented >= max(1, totalRooms / 2) ? .complete : .incomplete
+            return documented > 0 ? .complete : .incomplete
         }()
 
         let docsState: MMProofChecklistItem.State = missingDocs == 0 ? .complete : .incomplete
 
+        let issuesState: MMProofChecklistItem.State = {
+            if documented == 0 { return .locked }
+            return .complete
+        }()
+
+        let moveOutState: MMProofChecklistItem.State = .locked
+
         let reportState: MMProofChecklistItem.State = {
             if isExportReadyForResolvedVault == true { return .complete }
-            if documented == 0 { return .locked }
             return .locked
         }()
 
         let reportDetail: String = {
             if isExportReadyForResolvedVault == true { return "Ready to create your move-in report" }
-            return "Locked until room proof is ready"
+            if documented == 0 { return "Locked until you save room proof" }
+            if missingDocs > 0 { return "Add lease docs, then create your report" }
+            return "Almost ready — finish remaining room proof"
         }()
 
         return [
             MMProofChecklistItem(
                 title: "Room photos",
-                detail: totalRooms == 0 ? "Add rooms in your vault" : "\(documented) of \(totalRooms) rooms ready",
+                detail: totalRooms == 0
+                    ? "Add rooms in your vault"
+                    : "\(documented) of \(totalRooms) rooms · \(photoCount) photos saved",
                 state: roomsState
             ),
             MMProofChecklistItem(
                 title: "Lease & docs",
                 detail: "\(uploadedDocs) of \(requiredDocs) key docs uploaded",
                 state: docsState
+            ),
+            MMProofChecklistItem(
+                title: "Damage tags",
+                detail: documented == 0
+                    ? "Tag scratches and stains as you photograph rooms"
+                    : openIssues == 0
+                        ? "Issues tagged while you photograph rooms"
+                        : openIssues == 1
+                            ? "1 open issue to review"
+                            : "\(openIssues) open issues to review",
+                state: issuesState
+            ),
+            MMProofChecklistItem(
+                title: "Move-out proof",
+                detail: "Optional later — document the unit before you leave",
+                state: moveOutState
             ),
             MMProofChecklistItem(
                 title: "Report",

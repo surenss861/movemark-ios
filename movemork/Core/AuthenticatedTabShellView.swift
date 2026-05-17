@@ -17,6 +17,7 @@ enum RootTab: Hashable {
 
 struct AuthenticatedTabShellView: View {
     @Environment(PropertyStore.self) private var propertyStore
+    @Environment(SessionManager.self) private var sessionManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var selectedTab: RootTab = .vaults
@@ -109,6 +110,11 @@ struct AuthenticatedTabShellView: View {
             vaultPath = [.walkthrough]
         case .viewVault:
             vaultPath = []
+        }
+
+        guard let userId = sessionManager.userId else { return }
+        Task {
+            _ = await propertyStore.refreshActivePropertyHydration(userId: userId)
         }
     }
 }

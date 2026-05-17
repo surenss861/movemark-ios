@@ -77,8 +77,16 @@ struct FirstRunProofFlowView: View {
                 )
             }
         }
-        .onAppear {
+        .task(id: sessionManager.userId) {
+            await loadPropertiesIfNeeded()
             applyInitialStepIfNeeded()
+        }
+    }
+
+    private func loadPropertiesIfNeeded() async {
+        guard let userId = sessionManager.userId else { return }
+        if !propertyStore.hasCompletedInitialFetch {
+            await propertyStore.fetchAll(userId: userId)
         }
     }
 
@@ -93,12 +101,15 @@ struct FirstRunProofFlowView: View {
         guard let userId = sessionManager.userId else { return }
 
         Task { @MainActor in
-            if requiresOnboarding, sessionManager.authPhase == .needsOnboarding {
-                try? await sessionManager.completeOnboarding(firstName: onboardingName)
-            }
             FirstRunProofPreferences.markComplete(userId: userId)
             propertyStore.firstRunAwaitingReceiptDismissal = false
             propertyStore.pendingFirstRunExit = exit
+
+            _ = await propertyStore.refreshActivePropertyHydration(userId: userId)
+
+            if requiresOnboarding, sessionManager.authPhase == .needsOnboarding {
+                try? await sessionManager.completeOnboarding(firstName: onboardingName)
+            }
         }
     }
 }
