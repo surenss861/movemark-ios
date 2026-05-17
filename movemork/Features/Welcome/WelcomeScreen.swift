@@ -39,56 +39,111 @@ struct WelcomeScreen: View {
                 ZStack {
                     MMEmeraldBackground(emphasizesHeroZone: false, emphasizesCTABloom: false)
 
-                    VStack(alignment: .leading, spacing: 0) {
-                        brandIdentityRow
-                            .padding(.bottom, layout.brandToHeroGap)
+                    welcomeContent(
+                        layout: layout,
+                        cardWidth: cardWidth,
+                        dockSideInset: dockSideInset,
+                        safeBottom: geo.safeAreaInsets.bottom
+                    )
+                    .opacity(showAuth ? 0.32 : 1)
+                    .scaleEffect(showAuth ? 0.96 : 1, anchor: .center)
+                    .allowsHitTesting(!showAuth)
+                    .animation(welcomeBackdropAnimation, value: showAuth)
 
-                        WelcomeDepositCaseFile(
-                            maxWidth: cardWidth,
-                            heroHeight: layout.heroHeight,
-                            cardVisible: cardVisible,
-                            tagsVisible: tagsVisible
-                        )
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .frame(height: layout.heroHeight)
+                    if showAuth {
+                        Color.black.opacity(0.38)
+                            .ignoresSafeArea()
+                            .transition(reduceMotion ? .opacity : .opacity.animation(.easeOut(duration: 0.28)))
 
-                        headlineBlock
-                            .padding(.top, layout.heroToCopyGap)
-
-                        Spacer(minLength: layout.minFlexGap)
-
-                        bottomLaunchDock
-                            .padding(.horizontal, dockSideInset)
+                        AuthContainerView(initialMode: authInitialMode) {
+                            dismissAuth()
+                        }
+                        .id(authPresentationID)
+                        .transition(authSurfaceTransition)
+                        .zIndex(10)
                     }
-                    .padding(.horizontal, contentPadding)
-                    .padding(.top, layout.topPadding)
-                    .padding(.bottom, layout.bottomDockPadding(safeBottom: geo.safeAreaInsets.bottom))
                 }
             }
             .onAppear { playEntrance() }
-            .fullScreenCover(isPresented: $showAuth) {
-                AuthContainerView(initialMode: authInitialMode)
-                    .id(authPresentationID)
-            }
         }
+    }
+
+    // MARK: - Welcome content
+
+    private func welcomeContent(
+        layout: WelcomeZoneLayout,
+        cardWidth: CGFloat,
+        dockSideInset: CGFloat,
+        safeBottom: CGFloat
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            brandIdentityRow
+                .padding(.bottom, layout.brandToHeroGap)
+
+            WelcomeDepositCaseFile(
+                maxWidth: cardWidth,
+                heroHeight: layout.heroHeight,
+                cardVisible: cardVisible,
+                tagsVisible: tagsVisible
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: layout.heroHeight)
+
+            headlineBlock
+                .padding(.top, layout.heroToCopyGap)
+
+            Spacer(minLength: layout.minFlexGap)
+
+            bottomLaunchDock
+                .padding(.horizontal, dockSideInset)
+        }
+        .padding(.horizontal, contentPadding)
+        .padding(.top, layout.topPadding)
+        .padding(.bottom, layout.bottomDockPadding(safeBottom: safeBottom))
+    }
+
+    private var welcomeBackdropAnimation: Animation? {
+        reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.9)
+    }
+
+    private var authSurfaceTransition: AnyTransition {
+        if reduceMotion {
+            return .opacity
+        }
+        return .asymmetric(
+            insertion: .move(edge: .bottom).combined(with: .opacity),
+            removal: .opacity
+        )
     }
 
     private func launchAuth(mode: AuthContainerView.Mode) {
         MMHaptics.soft()
         authInitialMode = mode
         authPresentationID = UUID()
+
         if reduceMotion {
             showAuth = true
             return
         }
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+
+        withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
             launchCTAPressed = true
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            showAuth = true
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.spring(response: 0.48, dampingFraction: 0.88)) {
+                showAuth = true
                 launchCTAPressed = false
             }
+        }
+    }
+
+    private func dismissAuth() {
+        if reduceMotion {
+            showAuth = false
+            return
+        }
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.9)) {
+            showAuth = false
         }
     }
 

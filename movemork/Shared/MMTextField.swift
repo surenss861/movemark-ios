@@ -9,16 +9,37 @@ import SwiftUI
 import UIKit
 
 struct MMTextField: View {
+    enum Density {
+        case standard
+        /// Auth intake — tighter label + 56pt control.
+        case authCompact
+    }
+
     let title: String
     let placeholder: String
     @Binding var text: String
     var isSecure: Bool = false
     var keyboardType: UIKeyboardType = .default
+    var density: Density = .standard
+
+    private var labelSpacing: CGFloat {
+        density == .authCompact ? 5 : 8
+    }
+
+    private var fieldHeight: CGFloat {
+        density == .authCompact ? 56 : 54
+    }
+
+    private var titleFont: Font {
+        density == .authCompact
+            ? .system(size: 12.5, weight: .semibold)
+            : .system(size: 13.5, weight: .semibold)
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: labelSpacing) {
             Text(title)
-                .font(.system(size: 13.5, weight: .semibold))
+                .font(titleFont)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
             ZStack(alignment: .leading) {
@@ -45,7 +66,7 @@ struct MMTextField: View {
                 .tint(MoveMarkTheme.Colors.proofMint)
                 .padding(.horizontal, 16)
             }
-            .frame(height: 54)
+            .frame(height: fieldHeight)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(MoveMarkTheme.Colors.fieldFill)
