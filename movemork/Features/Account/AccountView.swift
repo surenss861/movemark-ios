@@ -20,8 +20,6 @@ struct AccountView: View {
     @State private var resetError: String? = nil
     @State private var isSendingReset = false
     @State private var subscriptionRestoreFeedback: String? = nil
-    @State private var subscriptionRestoreError: String? = nil
-
     private static let appleSubscriptionsURL = URL(string: "https://apps.apple.com/account/subscriptions")!
 
     private var displayName: String {
@@ -67,16 +65,18 @@ struct AccountView: View {
                 .mmProofShellBackground(heroFocus: false, ctaBloom: false)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardStack) {
-                    MMProofSectionHeader(
-                        title: "Account",
-                        subtitle: "Manage your profile, plan, and proof vaults."
-                    )
-                    profileCard
-                    planSection
-                    privacySupportSection
-                    securityCard
-                    aboutCard
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardStack) {
+                        MMProofSectionHeader(
+                            title: "Account",
+                            subtitle: "Manage your profile, plan, and proof vaults."
+                        )
+                        profileCard
+                        planSection
+                        privacySupportSection
+                        securityCard
+                        aboutCard
+                    }
 
                     MMButton(
                         title: "Sign out",
@@ -88,14 +88,14 @@ struct AccountView: View {
                         size: .standard
                     )
 
-                    if rootTabBarVisible {
-                        MMSignedInScrollTailSpacer(kind: .accountTab)
-                    }
+                    Color.clear
+                        .frame(height: rootTabBarVisible
+                            ? MoveMarkTheme.Spacing.scrollTailAccountTabChrome
+                            : MoveMarkTheme.Spacing.scrollTailFocusedFlow)
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
                 .padding(.top, 12)
                 .mmScrollContentTopInset(2)
-                .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
             }
         }
         .navigationTitle("")
@@ -117,14 +117,65 @@ struct AccountView: View {
     }
 
     private var planSection: some View {
-        accountSection(title: "Plan") {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Plan")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .padding(.leading, 2)
+
+            VStack(spacing: 8) {
+                planStatusCard
+
+                if !subscriptionManager.hasPro {
+                    MMButton(
+                        title: "Upgrade to Pro",
+                        action: {
+                            subscriptionRestoreFeedback = nil
+                            showPaywall = true
+                        },
+                        kind: .secondary,
+                        size: .standard
+                    )
+                }
+
+                if subscriptionManager.hasPro {
+                    MMProofListRow(
+                        title: "Manage subscription",
+                        subtitle: "View or cancel Apple subscriptions",
+                        style: .settings,
+                        onTap: { openURL(Self.appleSubscriptionsURL) }
+                    )
+                }
+
+                MMProofListRow(
+                    title: subscriptionManager.isLoading ? "Restoring purchases…" : "Restore purchases",
+                    subtitle: "Sync MoveMark Pro with this Apple ID",
+                    style: .settings,
+                    onTap: { runSubscriptionRestore() }
+                )
+                .disabled(subscriptionManager.isLoading)
+
+                if let subscriptionRestoreFeedback {
+                    Text(subscriptionRestoreFeedback)
+                        .font(MoveMarkTheme.Typography.footnote)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 4)
+                        .padding(.top, 2)
+                }
+            }
+        }
+    }
+
+    private var planStatusCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(subscriptionManager.hasPro ? "MoveMark Pro" : "Free plan")
+                    Text(subscriptionManager.hasPro ? "MoveMark Pro" : "Free")
                         .font(MoveMarkTheme.Typography.subheadlineMedium)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                    Text(subscriptionManager.accountPlanSummaryLine)
+                    Text(planStatusSummary)
                         .font(MoveMarkTheme.Typography.footnote)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -137,26 +188,21 @@ struct AccountView: View {
                     tone: subscriptionManager.hasPro ? .success : .neutral
                 )
             }
-
-            if !subscriptionManager.hasPro {
-                MMButton(
-                    title: "Upgrade to Pro",
-                    action: {
-                        subscriptionRestoreFeedback = nil
-                        subscriptionRestoreError = nil
-                        showPaywall = true
-                    },
-                    kind: .secondary,
-                    size: .standard
-                )
-                .padding(.top, 4)
-            }
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .mmProofCardSurface(.standard, cornerRadius: 18)
+    }
+
+    private var planStatusSummary: String {
+        if subscriptionManager.hasPro {
+            return subscriptionManager.accountPlanSummaryLine
+        }
+        return "1 property. 1 move-in report."
     }
 
     private func runSubscriptionRestore() {
         subscriptionRestoreFeedback = nil
-        subscriptionRestoreError = nil
 
         Task { @MainActor in
             let restored = await subscriptionManager.restorePurchases()
@@ -164,7 +210,7 @@ struct AccountView: View {
                 subscriptionRestoreFeedback = "MoveMark Pro is active on this Apple ID."
             } else {
                 subscriptionRestoreFeedback =
-                    "No active MoveMark subscription was found for this Apple ID. If you subscribed with a different Apple ID, use Subscriptions in App Store or sign into that account in Settings."
+                    "No active MoveMark subscription was found for this Apple ID. If you subscribed with a different Apple ID, use Manage subscription or sign into that Apple ID in Settings."
             }
         }
     }
@@ -237,21 +283,6 @@ struct AccountView: View {
                 .padding(.leading, 2)
 
             VStack(spacing: 8) {
-                MMProofListRow(
-                    title: subscriptionManager.isLoading ? "Restoring purchases…" : "Restore purchases",
-                    subtitle: "Sync MoveMark Pro with this Apple ID",
-                    style: .settings,
-                    onTap: { runSubscriptionRestore() }
-                )
-                .disabled(subscriptionManager.isLoading)
-
-                MMProofListRow(
-                    title: "Subscriptions in App Store",
-                    subtitle: "View or cancel Apple subscriptions",
-                    style: .settings,
-                    onTap: { openURL(Self.appleSubscriptionsURL) }
-                )
-
                 settingsLinkRow(title: "Privacy Policy", subtitle: "View privacy policy", url: privacyPolicyURL)
                 settingsLinkRow(title: "Terms of Use", subtitle: "View terms", url: termsURL)
                 settingsLinkRow(title: "Contact Support", subtitle: "Get help", url: supportURL ?? supportEmailURL)
@@ -260,18 +291,6 @@ struct AccountView: View {
                     subtitle: "Request deletion",
                     url: accountDeletionURL
                 )
-            }
-
-            if let subscriptionRestoreFeedback {
-                Text(subscriptionRestoreFeedback)
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 4)
-            }
-
-            if let subscriptionRestoreError {
-                MMErrorBanner(message: subscriptionRestoreError, retryTitle: nil, onRetry: nil)
             }
         }
     }
