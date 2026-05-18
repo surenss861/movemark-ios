@@ -81,6 +81,7 @@ struct RoomListView: View {
                 .presentationDetents([.height(430)])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(MoveMarkTheme.Colors.appBackground)
+                .mmSheetEntrance(isPresented: showAddRoom)
         }
     }
 

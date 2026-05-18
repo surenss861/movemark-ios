@@ -14,9 +14,11 @@ enum MoveMarkTheme {
         static let appBackgroundRaised = Color(red: 0.039, green: 0.090, blue: 0.071)   // #0A1712
         static let surface = Color(red: 0.063, green: 0.137, blue: 0.106)               // #10231B
 
-        // Cards
+        // Cards — green-tinted (legacy) + neutral evidence surfaces (Evidence OS)
         static let card = Color(red: 0.063, green: 0.137, blue: 0.106)                  // #10231B
         static let cardRaised = Color(red: 0.075, green: 0.161, blue: 0.122)             // #13291F
+        static let evidenceCard = Color(red: 0.082, green: 0.090, blue: 0.086)           // warm charcoal
+        static let evidenceCardRaised = Color(red: 0.102, green: 0.110, blue: 0.106)
         static let cardStroke = Color.white.opacity(0.08)
         static let subtleStroke = Color.white.opacity(0.06)
         static let tabBarFill = Color(red: 0.031, green: 0.075, blue: 0.059).opacity(0.94) // #08130F

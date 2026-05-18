@@ -20,42 +20,42 @@ struct MMRoomProgressCard: View {
     private var clampedProgress: Double { min(1, max(0, progress)) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Move-in proof")
+                Text("Room proof")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(MoveMarkTheme.Colors.textMuted)
 
                 Text(headline)
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .mmRowStatusTransition(value: headline)
 
                 Text(nextLine)
-                    .font(MoveMarkTheme.Typography.subheadline)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.94))
+                    .font(MoveMarkTheme.Typography.footnote)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .mmRowStatusTransition(value: nextLine)
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.9))
-                            .frame(height: 5)
-                        Capsule()
-                            .fill(MoveMarkTheme.Colors.primary.opacity(0.88))
-                            .frame(width: max(6, geo.size.width * clampedProgress), height: 5)
-                            .animation(reduceMotion ? nil : MMMotion.proofProgress, value: clampedProgress)
-                    }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.85))
+                        .frame(height: 4)
+                    Capsule()
+                        .fill(MoveMarkTheme.Colors.primary.opacity(0.88))
+                        .frame(width: max(4, geo.size.width * clampedProgress), height: 4)
+                        .animation(reduceMotion ? nil : MMMotion.proofProgress, value: clampedProgress)
                 }
-                .frame(height: 5)
+            }
+            .frame(height: 4)
 
-                if let progressLabel, !progressLabel.isEmpty {
-                    Text(progressLabel)
-                        .font(MoveMarkTheme.Typography.caption)
-                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                }
+            if let progressLabel, !progressLabel.isEmpty {
+                Text(progressLabel)
+                    .font(MoveMarkTheme.Typography.caption)
+                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
             }
 
             MMButton(
@@ -69,13 +69,6 @@ struct MMRoomProgressCard: View {
             )
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(MoveMarkTheme.Colors.card.opacity(0.96))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.5), lineWidth: 0.75)
-        )
+        .mmProofCardSurface(.neutral, cornerRadius: 18)
     }
 }

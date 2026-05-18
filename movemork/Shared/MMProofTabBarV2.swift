@@ -13,8 +13,8 @@ struct MMProofTabBarV2: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pressedTab: RootTab? = nil
 
-    private let barHeight: CGFloat = 66
-    private let iconSize: CGFloat = 19
+    private let barHeight: CGFloat = 56
+    private let iconSize: CGFloat = 18
 
     var body: some View {
         HStack(spacing: 0) {
@@ -25,16 +25,16 @@ struct MMProofTabBarV2: View {
         .frame(height: barHeight)
         .padding(.horizontal, 8)
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(MoveMarkTheme.Colors.tabBarFill)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(MoveMarkTheme.Colors.tabBarFill.opacity(0.92))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.white.opacity(0.06), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 20)
-        .padding(.top, 6)
-        .padding(.bottom, 10)
+        .padding(.horizontal, 22)
+        .padding(.top, 4)
+        .padding(.bottom, 8)
     }
 
     @ViewBuilder
@@ -45,41 +45,44 @@ struct MMProofTabBarV2: View {
         Button {
             guard selectedTab != tab else { return }
             MMHaptics.selection()
-            withAnimation(reduceMotion ? nil : MMMotion.tabSwitch) {
+            withAnimation(reduceMotion ? nil : MMMotion.quick) {
                 selectedTab = tab
             }
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: 3) {
                 Image(systemName: systemImage)
                     .font(.system(size: iconSize, weight: isSelected ? .semibold : .regular))
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(
                         isSelected
                             ? MoveMarkTheme.Colors.textPrimary
-                            : MoveMarkTheme.Colors.limeAccent.opacity(0.58)
+                            : MoveMarkTheme.Colors.textMuted.opacity(0.85)
                     )
-                    .frame(height: 22)
+                    .frame(height: 20)
+                    .offset(y: isSelected && !reduceMotion ? -1 : 0)
+                    .animation(reduceMotion ? nil : MMMotion.quick, value: isSelected)
 
                 if isSelected {
                     Capsule()
                         .fill(MoveMarkTheme.Colors.primary)
-                        .frame(width: 22, height: 2)
+                        .frame(width: 20, height: 2)
+                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 } else {
-                    Color.clear.frame(width: 22, height: 2)
+                    Color.clear.frame(width: 20, height: 2)
                 }
 
                 Text(title)
-                    .font(.system(size: 11, weight: isSelected ? .semibold : .medium))
+                    .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
                     .foregroundStyle(
                         isSelected
                             ? MoveMarkTheme.Colors.textPrimary
-                            : MoveMarkTheme.Colors.limeAccent.opacity(0.55)
+                            : MoveMarkTheme.Colors.textMuted.opacity(0.78)
                     )
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity)
-            .scaleEffect(isPressed && !reduceMotion ? 0.96 : 1)
-            .animation(reduceMotion ? nil : MMMotion.press, value: isPressed)
+            .scaleEffect(isPressed && !reduceMotion ? 0.97 : 1)
+            .animation(reduceMotion ? nil : MMMotion.spring, value: isPressed)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

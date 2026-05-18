@@ -11,6 +11,8 @@ enum MMProofCardSurface {
     case evidence
     case depositPayoff
     case standard
+    /// Neutral charcoal — less green dashboard chrome (Evidence OS).
+    case neutral
 }
 
 extension View {
@@ -46,6 +48,8 @@ private struct MMProofCardSurfaceModifier: ViewModifier {
             return MoveMarkTheme.Colors.cardRaised.opacity(0.99)
         case .standard:
             return MoveMarkTheme.Colors.card
+        case .neutral:
+            return MoveMarkTheme.Colors.evidenceCard
         }
     }
 
@@ -82,16 +86,29 @@ private struct MMProofCardSurfaceModifier: ViewModifier {
     private var border: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .stroke(
-                LinearGradient(
-                    colors: [
-                        MoveMarkTheme.Colors.limeAccent.opacity(kind == .depositPayoff ? 0.28 : 0.22),
-                        MoveMarkTheme.Colors.cardStroke.opacity(0.98)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                lineWidth: kind == .depositPayoff ? 1.05 : 1.1
+                borderGradient,
+                lineWidth: kind == .depositPayoff ? 1.05 : (kind == .neutral ? 0.75 : 1.1)
             )
+    }
+
+    private var borderGradient: LinearGradient {
+        switch kind {
+        case .neutral:
+            return LinearGradient(
+                colors: [Color.white.opacity(0.12), Color.white.opacity(0.05)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        default:
+            return LinearGradient(
+                colors: [
+                    MoveMarkTheme.Colors.limeAccent.opacity(kind == .depositPayoff ? 0.28 : 0.22),
+                    MoveMarkTheme.Colors.cardStroke.opacity(0.98)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
     }
 
     private var shadowColor: Color {
@@ -102,6 +119,8 @@ private struct MMProofCardSurfaceModifier: ViewModifier {
             return Color.black.opacity(0.34)
         case .standard:
             return Color.black.opacity(0.18)
+        case .neutral:
+            return Color.black.opacity(0.14)
         }
     }
 
@@ -110,6 +129,7 @@ private struct MMProofCardSurfaceModifier: ViewModifier {
         case .evidence: return 14
         case .depositPayoff: return 8
         case .standard: return 6
+        case .neutral: return 4
         }
     }
 
@@ -118,6 +138,7 @@ private struct MMProofCardSurfaceModifier: ViewModifier {
         case .evidence: return 6
         case .depositPayoff: return 3
         case .standard: return 3
+        case .neutral: return 2
         }
     }
 }

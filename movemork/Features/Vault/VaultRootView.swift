@@ -102,7 +102,7 @@ struct VaultRootView: View {
             VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardStack) {
                 MMProofSectionHeader(
                     title: "Your proof",
-                    subtitle: "Room photos, damage tags, and reports for each rental."
+                    subtitle: "What rental needs proof next?"
                 ) {
                     MMProofHeaderAddButton(action: presentAddProperty)
                 }
@@ -120,11 +120,7 @@ struct VaultRootView: View {
 
                 if let row = featuredPropertyRow {
                     primaryVaultCard(for: row)
-                        .opacity(hasAnimatedIn ? 1 : 0)
-                        .offset(y: hasAnimatedIn ? 0 : 12)
-                        .animation(MMMotion.cardReveal.delay(0.08), value: hasAnimatedIn)
-
-                    proofPhotoStrip(for: row)
+                        .mmAppearRise(isVisible: hasAnimatedIn, delay: 0.06, offset: 6)
                 }
 
                 missingDocsCard
@@ -169,37 +165,16 @@ struct VaultRootView: View {
 
     @ViewBuilder
     private func primaryVaultCard(for row: PropertyRow) -> some View {
-        MMProofPrimaryCard(
-            eyebrow: "Move-in proof",
-            title: displayName(for: row),
-            subtitle: locationText(for: row).isEmpty ? nil : locationText(for: row),
-            headline: vaultProofProgressHeadline,
+        MMVaultProofHeroCard(
+            propertyName: displayName(for: row),
+            location: locationText(for: row).isEmpty ? nil : locationText(for: row),
+            progressLine: vaultProofProgressHeadline,
             nextLine: vaultHeroNextLine,
             progress: vaultProofProgressValue,
+            previewURL: previewURLByPropertyId[row.id],
             primaryTitle: featuredContinueProofTitle,
             onPrimary: { openFeaturedVaultOrContinue() }
         )
-    }
-
-    @ViewBuilder
-    private func proofPhotoStrip(for row: PropertyRow) -> some View {
-        if let url = previewURLByPropertyId[row.id] {
-            AsyncImage(url: url) { phase in
-                if case .success(let image) = phase {
-                    HStack(spacing: 8) {
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 56, height: 56)
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-                        Text("Recent room proof")
-                            .font(MoveMarkTheme.Typography.footnote)
-                            .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                    }
-                }
-            }
-        }
     }
 
     @ViewBuilder
@@ -379,7 +354,7 @@ struct VaultRootView: View {
             VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardStack) {
                 MMProofSectionHeader(
                     title: "Your proof",
-                    subtitle: "Room photos, damage tags, and reports for each rental."
+                    subtitle: "What rental needs proof next?"
                 ) {
                     MMProofHeaderAddButton(action: presentAddProperty)
                 }

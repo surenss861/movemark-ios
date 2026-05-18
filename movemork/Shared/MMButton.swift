@@ -204,6 +204,6 @@ private struct MMButtonPressStyle: ButtonStyle {
                         .offset(y: 2)
                 }
             }
-            .animation(reduceMotion ? nil : MMMotion.press, value: configuration.isPressed)
+            .animation(reduceMotion ? nil : MMMotion.spring, value: configuration.isPressed)
     }
 }

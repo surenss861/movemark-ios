@@ -53,7 +53,7 @@ struct MMRoomProofRow: View {
 
     var body: some View {
         Button(action: onTap) {
-            MMCard(tone: .artifact, padding: 16, spacing: 0) {
+            MMCard(tone: .quiet, padding: 14, spacing: 0) {
                 HStack(alignment: .center, spacing: 14) {
                     indexBadge
 
@@ -70,9 +70,10 @@ struct MMRoomProofRow: View {
                         }
 
                         Text(status.detailLine)
-                            .font(MoveMarkTheme.Typography.subheadline)
+                            .font(MoveMarkTheme.Typography.footnote)
                             .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                             .lineLimit(2)
+                            .mmRowStatusTransition(value: status.detailLine)
                     }
 
                     Spacer(minLength: 0)
