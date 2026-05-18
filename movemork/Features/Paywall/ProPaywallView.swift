@@ -82,22 +82,26 @@ struct ProPaywallView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Deposit protection")
-                .font(MoveMarkTheme.Typography.footnote)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.95))
-
             Text(reason.headline)
                 .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text(reason.subheadline)
+            Text(sharedValueLine)
                 .font(MoveMarkTheme.Typography.subheadline)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(reason.subheadline)
+                .font(MoveMarkTheme.Typography.footnote)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.top, 10)
+    }
+
+    private var sharedValueLine: String {
+        "MoveMark Pro gives you unlimited proof vaults, move-out proof, and dispute-ready reports."
     }
 
     private var benefitsCard: some View {
@@ -239,7 +243,7 @@ struct ProPaywallView: View {
         if let local = localErrorMessage, !local.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return paywallBannerMessage(local)
         }
-        let server = subscriptionManager.lastErrorMessage ?? ""
+        let server = subscriptionManager.offeringsLoadErrorMessage ?? ""
         if !server.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return paywallBannerMessage(server)
         }
@@ -376,9 +380,9 @@ struct ProPaywallView: View {
     private func continuePurchaseTitle(for package: Package) -> String {
         switch planKind(for: package) {
         case .monthly:
-            return "Continue with Monthly"
+            return "Start Pro — Monthly"
         case .yearly:
-            return "Continue with Yearly"
+            return "Start Pro — Yearly"
         case .other:
             return reason.ctaTitle
         }
@@ -572,45 +576,17 @@ struct ProPaywallView: View {
     }
 
     private var benefitsTitle: String {
-        switch reason {
-        case .extraProperty:
-            return "What Pro adds"
-        case .unlimitedExports:
-            return "What Pro exports unlock"
-        case .disputePacket:
-            return "What Pro adds to your case"
-        case .moveOutExport:
-            return "What Pro adds at move-out"
-        }
+        "MoveMark Pro includes"
     }
 
     private var benefits: [(title: String, subtitle: String)] {
-        switch reason {
-        case .extraProperty:
-            return [
-                ("More property vaults", "One proof vault per rental, kept separate."),
-                ("Unlimited reports", "PDF reports from your proof file whenever you need them."),
-                ("Case builder included", "Stronger dispute workflow from the same evidence."),
-            ]
-        case .unlimitedExports:
-            return [
-                ("Unlimited move-in reports", "Fresh baseline reports as docs grow."),
-                ("Move-out reports", "Before-and-after records for deposit disputes."),
-                ("Case builder included", "Exports plus proof in one flow."),
-            ]
-        case .disputePacket:
-            return [
-                ("Case builder", "Organize proof into a clearer defense."),
-                ("Unlimited exports", "Reports and files your case may need."),
-                ("Move-out protection", "Proof where disputes usually hit."),
-            ]
-        case .moveOutExport:
-            return [
-                ("Move-out reports", "Before-and-after proof when risk is real."),
-                ("Unlimited reports", "Update reports as you add evidence."),
-                ("Case builder", "Move-out proof inside a stronger workflow."),
-            ]
-        }
+        [
+            ("Unlimited property vaults", "One proof vault per rental, kept separate."),
+            ("Unlimited move-in reports", "PDF reports from saved room proof."),
+            ("Move-out proof", "Re-capture rooms and export move-out reports."),
+            ("Dispute tools", "Organize proof when your deposit is questioned."),
+            ("Export history", "Reports and packets in one place."),
+        ]
     }
 
     private func priceCaption(for package: Package, product: StoreProduct) -> String {

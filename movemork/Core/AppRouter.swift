@@ -40,6 +40,9 @@ struct AppRouter: View {
                 propertyStore.clear()
             }
         }
+        .task {
+            subscriptionManager.configure(appUserID: sessionManager.userId?.uuidString)
+        }
         .task(id: sessionManager.userId) {
             await subscriptionManager.syncAuth(
                 appUserID: sessionManager.userId?.uuidString

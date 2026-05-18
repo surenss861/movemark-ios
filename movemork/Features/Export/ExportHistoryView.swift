@@ -30,6 +30,8 @@ struct ExportHistoryView: View {
     @State private var reportUnlockPulse = false
     @State private var lastReportReadiness: MMNextBestActionMapper.ReportReadiness? = nil
     @State private var isExporting = false
+    @State private var showPaywall = false
+    @State private var activePaywallReason: PaywallReason = .unlimitedExports
 
     private var apiBaseURL: String? {
         guard
@@ -156,6 +158,12 @@ struct ExportHistoryView: View {
             if !shareItems.isEmpty {
                 ShareSheet(activityItems: shareItems)
             }
+        }
+        .sheet(isPresented: $showPaywall) {
+            ProPaywallView(
+                reason: activePaywallReason,
+                onClose: { showPaywall = false }
+            )
         }
         .task(id: resolvedExportPropertyId) {
             await loadExports()
@@ -432,8 +440,14 @@ struct ExportHistoryView: View {
                 }
             })
         case .readyToMake:
-            return (isExporting ? "Making report…" : "Make move-in report", {
-                requestMoveInExport()
+            if subscriptionManager.canExportMoveIn(forUser: sessionManager.userId) {
+                return (isExporting ? "Making report…" : "Make move-in report", {
+                    requestMoveInExport()
+                })
+            }
+            return ("Upgrade for another report", {
+                activePaywallReason = .unlimitedExports
+                showPaywall = true
             })
         case .readyToShare:
             return ("Share report", {
@@ -1041,6 +1055,11 @@ struct ExportHistoryView: View {
         guard let property = resolvedPropertyRecord ?? propertyStore.currentProperty else { return }
         guard !isExporting else { return }
         guard isExportReadyForResolvedVault == true else { return }
+        guard subscriptionManager.canExportMoveIn(forUser: sessionManager.userId) else {
+            activePaywallReason = .unlimitedExports
+            showPaywall = true
+            return
+        }
         guard let baseURL = apiBaseURL else {
             errorMessage = "API base URL is missing. Set MoveMarkAPIBaseURL in build settings."
             return

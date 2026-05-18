@@ -13,42 +13,35 @@ enum PaywallReason: Equatable {
     case disputePacket
     case moveOutExport
 
+    /// Primary paywall headline (shared across entry points).
     var headline: String {
         switch self {
         case .extraProperty:
-            return "More proof vaults"
+            return "Protect more than one rental"
         case .unlimitedExports:
-            return "Unlimited reports"
+            return "Make more move-in reports"
         case .disputePacket:
-            return "Dispute packet & case tools"
+            return "Build a dispute-ready packet"
         case .moveOutExport:
-            return "Move-out case exports"
+            return "Document move-out proof"
         }
     }
 
+    /// Context line under the shared Pro value prop.
     var subheadline: String {
         switch self {
         case .extraProperty:
-            return "Add another rental proof vault when you move."
+            return "Add another rental vault when you move."
         case .unlimitedExports:
-            return "Make and share reports whenever you need them."
+            return "You’ve used your free move-in report on this account."
         case .disputePacket:
-            return "Dispute-ready exports and tools built from the same proof vault."
+            return "Organize proof into a stronger dispute workflow."
         case .moveOutExport:
-            return "Lock in move-out evidence while deposit risk is on the table."
+            return "Re-capture rooms and export move-out reports with Pro."
         }
     }
 
     var ctaTitle: String {
-        switch self {
-        case .extraProperty:
-            return "Upgrade to Pro"
-        case .unlimitedExports:
-            return "Get Pro Exports"
-        case .disputePacket:
-            return "Unlock Case Builder"
-        case .moveOutExport:
-            return "Unlock Move-out Exports"
-        }
+        "Start Pro"
     }
 }

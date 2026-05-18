@@ -49,13 +49,23 @@ final class SubscriptionManager {
     var isRefreshingOfferings: Bool = false
     /// True during an in-flight purchase or restore (StoreKit / RevenueCat transaction).
     var isStoreKitBusy: Bool = false
-    var lastErrorMessage: String? = nil
+    /// Paywall-only: offerings/catalog fetch failed or returned no packages.
+    var offeringsLoadErrorMessage: String? = nil
+    /// Startup/configure failure (invalid API key, etc.).
+    var configurationErrorMessage: String? = nil
     var currentOffering: Offering? = nil
+
+    /// Whether the paywall can show purchasable packages (after at least one refresh attempt).
+    var hasPaywallPackages: Bool {
+        guard let packages = currentOffering?.availablePackages else { return false }
+        return !packages.isEmpty
+    }
 
     /// Aggregate for screens that only need a single “busy” flag (e.g. Account restore while offerings also refresh).
     var isLoading: Bool { isRefreshingOfferings || isStoreKitBusy }
 
-    /// Canonical RevenueCat entitlement (App Store + aligned Test Store).
+    /// Canonical RevenueCat entitlements (dashboard may use either identifier).
+    private static let proEntitlementIDs = ["movemark_pro", "movemark_pro1"]
     private let proEntitlementID = "movemark_pro1"
     /// Some Test Store dashboards grant `test` before products attach to `movemark_pro1`; honored only when Test Store SDK use is allowed.
     private static let testStoreProEntitlementFallbackID = "test"
@@ -129,12 +139,20 @@ final class SubscriptionManager {
         return "Free move-in report used"
     }
 
-    /// Short copy for Account / Paywall — never surfaces RevenueCat or config jargon.
+    /// Short copy for Paywall only — Account stays on Free/Pro summary when plans fail to load.
     var userFacingPlansErrorMessage: String? {
-        guard let lastErrorMessage else { return nil }
-        let trimmed = lastErrorMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let offeringsLoadErrorMessage else { return nil }
+        let trimmed = offeringsLoadErrorMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         return Self.sanitizedPlansErrorMessage(trimmed)
+    }
+
+    /// Free-tier plan line for Account (never blocked by offerings fetch).
+    var accountPlanSummaryLine: String {
+        if hasPro {
+            return "Unlimited vaults, reports, and move-out proof"
+        }
+        return "1 property · 1 move-in report"
     }
 
     static func sanitizedPlansErrorMessage(_ raw: String) -> String {
@@ -193,7 +211,8 @@ final class SubscriptionManager {
             }
 
             guard Self.isValidRevenueCatPublicKey(apiKey) else {
-                lastErrorMessage = Self.userFacingRevenueCatKeyError(resolvedKey: apiKey)
+                configurationErrorMessage = Self.userFacingRevenueCatKeyError(resolvedKey: apiKey)
+                offeringsLoadErrorMessage = "Plans didn't load. Try again."
                 subscriptionLog.error(
                     "RevenueCat API key missing or invalid. Prefix: \(Self.keyDiagnosticPrefix(apiKey), privacy: .public) plistKey=RevenueCatPublicAPIKey"
                 )
@@ -287,7 +306,9 @@ final class SubscriptionManager {
     }
 
     private static func hasActiveProEntitlement(_ customerInfo: CustomerInfo) -> Bool {
-        if customerInfo.entitlements["movemark_pro1"]?.isActive == true { return true }
+        for id in proEntitlementIDs where customerInfo.entitlements[id]?.isActive == true {
+            return true
+        }
         if allowsRevenueCatTestStoreKey,
            customerInfo.entitlements[testStoreProEntitlementFallbackID]?.isActive == true {
             return true
@@ -295,17 +316,21 @@ final class SubscriptionManager {
         return false
     }
 
+    private static func matchedProEntitlementID(_ customerInfo: CustomerInfo) -> String {
+        for id in proEntitlementIDs where customerInfo.entitlements[id]?.isActive == true {
+            return id
+        }
+        if allowsRevenueCatTestStoreKey,
+           customerInfo.entitlements[testStoreProEntitlementFallbackID]?.isActive == true {
+            return "\(testStoreProEntitlementFallbackID) (Test Store fallback)"
+        }
+        return "—"
+    }
+
     private static func logEntitlementSnapshot(_ customerInfo: CustomerInfo, primaryEntitlementID: String, hasPro: Bool) {
         let activeKeys = customerInfo.entitlements.active.keys.sorted()
         let allKeys = customerInfo.entitlements.all.keys.sorted()
-        let matched: String = {
-            if customerInfo.entitlements["movemark_pro1"]?.isActive == true { return "movemark_pro1" }
-            if allowsRevenueCatTestStoreKey,
-               customerInfo.entitlements[testStoreProEntitlementFallbackID]?.isActive == true {
-                return "\(testStoreProEntitlementFallbackID) (Test Store fallback)"
-            }
-            return "—"
-        }()
+        let matched = matchedProEntitlementID(customerInfo)
         subscriptionLog.notice(
             "entitlements active=[\(activeKeys.joined(separator: ","), privacy: .public)] all=[\(allKeys.joined(separator: ","), privacy: .public)] primary=\(primaryEntitlementID, privacy: .public) matched=\(matched, privacy: .public) hasPro=\(hasPro, privacy: .public)"
         )
@@ -427,15 +452,16 @@ final class SubscriptionManager {
 
             await refresh()
         } catch {
-            lastErrorMessage = Self.userFacingRevenueCatOperationError(error)
+            offeringsLoadErrorMessage = Self.userFacingRevenueCatOperationError(error)
         }
     }
 
     /// - Parameter showLoading: When false, skips toggling `isRefreshingOfferings` (use after purchase/restore to avoid UI flicker).
     func refresh(showLoading: Bool = true) async {
         guard Purchases.isConfigured else {
-            if lastErrorMessage == nil {
-                lastErrorMessage = "Subscription options aren’t available until the app finishes setup."
+            if offeringsLoadErrorMessage == nil {
+                offeringsLoadErrorMessage = configurationErrorMessage
+                    ?? "Subscription options aren’t available until the app finishes setup."
             }
             return
         }
@@ -483,20 +509,7 @@ final class SubscriptionManager {
             )
             #endif
 
-            let resolvedOffering: Offering? = {
-                if let oid = Self.revenueCatOfferingIdentifierOverride() {
-                    if let off = offerings.all[oid] {
-                        subscriptionLog.notice(
-                            "RevenueCatOfferingOverride using id=\(oid, privacy: .public) (sdk current=\(offerings.current?.identifier ?? "nil", privacy: .public))"
-                        )
-                        return off
-                    }
-                    subscriptionLog.error(
-                        "RevenueCatOfferingOverride id=\(oid, privacy: .public) missing from catalog keys=\(String(describing: offerings.all.keys.sorted()), privacy: .public)"
-                    )
-                }
-                return offerings.current
-            }()
+            let resolvedOffering = Self.resolveOffering(from: offerings)
 
             currentOffering = resolvedOffering
 
@@ -510,16 +523,16 @@ final class SubscriptionManager {
 
                 if current.availablePackages.isEmpty {
                     subscriptionLog.notice("refresh resolved offering has zero packages (check RevenueCat packages / App Store Connect / Paid Apps Agreement)")
-                    lastErrorMessage = "Plans didn't load. Try again."
+                    offeringsLoadErrorMessage = "Plans didn't load. Try again."
                 } else {
-                    lastErrorMessage = nil
+                    offeringsLoadErrorMessage = nil
                 }
             } else {
-                subscriptionLog.notice("refresh resolved offering=nil (no current offering in RevenueCat)")
-                lastErrorMessage = "Plans didn't load. Try again."
+                subscriptionLog.notice("refresh resolved offering=nil (no offering with packages in RevenueCat)")
+                offeringsLoadErrorMessage = "Plans didn't load. Try again."
             }
         } catch {
-            lastErrorMessage = Self.userFacingRevenueCatOperationError(error)
+            offeringsLoadErrorMessage = Self.userFacingRevenueCatOperationError(error)
             let ns = error as NSError
             subscriptionLog.error(
                 "RevenueCat offerings fetch failed proEntitlement=\(self.proEntitlementID, privacy: .public) domain=\(ns.domain, privacy: .public) code=\(ns.code, privacy: .public) description=\(ns.localizedDescription, privacy: .public)"
@@ -541,7 +554,7 @@ final class SubscriptionManager {
 
         let result = try await Purchases.shared.purchase(package: package)
         hasPro = Self.hasActiveProEntitlement(result.customerInfo)
-        lastErrorMessage = nil
+        offeringsLoadErrorMessage = nil
         await refresh(showLoading: false)
     }
 
@@ -559,8 +572,29 @@ final class SubscriptionManager {
 
         let customerInfo = try await Purchases.shared.restorePurchases()
         hasPro = Self.hasActiveProEntitlement(customerInfo)
-        lastErrorMessage = nil
+        offeringsLoadErrorMessage = nil
         await refresh(showLoading: false)
+    }
+
+    /// Picks the best offering when `offerings.current` is unset or empty.
+    private static func resolveOffering(from offerings: Offerings) -> Offering? {
+        if let oid = revenueCatOfferingIdentifierOverride(),
+           let off = offerings.all[oid],
+           !off.availablePackages.isEmpty {
+            return off
+        }
+
+        if let current = offerings.current, !current.availablePackages.isEmpty {
+            return current
+        }
+
+        for preferredID in ["default", "current", "pro", "standard"] {
+            if let off = offerings.all[preferredID], !off.availablePackages.isEmpty {
+                return off
+            }
+        }
+
+        return offerings.all.values.first { !$0.availablePackages.isEmpty }
     }
 
     func canCreateProperty(currentCount: Int) -> Bool {

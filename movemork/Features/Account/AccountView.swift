@@ -118,25 +118,13 @@ struct AccountView: View {
 
     private var planSection: some View {
         accountSection(title: "Plan") {
-            if let err = subscriptionManager.userFacingPlansErrorMessage, !err.isEmpty {
-                MMErrorBanner(
-                    message: err,
-                    retryTitle: MMCopy.tryAgain,
-                    onRetry: {
-                        Task { @MainActor in
-                            await subscriptionManager.refresh()
-                        }
-                    }
-                )
-            }
-
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(subscriptionManager.hasPro ? "MoveMark Pro" : "Free")
+                    Text(subscriptionManager.hasPro ? "MoveMark Pro" : "Free plan")
                         .font(MoveMarkTheme.Typography.subheadlineMedium)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                    Text(planSummaryText)
+                    Text(subscriptionManager.accountPlanSummaryLine)
                         .font(MoveMarkTheme.Typography.footnote)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -146,7 +134,7 @@ struct AccountView: View {
 
                 MMPill(
                     text: subscriptionManager.hasPro ? "Active" : "Current",
-                    tone: .neutral
+                    tone: subscriptionManager.hasPro ? .success : .neutral
                 )
             }
 
@@ -182,14 +170,6 @@ struct AccountView: View {
             } catch {
                 subscriptionRestoreError = MoveMarkFlowMessage.subscriptionRestoreFailed(error)
             }
-        }
-    }
-
-    private var planSummaryText: String {
-        if subscriptionManager.hasPro {
-            return "More reports, move-out proof, and dispute tools."
-        } else {
-            return "1 property. 1 move-in report."
         }
     }
 
