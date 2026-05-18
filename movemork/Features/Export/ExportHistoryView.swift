@@ -375,7 +375,7 @@ struct ExportHistoryView: View {
 
         let reportDetail: String = {
             if isExportReadyForResolvedVault == true {
-                return "Ready to create from saved proof"
+                return "Can make from saved proof"
             }
             return "Unlocks after room proof + docs"
         }()
