@@ -51,6 +51,8 @@ struct RoomListView: View {
                     moveInReportCard
 
                     moveOutLink
+
+                    MMSignedInScrollTailSpacer(kind: .focusedSignedIn)
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
                 .padding(.top, 12)
@@ -78,6 +80,7 @@ struct RoomListView: View {
             AddRoomSheetView(onDismiss: { showAddRoom = false })
                 .presentationDetents([.height(430)])
                 .presentationDragIndicator(.visible)
+                .presentationBackground(MoveMarkTheme.Colors.appBackground)
         }
     }
 
@@ -244,8 +247,7 @@ private struct AddRoomSheetView: View {
     @State private var errorMessage: String? = nil
 
     private let suggestedRoomNames = [
-        "Office", "Den", "Balcony", "Storage",
-        "Garage", "Locker", "Basement", "Parking",
+        "Office", "Hallway", "Balcony", "Storage", "Den",
     ]
 
     private var trimmedName: String {
@@ -262,17 +264,18 @@ private struct AddRoomSheetView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .scrollBounceBehavior(.basedOnSize)
+        .background(MoveMarkTheme.Colors.appBackground)
     }
 
     private var sheetContent: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Add room")
+                    Text("Add a room")
                         .font(MoveMarkTheme.Typography.sectionTitle)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                    Text("Add any space you want to document before move-in.")
+                    Text("Add any space you want documented before move-in.")
                         .font(MoveMarkTheme.Typography.subheadline)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -328,8 +331,8 @@ private struct AddRoomSheetView: View {
             }
         }
         .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-        .padding(.top, 20)
-        .padding(.bottom, 32)
+        .padding(.top, 28)
+        .padding(.bottom, 28)
     }
 
     @ViewBuilder

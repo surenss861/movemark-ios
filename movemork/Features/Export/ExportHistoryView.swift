@@ -131,16 +131,15 @@ struct ExportHistoryView: View {
                             exportSection(title: "Dispute packets", rows: disputeRows)
                         }
                     }
+
+                    if rootTabBarVisible {
+                        MMSignedInScrollTailSpacer(kind: .rootTab)
+                    }
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
                 .padding(.top, 12)
                 .mmScrollContentTopInset(2)
-                .padding(
-                    .bottom,
-                    rootTabBarVisible
-                        ? MoveMarkTheme.Spacing.scrollTailRootTabChrome
-                        : MoveMarkTheme.Spacing.scrollTailFocusedFlow
-                )
+                .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
             }
             .refreshable {
                 await loadExports()
@@ -268,10 +267,10 @@ struct ExportHistoryView: View {
             return "Gathering your saved room proof."
         }
         if isExportReadyForResolvedVault == false {
-            return "Complete each room before creating your report."
+            return "Add room photos and lease docs to unlock your report."
         }
         if currentReportReadiness == .readyToMake {
-            return "Your saved room proof can now be turned into a report."
+            return "Add more rooms and docs for a stronger report."
         }
         if currentReportReadiness == .processing {
             return "Your report is being prepared. This usually takes a minute."
@@ -282,7 +281,10 @@ struct ExportHistoryView: View {
     private var readinessPillDisplay: String? {
         if isLoading { return nil }
         if readinessPillText == "Not ready" { return "Needs more proof" }
-        if readinessPillText == "Ready", currentReportReadiness == .readyToMake { return "Ready" }
+        if readinessPillText == "Ready", currentReportReadiness == .readyToMake {
+            return "Report can be made"
+        }
+        if readinessPillText == "Ready" { return "Ready to share" }
         return readinessPillText == "Loading" ? nil : readinessPillText
     }
 
@@ -311,7 +313,9 @@ struct ExportHistoryView: View {
 
         let roomsState: MMProofChecklistItem.State = {
             if totalRooms == 0 { return .incomplete }
-            return documented > 0 ? .complete : .incomplete
+            if documented == 0 { return .incomplete }
+            if documented >= totalRooms { return .complete }
+            return .incomplete
         }()
 
         let docsState: MMProofChecklistItem.State = missingDocs == 0 ? .complete : .incomplete
@@ -335,7 +339,9 @@ struct ExportHistoryView: View {
         }()
 
         let reportDetail: String = {
-            if isExportReadyForResolvedVault == true { return "Ready to create your move-in report" }
+            if isExportReadyForResolvedVault == true {
+                return "Ready to create from saved proof"
+            }
             return "Unlocks after room proof + docs"
         }()
 
@@ -482,7 +488,7 @@ struct ExportHistoryView: View {
             return "Report ready to share."
         }
         if isExportReadyForResolvedVault == true && exports.isEmpty {
-            return "Your room proof is ready for a report."
+            return "You can make a report now."
         }
         return "Open a vault to see report status."
     }
@@ -502,11 +508,11 @@ struct ExportHistoryView: View {
     }
 
     private var readinessPillTone: MMPill.Tone {
-        switch readinessPillText {
-        case "Ready": return .success
+        switch readinessPillDisplay ?? readinessPillText {
+        case "Report can be made", "Ready to share": return .success
         case "Processing", "Loading": return .warning
         case "Failed": return .danger
-        case "Needs proof": return .warning
+        case "Needs more proof": return .warning
         default: return .neutral
         }
     }
@@ -567,7 +573,7 @@ struct ExportHistoryView: View {
         if isExportReadyForResolvedVault == false {
             return "Finish room proof first."
         }
-        return "Your proof is ready. Make your move-in report from Room proof."
+        return "You can make your move-in report from here."
     }
 
     private var reportPreviewMock: some View {

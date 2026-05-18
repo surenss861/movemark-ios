@@ -87,16 +87,15 @@ struct AccountView: View {
                         kind: .secondary,
                         size: .standard
                     )
+
+                    if rootTabBarVisible {
+                        MMSignedInScrollTailSpacer(kind: .accountTab)
+                    }
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
                 .padding(.top, 12)
                 .mmScrollContentTopInset(2)
-                .padding(
-                    .bottom,
-                    rootTabBarVisible
-                        ? MoveMarkTheme.Spacing.scrollTailAccountTabChrome
-                        : MoveMarkTheme.Spacing.scrollTailFocusedFlow
-                )
+                .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
             }
         }
         .navigationTitle("")
@@ -265,6 +264,7 @@ struct AccountView: View {
                 MMProofListRow(
                     title: subscriptionManager.isLoading ? "Restoring purchases…" : "Restore purchases",
                     subtitle: "Sync MoveMark Pro with this Apple ID",
+                    style: .settings,
                     onTap: { runSubscriptionRestore() }
                 )
                 .disabled(subscriptionManager.isLoading)
@@ -272,13 +272,18 @@ struct AccountView: View {
                 MMProofListRow(
                     title: "Subscriptions in App Store",
                     subtitle: "View or cancel Apple subscriptions",
+                    style: .settings,
                     onTap: { openURL(Self.appleSubscriptionsURL) }
                 )
 
-                settingsLinkRow(title: "Privacy Policy", url: privacyPolicyURL)
-                settingsLinkRow(title: "Terms of Use", url: termsURL)
-                settingsLinkRow(title: "Contact Support", url: supportURL ?? supportEmailURL)
-                settingsLinkRow(title: "Account & Data Deletion", url: accountDeletionURL)
+                settingsLinkRow(title: "Privacy Policy", subtitle: "View privacy policy", url: privacyPolicyURL)
+                settingsLinkRow(title: "Terms of Use", subtitle: "View terms", url: termsURL)
+                settingsLinkRow(title: "Contact Support", subtitle: "Get help", url: supportURL ?? supportEmailURL)
+                settingsLinkRow(
+                    title: "Account & Data Deletion",
+                    subtitle: "Request deletion",
+                    url: accountDeletionURL
+                )
             }
 
             if let subscriptionRestoreFeedback {
@@ -295,10 +300,11 @@ struct AccountView: View {
         }
     }
 
-    private func settingsLinkRow(title: String, url: URL?) -> some View {
+    private func settingsLinkRow(title: String, subtitle: String, url: URL?) -> some View {
         MMProofListRow(
             title: title,
-            subtitle: url == nil ? "Link not configured in this build" : "Opens in browser",
+            subtitle: url == nil ? "Link not configured in this build" : subtitle,
+            style: .settings,
             onTap: {
                 guard let url else { return }
                 openURL(url)

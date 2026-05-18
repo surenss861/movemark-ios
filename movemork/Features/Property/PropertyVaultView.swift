@@ -262,6 +262,8 @@ struct PropertyVaultView: View {
                         .opacity(contentVisible ? 1 : 0)
                         .offset(y: contentVisible ? 0 : 8)
                         .animation(MMMotion.screenTransition.delay(0.20), value: contentVisible)
+
+                    MMSignedInScrollTailSpacer(kind: .focusedSignedIn)
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
                 .padding(.top, 4)

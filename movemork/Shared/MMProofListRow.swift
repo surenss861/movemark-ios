@@ -6,10 +6,20 @@
 import SwiftUI
 
 struct MMProofListRow: View {
+    enum Style {
+        case standard
+        case settings
+    }
+
     let title: String
     let subtitle: String
     var meta: String? = nil
+    var style: Style = .standard
     let onTap: () -> Void
+
+    private var cornerRadius: CGFloat {
+        style == .settings ? 22 : 16
+    }
 
     var body: some View {
         Button(action: onTap) {
@@ -42,12 +52,13 @@ struct MMProofListRow: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
+            .frame(minHeight: style == .settings ? 72 : 0, alignment: .center)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(MoveMarkTheme.Colors.card.opacity(0.96))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(Color.white.opacity(0.08), lineWidth: 1)
             )
         }

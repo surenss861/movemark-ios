@@ -88,9 +88,11 @@ enum MoveMarkTheme {
         static let subtitleToContent: CGFloat = 24
 
         /// Scroll tail when root tab bar is visible (Vaults, Reports).
-        static let scrollTailRootTabChrome: CGFloat = 148
-        /// Extra tail for Account — plan buttons sit low on screen.
-        static let scrollTailAccountTabChrome: CGFloat = 220
+        static let scrollTailRootTabChrome: CGFloat = 180
+        /// Extra tail for Account — Sign out sits above the floating dock.
+        static let scrollTailAccountTabChrome: CGFloat = 210
+        /// Pushed signed-in flows (room proof, property detail) without tab bar.
+        static let scrollTailFocusedSignedIn: CGFloat = 180
         static let scrollTailFocusedFlow: CGFloat = 24
         static let vaultExpansionScrollExtra: CGFloat = 0
     }
@@ -256,5 +258,31 @@ extension View {
     /// Keeps scroll content below status bar / TestFlight chrome.
     func mmScrollContentTopInset(_ extra: CGFloat = 0) -> some View {
         safeAreaPadding(.top, extra)
+    }
+}
+
+/// Clear spacer so scroll content clears the floating tab bar or bottom chrome.
+struct MMSignedInScrollTailSpacer: View {
+    enum Kind {
+        case rootTab
+        case accountTab
+        case focusedSignedIn
+    }
+
+    let kind: Kind
+
+    var body: some View {
+        Color.clear.frame(height: height)
+    }
+
+    private var height: CGFloat {
+        switch kind {
+        case .rootTab:
+            MoveMarkTheme.Spacing.scrollTailRootTabChrome
+        case .accountTab:
+            MoveMarkTheme.Spacing.scrollTailAccountTabChrome
+        case .focusedSignedIn:
+            MoveMarkTheme.Spacing.scrollTailFocusedSignedIn
+        }
     }
 }

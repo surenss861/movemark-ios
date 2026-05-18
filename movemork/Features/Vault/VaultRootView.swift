@@ -145,11 +145,13 @@ struct VaultRootView: View {
                         )
                     }
                 }
+
+                MMSignedInScrollTailSpacer(kind: .rootTab)
             }
             .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
             .padding(.top, 10)
             .mmScrollContentTopInset(2)
-            .padding(.bottom, MoveMarkTheme.Spacing.scrollTailRootTabChrome)
+            .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
         }
         .scrollIndicators(.hidden, axes: .vertical)
         .mmProofShellBackground(heroFocus: false, ctaBloom: false)
@@ -182,22 +184,20 @@ struct VaultRootView: View {
     @ViewBuilder
     private func proofPhotoStrip(for row: PropertyRow) -> some View {
         if let url = previewURLByPropertyId[row.id] {
-            HStack(spacing: 8) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.9))
+            AsyncImage(url: url) { phase in
+                if case .success(let image) = phase {
+                    HStack(spacing: 8) {
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 56, height: 56)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                        Text("Recent room proof")
+                            .font(MoveMarkTheme.Typography.footnote)
+                            .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                     }
                 }
-                .frame(width: 56, height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-                Text("Recent room proof")
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
             }
         }
     }
@@ -406,10 +406,12 @@ struct VaultRootView: View {
                         }
                     )
                 }
+
+                MMSignedInScrollTailSpacer(kind: .rootTab)
             }
             .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
             .padding(.top, 18)
-            .padding(.bottom, MoveMarkTheme.Spacing.scrollTailRootTabChrome)
+            .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
         }
         .mmProofShellBackground(heroFocus: false, ctaBloom: false)
     }
