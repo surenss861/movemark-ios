@@ -51,6 +51,8 @@ final class SubscriptionManager {
     var isStoreKitBusy: Bool = false
     /// Paywall-only: offerings/catalog fetch failed or returned no packages.
     var offeringsLoadErrorMessage: String? = nil
+    /// Last purchase attempt error (paywall), cleared on the next purchase.
+    var lastPurchaseErrorMessage: String? = nil
     /// Startup/configure failure (invalid API key, etc.).
     var configurationErrorMessage: String? = nil
     var currentOffering: Offering? = nil
@@ -150,7 +152,7 @@ final class SubscriptionManager {
     /// Free-tier plan line for Account (never blocked by offerings fetch).
     var accountPlanSummaryLine: String {
         if hasPro {
-            return "Unlimited vaults, reports, and move-out proof"
+            return "Unlimited vaults, reports, move-out proof, and dispute tools."
         }
         return "1 property · 1 move-in report"
     }
@@ -540,40 +542,77 @@ final class SubscriptionManager {
         }
     }
 
-    func purchase(package: Package) async throws {
+    /// Completes purchase, updates `hasPro`, and refreshes offerings in the background. Returns whether Pro is active.
+    @discardableResult
+    func purchase(package: Package) async -> Bool {
+        lastPurchaseErrorMessage = nil
+
         guard Purchases.isConfigured else {
-            throw NSError(
-                domain: "MoveMark.Subscription",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "RevenueCat is not configured. Check your API key for this build."]
-            )
+            lastPurchaseErrorMessage = "Subscriptions aren’t available in this build yet."
+            return false
         }
 
         isStoreKitBusy = true
         defer { isStoreKitBusy = false }
 
-        let result = try await Purchases.shared.purchase(package: package)
-        hasPro = Self.hasActiveProEntitlement(result.customerInfo)
-        offeringsLoadErrorMessage = nil
-        await refresh(showLoading: false)
+        do {
+            let result = try await Purchases.shared.purchase(package: package)
+            hasPro = Self.hasActiveProEntitlement(result.customerInfo)
+            offeringsLoadErrorMessage = nil
+            Task { @MainActor in
+                await self.refresh(showLoading: false)
+            }
+            return hasPro
+        } catch {
+            if !Self.isPurchaseCancelled(error) {
+                lastPurchaseErrorMessage = Self.userFacingPurchaseError(error)
+            }
+            return false
+        }
     }
 
-    func restorePurchases() async throws {
+    /// Restores purchases, updates `hasPro`, and refreshes offerings in the background.
+    @discardableResult
+    func restorePurchases() async -> Bool {
         guard Purchases.isConfigured else {
-            throw NSError(
-                domain: "MoveMark.Subscription",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "RevenueCat is not configured. Check your API key for this build."]
-            )
+            return false
         }
 
         isStoreKitBusy = true
         defer { isStoreKitBusy = false }
 
-        let customerInfo = try await Purchases.shared.restorePurchases()
-        hasPro = Self.hasActiveProEntitlement(customerInfo)
-        offeringsLoadErrorMessage = nil
-        await refresh(showLoading: false)
+        do {
+            let customerInfo = try await Purchases.shared.restorePurchases()
+            hasPro = Self.hasActiveProEntitlement(customerInfo)
+            offeringsLoadErrorMessage = nil
+            Task { @MainActor in
+                await self.refresh(showLoading: false)
+            }
+            return hasPro
+        } catch {
+            return false
+        }
+    }
+
+    private static func isPurchaseCancelled(_ error: Error) -> Bool {
+        if let code = error as? ErrorCode {
+            return code == .purchaseCancelledError
+        }
+        let ns = error as NSError
+        if ns.domain == ErrorCode.errorDomain,
+           let code = ErrorCode(rawValue: ns.code),
+           code == .purchaseCancelledError {
+            return true
+        }
+        return error.localizedDescription.lowercased().contains("cancel")
+    }
+
+    private static func userFacingPurchaseError(_ error: Error) -> String {
+        let lower = error.localizedDescription.lowercased()
+        if lower.contains("network") || lower.contains("offline") || lower.contains("internet") {
+            return "No connection. Check your internet and try again."
+        }
+        return "Purchase didn’t go through. Try again."
     }
 
     /// Picks the best offering when `offerings.current` is unset or empty.

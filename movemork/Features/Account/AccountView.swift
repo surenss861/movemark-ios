@@ -159,16 +159,12 @@ struct AccountView: View {
         subscriptionRestoreError = nil
 
         Task { @MainActor in
-            do {
-                try await subscriptionManager.restorePurchases()
-                if subscriptionManager.hasPro {
-                    subscriptionRestoreFeedback = "MoveMark Pro is active on this Apple ID."
-                } else {
-                    subscriptionRestoreFeedback =
-                        "No active MoveMark subscription was found for this Apple ID. If you subscribed with a different Apple ID, use Subscriptions in App Store or sign into that account in Settings."
-                }
-            } catch {
-                subscriptionRestoreError = MoveMarkFlowMessage.subscriptionRestoreFailed(error)
+            let restored = await subscriptionManager.restorePurchases()
+            if restored, subscriptionManager.hasPro {
+                subscriptionRestoreFeedback = "MoveMark Pro is active on this Apple ID."
+            } else {
+                subscriptionRestoreFeedback =
+                    "No active MoveMark subscription was found for this Apple ID. If you subscribed with a different Apple ID, use Subscriptions in App Store or sign into that account in Settings."
             }
         }
     }

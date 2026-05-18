@@ -21,6 +21,7 @@ struct ProPaywallView: View {
     @State private var initialOfferingsFetchCompleted = false
     @State private var proofToast: MMProofToastMessage? = nil
     @State private var proofToastVisible = false
+    @State private var showPurchaseSuccess = false
 
     /// Store product IDs — must match RevenueCat package products (App Store: monthly/yearly_subscription; Test Store mirror: testmonthly/testyearly).
     private static let monthlyProductIDs = ["monthly_subscription", "testmonthly"]
@@ -41,6 +42,11 @@ struct ProPaywallView: View {
                     .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
                     .padding(.top, 14)
                     .padding(.bottom, 36)
+                }
+                .allowsHitTesting(!showPurchaseSuccess)
+
+                if showPurchaseSuccess {
+                    purchaseSuccessOverlay
                 }
             }
             .task {
@@ -76,8 +82,38 @@ struct ProPaywallView: View {
                     .opacity(subscriptionManager.isStoreKitBusy ? 0.45 : 1)
                 }
             }
-            .interactiveDismissDisabled(subscriptionManager.isStoreKitBusy)
+            .interactiveDismissDisabled(subscriptionManager.isStoreKitBusy || showPurchaseSuccess)
         }
+    }
+
+    private var purchaseSuccessOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.52)
+                .ignoresSafeArea()
+
+            VStack(spacing: 12) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 44, weight: .semibold))
+                    .foregroundStyle(MoveMarkTheme.Colors.primary)
+
+                Text("Pro unlocked")
+                    .font(MoveMarkTheme.Typography.cardTitle)
+                    .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
+            }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 24)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(MoveMarkTheme.Colors.cardRaised.opacity(0.98))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(MoveMarkTheme.Colors.primary.opacity(0.35), lineWidth: 1)
+            )
+        }
+        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Pro unlocked")
     }
 
     private var header: some View {
@@ -161,15 +197,17 @@ struct ProPaywallView: View {
             if let selectedPackage {
                 ZStack {
                     MMButton(
-                        title: subscriptionManager.isStoreKitBusy ? "Starting…" : continuePurchaseTitle(for: selectedPackage),
+                        title: primaryPurchaseButtonTitle(for: selectedPackage),
                         action: { startPurchase(selectedPackage) },
                         kind: .primary,
                         size: .hero,
-                        isDisabled: subscriptionManager.isStoreKitBusy || subscriptionManager.isRefreshingOfferings
+                        isDisabled: subscriptionManager.isStoreKitBusy
+                            || subscriptionManager.isRefreshingOfferings
+                            || showPurchaseSuccess
                     )
                     .opacity(subscriptionManager.isStoreKitBusy ? 0.7 : 1)
 
-                    if subscriptionManager.isStoreKitBusy {
+                    if subscriptionManager.isStoreKitBusy, !showPurchaseSuccess {
                         ProgressView()
                             .tint(.white)
                     }
@@ -375,6 +413,12 @@ struct ProPaywallView: View {
 
     private func paywallBannerMessage(_ raw: String) -> String {
         SubscriptionManager.sanitizedPlansErrorMessage(raw)
+    }
+
+    private func primaryPurchaseButtonTitle(for package: Package) -> String {
+        if showPurchaseSuccess { return "Pro unlocked" }
+        if subscriptionManager.isStoreKitBusy { return "Starting…" }
+        return continuePurchaseTitle(for: package)
     }
 
     private func continuePurchaseTitle(for package: Package) -> String {
@@ -649,35 +693,48 @@ struct ProPaywallView: View {
     }
 
     private func startPurchase(_ package: Package) {
+        guard !subscriptionManager.isStoreKitBusy, !showPurchaseSuccess else { return }
+
         localErrorMessage = nil
         restoreOutcomeMessage = nil
 
         Task { @MainActor in
-            do {
-                try await subscriptionManager.purchase(package: package)
-                onClose()
-            } catch {
-                localErrorMessage = userFacingPaywallError(from: error)
+            let activated = await subscriptionManager.purchase(package: package)
+            guard activated else {
+                if let message = subscriptionManager.lastPurchaseErrorMessage {
+                    localErrorMessage = paywallBannerMessage(message)
+                }
+                return
             }
+
+            await completePurchaseSuccess()
         }
     }
 
     private func restorePurchases() {
+        guard !subscriptionManager.isStoreKitBusy, !showPurchaseSuccess else { return }
+
         localErrorMessage = nil
         restoreOutcomeMessage = nil
 
         Task { @MainActor in
-            do {
-                try await subscriptionManager.restorePurchases()
-                if subscriptionManager.hasPro {
-                    onClose()
-                } else {
-                    restoreOutcomeMessage = "No active subscription was found for this Apple ID."
-                }
-            } catch {
-                localErrorMessage = userFacingPaywallError(from: error)
+            let restored = await subscriptionManager.restorePurchases()
+            if restored, subscriptionManager.hasPro {
+                await completePurchaseSuccess()
+            } else {
+                restoreOutcomeMessage = "No active subscription was found for this Apple ID."
             }
         }
+    }
+
+    @MainActor
+    private func completePurchaseSuccess() async {
+        withAnimation(.easeOut(duration: 0.22)) {
+            showPurchaseSuccess = true
+        }
+        MMHaptics.success()
+        try? await Task.sleep(for: .milliseconds(750))
+        onClose()
     }
 
     private func userFacingPaywallError(from error: Error) -> String {
