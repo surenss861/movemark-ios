@@ -65,11 +65,13 @@ The SDK uses **`offerings.current`** in **Release**. RevenueCat returns whicheve
 
 ### Optional: force a specific offering id (**Debug builds only**)
 
-If **Current** is wrong but another id (e.g. a typo like `testdeault`) has the right packages, add to **Debug** Info.plist:
+If **Current** is wrong but another offering has the right packages, add to **Debug** Info.plist:
 
-- **`RevenueCatOfferingOverride`** = exact offering identifier string  
+- **`RevenueCatOfferingOverride`** = exact offering identifier (e.g. `default`)
 
-**Release ignores this key** — always `offerings.current`.
+Leave this key **unset** in normal development so the SDK uses RevenueCat’s **Current** offering. **Release ignores this key** — always `offerings.current`.
+
+Delete or fix any offering with **zero packages** in the dashboard; RevenueCat will warn even if the app resolves a different offering.
 
 **Simulator:** attach a **StoreKit Configuration** to the scheme with matching product ids, or use a **device** for Test Store.
 

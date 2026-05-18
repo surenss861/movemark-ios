@@ -37,8 +37,8 @@
           "internalID" : "F63F7FD3",
           "localizations" : [
             {
-              "description" : "",
-              "displayName" : "",
+              "description" : "Unlimited properties and move-in reports.",
+              "displayName" : "MoveMark Pro Monthly",
               "locale" : "en_US"
             }
           ],
@@ -64,8 +64,8 @@
           "internalID" : "9CDE04B9",
           "localizations" : [
             {
-              "description" : "",
-              "displayName" : "",
+              "description" : "Best value — unlimited properties and move-in reports.",
+              "displayName" : "MoveMark Pro Yearly",
               "locale" : "en_US"
             }
           ],
