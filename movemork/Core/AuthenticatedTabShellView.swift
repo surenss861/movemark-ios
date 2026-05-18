@@ -2,7 +2,7 @@
 //  AuthenticatedTabShellView.swift
 //  movemork
 //
-//  Root tabs (Vaults / Exports / Account) with tab bar only when appropriate:
+//  Root tabs (Proof / Reports / Account) with tab bar only when appropriate:
 //  bar visible for vault stack root and for Exports & Account tabs; hidden for any vault push
 //  (property detail, walkthrough, capture, move-out, dispute, etc.).
 //
@@ -57,7 +57,7 @@ struct AuthenticatedTabShellView: View {
         .environment(\.mmRootTabBarVisible, showsRootTabBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if showsRootTabBar {
-                MMProofTabBarV2(selectedTab: selectedTabBinding)
+                MMProofTabBarV4(selectedTab: selectedTabBinding)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
@@ -94,11 +94,10 @@ struct AuthenticatedTabShellView: View {
     }
 
     private var tabTransition: AnyTransition {
-        let offset = MMMotion.tabContentShift
-        return .asymmetric(
-            insertion: .opacity.combined(with: .offset(x: offset)),
-            removal: .opacity.combined(with: .offset(x: -offset))
-        )
+        if reduceMotion {
+            return .opacity
+        }
+        return .opacity.combined(with: .offset(y: MMMotion.tabContentRise))
     }
 
     private func consumePendingFirstRunExit() {

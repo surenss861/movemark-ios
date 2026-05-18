@@ -531,7 +531,7 @@ struct ExportHistoryView: View {
                         .font(MoveMarkTheme.Typography.cardTitle)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                    Text("Reports belong to one rental. Open a vault on the Vaults tab, then come back here.")
+                    Text("Reports belong to one rental. Open a vault on the Proof tab, then come back here.")
                         .font(MoveMarkTheme.Typography.subheadline)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)

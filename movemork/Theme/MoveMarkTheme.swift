@@ -89,10 +89,12 @@ enum MoveMarkTheme {
         static let titleToSubtitle: CGFloat = 8
         static let subtitleToContent: CGFloat = 24
 
-        /// Scroll tail when root tab bar is visible (Vaults, Reports).
-        static let scrollTailRootTabChrome: CGFloat = 180
-        /// Extra tail for Account — Sign out sits above the floating dock (66pt bar + insets + safe area).
-        static let scrollTailAccountTabChrome: CGFloat = 240
+        /// Root tab rail content height (icons + labels; safe area is additional).
+        static let rootTabBarContentHeight: CGFloat = 60
+        /// Scroll tail when root tab bar is visible (Proof, Report).
+        static let scrollTailRootTabChrome: CGFloat = 128
+        /// Account — Sign out clears the bottom rail.
+        static let scrollTailAccountTabChrome: CGFloat = 140
         /// Pushed signed-in flows (room proof, property detail) without tab bar.
         static let scrollTailFocusedSignedIn: CGFloat = 180
         static let scrollTailFocusedFlow: CGFloat = 24

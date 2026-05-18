@@ -12,7 +12,7 @@ private struct MMRootTabBarVisibleKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// True only on Vaults / Exports / Account at root — tab bar is on-screen and reserves layout height.
+    /// True only on Proof / Reports / Account at root — tab bar is on-screen and reserves layout height.
     var mmRootTabBarVisible: Bool {
         get { self[MMRootTabBarVisibleKey.self] }
         set { self[MMRootTabBarVisibleKey.self] = newValue }
