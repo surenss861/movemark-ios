@@ -32,6 +32,7 @@ struct ExportHistoryView: View {
     @State private var isExporting = false
     @State private var showPaywall = false
     @State private var activePaywallReason: PaywallReason = .unlimitedExports
+    @State private var reportsContentAppeared = false
 
     private var apiBaseURL: String? {
         guard
@@ -90,12 +91,13 @@ struct ExportHistoryView: View {
                 VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardStack) {
                     header
                     if hasActiveVault {
-                        exportReadinessHero
+                        reportPreviewHero
+                            .mmAppearRise(isVisible: reportsContentAppeared, delay: 0, offset: 6)
 
                         if shouldShowReportProofTrail {
-                            MMProofChecklistCard(
-                                title: "Report readiness",
-                                items: reportChecklistItems
+                            MMReportReadinessChecklist(
+                                items: reportChecklistItems,
+                                appeared: reportsContentAppeared
                             )
                         }
                     }
@@ -122,11 +124,7 @@ struct ExportHistoryView: View {
 
                     if !hasActiveVault && !isLoading {
                         noVaultSelectedState
-                    } else if hasActiveVault && exports.isEmpty && !isLoading {
-                        if isExportReadyForResolvedVault != false {
-                            emptyStateNoExportsYet
-                        }
-                    } else if !isLoading {
+                    } else if !isLoading, !(hasActiveVault && exports.isEmpty) {
                         VStack(alignment: .leading, spacing: 18) {
                             exportSection(title: "Move-in reports", rows: rows(for: "move_in_report"))
                             exportSection(title: "Move-out reports", rows: rows(for: "move_out_report"))
@@ -153,6 +151,9 @@ struct ExportHistoryView: View {
         }
         .onAppear {
             lastReportReadiness = currentReportReadiness
+            if !reportsContentAppeared {
+                reportsContentAppeared = true
+            }
         }
         .sheet(isPresented: $showShareSheet) {
             if !shareItems.isEmpty {
@@ -199,10 +200,7 @@ struct ExportHistoryView: View {
     }
 
     private var headerSubtitle: String {
-        if let name = activeVaultDisplayTitle, !name.isEmpty {
-            return "Build a report from saved room proof for \(name)."
-        }
-        return "Build a report from your saved room proof."
+        "Build a clean report from saved room proof."
     }
 
     private var exportContextStrip: some View {
@@ -251,53 +249,82 @@ struct ExportHistoryView: View {
         }
     }
 
-    private var exportReadinessHero: some View {
-        MMProofPrimaryCard(
-            title: readinessHeroTitle,
-            subtitle: isLoading ? nil : readinessMetricsLine,
-            leadingSystemImage: "doc.richtext",
-            headline: readinessSubline,
-            nextLine: isLoading ? "This only takes a moment." : reportNextStepLine,
-            statusPill: isLoading ? nil : readinessPillDisplay,
-            statusPillTone: readinessPillTone,
-            bodyText: isLoading ? nil : reportBodyLine,
+    private var reportPreviewHero: some View {
+        MMReportPreviewHero(
+            state: reportPreviewHeroState,
+            metricsLine: isLoading ? nil : readinessMetricsLine,
+            headline: reportHeroHeadline,
+            footnote: reportHeroFootnote,
+            proofChips: reportProofChips,
             primaryTitle: reportPrimaryCTA.title,
-            isPrimaryDisabled: isExporting || currentReportReadiness == .processing,
-            inlineLoadingStatus: isLoading ? "Checking saved proof…" : nil,
+            isPrimaryDisabled: isExporting || currentReportReadiness == .processing || isLoading,
+            unlockPulse: reportUnlockPulse,
             onPrimary: reportPrimaryCTA.action
         )
-        .scaleEffect(reportUnlockPulse ? 1.01 : 1)
-        .animation(MMMotion.reportUnlock, value: reportUnlockPulse)
     }
 
-    private var reportNextStepLine: String {
-        if isLoading {
-            return "Gathering your saved room proof."
+    private var reportPreviewHeroState: MMReportPreviewHero.State {
+        if isLoading { return .loading }
+        switch currentReportReadiness {
+        case .notReady, .noVault: return .notReady
+        case .readyToMake: return .canMake
+        case .processing: return .processing
+        case .readyToShare: return .ready
+        case .failed: return .failed
         }
-        if isExportReadyForResolvedVault == false {
-            return "Add room photos and lease docs to unlock your report."
+    }
+
+    private var reportHeroHeadline: String {
+        if isLoading { return "Checking saved proof…" }
+        switch currentReportReadiness {
+        case .notReady, .noVault:
+            return "Finish room proof first."
+        case .readyToMake:
+            return "You can make a report now."
+        case .readyToShare:
+            return "Your report is ready to share."
+        case .processing:
+            return "Building your PDF report."
+        case .failed:
+            return "We couldn't finish your report."
         }
-        if currentReportReadiness == .readyToMake {
+    }
+
+    private var reportHeroFootnote: String? {
+        guard !isLoading else { return nil }
+        switch currentReportReadiness {
+        case .notReady, .noVault:
+            return "Complete each room before creating your report."
+        case .readyToMake:
             return "Add more rooms and docs for a stronger report."
+        default:
+            return nil
         }
-        if currentReportReadiness == .processing {
-            return "Your report is being prepared. This usually takes a minute."
-        }
-        return "Share or download when processing finishes."
     }
 
-    private var readinessPillDisplay: String? {
-        if isLoading { return nil }
-        if readinessPillText == "Not ready" { return "Needs more proof" }
-        if readinessPillText == "Ready", currentReportReadiness == .readyToMake {
-            return "Report can be made"
-        }
-        if readinessPillText == "Ready" { return "Ready to share" }
-        return readinessPillText == "Loading" ? nil : readinessPillText
-    }
+    private var reportProofChips: [String] {
+        guard let property = resolvedPropertyRecord else { return [] }
+        var chips: [String] = []
 
-    private var reportBodyLine: String? {
-        nil
+        let totalRooms = propertyStore.totalRoomCount(for: property)
+        let documented = propertyStore.documentedRoomCount(for: property)
+        if totalRooms > 0 {
+            chips.append("\(documented)/\(totalRooms) rooms")
+        }
+
+        let photos = propertyStore.totalPhotoCount(for: property)
+        if photos > 0 {
+            chips.append(photos == 1 ? "1 photo" : "\(photos) photos")
+        }
+
+        let requiredDocs = PropertyStore.moveInRequiredDocumentTypes.count
+        let missingDocs = propertyStore.missingSupportingRecordCount(for: property)
+        let uploadedDocs = max(0, requiredDocs - missingDocs)
+        if requiredDocs > 0 {
+            chips.append("\(uploadedDocs)/\(requiredDocs) docs")
+        }
+
+        return chips
     }
 
     private var reportChecklistItems: [MMProofChecklistItem] {
@@ -450,31 +477,18 @@ struct ExportHistoryView: View {
                 showPaywall = true
             })
         case .readyToShare:
-            return ("Share report", {
+            return ("View / Share report", {
                 if let row = exports.first(where: { verificationStatus[$0.id] == .ready }) {
                     share(row)
                 }
             })
         case .processing:
-            return ("Processing report…", {})
+            return ("Building…", {})
         case .failed:
             return ("Try again", { Task { await loadExports() } })
         case .noVault:
             return ("Open vaults", { onOpenVaults?() })
         }
-    }
-
-    private var reportPreviewStatus: MMReportPreviewCard.Status {
-        if readinessPillText == "Processing" { return .processing }
-        if readinessPillText == "Failed" { return .failed }
-        if exports.contains(where: { verificationStatus[$0.id] == .ready }) { return .readyToShare }
-        if isExportReadyForResolvedVault == false { return .notReady }
-        if isExportReadyForResolvedVault == true && exports.isEmpty { return .readyToMake }
-        return .notReady
-    }
-
-    private var readinessHeroTitle: String {
-        "Your move-in report"
     }
 
     private var readinessMetricsLine: String? {
@@ -493,20 +507,6 @@ struct ExportHistoryView: View {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    private var readinessSubline: String {
-        if isLoading { return "Checking saved proof…" }
-        if isExportReadyForResolvedVault == false {
-            return "Finish room proof first."
-        }
-        if exports.contains(where: { verificationStatus[$0.id] == .ready }) {
-            return "Report ready to share."
-        }
-        if isExportReadyForResolvedVault == true && exports.isEmpty {
-            return "You can make a report now."
-        }
-        return "Open a vault to see report status."
-    }
-
     private var readinessPillText: String {
         if isLoading { return "Loading" }
         if exports.contains(where: { ($0.exportType == "move_in_report") && ((verificationStatus[$0.id] == .processing) || (verificationStatus[$0.id] == .queued) || (verificationStatus[$0.id] == .verifying)) }) {
@@ -519,16 +519,6 @@ struct ExportHistoryView: View {
         if exports.contains(where: { $0.exportType == "move_in_report" }) { return "Ready" }
         if isExportReadyForResolvedVault == true { return "Ready" }
         return hasActiveVault ? "Not ready" : "No vault"
-    }
-
-    private var readinessPillTone: MMPill.Tone {
-        switch readinessPillDisplay ?? readinessPillText {
-        case "Report can be made", "Ready to share": return .success
-        case "Processing", "Loading": return .warning
-        case "Failed": return .danger
-        case "Needs more proof": return .warning
-        default: return .neutral
-        }
     }
 
     private var noVaultSelectedState: some View {
@@ -558,36 +548,6 @@ struct ExportHistoryView: View {
                 }
             }
         }
-    }
-
-    /// Active vault, export-ready or still loading readiness, and no rows yet.
-    private var emptyStateNoExportsYet: some View {
-        MMCard(tone: .quiet, padding: 18, spacing: 16) {
-            VStack(alignment: .leading, spacing: 14) {
-                reportPreviewMock
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("No reports yet")
-                        .font(MoveMarkTheme.Typography.cardTitle)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                    Text(emptyStateNoExportsBody)
-                        .font(MoveMarkTheme.Typography.subheadline)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-    }
-
-    private var emptyStateNoExportsBody: String {
-        if resolvedPropertyRecord == nil {
-            return "Open your vault, add room photos, then make your move-in report."
-        }
-        if isExportReadyForResolvedVault == false {
-            return "Finish room proof first."
-        }
-        return "You can make your move-in report from here."
     }
 
     private var reportPreviewMock: some View {
