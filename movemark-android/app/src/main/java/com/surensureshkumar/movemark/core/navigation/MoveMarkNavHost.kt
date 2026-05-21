@@ -1,0 +1,110 @@
+package com.surensureshkumar.movemark.core.navigation
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.surensureshkumar.movemark.data.auth.AuthState
+import com.surensureshkumar.movemark.features.auth.AuthMode
+import com.surensureshkumar.movemark.features.auth.AuthScreen
+import com.surensureshkumar.movemark.features.firstrun.CreatePropertyScreen
+import com.surensureshkumar.movemark.features.main.MainShellScreen
+import com.surensureshkumar.movemark.features.proof.RoomProofScreen
+import com.surensureshkumar.movemark.features.welcome.WelcomeScreen
+import com.surensureshkumar.movemark.features.welcome.WelcomeViewModel
+import java.util.UUID
+
+@Composable
+fun MoveMarkNavHost() {
+    val navController = rememberNavController()
+    val welcomeVm: WelcomeViewModel = hiltViewModel()
+    val authState by welcomeVm.authState.collectAsState()
+    val hasProperty by welcomeVm.hasProperty.collectAsState()
+
+    LaunchedEffect(authState, hasProperty) {
+        when (authState) {
+            AuthState.Loading -> Unit
+            AuthState.SignedOut -> {
+                if (navController.currentDestination?.route != Routes.Welcome) {
+                    navController.navigate(Routes.Welcome) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+            AuthState.SignedIn -> {
+                val dest = when {
+                    hasProperty == false -> Routes.CreateProperty
+                    hasProperty == true -> Routes.Main
+                    else -> return@LaunchedEffect
+                }
+                if (navController.currentDestination?.route != dest) {
+                    navController.navigate(dest) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+        }
+    }
+
+    NavHost(navController = navController, startDestination = Routes.Welcome) {
+        composable(Routes.Welcome) {
+            WelcomeScreen(
+                onStartMoveIn = {
+                    navController.navigate(Routes.auth("signUp"))
+                },
+                onContinue = {
+                    navController.navigate(Routes.auth("signIn"))
+                },
+            )
+        }
+        composable(
+            route = Routes.Auth,
+            arguments = listOf(navArgument("mode") { defaultValue = "signIn" }),
+        ) { entry ->
+            val mode = entry.arguments?.getString("mode")
+            AuthScreen(
+                initialMode = if (mode == "signUp") AuthMode.SignUp else AuthMode.SignIn,
+                onDismiss = { navController.popBackStack() },
+            )
+        }
+        composable(Routes.CreateProperty) {
+            CreatePropertyScreen(
+                onCreated = {
+                    navController.navigate(Routes.Main) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
+            )
+        }
+        composable(Routes.Main) {
+            MainShellScreen(
+                onOpenRoom = { roomId ->
+                    navController.navigate(Routes.roomProof(roomId.toString()))
+                },
+                onSignOut = {
+                    navController.navigate(Routes.Welcome) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
+            )
+        }
+        composable(
+            route = Routes.RoomProof,
+            arguments = listOf(navArgument(Routes.RoomProofArg) { type = NavType.StringType }),
+        ) { entry ->
+            val roomId = entry.arguments?.getString(Routes.RoomProofArg)?.let { UUID.fromString(it) }
+            if (roomId != null) {
+                RoomProofScreen(
+                    roomId = roomId,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+        }
+    }
+}

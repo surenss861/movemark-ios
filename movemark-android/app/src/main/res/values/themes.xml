@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.MoveMark" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#FF07120E</item>
+        <item name="android:navigationBarColor">#FF07120E</item>
+        <item name="android:windowBackground">#FF07120E</item>
+    </style>
+</resources>

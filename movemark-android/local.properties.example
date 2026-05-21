@@ -1,0 +1,10 @@
+# Copy to local.properties (gitignored). Same Supabase project as iOS movemork.
+sdk.dir=/Users/YOUR_USER/Library/Android/sdk
+
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key
+
+MOVE_MARK_API_BASE_URL=https://movemark-api-production.up.railway.app
+
+# RevenueCat Android public SDK key (when enabling Play Billing)
+REVENUECAT_PUBLIC_KEY=
