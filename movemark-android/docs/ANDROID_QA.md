@@ -1,5 +1,7 @@
 # MoveMark Android QA
 
+**First device run:** follow [`ANDROID_MANUAL_QA_GATE.md`](ANDROID_MANUAL_QA_GATE.md) and `./scripts/android-device-qa.sh` from the `movemork` repo root.
+
 Run from:
 
 ```bash

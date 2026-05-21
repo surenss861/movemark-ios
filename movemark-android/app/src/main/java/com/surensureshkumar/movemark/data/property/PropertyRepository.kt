@@ -71,7 +71,9 @@ class PropertyRepository @Inject constructor(
                 sortOrder = index,
             )
         }
-        client.from("rooms").insert(rooms)
+        client.from("rooms").insert(rooms) {
+            select()
+        }
     }
 
     suspend fun insertRoom(propertyId: UUID, name: String, sortOrder: Int): RoomRow {
