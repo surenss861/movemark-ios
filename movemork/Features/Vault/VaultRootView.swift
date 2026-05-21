@@ -98,7 +98,7 @@ struct VaultRootView: View {
     }
 
     private var vaultsDashboard: some View {
-        ScrollView {
+            ScrollView {
             VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardStack) {
                 MMProofSectionHeader(
                     title: "Your proof",
@@ -110,13 +110,13 @@ struct VaultRootView: View {
                 .offset(y: hasAnimatedIn ? 0 : 8)
                 .animation(MMMotion.cardReveal.delay(0.04), value: hasAnimatedIn)
 
-                if let error = propertyStore.errorMessage {
-                    MMErrorBanner(
-                        message: error,
-                        retryTitle: MMCopy.tryAgain,
-                        onRetry: { Task { await reload() } }
-                    )
-                }
+                    if let error = propertyStore.errorMessage {
+                        MMErrorBanner(
+                            message: error,
+                            retryTitle: MMCopy.tryAgain,
+                            onRetry: { Task { await reload() } }
+                        )
+                    }
 
                 if let row = featuredPropertyRow {
                     primaryVaultCard(for: row)
@@ -148,17 +148,17 @@ struct VaultRootView: View {
             .padding(.top, 10)
             .mmScrollContentTopInset(2)
             .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
-        }
-        .scrollIndicators(.hidden, axes: .vertical)
+            }
+            .scrollIndicators(.hidden, axes: .vertical)
         .mmProofShellBackground(heroFocus: false, ctaBloom: false)
         .task { await loadPreviewURLs() }
         .task(id: featuredPropertyId) { await ensureFeaturedPropertyLoaded() }
         .task(id: otherProperties.map(\.id)) { await loadOtherRentalSummaries() }
-        .onChange(of: scenePhase) { _, phase in
+            .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await loadPreviewURLs() } }
-        }
-        .onAppear {
-            guard !hasAnimatedIn else { return }
+            }
+            .onAppear {
+                guard !hasAnimatedIn else { return }
             withAnimation(.easeOut(duration: 0.42)) { hasAnimatedIn = true }
         }
     }
@@ -199,13 +199,13 @@ struct VaultRootView: View {
     }
 
     private func presentAddProperty() {
-        if subscriptionManager.canCreateProperty(currentCount: propertyStore.properties.count) {
-            showAddProperty = true
-        } else {
-            activePaywallReason = .extraProperty
-            showPaywall = true
-        }
-    }
+                if subscriptionManager.canCreateProperty(currentCount: propertyStore.properties.count) {
+                    showAddProperty = true
+                } else {
+                    activePaywallReason = .extraProperty
+                    showPaywall = true
+                }
+            }
 
     private func loadOtherRentalSummaries() async {
         guard let userId = sessionManager.userId else { return }

@@ -36,7 +36,7 @@ struct WelcomeScreen: View {
                 let cardWidth = min(geo.size.width - contentPadding * 2, 420)
                 let dockSideInset = max(0, launchDockHorizontalInset - contentPadding)
 
-                ZStack {
+            ZStack {
                     MMEmeraldBackground(emphasizesHeroZone: false, emphasizesCTABloom: false)
 
                     welcomeContent(
@@ -52,7 +52,7 @@ struct WelcomeScreen: View {
 
                     if showAuth {
                         Color.black.opacity(0.38)
-                            .ignoresSafeArea()
+                    .ignoresSafeArea()
                             .transition(reduceMotion ? .opacity : .opacity.animation(.easeOut(duration: 0.28)))
 
                         AuthContainerView(initialMode: authInitialMode) {
@@ -175,7 +175,7 @@ struct WelcomeScreen: View {
                 .font(.system(size: 32, weight: .bold))
                 .tracking(-0.7)
                 .lineSpacing(2)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 .lineLimit(2)
                 .minimumScaleFactor(0.92)
                 .fixedSize(horizontal: false, vertical: true)

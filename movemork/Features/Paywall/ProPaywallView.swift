@@ -721,6 +721,8 @@ struct ProPaywallView: View {
             let restored = await subscriptionManager.restorePurchases()
             if restored, subscriptionManager.hasPro {
                 await completePurchaseSuccess()
+            } else if let err = subscriptionManager.lastRestoreErrorMessage {
+                restoreOutcomeMessage = err
             } else {
                 restoreOutcomeMessage = "No active subscription was found for this Apple ID."
             }

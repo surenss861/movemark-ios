@@ -23,11 +23,8 @@ enum UserFacingDatabaseError {
     static func message(from error: Error, fallback: String, intent: Intent = .load) -> String {
         let lower = error.localizedDescription.lowercased()
 
-        if lower.contains("not authenticated")
-            || lower.contains("invalid jwt")
-            || lower.contains("jwt")
-            || lower.contains("session")
-            || lower.contains("refresh token") {
+        if MoveMarkSessionExpiry.requiresReauthentication(error) {
+            MoveMarkSessionExpiry.notifyIfNeeded(for: error)
             return "Session expired. Please sign in again."
         }
 

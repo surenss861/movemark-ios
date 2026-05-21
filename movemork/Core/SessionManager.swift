@@ -9,6 +9,33 @@ import Foundation
 import Observation
 import Supabase
 
+/// Holds the session-expiry notification observer so `deinit` can remove it off the main actor.
+private final class SessionExpiryObserverBox: @unchecked Sendable {
+    private let lock = NSLock()
+    nonisolated(unsafe) private var token: NSObjectProtocol?
+
+    nonisolated init() {}
+
+    nonisolated func install(handler: @escaping () -> Void) {
+        lock.lock()
+        if let token { NotificationCenter.default.removeObserver(token) }
+        token = NotificationCenter.default.addObserver(
+            forName: .moveMarkSessionExpired,
+            object: nil,
+            queue: .main,
+            using: { _ in handler() }
+        )
+        lock.unlock()
+    }
+
+    nonisolated func remove() {
+        lock.lock()
+        if let token { NotificationCenter.default.removeObserver(token) }
+        token = nil
+        lock.unlock()
+    }
+}
+
 /// Thread-safe holder so `SessionManager.deinit` can cancel the auth listener without touching `@MainActor` state.
 private final class TaskCancellationBox: @unchecked Sendable {
     private let lock = NSLock()
@@ -56,7 +83,16 @@ final class SessionManager {
     /// `SessionManager` is `@MainActor`; `deinit` is not — the box is the only cross-isolation handle to the listener task.
     private let authStateTaskBox = TaskCancellationBox()
 
+    private let sessionExpiryObserverBox = SessionExpiryObserverBox()
+
     init() {
+        sessionExpiryObserverBox.install { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                await self.signOut()
+            }
+        }
+
         Task {
             await bootstrap()
         }
@@ -64,6 +100,7 @@ final class SessionManager {
 
     deinit {
         authStateTaskBox.cancel()
+        sessionExpiryObserverBox.remove()
     }
 
     func bootstrap() async {

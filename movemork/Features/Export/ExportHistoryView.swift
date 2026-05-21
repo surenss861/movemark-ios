@@ -1011,9 +1011,31 @@ struct ExportHistoryView: View {
         }
     }
 
+    private var hasActiveMoveInExportJob: Bool {
+        exports.contains { row in
+            guard row.exportType == "move_in_report" else { return false }
+            guard let status = verificationStatus[row.id] else { return false }
+            switch status {
+            case .queued, .processing, .verifying:
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
     private func requestMoveInExport() {
         guard let property = resolvedPropertyRecord ?? propertyStore.currentProperty else { return }
         guard !isExporting else { return }
+        guard !hasActiveMoveInExportJob else {
+            errorMessage = "A move-in report is already queued or processing. Open Reports to check status."
+            MMProofToastPresenter.show(
+                .reportQueued(),
+                message: $proofToast,
+                isVisible: $proofToastVisible
+            )
+            return
+        }
         guard isExportReadyForResolvedVault == true else { return }
         guard subscriptionManager.canExportMoveIn(forUser: sessionManager.userId) else {
             activePaywallReason = .unlimitedExports

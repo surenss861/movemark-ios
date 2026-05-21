@@ -183,7 +183,7 @@ enum MMProofTimelineBuilder {
         var rows: [MMProofTimelineRow] = []
         let uploaded = Set(property.vaultDocuments)
 
-        let documentedRooms = property.rooms.filter { !$0.evidence.isEmpty }
+        let documentedRooms = property.rooms.filter { MMRoomProofMetrics.isDocumented($0) }
         let recentRooms = documentedRooms.sorted { lhs, rhs in
             let left = lhs.evidence.map(\.createdAt).max() ?? .distantPast
             let right = rhs.evidence.map(\.createdAt).max() ?? .distantPast
@@ -205,7 +205,7 @@ enum MMProofTimelineBuilder {
             )
         }
 
-        if let nextRoom, nextRoom.evidence.isEmpty {
+        if let nextRoom, !MMRoomProofMetrics.isDocumented(nextRoom) {
             rows.append(
                 MMProofTimelineRow(
                     id: "room-\(nextRoom.id.uuidString)",
@@ -338,7 +338,7 @@ enum MMProofTimelineBuilder {
         }
 
         var rows: [MMProofTimelineRow] = []
-        let documented = property.rooms.filter { !$0.evidence.isEmpty }.count
+        let documented = property.rooms.filter { MMRoomProofMetrics.isDocumented($0) }.count
         let total = property.rooms.count
         let photos = property.rooms.flatMap(\.evidence).reduce(0) { $0 + $1.photoCount }
 

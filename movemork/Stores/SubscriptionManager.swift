@@ -53,6 +53,8 @@ final class SubscriptionManager {
     var offeringsLoadErrorMessage: String? = nil
     /// Last purchase attempt error (paywall), cleared on the next purchase.
     var lastPurchaseErrorMessage: String? = nil
+    /// Last restore attempt error (paywall / account), cleared on the next restore.
+    var lastRestoreErrorMessage: String? = nil
     /// Startup/configure failure (invalid API key, etc.).
     var configurationErrorMessage: String? = nil
     var currentOffering: Offering? = nil
@@ -157,7 +159,7 @@ final class SubscriptionManager {
         return "1 property · 1 move-in report"
     }
 
-    static func sanitizedPlansErrorMessage(_ raw: String) -> String {
+    nonisolated static func sanitizedPlansErrorMessage(_ raw: String) -> String {
         let lower = raw.lowercased()
         if lower.contains("revenuecat")
             || lower.contains("offering")
@@ -574,7 +576,11 @@ final class SubscriptionManager {
     /// Restores purchases, updates `hasPro`, and refreshes offerings in the background.
     @discardableResult
     func restorePurchases() async -> Bool {
+        lastRestoreErrorMessage = nil
+
         guard Purchases.isConfigured else {
+            lastRestoreErrorMessage = configurationErrorMessage
+                ?? "Subscriptions aren’t available in this build yet."
             return false
         }
 
@@ -590,8 +596,20 @@ final class SubscriptionManager {
             }
             return hasPro
         } catch {
+            lastRestoreErrorMessage = Self.userFacingRestoreError(error)
             return false
         }
+    }
+
+    private static func userFacingRestoreError(_ error: Error) -> String {
+        if isPurchaseCancelled(error) {
+            return "Restore cancelled."
+        }
+        let lower = error.localizedDescription.lowercased()
+        if lower.contains("network") || lower.contains("offline") || lower.contains("internet") {
+            return "No connection. Check your internet and try again."
+        }
+        return "Couldn’t restore purchases. Try again in a moment."
     }
 
     private static func isPurchaseCancelled(_ error: Error) -> Bool {

@@ -65,10 +65,10 @@ struct EvidenceCaptureView: View {
         return room?.evidence ?? []
     }
 
-    /// Move-in only: room is documented when it has at least one evidence entry.
+    /// Move-in only: room is documented when it has at least one photo on file.
     var isRoomCurrentlyDocumented: Bool {
         guard let room else { return false }
-        return !room.evidence.isEmpty
+        return MMRoomProofMetrics.isDocumented(room)
     }
 
     var body: some View {
@@ -658,6 +658,7 @@ private struct AppendPhotosSheet: View {
     }
 
     private func commitAppend() async {
+        guard !isUploading else { return }
         localError = nil
         let data = loadedImages.compactMap { $0.jpegData(compressionQuality: 0.82) }
         guard !data.isEmpty else {
