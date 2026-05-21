@@ -2,6 +2,8 @@
 
 Use this after the reliability pass. Goal: a random renter can install, sign up, document one room, make a report, and manage subscription **without hitting something broken**.
 
+**Completion audit (code vs device):** see [`VIBE_CLEANUP_COMPLETION.md`](VIBE_CLEANUP_COMPLETION.md).
+
 Run on **TestFlight** (or Release archive) with production `appl_…` RevenueCat key.
 
 ---
