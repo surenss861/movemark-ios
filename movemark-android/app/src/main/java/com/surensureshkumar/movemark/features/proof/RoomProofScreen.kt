@@ -29,6 +29,7 @@ import java.util.UUID
 fun RoomProofScreen(
     roomId: UUID,
     onBack: () -> Unit,
+    onProofSaved: (UUID) -> Unit,
     viewModel: RoomProofViewModel = hiltViewModel(),
 ) {
     val room by viewModel.room.collectAsState()
@@ -36,7 +37,7 @@ fun RoomProofScreen(
     val uploading by viewModel.uploading.collectAsState()
     val message by viewModel.message.collectAsState()
     LaunchedEffect(Unit) {
-        viewModel.proofSaved.collect { onBack() }
+        viewModel.proofSaved.collect { payload -> onProofSaved(payload.roomId) }
     }
 
     val picker = rememberLauncherForActivityResult(

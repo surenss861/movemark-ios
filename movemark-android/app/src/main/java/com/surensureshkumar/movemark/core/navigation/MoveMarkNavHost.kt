@@ -4,24 +4,36 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.surensureshkumar.movemark.core.di.MoveMarkEntryPoints
 import com.surensureshkumar.movemark.data.auth.AuthState
 import com.surensureshkumar.movemark.features.auth.AuthMode
 import com.surensureshkumar.movemark.features.auth.AuthScreen
 import com.surensureshkumar.movemark.features.firstrun.CreatePropertyScreen
 import com.surensureshkumar.movemark.features.main.MainShellScreen
 import com.surensureshkumar.movemark.features.proof.RoomProofScreen
+import com.surensureshkumar.movemark.features.proof.SavedProofReceiptScreen
 import com.surensureshkumar.movemark.features.welcome.WelcomeScreen
 import com.surensureshkumar.movemark.features.welcome.WelcomeViewModel
+import dagger.hilt.android.EntryPointAccessors
 import java.util.UUID
 
 @Composable
 fun MoveMarkNavHost() {
+    val context = LocalContext.current
+    val mainTabRequest = remember(context) {
+        EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            MoveMarkEntryPoints::class.java,
+        ).mainTabRequest()
+    }
     val navController = rememberNavController()
     val welcomeVm: WelcomeViewModel = hiltViewModel()
     val authState by welcomeVm.authState.collectAsState()
@@ -103,6 +115,44 @@ fun MoveMarkNavHost() {
                 RoomProofScreen(
                     roomId = roomId,
                     onBack = { navController.popBackStack() },
+                    onProofSaved = { savedRoomId ->
+                        navController.navigate(Routes.savedProofReceipt(savedRoomId.toString())) {
+                            popUpTo(Routes.roomProof(savedRoomId.toString())) { inclusive = true }
+                        }
+                    },
+                )
+            }
+        }
+        composable(
+            route = Routes.SavedProofReceipt,
+            arguments = listOf(navArgument(Routes.SavedProofReceiptArg) { type = NavType.StringType }),
+        ) { entry ->
+            val roomId = entry.arguments?.getString(Routes.SavedProofReceiptArg)?.let { UUID.fromString(it) }
+            if (roomId != null) {
+                SavedProofReceiptScreen(
+                    roomId = roomId,
+                    onContinueNextRoom = { nextRoomId ->
+                        if (nextRoomId != null) {
+                            navController.navigate(Routes.roomProof(nextRoomId.toString())) {
+                                popUpTo(Routes.SavedProofReceipt) { inclusive = true }
+                            }
+                        } else {
+                            mainTabRequest.request(MainTab.Reports)
+                            navController.popBackStack(Routes.Main, false)
+                        }
+                    },
+                    onViewVault = {
+                        mainTabRequest.request(MainTab.Vault)
+                        navController.popBackStack(Routes.Main, false)
+                    },
+                    onAddMorePhotos = { id ->
+                        navController.navigate(Routes.roomProof(id.toString())) {
+                            popUpTo(Routes.SavedProofReceipt) { inclusive = true }
+                        }
+                    },
+                    onBackSafe = {
+                        navController.popBackStack(Routes.Main, false)
+                    },
                 )
             }
         }

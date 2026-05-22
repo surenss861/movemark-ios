@@ -11,6 +11,11 @@ object Routes {
     const val RoomProofArg = "roomId"
 
     fun roomProof(roomId: String) = "room_proof/$roomId"
+
+    const val SavedProofReceipt = "saved_proof_receipt/{roomId}"
+    const val SavedProofReceiptArg = "roomId"
+
+    fun savedProofReceipt(roomId: String) = "saved_proof_receipt/$roomId"
 }
 
 enum class MainTab { Vault, Rooms, Reports, Account }

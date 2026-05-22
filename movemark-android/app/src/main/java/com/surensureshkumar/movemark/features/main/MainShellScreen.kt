@@ -3,6 +3,8 @@ package com.surensureshkumar.movemark.features.main
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -25,6 +27,12 @@ fun MainShellScreen(
     viewModel: MainShellViewModel = hiltViewModel(),
 ) {
     var tab by rememberSaveable { mutableStateOf(MainTab.Vault) }
+    val pendingTab by viewModel.pendingTab.collectAsState()
+
+    LaunchedEffect(pendingTab) {
+        pendingTab?.let { tab = it }
+        if (pendingTab != null) viewModel.clearTabRequest()
+    }
 
     MMBackground {
         Scaffold(

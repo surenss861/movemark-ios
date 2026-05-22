@@ -34,6 +34,7 @@ class RoomProofViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val sessionManager: SessionManager,
     private val propertyStore: PropertyStore,
+    private val receiptCache: SavedProofReceiptCache,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     val roomId: UUID = UUID.fromString(checkNotNull(savedStateHandle.get<String>("roomId")))
@@ -52,8 +53,8 @@ class RoomProofViewModel @Inject constructor(
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
-    private val _proofSaved = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val proofSaved: SharedFlow<Unit> = _proofSaved.asSharedFlow()
+    private val _proofSaved = MutableSharedFlow<SavedProofReceiptPayload>(extraBufferCapacity = 1)
+    val proofSaved: SharedFlow<SavedProofReceiptPayload> = _proofSaved.asSharedFlow()
 
     fun addUris(uris: List<Uri>) {
         viewModelScope.launch {
@@ -92,25 +93,40 @@ class RoomProofViewModel @Inject constructor(
             _uploading.value = true
             _message.value = null
             try {
+                val photosToUpload = _photos.value
+                val thumbnail = photosToUpload.firstOrNull()
                 val result = withContext(Dispatchers.IO) {
                     propertyStore.addEvidence(
                         roomId = room.id,
                         title = room.name,
                         notes = "",
-                        photos = _photos.value,
+                        photos = photosToUpload,
                         propertyId = property.id,
                         userId = userId,
                     )
                 }
-                _photos.value = emptyList()
-                var msg = "Proof saved."
-                if (result.hadPartialFailure) {
-                    msg += " ${result.savedCount} of ${result.attemptedCount} photos uploaded; retry to add the rest."
-                } else if (!result.hydrationRefreshed) {
-                    msg += " Counts may update when you refresh."
+                if (result.savedCount <= 0) {
+                    _message.value = "Photos could not be uploaded. Check your connection and try again."
+                    return@launch
                 }
-                _message.value = msg
-                _proofSaved.tryEmit(Unit)
+                _photos.value = emptyList()
+                val payload = SavedProofReceiptPayload(
+                    roomId = room.id,
+                    roomName = room.name,
+                    propertyId = property.id,
+                    savedCount = result.savedCount,
+                    attemptedCount = result.attemptedCount,
+                    hadPartialFailure = result.hadPartialFailure,
+                    timestampMillis = System.currentTimeMillis(),
+                    thumbnailJpeg = thumbnail,
+                )
+                receiptCache.put(payload)
+                if (result.hadPartialFailure) {
+                    _message.value = "${result.savedCount} of ${result.attemptedCount} photos uploaded"
+                } else {
+                    _message.value = null
+                }
+                _proofSaved.tryEmit(payload)
             } catch (e: Exception) {
                 _message.value = e.message ?: "Save failed."
             } finally {
