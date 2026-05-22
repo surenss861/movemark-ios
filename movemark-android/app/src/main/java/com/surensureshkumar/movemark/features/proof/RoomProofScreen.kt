@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -153,34 +154,24 @@ fun RoomProofScreen(
                 .padding(horizontal = MMSpacing.ScreenHorizontal.dp, vertical = 24.dp),
         ) {
             TextButton(onClick = { handleBack() }) { Text("Back", color = MMColors.TextSecondary) }
-            if (proofPhase == ProofPhase.MoveOut) {
-                Text(
-                    "Move-out proof",
-                    style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
-                    color = MMColors.TextMuted,
-                )
-                Spacer(Modifier.height(4.dp))
-            }
-            Text(
-                text = room?.name ?: "Room",
-                style = androidx.compose.material3.MaterialTheme.typography.headlineLarge,
-            )
-            Spacer(Modifier.height(8.dp))
             val documented = room?.let { RoomProofMetrics.isDocumented(it, proofPhase) } == true
             val pendingSelected = photos.count { it.status != PhotoUploadStatus.Uploaded }
             val uploadingProgress = saveState as? RoomProofSaveState.Uploading
-            Text(
-                text = when {
-                    uploadingProgress != null ->
-                        "Uploading ${uploadingProgress.currentIndex} of ${uploadingProgress.total}…"
-                    pendingSelected > 0 -> "$pendingSelected photos selected"
-                    documented && proofPhase == ProofPhase.MoveOut -> "Move-out proof on file"
-                    documented -> "Room has saved proof on file"
-                    proofPhase == ProofPhase.MoveOut -> "No move-out photos yet"
-                    else -> "No photos yet"
-                },
-                color = MMColors.TextSecondary,
+            val onFileCount = room?.let { RoomProofMetrics.photoCount(it, proofPhase) } ?: 0
+            val statusLine = when {
+                uploadingProgress != null ->
+                    "Uploading ${uploadingProgress.currentIndex} of ${uploadingProgress.total}…"
+                pendingSelected > 0 -> "$pendingSelected photos ready to save"
+                documented -> "$onFileCount on file · add more anytime"
+                proofPhase == ProofPhase.MoveOut -> "Capture move-out photos for this room"
+                else -> "Capture move-in photos for this room"
+            }
+            RoomProofCaptureHero(
+                roomName = room?.name ?: "Room",
+                proofPhase = proofPhase,
+                statusLine = statusLine,
             )
+            Spacer(Modifier.height(16.dp))
 
             if (photos.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
@@ -231,7 +222,19 @@ fun RoomProofScreen(
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(20.dp))
+            Text(
+                "Add proof photos",
+                style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                color = MMColors.TextPrimary,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Use the camera or pick from your gallery.",
+                color = MMColors.TextSecondary,
+                fontSize = 14.sp,
+            )
+            Spacer(Modifier.height(16.dp))
             MMButton(
                 text = "Take photos",
                 onClick = ::launchCamera,

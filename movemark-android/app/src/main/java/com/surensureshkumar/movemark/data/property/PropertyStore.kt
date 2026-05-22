@@ -98,6 +98,21 @@ class PropertyStore @Inject constructor(
         fetchAll(userId)
     }
 
+    suspend fun activateProperty(propertyId: UUID, userId: UUID) {
+        val row = _properties.value.firstOrNull { it.id == propertyId.toString() } ?: return
+        _activePropertyId.value = propertyId
+        _isLoading.value = true
+        _errorMessage.value = null
+        try {
+            dataStore.edit { it[activeKey(userId)] = propertyId.toString() }
+            _currentProperty.value = hydrator.hydrate(row)
+        } catch (e: Exception) {
+            _errorMessage.value = e.message ?: "Could not open this rental."
+        } finally {
+            _isLoading.value = false
+        }
+    }
+
     suspend fun refreshActive(userId: UUID): Boolean {
         val activeId = _activePropertyId.value ?: return run {
             fetchAll(userId)

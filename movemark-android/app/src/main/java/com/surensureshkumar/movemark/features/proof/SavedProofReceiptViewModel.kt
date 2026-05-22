@@ -67,12 +67,11 @@ class SavedProofReceiptViewModel @Inject constructor(
             partialMessage = if (partial) "$saved of $attempted photos uploaded" else null,
             proofPhase = phase,
             receiptTitle = if (isMoveOut) "Move-out proof saved" else "Saved to your vault",
-            receiptSubtitle = if (isMoveOut) {
-                "Your move-out photos are stored with the timestamp."
-            } else {
-                "Your room proof is stored with the timestamp."
+            receiptSubtitle = when {
+                saved == 1 -> "1 photo saved"
+                else -> "$saved photos saved"
             },
-            roomDocumentedLabel = if (isMoveOut) "Move-out room documented" else "Room now documented",
+            roomDocumentedLabel = if (documented) "Ready to review" else "",
             continueNextRoomLabel = if (isMoveOut) "Continue next move-out room" else "Continue next room",
         )
     }

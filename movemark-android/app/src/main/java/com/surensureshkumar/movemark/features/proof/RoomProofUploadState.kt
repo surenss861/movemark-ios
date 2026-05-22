@@ -42,7 +42,7 @@ sealed class RoomProofSaveState {
 
 fun RoomProofSaveState.saveButtonLabel(): String = when (this) {
     is RoomProofSaveState.Uploading -> "Uploading ${currentIndex} of $total…"
-    is RoomProofSaveState.Preparing -> "Saving proof…"
+    is RoomProofSaveState.Preparing -> "Preparing…"
     else -> "Save proof"
 }
 
