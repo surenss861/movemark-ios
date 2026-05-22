@@ -18,6 +18,7 @@ import javax.inject.Inject
 class SubscriptionViewModel @Inject constructor(
     private val repository: SubscriptionRepository,
 ) : ViewModel() {
+    val isMockMode: Boolean get() = repository.isMockMode
     val hasPro: StateFlow<Boolean> = repository.hasPro
     val packages: StateFlow<List<PlanPackageUi>> = repository.packages
     val loading: StateFlow<Boolean> = repository.loading

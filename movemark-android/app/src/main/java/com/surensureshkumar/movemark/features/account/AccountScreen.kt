@@ -38,6 +38,7 @@ fun AccountScreen(
     val hasPro by viewModel.hasPro.collectAsState()
     val restoreMessage by viewModel.restoreMessage.collectAsState()
     val purchasing by viewModel.purchasing.collectAsState()
+    val isMockMode = viewModel.isMockMode
     val context = LocalContext.current
     LaunchedEffect(Unit) { viewModel.refreshSubscription() }
 
@@ -63,6 +64,10 @@ fun AccountScreen(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
             )
+            if (isMockMode && hasPro) {
+                Spacer(Modifier.height(4.dp))
+                Text("Test mode", color = MMColors.TextMuted, fontSize = 12.sp)
+            }
             Spacer(Modifier.height(6.dp))
             Text(
                 if (hasPro) {
@@ -78,10 +83,18 @@ fun AccountScreen(
         if (!hasPro) {
             MMButton(text = "Upgrade to Pro", onClick = { onShowPaywall(PaywallReason.ExtraProperty) })
             Spacer(Modifier.height(8.dp))
-        } else {
+        } else if (!isMockMode) {
             MMButton(
                 text = "Manage subscription",
                 onClick = { PlaySubscriptionIntents.openManageSubscriptions(context) },
+                style = MMButtonStyle.Secondary,
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+        if (isMockMode) {
+            MMButton(
+                text = "Reset test subscription",
+                onClick = viewModel::resetTestSubscription,
                 style = MMButtonStyle.Secondary,
             )
             Spacer(Modifier.height(8.dp))

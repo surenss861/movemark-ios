@@ -22,6 +22,7 @@ class AccountViewModel @Inject constructor(
         const val TERMS_URL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
     }
 
+    val isMockMode: Boolean get() = subscriptionRepository.isMockMode
     val email: StateFlow<String?> = sessionManager.userEmail
     val hasPro: StateFlow<Boolean> = subscriptionRepository.hasPro
     val restoreMessage: StateFlow<String?> = subscriptionRepository.restoreMessage
@@ -34,6 +35,12 @@ class AccountViewModel @Inject constructor(
     fun restorePurchases() {
         viewModelScope.launch {
             subscriptionRepository.restorePurchases()
+        }
+    }
+
+    fun resetTestSubscription() {
+        viewModelScope.launch {
+            subscriptionRepository.resetMockSubscription()
         }
     }
 

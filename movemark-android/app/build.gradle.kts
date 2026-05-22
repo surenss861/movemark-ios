@@ -19,6 +19,10 @@ val localProperties = Properties().apply {
 fun localProp(key: String, default: String = ""): String =
     (localProperties.getProperty(key) ?: default).trim()
 
+val revenueCatKey = localProp("REVENUECAT_PUBLIC_KEY")
+val debugBillingDefault = if (revenueCatKey.isBlank()) "mock" else "revenuecat"
+val billingModeProp = localProp("BILLING_MODE", debugBillingDefault)
+
 android {
     namespace = "com.surensureshkumar.movemark"
     compileSdk = 35
@@ -37,7 +41,8 @@ android {
             "MOVE_MARK_API_BASE_URL",
             "\"${localProp("MOVE_MARK_API_BASE_URL", "https://movemark-api-production.up.railway.app")}\"",
         )
-        buildConfigField("String", "REVENUECAT_PUBLIC_KEY", "\"${localProp("REVENUECAT_PUBLIC_KEY")}\"")
+        buildConfigField("String", "REVENUECAT_PUBLIC_KEY", "\"$revenueCatKey\"")
+        buildConfigField("String", "BILLING_MODE", "\"$billingModeProp\"")
     }
 
     buildTypes {
@@ -47,6 +52,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            buildConfigField("String", "BILLING_MODE", "\"revenuecat\"")
         }
     }
 

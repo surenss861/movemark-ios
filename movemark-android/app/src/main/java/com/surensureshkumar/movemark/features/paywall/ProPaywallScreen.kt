@@ -61,6 +61,7 @@ fun ProPaywallScreen(
     val error by viewModel.errorMessage.collectAsState()
     val restoreMessage by viewModel.restoreMessage.collectAsState()
     val purchaseSuccess by viewModel.purchaseSuccess.collectAsState()
+    val isMockMode = viewModel.isMockMode
     val busy = loading || purchasing
 
     LaunchedEffect(Unit) {
@@ -99,6 +100,14 @@ fun ProPaywallScreen(
             Text(reason.subheadline, color = MMColors.TextSecondary, fontSize = 15.sp)
             Spacer(Modifier.height(6.dp))
             Text(reason.valueProp, color = MMColors.TextMuted, fontSize = 14.sp)
+            if (isMockMode) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Test billing mode. No real purchase will be made.",
+                    color = MMColors.TextMuted,
+                    fontSize = 12.sp,
+                )
+            }
             Spacer(Modifier.height(20.dp))
 
             when {
@@ -120,7 +129,7 @@ fun ProPaywallScreen(
                     packages.forEach { plan ->
                         PlanCard(
                             plan = plan,
-                            selected = selected?.revenueCatPackage?.identifier == plan.revenueCatPackage.identifier,
+                            selected = selected?.id == plan.id,
                             onSelect = { viewModel.selectPlan(plan) },
                             enabled = !busy,
                         )
@@ -135,7 +144,11 @@ fun ProPaywallScreen(
                         Spacer(Modifier.height(8.dp))
                     }
                     MMButton(
-                        text = if (purchasing) "Starting Pro…" else "Start Pro",
+                        text = when {
+                            purchasing -> if (isMockMode) "Unlocking Pro…" else "Starting Pro…"
+                            isMockMode -> "Unlock Pro for testing"
+                            else -> "Start Pro"
+                        },
                         onClick = {
                             activity?.let { act ->
                                 viewModel.purchase(act) { }

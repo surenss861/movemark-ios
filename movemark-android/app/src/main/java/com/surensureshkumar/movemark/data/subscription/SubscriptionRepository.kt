@@ -1,264 +1,61 @@
 package com.surensureshkumar.movemark.data.subscription
 
 import android.app.Activity
-import android.util.Log
-import com.revenuecat.purchases.CustomerInfo
-import com.revenuecat.purchases.Offerings
-import com.revenuecat.purchases.Package
-import com.revenuecat.purchases.PurchaseParams
-import com.revenuecat.purchases.Purchases
-import com.revenuecat.purchases.PurchasesError
-import com.revenuecat.purchases.PurchasesTransactionException
-import com.revenuecat.purchases.awaitCustomerInfo
-import com.revenuecat.purchases.awaitLogIn
-import com.revenuecat.purchases.awaitLogOut
-import com.revenuecat.purchases.awaitOfferings
-import com.revenuecat.purchases.awaitPurchase
-import com.revenuecat.purchases.awaitRestore
-import com.revenuecat.purchases.interfaces.UpdatedCustomerInfoListener
-import com.surensureshkumar.movemark.BuildConfig
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
-data class PlanPackageUi(
-    val revenueCatPackage: Package,
-    val title: String,
-    val periodLabel: String,
-    val price: String,
-    val isYearly: Boolean,
-)
-
-sealed class PurchaseOutcome {
-    data object Success : PurchaseOutcome()
-    data object Cancelled : PurchaseOutcome()
-    data class Failed(val message: String) : PurchaseOutcome()
-}
-
-sealed class RestoreOutcome {
-    data object Restored : RestoreOutcome()
-    data object NoneFound : RestoreOutcome()
-    data class Failed(val message: String) : RestoreOutcome()
-}
-
+/**
+ * App-facing subscription API. Delegates to [RevenueCatSubscriptionBilling] or [MockSubscriptionBilling].
+ */
 @Singleton
-class SubscriptionRepository @Inject constructor() : UpdatedCustomerInfoListener {
-
+class SubscriptionRepository @Inject constructor(
+    private val revenueCat: RevenueCatSubscriptionBilling,
+    private val mock: MockSubscriptionBilling,
+) {
     companion object {
-        private const val TAG = "MoveMarkRC"
-        const val PRO_ENTITLEMENT_ID = "movemark_pro1"
-        private val MONTHLY_IDS = setOf("movemark_pro_monthly", "\$rc_monthly", "monthly")
-        private val YEARLY_IDS = setOf("movemark_pro_yearly", "\$rc_annual", "yearly", "annual")
+        const val PRO_ENTITLEMENT_ID = RevenueCatSubscriptionBilling.PRO_ENTITLEMENT_ID
     }
 
-    private val mutex = Mutex()
+    private val impl: SubscriptionBilling =
+        if (BillingConfig.isMockMode) mock else revenueCat
 
-    private val _hasPro = MutableStateFlow(false)
-    val hasPro: StateFlow<Boolean> = _hasPro.asStateFlow()
-
-    private val _packages = MutableStateFlow<List<PlanPackageUi>>(emptyList())
-    val packages: StateFlow<List<PlanPackageUi>> = _packages.asStateFlow()
-
-    private val _loading = MutableStateFlow(false)
-    val loading: StateFlow<Boolean> = _loading.asStateFlow()
-
-    private val _purchasing = MutableStateFlow(false)
-    val purchasing: StateFlow<Boolean> = _purchasing.asStateFlow()
-
-    private val _errorMessage = MutableStateFlow<String?>(null)
-    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
-
-    private val _restoreMessage = MutableStateFlow<String?>(null)
-    val restoreMessage: StateFlow<String?> = _restoreMessage.asStateFlow()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     init {
-        if (isConfigured) {
-            Purchases.sharedInstance.updatedCustomerInfoListener = this
+        if (BillingConfig.isMockMode) {
+            scope.launch { mock.initialize() }
         }
     }
 
-    val isConfigured: Boolean
-        get() = BuildConfig.REVENUECAT_PUBLIC_KEY.isNotBlank() &&
-            runCatching { Purchases.isConfigured }.getOrDefault(false)
+    val isMockMode: Boolean get() = BillingConfig.isMockMode
 
-    override fun onReceived(customerInfo: CustomerInfo) {
-        applyCustomerInfo(customerInfo)
-    }
+    val hasPro: StateFlow<Boolean> get() = impl.hasPro
+    val packages: StateFlow<List<PlanPackageUi>> get() = impl.packages
+    val loading: StateFlow<Boolean> get() = impl.loading
+    val purchasing: StateFlow<Boolean> get() = impl.purchasing
+    val errorMessage: StateFlow<String?> get() = impl.errorMessage
+    val restoreMessage: StateFlow<String?> get() = impl.restoreMessage
 
-    suspend fun logIn(appUserId: String) {
-        if (!isConfigured) return
-        mutex.withLock {
-            runCatching {
-                val result = Purchases.sharedInstance.awaitLogIn(appUserId)
-                applyCustomerInfo(result.customerInfo)
-                Log.d(TAG, "logIn ok user=$appUserId hasPro=${_hasPro.value}")
-            }.onFailure { e ->
-                Log.e(TAG, "logIn failed", e)
-            }
-        }
-    }
+    suspend fun logIn(appUserId: String) = impl.logIn(appUserId)
 
-    suspend fun logOut() {
-        if (!isConfigured) {
-            _hasPro.value = false
-            return
-        }
-        mutex.withLock {
-            runCatching {
-                val info = Purchases.sharedInstance.awaitLogOut()
-                applyCustomerInfo(info)
-                _packages.value = emptyList()
-                Log.d(TAG, "logOut ok")
-            }.onFailure { e ->
-                Log.e(TAG, "logOut failed", e)
-                _hasPro.value = false
-            }
-        }
-    }
+    suspend fun logOut() = impl.logOut()
 
-    suspend fun refreshCustomerInfo() {
-        if (!isConfigured) return
-        mutex.withLock {
-            runCatching {
-                applyCustomerInfo(Purchases.sharedInstance.awaitCustomerInfo())
-            }.onFailure { e ->
-                Log.e(TAG, "refreshCustomerInfo failed", e)
-            }
-        }
-    }
+    suspend fun refreshCustomerInfo() = impl.refreshCustomerInfo()
 
-    suspend fun fetchOfferings() {
-        if (!isConfigured) {
-            _errorMessage.value = "Plans didn't load. Try again."
-            return
-        }
-        _loading.value = true
-        _errorMessage.value = null
-        try {
-            val offerings: Offerings = Purchases.sharedInstance.awaitOfferings()
-            val current = offerings.current
-            if (current == null || current.availablePackages.isEmpty()) {
-                _packages.value = emptyList()
-                _errorMessage.value = "Plans didn't load. Try again."
-                return
-            }
-            _packages.value = mapPackages(current.availablePackages)
-        } catch (e: Exception) {
-            Log.e(TAG, "fetchOfferings failed", e)
-            _packages.value = emptyList()
-            _errorMessage.value = sanitizeError(e)
-        } finally {
-            _loading.value = false
-        }
-    }
+    suspend fun fetchOfferings() = impl.fetchOfferings()
 
-    suspend fun purchase(activity: Activity, plan: PlanPackageUi): PurchaseOutcome {
-        if (!isConfigured) return PurchaseOutcome.Failed("Purchases aren't available right now.")
-        _purchasing.value = true
-        _errorMessage.value = null
-        return try {
-            val params = PurchaseParams.Builder(activity, plan.revenueCatPackage).build()
-            val result = Purchases.sharedInstance.awaitPurchase(params)
-            applyCustomerInfo(result.customerInfo)
-            PurchaseOutcome.Success
-        } catch (e: PurchasesTransactionException) {
-            if (e.userCancelled) {
-                PurchaseOutcome.Cancelled
-            } else {
-                Log.e(TAG, "purchase failed", e)
-                val msg = "Purchase couldn't complete. Try again."
-                _errorMessage.value = msg
-                PurchaseOutcome.Failed(msg)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "purchase failed", e)
-            val msg = sanitizeError(e)
-            _errorMessage.value = msg
-            PurchaseOutcome.Failed(msg)
-        } finally {
-            _purchasing.value = false
-        }
-    }
+    suspend fun purchase(activity: Activity, plan: PlanPackageUi) = impl.purchase(activity, plan)
 
-    suspend fun restorePurchases(): RestoreOutcome {
-        if (!isConfigured) return RestoreOutcome.Failed("Purchases couldn't be restored. Try again.")
-        _purchasing.value = true
-        _restoreMessage.value = null
-        return try {
-            val info = Purchases.sharedInstance.awaitRestore()
-            applyCustomerInfo(info)
-            if (_hasPro.value) {
-                _restoreMessage.value = "MoveMark Pro restored."
-                RestoreOutcome.Restored
-            } else {
-                _restoreMessage.value = "No active subscription found for this Google account."
-                RestoreOutcome.NoneFound
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "restore failed", e)
-            val msg = "Purchases couldn't be restored. Try again."
-            _restoreMessage.value = msg
-            RestoreOutcome.Failed(msg)
-        } finally {
-            _purchasing.value = false
-        }
-    }
+    suspend fun restorePurchases() = impl.restorePurchases()
 
-    fun clearRestoreMessage() {
-        _restoreMessage.value = null
-    }
+    fun clearRestoreMessage() = impl.clearRestoreMessage()
 
-    fun clearError() {
-        _errorMessage.value = null
-    }
+    fun clearError() = impl.clearError()
 
-    private fun applyCustomerInfo(info: CustomerInfo?) {
-        _hasPro.value = info?.entitlements?.get(PRO_ENTITLEMENT_ID)?.isActive == true
-    }
-
-    private fun mapPackages(packages: List<Package>): List<PlanPackageUi> {
-        val monthly = packages.firstOrNull { pkg ->
-            val id = pkg.product.id.lowercase()
-            pkg.packageType.name.contains("MONTH", ignoreCase = true) ||
-                MONTHLY_IDS.any { id.contains(it.removePrefix("$")) }
-        }
-        val yearly = packages.firstOrNull { pkg ->
-            val id = pkg.product.id.lowercase()
-            pkg.packageType.name.contains("ANNUAL", ignoreCase = true) ||
-                pkg.packageType.name.contains("YEAR", ignoreCase = true) ||
-                YEARLY_IDS.any { id.contains(it.removePrefix("$")) }
-        }
-        return listOfNotNull(
-            monthly?.toUi(isYearly = false),
-            yearly?.toUi(isYearly = true),
-        )
-    }
-
-    private fun Package.toUi(isYearly: Boolean): PlanPackageUi {
-        val product = product
-        return PlanPackageUi(
-            revenueCatPackage = this,
-            title = if (isYearly) "MoveMark Pro Yearly" else "MoveMark Pro Monthly",
-            periodLabel = if (isYearly) "Billed yearly" else "Billed monthly",
-            price = product.price.formatted,
-            isYearly = isYearly,
-        )
-    }
-
-    private fun sanitizeError(error: Throwable): String {
-        val raw = error.message.orEmpty()
-        if (raw.isBlank() ||
-            raw.contains("RevenueCat", ignoreCase = true) ||
-            raw.contains("Billing", ignoreCase = true) ||
-            raw.contains("Play", ignoreCase = true) ||
-            raw.length > 120
-        ) {
-            return "Plans didn't load. Try again."
-        }
-        return raw
-    }
+    suspend fun resetMockSubscription() = impl.resetMockSubscription()
 }
