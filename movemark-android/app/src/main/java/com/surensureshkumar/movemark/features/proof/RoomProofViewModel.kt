@@ -11,6 +11,7 @@ import com.surensureshkumar.movemark.data.auth.SessionManager
 import com.surensureshkumar.movemark.data.models.RoomRecord
 import com.surensureshkumar.movemark.data.property.PropertyStore
 import com.surensureshkumar.movemark.domain.RoomProofMetrics
+import com.surensureshkumar.movemark.features.proof.camera.CameraCaptureResultHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +36,7 @@ class RoomProofViewModel @Inject constructor(
     private val sessionManager: SessionManager,
     private val propertyStore: PropertyStore,
     private val receiptCache: SavedProofReceiptCache,
+    private val cameraResultHolder: CameraCaptureResultHolder,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     val roomId: UUID = UUID.fromString(checkNotNull(savedStateHandle.get<String>("roomId")))
@@ -55,6 +57,10 @@ class RoomProofViewModel @Inject constructor(
 
     private val _proofSaved = MutableSharedFlow<SavedProofReceiptPayload>(extraBufferCapacity = 1)
     val proofSaved: SharedFlow<SavedProofReceiptPayload> = _proofSaved.asSharedFlow()
+
+    fun consumeCameraCaptures() {
+        cameraResultHolder.consume(roomId)?.let { addUris(it) }
+    }
 
     fun addUris(uris: List<Uri>) {
         viewModelScope.launch {

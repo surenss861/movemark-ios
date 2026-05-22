@@ -20,6 +20,7 @@ import com.surensureshkumar.movemark.features.firstrun.CreatePropertyScreen
 import com.surensureshkumar.movemark.features.main.MainShellScreen
 import com.surensureshkumar.movemark.features.proof.RoomProofScreen
 import com.surensureshkumar.movemark.features.proof.SavedProofReceiptScreen
+import com.surensureshkumar.movemark.features.proof.camera.CameraCaptureScreen
 import com.surensureshkumar.movemark.features.welcome.WelcomeScreen
 import com.surensureshkumar.movemark.features.welcome.WelcomeViewModel
 import dagger.hilt.android.EntryPointAccessors
@@ -115,11 +116,26 @@ fun MoveMarkNavHost() {
                 RoomProofScreen(
                     roomId = roomId,
                     onBack = { navController.popBackStack() },
+                    onOpenCamera = {
+                        navController.navigate(Routes.cameraCapture(roomId.toString()))
+                    },
                     onProofSaved = { savedRoomId ->
                         navController.navigate(Routes.savedProofReceipt(savedRoomId.toString())) {
                             popUpTo(Routes.roomProof(savedRoomId.toString())) { inclusive = true }
                         }
                     },
+                )
+            }
+        }
+        composable(
+            route = Routes.CameraCapture,
+            arguments = listOf(navArgument(Routes.RoomProofArg) { type = NavType.StringType }),
+        ) { entry ->
+            val roomId = entry.arguments?.getString(Routes.RoomProofArg)?.let { UUID.fromString(it) }
+            if (roomId != null) {
+                CameraCaptureScreen(
+                    onClose = { navController.popBackStack() },
+                    onDone = { navController.popBackStack() },
                 )
             }
         }

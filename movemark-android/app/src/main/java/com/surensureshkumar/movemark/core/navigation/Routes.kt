@@ -16,6 +16,10 @@ object Routes {
     const val SavedProofReceiptArg = "roomId"
 
     fun savedProofReceipt(roomId: String) = "saved_proof_receipt/$roomId"
+
+    const val CameraCapture = "camera_capture/{roomId}"
+
+    fun cameraCapture(roomId: String) = "camera_capture/$roomId"
 }
 
 enum class MainTab { Vault, Rooms, Reports, Account }
