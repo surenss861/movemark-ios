@@ -42,7 +42,9 @@ data class ReportsUiState(
     val proofChips: List<String> = emptyList(),
     val checklistItems: List<ReportChecklistItem> = emptyList(),
     val exports: List<ExportRow> = emptyList(),
-    val actionInProgress: Boolean = false,
+    val moveInActionInProgress: Boolean = false,
+    val moveOutActionInProgress: Boolean = false,
+    val disputeActionInProgress: Boolean = false,
     val banner: String? = null,
     val bannerIsError: Boolean = false,
     val moveOutPhotos: Int = 0,
@@ -338,9 +340,11 @@ class ReportsViewModel @Inject constructor(
             totalRooms = total,
             totalPhotos = photos,
             proofChips = buildProofChips(documented, total, photos),
-            checklistItems = buildChecklist(documented, total, readiness),
+            checklistItems = buildChecklist(documented, total, readiness, moveOutPhotos),
             exports = exports,
-            actionInProgress = moveInBusy || moveOutBusy || disputeBusy,
+            moveInActionInProgress = moveInBusy,
+            moveOutActionInProgress = moveOutBusy,
+            disputeActionInProgress = disputeBusy,
             banner = banner?.first,
             bannerIsError = banner?.second == true,
             moveOutPhotos = moveOutPhotos,
@@ -363,6 +367,7 @@ class ReportsViewModel @Inject constructor(
         documented: Int,
         total: Int,
         readiness: ReportReadiness,
+        moveOutPhotos: Int,
     ): List<ReportChecklistItem> {
         val roomsState = when {
             total == 0 || documented == 0 -> ChecklistItemState.Incomplete
@@ -375,6 +380,11 @@ class ReportsViewModel @Inject constructor(
             ReportReadiness.Failed -> ChecklistItemState.Incomplete
             else -> ChecklistItemState.Locked
         }
+        val moveOutState = if (moveOutPhotos > 0) {
+            ChecklistItemState.Complete
+        } else {
+            ChecklistItemState.Locked
+        }
         return listOf(
             ReportChecklistItem(
                 title = "Room photos",
@@ -383,8 +393,22 @@ class ReportsViewModel @Inject constructor(
             ),
             ReportChecklistItem(
                 title = "Lease & docs",
-                detail = "Optional on Android — add on iOS for stronger reports",
+                detail = "Add lease and deposit records in your vault",
                 state = ChecklistItemState.Locked,
+            ),
+            ReportChecklistItem(
+                title = "Damage tags",
+                detail = if (documented == 0) {
+                    "Tag issues while you photograph rooms"
+                } else {
+                    "Optional — tag scratches and stains as you go"
+                },
+                state = if (documented == 0) ChecklistItemState.Locked else ChecklistItemState.Incomplete,
+            ),
+            ReportChecklistItem(
+                title = "Move-out proof",
+                detail = if (moveOutPhotos > 0) "Move-out photos on file" else "Optional later — before you move out",
+                state = moveOutState,
             ),
             ReportChecklistItem(
                 title = "Report",
@@ -402,11 +426,11 @@ class ReportsViewModel @Inject constructor(
 }
 
 private fun disputeStatusLine(readiness: DisputePacketReadiness): String = when (readiness) {
-    DisputePacketReadiness.NoProof -> "Add room proof first."
-    DisputePacketReadiness.ReadyToMake -> "Dispute packet can be made."
-    DisputePacketReadiness.Processing -> "Building packet…"
-    DisputePacketReadiness.ReadyToShare -> "Dispute packet ready."
-    DisputePacketReadiness.Failed -> "Packet failed. Retry."
+    DisputePacketReadiness.NoProof -> "Add room proof first"
+    DisputePacketReadiness.ReadyToMake -> "Packet can be built"
+    DisputePacketReadiness.Processing -> "Building packet"
+    DisputePacketReadiness.ReadyToShare -> "Packet ready"
+    DisputePacketReadiness.Failed -> "Packet failed"
 }
 
 fun disputePrimaryCta(
@@ -421,17 +445,17 @@ fun disputePrimaryCta(
             Triple(if (busy) "Building packet…" else "Build dispute packet", !busy, busy)
         DisputePacketReadiness.ReadyToShare ->
             Triple(if (busy) "Opening…" else "View / Share packet", !busy, busy)
-        DisputePacketReadiness.Processing -> Triple("Building…", false, false)
+        DisputePacketReadiness.Processing -> Triple("Building packet…", false, false)
         DisputePacketReadiness.Failed -> Triple(if (busy) "Retrying…" else "Retry packet", !busy, busy)
     }
 }
 
 private fun moveOutStatusLine(readiness: MoveOutReportReadiness): String = when (readiness) {
-    MoveOutReportReadiness.NoProof -> "Capture move-out proof first."
-    MoveOutReportReadiness.ReadyToMake -> "Move-out report can be made."
-    MoveOutReportReadiness.Processing -> "Building move-out report…"
-    MoveOutReportReadiness.ReadyToShare -> "Move-out report ready."
-    MoveOutReportReadiness.Failed -> "Move-out report failed. Retry."
+    MoveOutReportReadiness.NoProof -> "Capture move-out proof first"
+    MoveOutReportReadiness.ReadyToMake -> "Move-out report can be made"
+    MoveOutReportReadiness.Processing -> "Building move-out report"
+    MoveOutReportReadiness.ReadyToShare -> "Move-out report ready"
+    MoveOutReportReadiness.Failed -> "Move-out report failed"
 }
 
 private fun primaryCta(readiness: ReportReadiness, loading: Boolean, busy: Boolean): Triple<String, Boolean, Boolean> {
@@ -440,7 +464,7 @@ private fun primaryCta(readiness: ReportReadiness, loading: Boolean, busy: Boole
         ReportReadiness.NotReady, ReportReadiness.NoVault -> Triple("Continue room proof", true, false)
         ReportReadiness.ReadyToMake -> Triple(if (busy) "Making report…" else "Make move-in report", !busy, busy)
         ReportReadiness.ReadyToShare -> Triple(if (busy) "Opening…" else "View / Share report", !busy, busy)
-        ReportReadiness.Processing -> Triple("Building…", false, false)
+        ReportReadiness.Processing -> Triple("Building report…", false, false)
         ReportReadiness.Failed -> Triple(if (busy) "Retrying…" else "Retry report", !busy, busy)
     }
 }
@@ -457,7 +481,7 @@ fun moveOutPrimaryCta(
             Triple(if (busy) "Making move-out report…" else "Make move-out report", !busy, busy)
         MoveOutReportReadiness.ReadyToShare ->
             Triple(if (busy) "Opening…" else "View / Share report", !busy, busy)
-        MoveOutReportReadiness.Processing -> Triple("Building…", false, false)
+        MoveOutReportReadiness.Processing -> Triple("Building move-out report…", false, false)
         MoveOutReportReadiness.Failed -> Triple(if (busy) "Retrying…" else "Retry report", !busy, busy)
     }
 }
@@ -485,10 +509,10 @@ fun ReportsUiState.metricsLine(): String? {
 }
 
 fun ReportsUiState.primaryCta(): Triple<String, Boolean, Boolean> =
-    primaryCta(readiness, propertyLoading || exportsLoading, actionInProgress)
+    primaryCta(readiness, propertyLoading || exportsLoading, moveInActionInProgress)
 
 fun ReportsUiState.moveOutCta(): Triple<String, Boolean, Boolean> =
-    moveOutPrimaryCta(moveOutReadiness, propertyLoading || exportsLoading, actionInProgress)
+    moveOutPrimaryCta(moveOutReadiness, propertyLoading || exportsLoading, moveOutActionInProgress)
 
 fun ReportsUiState.disputeCta(): Triple<String, Boolean, Boolean> =
-    disputePrimaryCta(disputeReadiness, propertyLoading || exportsLoading, actionInProgress)
+    disputePrimaryCta(disputeReadiness, propertyLoading || exportsLoading, disputeActionInProgress)

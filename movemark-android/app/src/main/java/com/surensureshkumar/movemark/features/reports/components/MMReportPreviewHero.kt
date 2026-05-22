@@ -1,5 +1,10 @@
 package com.surensureshkumar.movemark.features.reports.components
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,14 +21,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.surensureshkumar.movemark.core.design.MMColors
+import com.surensureshkumar.movemark.core.design.mmAppearRise
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMProofCard
 import com.surensureshkumar.movemark.data.export.ReportReadiness
@@ -40,13 +48,20 @@ fun MMReportPreviewHero(
     primaryEnabled: Boolean,
     primaryLoading: Boolean,
     onPrimary: () -> Unit,
+    appeared: Boolean,
+    reduceMotion: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val isBright = readiness == ReportReadiness.ReadyToMake || readiness == ReportReadiness.ReadyToShare
+    val isProcessing = readiness == ReportReadiness.Processing
 
-    MMProofCard(modifier) {
+    MMProofCard(modifier.mmAppearRise(appeared, reduceMotion, label = "reportHero")) {
         Row(verticalAlignment = Alignment.Top) {
-            DocumentPreview(isBright = isBright)
+            DocumentPreview(
+                isBright = isBright,
+                isProcessing = isProcessing,
+                reduceMotion = reduceMotion,
+            )
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 metricsLine?.takeIf { it.isNotBlank() }?.let {
@@ -64,7 +79,10 @@ fun MMReportPreviewHero(
         }
         if (proofChips.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 proofChips.forEach { chip ->
                     Text(
                         chip,
@@ -83,6 +101,7 @@ fun MMReportPreviewHero(
             onClick = onPrimary,
             enabled = primaryEnabled,
             loading = primaryLoading,
+            modifier = Modifier.mmAppearRise(appeared, reduceMotion, label = "reportCta"),
         )
     }
 }
@@ -90,12 +109,11 @@ fun MMReportPreviewHero(
 @Composable
 private fun StatusPill(readiness: ReportReadiness) {
     val text = when (readiness) {
-        ReportReadiness.ReadyToMake -> "Can make report"
+        ReportReadiness.ReadyToMake -> "Report can be made"
         ReportReadiness.ReadyToShare -> "Report ready"
         ReportReadiness.Processing -> "Building report"
-        ReportReadiness.Failed -> "Failed"
+        ReportReadiness.Failed -> "Report failed"
         ReportReadiness.NotReady, ReportReadiness.NoVault -> "Needs more proof"
-        else -> "Checking proof"
     }
     val (bg, fg) = when (readiness) {
         ReportReadiness.ReadyToMake, ReportReadiness.ReadyToShare ->
@@ -106,7 +124,6 @@ private fun StatusPill(readiness: ReportReadiness) {
             MMColors.SemanticDanger.copy(0.2f) to MMColors.SemanticDanger
         ReportReadiness.NotReady, ReportReadiness.NoVault ->
             MMColors.SemanticWarning.copy(0.2f) to MMColors.SemanticWarning
-        else -> MMColors.FieldFill to MMColors.TextMuted
     }
     Text(
         text,
@@ -120,8 +137,28 @@ private fun StatusPill(readiness: ReportReadiness) {
 }
 
 @Composable
-private fun DocumentPreview(isBright: Boolean) {
-    Box(Modifier.size(width = 88.dp, height = 116.dp)) {
+private fun DocumentPreview(
+    isBright: Boolean,
+    isProcessing: Boolean,
+    reduceMotion: Boolean,
+) {
+    val pulseAlpha = if (isProcessing && !reduceMotion) {
+        val transition = rememberInfiniteTransition(label = "docPulse")
+        transition.animateFloat(
+            initialValue = 0.88f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+            label = "docPulseAlpha",
+        ).value
+    } else {
+        1f
+    }
+
+    Box(
+        Modifier
+            .size(width = 88.dp, height = 116.dp)
+            .alpha(pulseAlpha),
+    ) {
         Box(
             Modifier
                 .size(58.dp, 88.dp)
