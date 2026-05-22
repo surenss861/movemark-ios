@@ -20,7 +20,12 @@ class AuthViewModel @Inject constructor(
     private val sessionManager: SessionManager,
     private val propertyStore: PropertyStore,
 ) : ViewModel() {
-    var mode: AuthMode = AuthMode.SignIn
+    private val _mode = MutableStateFlow(AuthMode.SignIn)
+    val mode: StateFlow<AuthMode> = _mode.asStateFlow()
+
+    fun setMode(value: AuthMode) {
+        _mode.value = value
+    }
 
     private val _email = MutableStateFlow("")
     val email: StateFlow<String> = _email.asStateFlow()
@@ -42,7 +47,7 @@ class AuthViewModel @Inject constructor(
             _loading.value = true
             _message.value = null
             try {
-                when (mode) {
+                when (_mode.value) {
                     AuthMode.SignUp -> sessionManager.signUp(_email.value, _password.value)
                     AuthMode.SignIn -> sessionManager.signIn(_email.value, _password.value)
                 }

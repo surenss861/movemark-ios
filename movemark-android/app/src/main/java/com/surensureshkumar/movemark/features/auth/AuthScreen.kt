@@ -27,8 +27,9 @@ fun AuthScreen(
     viewModel: AuthViewModel = hiltViewModel(),
 ) {
     androidx.compose.runtime.LaunchedEffect(initialMode) {
-        viewModel.mode = initialMode
+        viewModel.setMode(initialMode)
     }
+    val mode by viewModel.mode.collectAsState()
     val email by viewModel.email.collectAsState()
     val password by viewModel.password.collectAsState()
     val loading by viewModel.loading.collectAsState()
@@ -44,12 +45,12 @@ fun AuthScreen(
             TextButton(onClick = onDismiss) { Text("Back", color = MMColors.TextSecondary) }
             Spacer(Modifier.height(8.dp))
             Text(
-                text = if (viewModel.mode == AuthMode.SignUp) "Create your vault" else "Sign in",
+                text = if (mode == AuthMode.SignUp) "Create your vault" else "Sign in",
                 style = androidx.compose.material3.MaterialTheme.typography.headlineLarge,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = if (viewModel.mode == AuthMode.SignUp) {
+                text = if (mode == AuthMode.SignUp) {
                     "Your move-in proof saves here."
                 } else {
                     "Sign in to continue saving proof."
@@ -67,7 +68,7 @@ fun AuthScreen(
             }
             Spacer(Modifier.height(24.dp))
             MMButton(
-                text = if (viewModel.mode == AuthMode.SignUp) "Create account" else "Sign in",
+                text = if (mode == AuthMode.SignUp) "Create account" else "Sign in",
                 onClick = viewModel::submit,
                 loading = loading,
             )
