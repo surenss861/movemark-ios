@@ -44,6 +44,9 @@ class SessionManager @Inject constructor(
     private val _userEmail = MutableStateFlow<String?>(null)
     val userEmail: StateFlow<String?> = _userEmail.asStateFlow()
 
+    private val _userFullName = MutableStateFlow<String?>(null)
+    val userFullName: StateFlow<String?> = _userFullName.asStateFlow()
+
     init {
         scope.launch {
             client.auth.sessionStatus.collect { status ->
@@ -91,6 +94,17 @@ class SessionManager @Inject constructor(
         client.auth.resetPasswordForEmail(trimmed)
     }
 
+    suspend fun refreshProfile() {
+        val uid = _userId.value ?: return
+        _userFullName.value = profileRepository.fetchFullName(uid)
+    }
+
+    suspend fun updateProfileFullName(fullName: String) {
+        val uid = _userId.value ?: throw AuthException("Sign in to update your profile.")
+        profileRepository.updateFullName(uid, fullName)
+        _userFullName.value = fullName.trim()
+    }
+
     suspend fun signOut(onCleared: () -> Unit) {
         subscriptionRepository.logOut()
         client.auth.signOut()
@@ -111,13 +125,17 @@ class SessionManager @Inject constructor(
         _userEmail.value = email
         _authState.value = if (id != null) AuthState.SignedIn else AuthState.SignedOut
         if (id != null) {
-            scope.launch { subscriptionRepository.refreshCustomerInfo() }
+            scope.launch {
+                subscriptionRepository.refreshCustomerInfo()
+                refreshProfile()
+            }
         }
     }
 
     private fun clearUser() {
         _userId.value = null
         _userEmail.value = null
+        _userFullName.value = null
         _authState.value = AuthState.SignedOut
     }
 }
