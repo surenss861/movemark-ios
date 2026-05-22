@@ -2,6 +2,7 @@ package com.surensureshkumar.movemark.data.auth
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import com.surensureshkumar.movemark.data.subscription.SubscriptionRepository
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
@@ -29,6 +30,7 @@ class AuthException(message: String) : Exception(message)
 class SessionManager @Inject constructor(
     private val client: SupabaseClient,
     private val profileRepository: ProfileRepository,
+    private val subscriptionRepository: SubscriptionRepository,
     @Suppress("UNUSED_PARAMETER") dataStore: DataStore<Preferences>,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -66,6 +68,7 @@ class SessionManager @Inject constructor(
         val uid = UUID.fromString(user.id)
         profileRepository.ensureProfileExists(uid, email.trim())
         applyUser(user.id, user.email ?: email.trim())
+        subscriptionRepository.logIn(user.id)
     }
 
     suspend fun signIn(email: String, password: String) {
@@ -79,6 +82,7 @@ class SessionManager @Inject constructor(
         val uid = UUID.fromString(user.id)
         profileRepository.ensureProfileExists(uid, user.email ?: email.trim())
         applyUser(user.id, user.email ?: email.trim())
+        subscriptionRepository.logIn(user.id)
     }
 
     suspend fun resetPassword(email: String) {
@@ -88,6 +92,7 @@ class SessionManager @Inject constructor(
     }
 
     suspend fun signOut(onCleared: () -> Unit) {
+        subscriptionRepository.logOut()
         client.auth.signOut()
         clearUser()
         onCleared()
@@ -105,6 +110,9 @@ class SessionManager @Inject constructor(
         _userId.value = id?.let { runCatching { UUID.fromString(it) }.getOrNull() }
         _userEmail.value = email
         _authState.value = if (id != null) AuthState.SignedIn else AuthState.SignedOut
+        if (id != null) {
+            scope.launch { subscriptionRepository.refreshCustomerInfo() }
+        }
     }
 
     private fun clearUser() {

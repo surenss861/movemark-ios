@@ -105,6 +105,12 @@ fun MoveMarkNavHost() {
                         popUpTo(0) { inclusive = true }
                     }
                 },
+                onAddProperty = { navController.navigate(Routes.AddProperty) },
+            )
+        }
+        composable(Routes.AddProperty) {
+            CreatePropertyScreen(
+                onCreated = { navController.popBackStack() },
             )
         }
         composable(

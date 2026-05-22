@@ -20,6 +20,8 @@ object Routes {
     const val CameraCapture = "camera_capture/{roomId}"
 
     fun cameraCapture(roomId: String) = "camera_capture/$roomId"
+
+    const val AddProperty = "add_property"
 }
 
 enum class MainTab { Vault, Rooms, Reports, Account }

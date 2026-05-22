@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.surensureshkumar.movemark.data.auth.SessionManager
 import com.surensureshkumar.movemark.data.property.PropertyStore
+import com.surensureshkumar.movemark.data.subscription.SubscriptionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -13,6 +14,7 @@ import javax.inject.Inject
 class AccountViewModel @Inject constructor(
     private val sessionManager: SessionManager,
     private val propertyStore: PropertyStore,
+    private val subscriptionRepository: SubscriptionRepository,
 ) : ViewModel() {
     companion object {
         const val PRIVACY_URL =
@@ -21,6 +23,19 @@ class AccountViewModel @Inject constructor(
     }
 
     val email: StateFlow<String?> = sessionManager.userEmail
+    val hasPro: StateFlow<Boolean> = subscriptionRepository.hasPro
+    val restoreMessage: StateFlow<String?> = subscriptionRepository.restoreMessage
+    val purchasing: StateFlow<Boolean> = subscriptionRepository.purchasing
+
+    fun refreshSubscription() {
+        viewModelScope.launch { subscriptionRepository.refreshCustomerInfo() }
+    }
+
+    fun restorePurchases() {
+        viewModelScope.launch {
+            subscriptionRepository.restorePurchases()
+        }
+    }
 
     fun signOut(onDone: () -> Unit) {
         viewModelScope.launch {

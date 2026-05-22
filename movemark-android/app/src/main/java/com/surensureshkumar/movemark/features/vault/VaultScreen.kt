@@ -17,18 +17,24 @@ import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMProofCard
+import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
 import com.surensureshkumar.movemark.domain.RoomProofMetrics
+import com.surensureshkumar.movemark.features.subscription.PaywallReason
 import java.util.UUID
 
 @Composable
 fun VaultScreen(
     onOpenRoom: (UUID) -> Unit,
+    onAddProperty: () -> Unit,
+    onShowPaywall: (PaywallReason) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: VaultViewModel = hiltViewModel(),
 ) {
     val property by viewModel.property.collectAsState()
     val loading by viewModel.loading.collectAsState()
     val error by viewModel.error.collectAsState()
+    val hasPro by viewModel.hasPro.collectAsState()
+    val propertyCount by viewModel.propertyCount.collectAsState()
 
     Column(
         modifier = modifier
@@ -60,6 +66,18 @@ fun VaultScreen(
                 MMButton(
                     text = if (next != null) "Continue room proof" else "Review rooms",
                     onClick = { (next ?: p.rooms.firstOrNull())?.let { onOpenRoom(it.id) } },
+                )
+                Spacer(Modifier.height(12.dp))
+                MMButton(
+                    text = "Add another rental",
+                    onClick = {
+                        if (!hasPro && propertyCount >= 1) {
+                            onShowPaywall(PaywallReason.ExtraProperty)
+                        } else {
+                            onAddProperty()
+                        }
+                    },
+                    style = MMButtonStyle.Secondary,
                 )
             }
         }
