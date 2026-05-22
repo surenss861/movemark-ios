@@ -2,14 +2,25 @@ import type { Context } from "hono";
 import { Hono } from "hono";
 import { requireUserIdFromBearer } from "../lib/auth.js";
 import { env } from "../lib/env.js";
+import { buildDisputeEvidenceCatalog } from "../lib/disputeEvidenceCatalog.js";
 import {
+  buildDisputePacketChecklist,
+  hasEnoughDisputeProof,
+} from "../lib/disputePacketBuilder.js";
+import {
+  computeMoveInProofStats,
   computeMoveOutProofStats,
+  DISPUTE_PACKET_TYPE,
   isActiveExportJob,
   isUuidString,
   MOVE_IN_REPORT_TYPE,
   MOVE_OUT_REPORT_TYPE,
 } from "../lib/exportGuards.js";
-import { generateMoveInPdfBuffer, generateMoveOutPdfBuffer } from "../lib/pdf.js";
+import {
+  generateDisputePacketPdfBuffer,
+  generateMoveInPdfBuffer,
+  generateMoveOutPdfBuffer,
+} from "../lib/pdf.js";
 import { uploadExportToSupabaseStorage } from "../lib/storage.js";
 import { supabaseAdmin } from "../lib/supabase.js";
 import type {
@@ -588,5 +599,199 @@ exportsRouter.post("/move-out", async (c) => {
     }
   } catch (error) {
     return handleExportsError(c, error, "POST /move-out");
+  }
+});
+
+exportsRouter.post("/dispute-packet", async (c) => {
+  try {
+    const userId = await requireUserIdFromBearer(c);
+    const body = await c.req.json<ExportRequestBody>();
+
+    if (!body.propertyId || body.format !== "pdf") {
+      return c.json({ error: "Invalid request body" }, 400);
+    }
+
+    if (!isUuidString(body.propertyId)) {
+      return c.json({ error: "Invalid propertyId" }, 400);
+    }
+
+    const { data: property, error: propertyError } = await supabaseAdmin
+      .from("properties")
+      .select("*")
+      .eq("id", body.propertyId)
+      .eq("user_id", userId)
+      .single();
+
+    if (propertyError || !property) {
+      return c.json({ error: "Property not found" }, 404);
+    }
+
+    const { data: propertyExports } = await supabaseAdmin
+      .from("exports")
+      .select("id,status,file_path,export_type,completed_at,requested_at,created_at")
+      .eq("user_id", userId)
+      .eq("property_id", body.propertyId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    const exportRows = propertyExports ?? [];
+
+    const activeDispute = exportRows
+      .filter((row) => row.export_type === DISPUTE_PACKET_TYPE)
+      .find((row) =>
+        isActiveExportJob({
+          status: row.status as string,
+          file_path: row.file_path as string | null,
+        })
+      );
+    if (activeDispute) {
+      return c.json(
+        { error: "A dispute packet is already being built.", code: "export_already_processing" },
+        409
+      );
+    }
+
+    const { data: moveInInspection } = await supabaseAdmin
+      .from("inspections")
+      .select("id")
+      .eq("property_id", body.propertyId)
+      .eq("user_id", userId)
+      .eq("inspection_type", "move_in")
+      .maybeSingle();
+
+    let moveInItems: Array<Record<string, unknown>> = [];
+    const photoCountByMoveInItem = new Map<string, number>();
+
+    if (moveInInspection?.id) {
+      const { data: items } = await supabaseAdmin
+        .from("inspection_items")
+        .select("id,room_id")
+        .eq("inspection_id", moveInInspection.id);
+
+      moveInItems = items ?? [];
+      const itemIds = moveInItems
+        .map((row) => row["id"] as string | undefined)
+        .filter((id): id is string => Boolean(id));
+
+      if (itemIds.length > 0) {
+        const { data: evidenceRows } = await supabaseAdmin
+          .from("evidence_files")
+          .select("inspection_item_id")
+          .eq("property_id", body.propertyId)
+          .in("inspection_item_id", itemIds);
+
+        for (const er of evidenceRows ?? []) {
+          const iid = er.inspection_item_id as string | undefined;
+          if (!iid) continue;
+          photoCountByMoveInItem.set(iid, (photoCountByMoveInItem.get(iid) ?? 0) + 1);
+        }
+      }
+    }
+
+    const moveInStats = computeMoveInProofStats(moveInItems, photoCountByMoveInItem);
+
+    if (
+      !hasEnoughDisputeProof(
+        moveInStats.documentedRooms,
+        moveInStats.totalPhotos,
+        exportRows as Array<{
+          export_type: string;
+          status: string;
+          file_path?: string | null;
+          completed_at?: string | null;
+          requested_at?: string | null;
+          created_at?: string | null;
+        }>
+      )
+    ) {
+      return c.json(
+        {
+          error: "Add move-in room proof or a move-in report before building a dispute packet.",
+          code: "not_enough_dispute_proof",
+        },
+        400
+      );
+    }
+
+    const catalog = await buildDisputeEvidenceCatalog(userId, body.propertyId);
+    const checklist = buildDisputePacketChecklist(
+      catalog,
+      exportRows as Array<{
+        export_type: string;
+        status: string;
+        file_path?: string | null;
+        completed_at?: string | null;
+        requested_at?: string | null;
+        created_at?: string | null;
+      }>,
+      moveInStats.documentedRooms
+    );
+
+    const requestedAt = new Date().toISOString();
+
+    const { data: exportRow, error: exportInsertError } = await supabaseAdmin
+      .from("exports")
+      .insert({
+        user_id: userId,
+        property_id: body.propertyId,
+        export_type: DISPUTE_PACKET_TYPE,
+        status: "queued",
+        requested_at: requestedAt,
+      })
+      .select("*")
+      .single();
+
+    if (exportInsertError || !exportRow) {
+      return c.json({ error: "Failed to create export row" }, 500);
+    }
+
+    try {
+      const pdfBuffer = await generateDisputePacketPdfBuffer({
+        property,
+        checklist,
+      });
+
+      const upload = await uploadExportToSupabaseStorage({
+        userId,
+        exportId: exportRow.id,
+        fileBuffer: pdfBuffer,
+      });
+
+      const { error: updateError } = await supabaseAdmin
+        .from("exports")
+        .update({
+          status: "completed",
+          file_path: upload.path,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", exportRow.id);
+
+      if (updateError) {
+        console.error("[movemark-api:exports] dispute-packet finalize", updateError);
+        throw new Error(`finalize: ${updateError.message}`);
+      }
+
+      const response: ExportResponseBody = {
+        exportId: exportRow.id,
+        status: "completed",
+        type: DISPUTE_PACKET_TYPE,
+        requestedAt:
+          (exportRow.requested_at as string | undefined) ??
+          (exportRow.created_at as string | undefined) ??
+          requestedAt,
+      };
+
+      return c.json(response, 200);
+    } catch (pipelineError) {
+      const msg = pipelineError instanceof Error ? pipelineError.message : String(pipelineError);
+      console.error("[movemark-api:exports] POST /dispute-packet pipeline failed", pipelineError);
+      await markExportFailed(exportRow.id, msg);
+      return c.json(
+        { error: "Dispute packet generation failed", code: "export_failed" },
+        500
+      );
+    }
+  } catch (error) {
+    return handleExportsError(c, error, "POST /dispute-packet");
   }
 });

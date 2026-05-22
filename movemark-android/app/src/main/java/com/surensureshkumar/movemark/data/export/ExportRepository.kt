@@ -28,6 +28,10 @@ class ExportRepository @Inject constructor(
         api.requestMoveOutExport(token(), propertyId)
     }
 
+    suspend fun queueDisputePacket(propertyId: UUID) {
+        api.requestDisputePacketExport(token(), propertyId)
+    }
+
     suspend fun downloadUrl(exportId: UUID): String {
         val resp = api.fetchDownloadUrl(token(), exportId.toString())
         return resp.downloadUrl

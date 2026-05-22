@@ -25,6 +25,7 @@ import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMProofCard
+import com.surensureshkumar.movemark.data.export.DisputePacketReadiness
 import com.surensureshkumar.movemark.data.export.MoveOutReportReadiness
 import com.surensureshkumar.movemark.data.export.ReportReadiness
 import com.surensureshkumar.movemark.features.reports.components.ExportHistorySection
@@ -64,6 +65,7 @@ fun ReportsScreen(
     val scroll = rememberScrollState()
     val (ctaTitle, ctaEnabled, ctaLoading) = state.primaryCta()
     val (moveOutCtaTitle, moveOutCtaEnabled, moveOutCtaLoading) = state.moveOutCta()
+    val (disputeCtaTitle, disputeCtaEnabled, disputeCtaLoading) = state.disputeCta()
     val showChecklist = state.readiness != ReportReadiness.NoVault
 
     Column(
@@ -152,6 +154,52 @@ fun ReportsScreen(
                         },
                         enabled = moveOutCtaEnabled,
                         loading = moveOutCtaLoading,
+                    )
+                }
+                Spacer(Modifier.height(24.dp))
+                Text(
+                    "Dispute packet",
+                    style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
+                    color = MMColors.TextPrimary,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Bundle your proof if your deposit is questioned.",
+                    color = MMColors.TextSecondary,
+                    fontSize = 14.sp,
+                )
+                Spacer(Modifier.height(8.dp))
+                MMProofCard {
+                    Text(
+                        state.disputePacketStatus,
+                        color = when (state.disputeReadiness) {
+                            DisputePacketReadiness.ReadyToShare -> MMColors.Primary
+                            DisputePacketReadiness.Failed -> MMColors.SemanticDanger
+                            DisputePacketReadiness.Processing -> MMColors.TextSecondary
+                            DisputePacketReadiness.ReadyToMake -> MMColors.TextPrimary
+                            DisputePacketReadiness.NoProof -> MMColors.TextSecondary
+                        },
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "MoveMark organizes your proof. It does not provide legal advice.",
+                        color = MMColors.TextMuted,
+                        fontSize = 12.sp,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    MMButton(
+                        text = disputeCtaTitle,
+                        onClick = {
+                            viewModel.onDisputePrimaryAction(
+                                hasPro = hasPro,
+                                onContinueRoomProof = onContinueRoomProof,
+                                onShowPaywall = onShowPaywall,
+                            )
+                        },
+                        enabled = disputeCtaEnabled,
+                        loading = disputeCtaLoading,
                     )
                 }
             }

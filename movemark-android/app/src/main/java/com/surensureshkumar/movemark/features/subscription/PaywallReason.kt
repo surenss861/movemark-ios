@@ -13,7 +13,7 @@ enum class PaywallReason {
         get() = when (this) {
             ExtraProperty -> "Protect more than one rental."
             UnlimitedExports -> "Make more move-in reports."
-            DisputePacket -> "Build a dispute-ready packet."
+            DisputePacket -> "Dispute tools need Pro."
             MoveOutExport -> "Document move-out proof."
             MoveOutProof -> "Move-out proof needs Pro."
             MoveOutReport -> "Move-out reports need Pro."

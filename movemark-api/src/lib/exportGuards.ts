@@ -8,6 +8,7 @@ export function isUuidString(value: string): boolean {
 
 export const MOVE_IN_REPORT_TYPE = "move_in_report";
 export const MOVE_OUT_REPORT_TYPE = "move_out_report";
+export const DISPUTE_PACKET_TYPE = "dispute_packet";
 
 export type ExportRowLike = {
   status: string;
@@ -25,16 +26,19 @@ export function isActiveExportJob(row: ExportRowLike): boolean {
   return false;
 }
 
-export type MoveOutProofStats = {
+export type InspectionProofStats = {
   documentedRooms: number;
   totalPhotos: number;
 };
 
-/** Rooms with ≥1 move-out photo and total photo count (move-out inspection only). */
-export function computeMoveOutProofStats(
+/** @deprecated Use [computeInspectionProofStats]. */
+export type MoveOutProofStats = InspectionProofStats;
+
+/** Rooms with ≥1 photo on an inspection item and total photo count. */
+export function computeInspectionProofStats(
   inspectionItems: Array<Record<string, unknown>>,
   photoCountByItem: Map<string, number>
-): MoveOutProofStats {
+): InspectionProofStats {
   const roomsWithPhotos = new Set<string>();
   let totalPhotos = 0;
 
@@ -53,4 +57,19 @@ export function computeMoveOutProofStats(
     documentedRooms: roomsWithPhotos.size,
     totalPhotos,
   };
+}
+
+/** Rooms with ≥1 move-out photo and total photo count (move-out inspection only). */
+export function computeMoveOutProofStats(
+  inspectionItems: Array<Record<string, unknown>>,
+  photoCountByItem: Map<string, number>
+): InspectionProofStats {
+  return computeInspectionProofStats(inspectionItems, photoCountByItem);
+}
+
+export function computeMoveInProofStats(
+  inspectionItems: Array<Record<string, unknown>>,
+  photoCountByItem: Map<string, number>
+): InspectionProofStats {
+  return computeInspectionProofStats(inspectionItems, photoCountByItem);
 }

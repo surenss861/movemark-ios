@@ -2,6 +2,8 @@ package com.surensureshkumar.movemark.features.reports
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.surensureshkumar.movemark.data.export.DisputePacketReadiness
+import com.surensureshkumar.movemark.data.export.DisputePacketReadinessMapper
 import com.surensureshkumar.movemark.data.export.ExportRepository
 import com.surensureshkumar.movemark.data.export.ExportRow
 import com.surensureshkumar.movemark.data.export.MoveOutReportReadiness
@@ -47,6 +49,8 @@ data class ReportsUiState(
     val moveOutDocumentedRooms: Int = 0,
     val moveOutReadiness: MoveOutReportReadiness = MoveOutReportReadiness.NoProof,
     val moveOutReportStatus: String = "Capture move-out proof first.",
+    val disputeReadiness: DisputePacketReadiness = DisputePacketReadiness.NoProof,
+    val disputePacketStatus: String = "Add room proof first.",
 )
 
 @HiltViewModel
@@ -62,6 +66,7 @@ class ReportsViewModel @Inject constructor(
     private val _exportsLoading = MutableStateFlow(false)
     private val _actionInProgress = MutableStateFlow(false)
     private val _moveOutActionInProgress = MutableStateFlow(false)
+    private val _disputeActionInProgress = MutableStateFlow(false)
     private val _banner = MutableStateFlow<Pair<String, Boolean>?>(null)
 
     private val _uiState = MutableStateFlow(ReportsUiState())
@@ -82,23 +87,21 @@ class ReportsViewModel @Inject constructor(
                     _exportsLoading,
                     _actionInProgress,
                     _moveOutActionInProgress,
-                    _banner,
-                ) { exportsLoading, moveInBusy, moveOutBusy, banner ->
-                    listOf(exportsLoading, moveInBusy, moveOutBusy, banner)
+                    _disputeActionInProgress,
+                ) { exportsLoading, moveInBusy, moveOutBusy, disputeBusy ->
+                    listOf(exportsLoading, moveInBusy, moveOutBusy, disputeBusy)
                 },
-            ) { propTriple, flags ->
+                _banner,
+            ) { propTriple, busyFlags, banner ->
                 @Suppress("UNCHECKED_CAST")
-                val exportsLoading = flags[0] as Boolean
-                val moveInBusy = flags[1] as Boolean
-                val moveOutBusy = flags[2] as Boolean
-                val banner = flags[3] as Pair<String, Boolean>?
                 buildUiState(
                     property = propTriple.first,
                     propertyLoading = propTriple.second,
                     exports = propTriple.third,
-                    exportsLoading = exportsLoading,
-                    moveInBusy = moveInBusy,
-                    moveOutBusy = moveOutBusy,
+                    exportsLoading = busyFlags[0] as Boolean,
+                    moveInBusy = busyFlags[1] as Boolean,
+                    moveOutBusy = busyFlags[2] as Boolean,
+                    disputeBusy = busyFlags[3] as Boolean,
                     banner = banner,
                 )
             }.collect { _uiState.value = it }
@@ -139,6 +142,24 @@ class ReportsViewModel @Inject constructor(
             ReportReadiness.ReadyToShare -> shareMoveInReport()
             ReportReadiness.Failed -> queueMoveInReport()
             ReportReadiness.Processing -> Unit
+        }
+    }
+
+    fun onDisputePrimaryAction(
+        hasPro: Boolean,
+        onContinueRoomProof: () -> Unit,
+        onShowPaywall: (PaywallReason) -> Unit,
+    ) {
+        if (!hasPro) {
+            onShowPaywall(PaywallReason.DisputePacket)
+            return
+        }
+        when (_uiState.value.disputeReadiness) {
+            DisputePacketReadiness.NoProof -> onContinueRoomProof()
+            DisputePacketReadiness.ReadyToMake -> queueDisputePacket()
+            DisputePacketReadiness.ReadyToShare -> shareDisputePacket()
+            DisputePacketReadiness.Failed -> queueDisputePacket()
+            DisputePacketReadiness.Processing -> Unit
         }
     }
 
@@ -218,11 +239,45 @@ class ReportsViewModel @Inject constructor(
         shareExport(row)
     }
 
-    private fun shareExport(row: ExportRow) {
-        if (_actionInProgress.value || _moveOutActionInProgress.value) return
+    private fun shareDisputePacket() {
+        val row = DisputePacketReadinessMapper.firstReadyDisputeExport(_exports.value) ?: return
+        shareExport(row)
+    }
+
+    private fun queueDisputePacket() {
+        val property = propertyStore.currentProperty.value ?: return
+        if (_disputeActionInProgress.value) return
+        if (DisputePacketReadinessMapper.hasActiveDisputeJob(_exports.value)) {
+            _banner.value = "A dispute packet is already building. Check status below." to false
+            return
+        }
         viewModelScope.launch {
-            _moveOutActionInProgress.value = row.type == ReportReadinessMapper.MOVE_OUT_REPORT_TYPE
-            _actionInProgress.value = row.type == ReportReadinessMapper.MOVE_IN_REPORT_TYPE
+            _disputeActionInProgress.value = true
+            _banner.value = null
+            try {
+                withContext(Dispatchers.IO) {
+                    exportRepository.queueDisputePacket(property.id)
+                }
+                _banner.value = "Dispute packet queued. Building your PDF…" to false
+                refreshExports()
+            } catch (e: Exception) {
+                _banner.value = exportRepository.userMessage(e) to true
+            } finally {
+                _disputeActionInProgress.value = false
+            }
+        }
+    }
+
+    private fun shareExport(row: ExportRow) {
+        if (_actionInProgress.value || _moveOutActionInProgress.value || _disputeActionInProgress.value) {
+            return
+        }
+        viewModelScope.launch {
+            when (row.type) {
+                ReportReadinessMapper.MOVE_IN_REPORT_TYPE -> _actionInProgress.value = true
+                ReportReadinessMapper.MOVE_OUT_REPORT_TYPE -> _moveOutActionInProgress.value = true
+                ReportReadinessMapper.DISPUTE_PACKET_TYPE -> _disputeActionInProgress.value = true
+            }
             _banner.value = null
             try {
                 val url = withContext(Dispatchers.IO) {
@@ -234,6 +289,7 @@ class ReportsViewModel @Inject constructor(
             } finally {
                 _actionInProgress.value = false
                 _moveOutActionInProgress.value = false
+                _disputeActionInProgress.value = false
             }
         }
     }
@@ -245,6 +301,7 @@ class ReportsViewModel @Inject constructor(
         exportsLoading: Boolean,
         moveInBusy: Boolean,
         moveOutBusy: Boolean,
+        disputeBusy: Boolean,
         banner: Pair<String, Boolean>?,
     ): ReportsUiState {
         if (propertyLoading && property == null) {
@@ -266,6 +323,7 @@ class ReportsViewModel @Inject constructor(
         val moveOutPhotos = RoomProofMetrics.totalPhotoCount(property, ProofPhase.MoveOut)
         val moveOutDocumented = RoomProofMetrics.moveOutDocumentedCount(property)
         val moveOutReadiness = MoveOutReportReadinessMapper.resolve(moveOutPhotos, exports)
+        val disputeReadiness = DisputePacketReadinessMapper.resolve(documented, exports)
         val readiness = ReportReadinessMapper.resolve(
             hasVault = true,
             documentedRooms = documented,
@@ -282,13 +340,15 @@ class ReportsViewModel @Inject constructor(
             proofChips = buildProofChips(documented, total, photos),
             checklistItems = buildChecklist(documented, total, readiness),
             exports = exports,
-            actionInProgress = moveInBusy || moveOutBusy,
+            actionInProgress = moveInBusy || moveOutBusy || disputeBusy,
             banner = banner?.first,
             bannerIsError = banner?.second == true,
             moveOutPhotos = moveOutPhotos,
             moveOutDocumentedRooms = moveOutDocumented,
             moveOutReadiness = moveOutReadiness,
             moveOutReportStatus = moveOutStatusLine(moveOutReadiness),
+            disputeReadiness = disputeReadiness,
+            disputePacketStatus = disputeStatusLine(disputeReadiness),
         )
     }
 
@@ -338,6 +398,31 @@ class ReportsViewModel @Inject constructor(
                 state = reportState,
             ),
         )
+    }
+}
+
+private fun disputeStatusLine(readiness: DisputePacketReadiness): String = when (readiness) {
+    DisputePacketReadiness.NoProof -> "Add room proof first."
+    DisputePacketReadiness.ReadyToMake -> "Dispute packet can be made."
+    DisputePacketReadiness.Processing -> "Building packet…"
+    DisputePacketReadiness.ReadyToShare -> "Dispute packet ready."
+    DisputePacketReadiness.Failed -> "Packet failed. Retry."
+}
+
+fun disputePrimaryCta(
+    readiness: DisputePacketReadiness,
+    loading: Boolean,
+    busy: Boolean,
+): Triple<String, Boolean, Boolean> {
+    if (loading) return Triple("Checking dispute packet…", false, false)
+    return when (readiness) {
+        DisputePacketReadiness.NoProof -> Triple("Continue room proof", true, false)
+        DisputePacketReadiness.ReadyToMake ->
+            Triple(if (busy) "Building packet…" else "Build dispute packet", !busy, busy)
+        DisputePacketReadiness.ReadyToShare ->
+            Triple(if (busy) "Opening…" else "View / Share packet", !busy, busy)
+        DisputePacketReadiness.Processing -> Triple("Building…", false, false)
+        DisputePacketReadiness.Failed -> Triple(if (busy) "Retrying…" else "Retry packet", !busy, busy)
     }
 }
 
@@ -404,3 +489,6 @@ fun ReportsUiState.primaryCta(): Triple<String, Boolean, Boolean> =
 
 fun ReportsUiState.moveOutCta(): Triple<String, Boolean, Boolean> =
     moveOutPrimaryCta(moveOutReadiness, propertyLoading || exportsLoading, actionInProgress)
+
+fun ReportsUiState.disputeCta(): Triple<String, Boolean, Boolean> =
+    disputePrimaryCta(disputeReadiness, propertyLoading || exportsLoading, actionInProgress)

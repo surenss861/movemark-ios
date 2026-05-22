@@ -36,6 +36,18 @@ cd /Volumes/sss/movemark/movemork/movemark-android
 | 20 | Failed retry | Failed export: Retry report queues again |
 | 21 | Free Reports CTA | Move-out report button → paywall “Move-out reports need Pro.” |
 
+## P3 — Dispute packet (mock Pro)
+
+| # | Flow | Expected |
+|---|------|----------|
+| 22 | No move-in proof | Dispute section: “Add room proof first.” → Continue room proof |
+| 23 | With move-in proof | “Dispute packet can be made.” → Build dispute packet |
+| 24 | Duplicate tap | Second build shows “already building” |
+| 25 | Ready packet | View / Share packet opens PDF |
+| 26 | Failed retry | Retry packet works after failure |
+| 27 | Free user | Dispute CTA → paywall “Dispute tools need Pro.” |
+| 28 | Legal copy | Shows “does not provide legal advice” (no “win/guaranteed” copy) |
+
 ## Rules (must not break)
 
 - `photoCount == 0` → **not** documented

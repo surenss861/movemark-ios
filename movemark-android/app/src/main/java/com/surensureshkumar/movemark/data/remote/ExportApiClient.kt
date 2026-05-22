@@ -82,6 +82,9 @@ class ExportApiClient @Inject constructor(
     suspend fun requestMoveOutExport(accessToken: String, propertyId: UUID): MoveInExportResponse =
         requestExport("$base/api/exports/move-out", accessToken, propertyId)
 
+    suspend fun requestDisputePacketExport(accessToken: String, propertyId: UUID): MoveInExportResponse =
+        requestExport("$base/api/exports/dispute-packet", accessToken, propertyId)
+
     private suspend fun requestExport(url: String, accessToken: String, propertyId: UUID): MoveInExportResponse =
         try {
             val payload = """{"propertyId":"$propertyId","format":"pdf"}"""
@@ -140,6 +143,10 @@ class ExportApiClient @Inject constructor(
                         "not_enough_move_out_proof" ->
                             throw ExportApiException.QueueFailed(
                                 "Capture move-out proof for at least one room first.",
+                            )
+                        "not_enough_dispute_proof" ->
+                            throw ExportApiException.QueueFailed(
+                                "Add move-in room proof before building a dispute packet.",
                             )
                     }
                     throw ExportApiException.Network(sanitizeMessage(body, resp.message))

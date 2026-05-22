@@ -3,7 +3,7 @@ export type ExportRequestBody = {
   format: "pdf";
 };
 
-export type ExportReportType = "move_in_report" | "move_out_report";
+export type ExportReportType = "move_in_report" | "move_out_report" | "dispute_packet";
 
 export type ExportResponseBody = {
   exportId: string;

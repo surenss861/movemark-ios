@@ -403,3 +403,84 @@ export async function generateMoveOutPdfBuffer(input: {
   const bytes = await pdf.save();
   return Buffer.from(bytes);
 }
+
+export type DisputePacketChecklist = {
+  moveInReport: string;
+  moveOutReport: string;
+  leaseAndDepositDocs: string[];
+  damageNotes: string[];
+  timeline: string[];
+};
+
+export async function generateDisputePacketPdfBuffer(input: {
+  property: Record<string, unknown>;
+  checklist: DisputePacketChecklist;
+}): Promise<Buffer> {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+  let page = pdf.addPage([PAGE_W, PAGE_H]);
+  const ctx: DrawCtx = { pdf, page, y: PAGE_H - MARGIN, font, fontBold };
+
+  const title = strProp(input.property, "title") || "Untitled";
+  const line1 = strProp(input.property, "address_line_1", "address_line1");
+  const city = strProp(input.property, "city");
+  const region = strProp(input.property, "province_state");
+
+  await drawParagraph(ctx, "MoveMark — Dispute packet", TITLE, true);
+  ctx.y -= 6;
+  await drawParagraph(ctx, `Property: ${title}`, HEAD, true);
+  const addressLine = [line1, [city, region].filter(Boolean).join(", ")].filter(Boolean).join(" · ");
+  if (addressLine) await drawParagraph(ctx, addressLine, BODY);
+  ctx.y -= 8;
+  await drawParagraph(
+    ctx,
+    "MoveMark organizes your proof. It does not provide legal advice.",
+    META,
+    false,
+    true
+  );
+  ctx.y -= 12;
+
+  await drawParagraph(ctx, "Proof checklist", HEAD, true);
+  ctx.y -= 4;
+  await drawParagraph(ctx, `Move-in report: ${input.checklist.moveInReport}`, BODY);
+  await drawParagraph(ctx, `Move-out report: ${input.checklist.moveOutReport}`, BODY);
+  ctx.y -= 8;
+
+  await drawParagraph(ctx, "Lease / deposit documents", HEAD, true);
+  if (input.checklist.leaseAndDepositDocs.length === 0) {
+    await drawParagraph(ctx, "None on file.", BODY, false, true);
+  } else {
+    for (const doc of input.checklist.leaseAndDepositDocs) {
+      await drawParagraph(ctx, `• ${doc}`, BODY);
+    }
+  }
+  ctx.y -= 8;
+
+  await drawParagraph(ctx, "Damage notes", HEAD, true);
+  if (input.checklist.damageNotes.length === 0) {
+    await drawParagraph(ctx, "No tagged damage notes on file.", BODY, false, true);
+  } else {
+    for (const note of input.checklist.damageNotes) {
+      await drawParagraph(ctx, `• ${note}`, BODY);
+    }
+  }
+  ctx.y -= 8;
+
+  await drawParagraph(ctx, "Timeline summary", HEAD, true);
+  if (input.checklist.timeline.length === 0) {
+    await drawParagraph(ctx, "No dated events on file.", BODY, false, true);
+  } else {
+    for (const line of input.checklist.timeline) {
+      await drawParagraph(ctx, `• ${line}`, BODY);
+    }
+  }
+
+  ctx.y -= 14;
+  await drawParagraph(ctx, `Generated ${new Date().toISOString()}`, META, false, true);
+
+  const bytes = await pdf.save();
+  return Buffer.from(bytes);
+}
