@@ -7,6 +7,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import com.surensureshkumar.movemark.core.util.MMUserMessages
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -160,8 +161,8 @@ class ExportApiClient @Inject constructor(
     private fun sanitizeMessage(body: String, fallback: String): String {
         val err = runCatching { json.decodeFromString<ApiErrorBody>(body) }.getOrNull()
         val raw = err?.error?.trim().orEmpty()
-        if (raw.isBlank() || raw.contains("RevenueCat", ignoreCase = true)) {
-            return "Report couldn't load. Try again."
+        if (raw.isBlank() || MMUserMessages.isTechnical(raw)) {
+            return "Report couldn't be started. Try again."
         }
         return raw
     }

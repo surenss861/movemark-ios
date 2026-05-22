@@ -129,7 +129,7 @@ class RevenueCatSubscriptionBilling @Inject constructor() : SubscriptionBilling,
         } catch (e: Exception) {
             Log.e(TAG, "fetchOfferings failed", e)
             _packages.value = emptyList()
-            _errorMessage.value = sanitizeError(e)
+            _errorMessage.value = com.surensureshkumar.movemark.core.util.MMUserMessages.plans(e)
         } finally {
             _loading.value = false
         }
@@ -157,7 +157,7 @@ class RevenueCatSubscriptionBilling @Inject constructor() : SubscriptionBilling,
             }
         } catch (e: Exception) {
             Log.e(TAG, "purchase failed", e)
-            val msg = sanitizeError(e)
+            val msg = com.surensureshkumar.movemark.core.util.MMUserMessages.purchase(e)
             _errorMessage.value = msg
             PurchaseOutcome.Failed(msg)
         } finally {
@@ -233,16 +233,4 @@ class RevenueCatSubscriptionBilling @Inject constructor() : SubscriptionBilling,
         )
     }
 
-    private fun sanitizeError(error: Throwable): String {
-        val raw = error.message.orEmpty()
-        if (raw.isBlank() ||
-            raw.contains("RevenueCat", ignoreCase = true) ||
-            raw.contains("Billing", ignoreCase = true) ||
-            raw.contains("Play", ignoreCase = true) ||
-            raw.length > 120
-        ) {
-            return "Plans didn't load. Try again."
-        }
-        return raw
-    }
 }

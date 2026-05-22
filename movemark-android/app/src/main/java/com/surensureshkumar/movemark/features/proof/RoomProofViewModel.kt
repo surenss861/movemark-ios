@@ -8,6 +8,7 @@ import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.surensureshkumar.movemark.core.util.MMUserMessages
 import com.surensureshkumar.movemark.data.auth.SessionManager
 import com.surensureshkumar.movemark.data.models.RoomRecord
 import com.surensureshkumar.movemark.data.property.EvidenceUploadContext
@@ -205,10 +206,7 @@ class RoomProofViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 Log.e(UPLOAD_TAG, "Save proof failed", e)
-                val friendly = e.message?.takeIf {
-                    it.contains("couldn't upload", ignoreCase = true) ||
-                        it.contains("connection", ignoreCase = true)
-                } ?: RoomProofUploadMessages.FULL_FAILURE
+                val friendly = MMUserMessages.proofSave(e)
                 _saveState.value = RoomProofSaveState.Failed(friendly)
                 _message.value = friendly
             } finally {

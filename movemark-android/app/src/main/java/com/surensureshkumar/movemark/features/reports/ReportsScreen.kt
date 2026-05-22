@@ -81,7 +81,8 @@ fun ReportsScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = MMSpacing.ScreenHorizontal.dp, vertical = 24.dp),
+            .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
+            .padding(top = 24.dp, bottom = MMSpacing.TabScrollBottom.dp),
     ) {
         MMProofSectionHeader(
             title = "Your move-in report",
@@ -92,6 +93,8 @@ fun ReportsScreen(
         when {
             state.propertyLoading && state.exports.isEmpty() && state.noVault -> {
                 CircularProgressIndicator(color = MMColors.Primary)
+                Spacer(Modifier.height(12.dp))
+                Text("Checking saved proof…", color = MMColors.TextSecondary, fontSize = 15.sp)
             }
             state.noVault -> {
                 Text("Create a rental vault first.", color = MMColors.TextSecondary, fontSize = 15.sp)

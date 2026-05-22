@@ -49,7 +49,8 @@ fun RoomsScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = MMSpacing.ScreenHorizontal.dp, vertical = 24.dp),
+            .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
+            .padding(top = 24.dp, bottom = MMSpacing.TabScrollBottom.dp),
     ) {
         MMProofSectionHeader(
             title = "Room proof",

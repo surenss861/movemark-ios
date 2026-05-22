@@ -2,6 +2,7 @@ package com.surensureshkumar.movemark.features.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.surensureshkumar.movemark.core.util.MMUserMessages
 import com.surensureshkumar.movemark.data.auth.AuthException
 import com.surensureshkumar.movemark.data.auth.SessionManager
 import com.surensureshkumar.movemark.data.property.PropertyStore
@@ -47,9 +48,9 @@ class AuthViewModel @Inject constructor(
                 }
                 sessionManager.userId.value?.let { propertyStore.fetchAll(it) }
             } catch (e: AuthException) {
-                _message.value = e.message
+                _message.value = MMUserMessages.auth(e)
             } catch (e: Exception) {
-                _message.value = e.message ?: "Authentication failed."
+                _message.value = MMUserMessages.auth(e)
             } finally {
                 _loading.value = false
             }
@@ -62,7 +63,7 @@ class AuthViewModel @Inject constructor(
                 sessionManager.resetPassword(_email.value)
                 _message.value = "Check your email for a reset link."
             } catch (e: Exception) {
-                _message.value = e.message
+                _message.value = MMUserMessages.passwordReset(e)
             }
         }
     }

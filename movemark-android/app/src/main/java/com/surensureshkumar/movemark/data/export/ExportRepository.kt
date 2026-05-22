@@ -2,6 +2,7 @@ package com.surensureshkumar.movemark.data.export
 
 import com.surensureshkumar.movemark.data.auth.SessionManager
 import com.surensureshkumar.movemark.data.remote.ExportApiClient
+import com.surensureshkumar.movemark.core.util.MMUserMessages
 import com.surensureshkumar.movemark.data.remote.ExportApiException
 import java.util.UUID
 import javax.inject.Inject
@@ -37,8 +38,5 @@ class ExportRepository @Inject constructor(
         return resp.downloadUrl
     }
 
-    fun userMessage(error: Throwable): String = when (error) {
-        is ExportApiException -> error.message ?: "Something went wrong. Try again."
-        else -> "Report couldn't load. Try again."
-    }
+    fun userMessage(error: Throwable): String = MMUserMessages.export(error)
 }

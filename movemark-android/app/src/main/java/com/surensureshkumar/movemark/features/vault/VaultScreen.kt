@@ -66,7 +66,7 @@ fun VaultScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-            .padding(top = 10.dp, bottom = 32.dp),
+            .padding(top = 10.dp, bottom = MMSpacing.TabScrollBottom.dp),
     ) {
         MMProofSectionHeader(
             title = "Your proof",
@@ -89,6 +89,8 @@ fun VaultScreen(
         when {
             loading && property == null -> {
                 CircularProgressIndicator(color = MMColors.Primary)
+                Spacer(Modifier.height(12.dp))
+                Text("Loading your proof vault…", color = MMColors.TextSecondary, fontSize = 15.sp)
             }
             error != null -> {
                 Text(error!!, color = MMColors.SemanticDanger)

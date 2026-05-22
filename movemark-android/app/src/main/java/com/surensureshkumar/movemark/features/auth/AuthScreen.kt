@@ -38,7 +38,8 @@ fun AuthScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = MMSpacing.ScreenHorizontal.dp, vertical = 32.dp),
+                .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
+                .padding(top = 32.dp, bottom = MMSpacing.TabScrollBottom.dp),
         ) {
             TextButton(onClick = onDismiss) { Text("Back", color = MMColors.TextSecondary) }
             Spacer(Modifier.height(8.dp))

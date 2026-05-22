@@ -87,7 +87,7 @@ fun AccountScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-            .padding(top = 12.dp, bottom = 40.dp),
+            .padding(top = 12.dp, bottom = MMSpacing.TabScrollBottom.dp),
     ) {
         MMProofSectionHeader(
             title = "Account",

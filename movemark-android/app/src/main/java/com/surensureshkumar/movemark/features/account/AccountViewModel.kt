@@ -2,7 +2,9 @@ package com.surensureshkumar.movemark.features.account
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.util.Log
 import com.surensureshkumar.movemark.BuildConfig
+import com.surensureshkumar.movemark.core.util.MMUserMessages
 import com.surensureshkumar.movemark.data.auth.AuthException
 import com.surensureshkumar.movemark.data.auth.SessionManager
 import com.surensureshkumar.movemark.data.property.PropertyStore
@@ -89,12 +91,10 @@ class AccountViewModel @Inject constructor(
                 sessionManager.resetPassword(email)
                 _notice.value = AccountNotice("Check your email for a link to reset your password.")
             } catch (e: AuthException) {
-                _notice.value = AccountNotice(e.message ?: "Could not send reset email.", isError = true)
-            } catch (_: Exception) {
-                _notice.value = AccountNotice(
-                    "Could not send reset email. Try again in a moment.",
-                    isError = true,
-                )
+                _notice.value = AccountNotice(MMUserMessages.passwordReset(e), isError = true)
+            } catch (e: Exception) {
+                Log.e("AccountViewModel", "resetPassword failed", e)
+                _notice.value = AccountNotice(MMUserMessages.passwordReset(e), isError = true)
             } finally {
                 _resetInProgress.value = false
             }
@@ -109,9 +109,10 @@ class AccountViewModel @Inject constructor(
                 sessionManager.updateProfileFullName(name)
                 _notice.value = AccountNotice("Name updated.")
             } catch (e: AuthException) {
-                _notice.value = AccountNotice(e.message ?: "Could not update name.", isError = true)
-            } catch (_: Exception) {
-                _notice.value = AccountNotice("Could not update name. Try again.", isError = true)
+                _notice.value = AccountNotice(MMUserMessages.profile(e), isError = true)
+            } catch (e: Exception) {
+                Log.e("AccountViewModel", "updateFullName failed", e)
+                _notice.value = AccountNotice(MMUserMessages.profile(e), isError = true)
             } finally {
                 _profileSaving.value = false
             }

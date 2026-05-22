@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import android.util.Log
+import com.surensureshkumar.movemark.core.util.MMUserMessages
 import com.surensureshkumar.movemark.data.models.CreatePropertyInput
 import com.surensureshkumar.movemark.data.models.EvidenceRecord
 import com.surensureshkumar.movemark.data.models.PropertyRecord
@@ -82,7 +83,8 @@ class PropertyStore @Inject constructor(
             _currentProperty.value = hydrator.hydrate(row)
             _errorMessage.value = null
         } catch (e: Exception) {
-            _errorMessage.value = e.message ?: "Could not load your rentals."
+            Log.e("PropertyStore", "fetchAll failed", e)
+            _errorMessage.value = MMUserMessages.loadRentals(e)
             _currentProperty.value = null
         } finally {
             _isLoading.value = false
@@ -107,7 +109,8 @@ class PropertyStore @Inject constructor(
             dataStore.edit { it[activeKey(userId)] = propertyId.toString() }
             _currentProperty.value = hydrator.hydrate(row)
         } catch (e: Exception) {
-            _errorMessage.value = e.message ?: "Could not open this rental."
+            Log.e("PropertyStore", "activateProperty failed", e)
+            _errorMessage.value = MMUserMessages.activateRental(e)
         } finally {
             _isLoading.value = false
         }
