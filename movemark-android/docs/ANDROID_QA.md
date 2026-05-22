@@ -9,6 +9,23 @@ cd /Volumes/sss/movemark/movemork/movemark-android
 ./gradlew :app:assembleDebug
 ```
 
+## End-to-end release candidate route
+
+Run once on a device or emulator (mock billing: `BILLING_MODE=mock` in `local.properties`):
+
+| Step | Screen | Action |
+|------|--------|--------|
+| 1 | Welcome | Proof hero card visible; **Start move-in proof** → sign up |
+| 2 | Auth | Create account |
+| 3 | Create rental | Name + address → vault |
+| 4 | Rooms | First room → camera/gallery → **Save proof** |
+| 5 | Receipt | Saved to vault; continue next room or vault |
+| 6 | Report | Move-in report when ≥1 room documented |
+| 7 | Account | Enable mock Pro / reset test subscription |
+| 8 | Vault | Open move-out proof → capture → receipt |
+| 9 | Report | Move-out report + dispute packet (Pro) |
+| 10 | Account | Sign out → Welcome |
+
 ## P0 — Core proof loop
 
 | # | Flow | Screen | Expected | Actual | Logs |

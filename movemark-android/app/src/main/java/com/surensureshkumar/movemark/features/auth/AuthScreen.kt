@@ -46,6 +46,16 @@ fun AuthScreen(
                 text = if (viewModel.mode == AuthMode.SignUp) "Create your vault" else "Sign in",
                 style = androidx.compose.material3.MaterialTheme.typography.headlineLarge,
             )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = if (viewModel.mode == AuthMode.SignUp) {
+                    "Your move-in proof saves here."
+                } else {
+                    "Sign in to continue saving proof."
+                },
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                color = MMColors.TextSecondary,
+            )
             Spacer(Modifier.height(24.dp))
             MMTextField(email, viewModel::setEmail, "Email", keyboardType = KeyboardType.Email)
             Spacer(Modifier.height(12.dp))

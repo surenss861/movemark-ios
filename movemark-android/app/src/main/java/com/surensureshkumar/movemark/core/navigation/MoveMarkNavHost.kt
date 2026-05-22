@@ -76,7 +76,7 @@ fun MoveMarkNavHost() {
                 onStartMoveIn = {
                     navController.navigate(Routes.auth("signUp"))
                 },
-                onContinue = {
+                onSignIn = {
                     navController.navigate(Routes.auth("signIn"))
                 },
             )

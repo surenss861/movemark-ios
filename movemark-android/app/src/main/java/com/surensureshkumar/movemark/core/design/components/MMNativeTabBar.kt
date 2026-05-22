@@ -67,11 +67,11 @@ private fun ColumnTab(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(icon, contentDescription = label, tint = if (active) MMColors.Primary else MMColors.TextMuted)
+        Icon(icon, contentDescription = label, tint = if (active) MMColors.TextPrimary else MMColors.TextMuted)
         Text(
             label,
             style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
-            color = if (active) MMColors.Primary else MMColors.TextMuted,
+            color = if (active) MMColors.TextPrimary else MMColors.TextMuted,
         )
     }
 }

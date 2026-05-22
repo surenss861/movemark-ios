@@ -33,4 +33,12 @@ object MMMotion {
     @Composable
     fun checkPopSpec(reduceMotion: Boolean): FiniteAnimationSpec<Float> =
         if (reduceMotion) tween(0) else spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium)
+
+    @Composable
+    fun welcomeEnterSpec(reduceMotion: Boolean, durationMillis: Int = 480): FiniteAnimationSpec<Float> =
+        if (reduceMotion) tween(0) else tween(durationMillis = durationMillis)
+
+    @Composable
+    fun welcomeTagEnterSpec(reduceMotion: Boolean): FiniteAnimationSpec<Float> =
+        if (reduceMotion) tween(0) else spring(dampingRatio = 0.78f, stiffness = Spring.StiffnessMedium)
 }
