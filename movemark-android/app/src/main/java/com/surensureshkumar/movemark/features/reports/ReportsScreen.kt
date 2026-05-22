@@ -24,6 +24,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.data.export.ReportReadiness
+import com.surensureshkumar.movemark.core.design.components.MMProofCard
 import com.surensureshkumar.movemark.features.reports.components.ExportHistorySection
 import com.surensureshkumar.movemark.features.reports.components.MMReportPreviewHero
 import com.surensureshkumar.movemark.features.reports.components.MMReportReadinessChecklist
@@ -104,6 +105,37 @@ fun ReportsScreen(
                 if (state.exports.isNotEmpty()) {
                     Spacer(Modifier.height(24.dp))
                     ExportHistorySection(exports = state.exports)
+                }
+                if (!state.noVault) {
+                    Spacer(Modifier.height(24.dp))
+                    Text(
+                        "Move-out report",
+                        style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
+                        color = MMColors.TextPrimary,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    MMProofCard {
+                        Text(
+                            state.moveOutReportStatus,
+                            color = if (state.moveOutReportReady) MMColors.Primary else MMColors.TextSecondary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        if (state.moveOutPhotos > 0) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "${state.moveOutDocumentedRooms} of ${state.totalRooms} rooms · ${state.moveOutPhotos} photos",
+                                color = MMColors.TextMuted,
+                                fontSize = 13.sp,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "Report generation coming soon.",
+                                color = MMColors.TextMuted,
+                                fontSize = 13.sp,
+                            )
+                        }
+                    }
                 }
             }
         }

@@ -12,6 +12,8 @@ import com.surensureshkumar.movemark.data.auth.SessionManager
 import com.surensureshkumar.movemark.data.models.RoomRecord
 import com.surensureshkumar.movemark.data.property.EvidenceUploadContext
 import com.surensureshkumar.movemark.data.property.PropertyStore
+import com.surensureshkumar.movemark.domain.ProofPhase
+import com.surensureshkumar.movemark.core.navigation.Routes
 import com.surensureshkumar.movemark.features.proof.camera.CameraCaptureResultHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -42,7 +44,8 @@ class RoomProofViewModel @Inject constructor(
     private val cameraResultHolder: CameraCaptureResultHolder,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
-    val roomId: UUID = UUID.fromString(checkNotNull(savedStateHandle.get<String>("roomId")))
+    val roomId: UUID = UUID.fromString(checkNotNull(savedStateHandle.get<String>(Routes.RoomProofArg)))
+    val proofPhase: ProofPhase = ProofPhase.fromKey(savedStateHandle.get<String>(Routes.ProofPhaseArg))
 
     val room: StateFlow<RoomRecord?> = propertyStore.currentProperty
         .map { prop -> prop?.rooms?.firstOrNull { it.id == roomId } }
@@ -131,6 +134,7 @@ class RoomProofViewModel @Inject constructor(
                         notes = "",
                         propertyId = property.id,
                         userId = userId,
+                        proofPhase = proofPhase,
                     )
                 }.also { uploadContext = it }
 
@@ -260,6 +264,7 @@ class RoomProofViewModel @Inject constructor(
             hadPartialFailure = savedCount < attemptedCount,
             timestampMillis = System.currentTimeMillis(),
             thumbnailJpeg = thumbnail,
+            proofPhase = proofPhase,
         )
     }
 

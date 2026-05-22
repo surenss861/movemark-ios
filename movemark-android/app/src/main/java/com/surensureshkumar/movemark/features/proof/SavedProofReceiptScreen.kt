@@ -47,6 +47,7 @@ import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
 import com.surensureshkumar.movemark.core.design.components.MMProofCard
+import com.surensureshkumar.movemark.domain.ProofPhase
 import kotlinx.coroutines.delay
 import java.util.UUID
 
@@ -108,13 +109,13 @@ fun SavedProofReceiptScreen(
                         Spacer(Modifier.width(10.dp))
                         Column {
                             Text(
-                                "Saved to your vault",
+                                state.receiptTitle,
                                 color = MMColors.TextPrimary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 22.sp,
                             )
                             Text(
-                                "Your room proof is stored with the timestamp.",
+                                state.receiptSubtitle,
                                 color = MMColors.TextSecondary,
                                 fontSize = 14.sp,
                             )
@@ -143,14 +144,14 @@ fun SavedProofReceiptScreen(
                             }
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    "${state.roomName} proof",
+                                    proofMetaTitle(state),
                                     color = MMColors.TextPrimary,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 17.sp,
                                 )
                                 Spacer(Modifier.height(6.dp))
                                 Text(
-                                    photoLine(state.savedCount),
+                                    proofMetaLine(state),
                                     color = MMColors.TextSecondary,
                                     fontSize = 14.sp,
                                 )
@@ -159,7 +160,7 @@ fun SavedProofReceiptScreen(
                                 if (state.isRoomDocumented) {
                                     Spacer(Modifier.height(8.dp))
                                     Text(
-                                        "Room now documented",
+                                        state.roomDocumentedLabel,
                                         color = MMColors.Primary,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.SemiBold,
@@ -176,7 +177,7 @@ fun SavedProofReceiptScreen(
             }
             Spacer(Modifier.weight(1f))
             MMButton(
-                text = "Continue next room",
+                text = state.continueNextRoomLabel,
                 onClick = { onContinueNextRoom(viewModel.nextUndocumentedRoomId()) },
             )
             Spacer(Modifier.height(10.dp))
@@ -201,7 +202,14 @@ fun SavedProofReceiptScreen(
     }
 }
 
-private fun photoLine(count: Int): String {
-    val photos = if (count == 1) "1 photo saved" else "$count photos saved"
-    return "$photos · Move-in"
+private fun proofMetaTitle(state: SavedProofReceiptUiState): String =
+    if (state.proofPhase == ProofPhase.MoveOut) {
+        "${state.roomName} · Move-out"
+    } else {
+        "${state.roomName} proof"
+    }
+
+private fun proofMetaLine(state: SavedProofReceiptUiState): String {
+    val photos = if (state.savedCount == 1) "1 photo" else "${state.savedCount} photos"
+    return "$photos · ${state.proofPhase.displayName}"
 }

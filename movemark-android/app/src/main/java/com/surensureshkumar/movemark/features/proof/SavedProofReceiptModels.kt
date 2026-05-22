@@ -1,5 +1,6 @@
 package com.surensureshkumar.movemark.features.proof
 
+import com.surensureshkumar.movemark.domain.ProofPhase
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -13,6 +14,7 @@ data class SavedProofReceiptPayload(
     val hadPartialFailure: Boolean,
     val timestampMillis: Long,
     val thumbnailJpeg: ByteArray?,
+    val proofPhase: ProofPhase = ProofPhase.MoveIn,
 )
 
 @Singleton

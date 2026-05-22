@@ -28,6 +28,7 @@ import java.util.UUID
 @Composable
 fun MainShellScreen(
     onOpenRoom: (UUID) -> Unit,
+    onOpenMoveOutProof: () -> Unit,
     onSignOut: () -> Unit,
     onAddProperty: () -> Unit,
     viewModel: MainShellViewModel = hiltViewModel(),
@@ -53,6 +54,7 @@ fun MainShellScreen(
                     MainTab.Vault -> VaultScreen(
                         modifier = Modifier.padding(padding),
                         onOpenRoom = onOpenRoom,
+                        onOpenMoveOutProof = onOpenMoveOutProof,
                         onAddProperty = onAddProperty,
                         onShowPaywall = { paywallReason = it },
                     )

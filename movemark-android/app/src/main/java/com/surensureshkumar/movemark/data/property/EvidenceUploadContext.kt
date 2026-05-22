@@ -1,5 +1,6 @@
 package com.surensureshkumar.movemark.data.property
 
+import com.surensureshkumar.movemark.domain.ProofPhase
 import java.util.UUID
 
 data class EvidenceUploadContext(
@@ -8,4 +9,5 @@ data class EvidenceUploadContext(
     val title: String,
     val propertyId: UUID,
     val userId: UUID,
+    val proofPhase: ProofPhase,
 )

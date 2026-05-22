@@ -8,6 +8,7 @@ import com.surensureshkumar.movemark.data.export.ReportReadiness
 import com.surensureshkumar.movemark.data.export.ReportReadinessMapper
 import com.surensureshkumar.movemark.data.models.PropertyRecord
 import com.surensureshkumar.movemark.data.property.PropertyStore
+import com.surensureshkumar.movemark.domain.ProofPhase
 import com.surensureshkumar.movemark.domain.RoomProofMetrics
 import com.surensureshkumar.movemark.features.reports.components.ChecklistItemState
 import com.surensureshkumar.movemark.features.reports.components.ReportChecklistItem
@@ -38,6 +39,10 @@ data class ReportsUiState(
     val actionInProgress: Boolean = false,
     val banner: String? = null,
     val bannerIsError: Boolean = false,
+    val moveOutPhotos: Int = 0,
+    val moveOutDocumentedRooms: Int = 0,
+    val moveOutReportStatus: String = "Capture move-out proof first.",
+    val moveOutReportReady: Boolean = false,
 )
 
 @HiltViewModel
@@ -182,9 +187,15 @@ class ReportsViewModel @Inject constructor(
                 bannerIsError = banner?.second == true,
             )
         }
-        val documented = RoomProofMetrics.documentedCount(property)
+        val documented = RoomProofMetrics.moveInDocumentedCount(property)
         val total = property.rooms.size
-        val photos = RoomProofMetrics.totalPhotoCount(property)
+        val photos = RoomProofMetrics.totalPhotoCount(property, ProofPhase.MoveIn)
+        val moveOutPhotos = RoomProofMetrics.totalPhotoCount(property, ProofPhase.MoveOut)
+        val moveOutDocumented = RoomProofMetrics.moveOutDocumentedCount(property)
+        val moveOutReportStatus = when {
+            moveOutPhotos == 0 -> "Capture move-out proof first."
+            else -> "Move-out proof saved"
+        }
         val readiness = ReportReadinessMapper.resolve(
             hasVault = true,
             documentedRooms = documented,
@@ -204,6 +215,10 @@ class ReportsViewModel @Inject constructor(
             actionInProgress = actionBusy,
             banner = banner?.first,
             bannerIsError = banner?.second == true,
+            moveOutPhotos = moveOutPhotos,
+            moveOutDocumentedRooms = moveOutDocumented,
+            moveOutReportStatus = moveOutReportStatus,
+            moveOutReportReady = moveOutPhotos > 0,
         )
     }
 

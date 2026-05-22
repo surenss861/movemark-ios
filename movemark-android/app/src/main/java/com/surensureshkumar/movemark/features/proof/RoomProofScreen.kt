@@ -40,6 +40,7 @@ import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
 import com.surensureshkumar.movemark.core.design.components.MMProofCard
+import com.surensureshkumar.movemark.domain.ProofPhase
 import com.surensureshkumar.movemark.domain.RoomProofMetrics
 import java.util.UUID
 
@@ -51,6 +52,7 @@ fun RoomProofScreen(
     onOpenCamera: () -> Unit,
     viewModel: RoomProofViewModel = hiltViewModel(),
 ) {
+    val proofPhase = viewModel.proofPhase
     val room by viewModel.room.collectAsState()
     val photos by viewModel.photos.collectAsState()
     val photoCount by viewModel.photoCount.collectAsState()
@@ -151,12 +153,20 @@ fun RoomProofScreen(
                 .padding(horizontal = MMSpacing.ScreenHorizontal.dp, vertical = 24.dp),
         ) {
             TextButton(onClick = { handleBack() }) { Text("Back", color = MMColors.TextSecondary) }
+            if (proofPhase == ProofPhase.MoveOut) {
+                Text(
+                    "Move-out proof",
+                    style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
+                    color = MMColors.TextMuted,
+                )
+                Spacer(Modifier.height(4.dp))
+            }
             Text(
                 text = room?.name ?: "Room",
                 style = androidx.compose.material3.MaterialTheme.typography.headlineLarge,
             )
             Spacer(Modifier.height(8.dp))
-            val documented = room?.let { RoomProofMetrics.isDocumented(it) } == true
+            val documented = room?.let { RoomProofMetrics.isDocumented(it, proofPhase) } == true
             val pendingSelected = photos.count { it.status != PhotoUploadStatus.Uploaded }
             val uploadingProgress = saveState as? RoomProofSaveState.Uploading
             Text(
@@ -164,7 +174,9 @@ fun RoomProofScreen(
                     uploadingProgress != null ->
                         "Uploading ${uploadingProgress.currentIndex} of ${uploadingProgress.total}…"
                     pendingSelected > 0 -> "$pendingSelected photos selected"
+                    documented && proofPhase == ProofPhase.MoveOut -> "Move-out proof on file"
                     documented -> "Room has saved proof on file"
+                    proofPhase == ProofPhase.MoveOut -> "No move-out photos yet"
                     else -> "No photos yet"
                 },
                 color = MMColors.TextSecondary,

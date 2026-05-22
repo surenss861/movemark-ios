@@ -29,7 +29,9 @@ class CameraCaptureViewModel @Inject constructor(
     private val resultHolder: CameraCaptureResultHolder,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
-    val roomId: UUID = UUID.fromString(checkNotNull(savedStateHandle.get<String>("roomId")))
+    val roomId: UUID = UUID.fromString(
+        checkNotNull(savedStateHandle.get<String>(com.surensureshkumar.movemark.core.navigation.Routes.RoomProofArg)),
+    )
 
     val roomName: StateFlow<String> = propertyStore.currentProperty
         .map { prop -> prop?.rooms?.firstOrNull { it.id == roomId }?.name ?: "Room proof" }

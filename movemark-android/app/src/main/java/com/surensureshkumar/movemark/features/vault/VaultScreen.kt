@@ -1,5 +1,6 @@
 package com.surensureshkumar.movemark.features.vault
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,6 +13,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
@@ -25,6 +27,7 @@ import java.util.UUID
 @Composable
 fun VaultScreen(
     onOpenRoom: (UUID) -> Unit,
+    onOpenMoveOutProof: () -> Unit,
     onAddProperty: () -> Unit,
     onShowPaywall: (PaywallReason) -> Unit,
     modifier: Modifier = Modifier,
@@ -67,6 +70,34 @@ fun VaultScreen(
                     text = if (next != null) "Continue room proof" else "Review rooms",
                     onClick = { (next ?: p.rooms.firstOrNull())?.let { onOpenRoom(it.id) } },
                 )
+                Spacer(Modifier.height(12.dp))
+                MMProofCard(
+                    modifier = Modifier.clickable {
+                        if (hasPro) {
+                            onOpenMoveOutProof()
+                        } else {
+                            onShowPaywall(PaywallReason.MoveOutProof)
+                        }
+                    },
+                ) {
+                    Text(
+                        "Open move-out proof",
+                        style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                        color = MMColors.TextPrimary,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Re-capture rooms before you leave.",
+                        color = MMColors.TextSecondary,
+                        fontSize = 14.sp,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        RoomProofMetrics.moveOutStatusLine(p),
+                        color = MMColors.TextMuted,
+                        fontSize = 13.sp,
+                    )
+                }
                 Spacer(Modifier.height(12.dp))
                 MMButton(
                     text = "Add another rental",

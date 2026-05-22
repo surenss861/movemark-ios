@@ -9,6 +9,7 @@ import com.surensureshkumar.movemark.data.models.CreatePropertyInput
 import com.surensureshkumar.movemark.data.models.EvidenceRecord
 import com.surensureshkumar.movemark.data.models.PropertyRecord
 import com.surensureshkumar.movemark.data.models.PropertyRow
+import com.surensureshkumar.movemark.domain.ProofPhase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -123,8 +124,9 @@ class PropertyStore @Inject constructor(
         notes: String,
         propertyId: UUID,
         userId: UUID,
+        proofPhase: ProofPhase = ProofPhase.MoveIn,
     ): EvidenceUploadContext {
-        val inspectionId = inspectionRepository.upsertInspection(propertyId, userId, "move_in")
+        val inspectionId = inspectionRepository.upsertInspection(propertyId, userId, proofPhase.key)
         val itemId = inspectionRepository.insertInspectionItem(
             inspectionId = inspectionId,
             roomId = roomId,
@@ -137,6 +139,7 @@ class PropertyStore @Inject constructor(
             title = title,
             propertyId = propertyId,
             userId = userId,
+            proofPhase = proofPhase,
         )
     }
 
@@ -145,7 +148,7 @@ class PropertyStore @Inject constructor(
         photo: ByteArray,
     ): Boolean {
         val path =
-            "${context.userId}/${context.propertyId}/move-in/${context.roomId}/${UUID.randomUUID()}.jpg"
+            "${context.userId}/${context.propertyId}/${context.proofPhase.storageFolder}/${context.roomId}/${UUID.randomUUID()}.jpg"
         return try {
             inspectionRepository.uploadPhoto(photo, path)
             inspectionRepository.insertEvidenceFile(
@@ -174,11 +177,12 @@ class PropertyStore @Inject constructor(
             }
             throw IllegalStateException(UPLOAD_FAILURE_MESSAGE)
         }
-        applyOptimisticMoveIn(
+        applyOptimisticEvidence(
             context.roomId,
             context.inspectionItemId,
             context.title,
             uploadedCount,
+            context.proofPhase,
         )
         val refreshed = refreshActive(context.userId)
         return SaveEvidenceResult(uploadedCount, attemptedCount, refreshed)
@@ -202,7 +206,7 @@ class PropertyStore @Inject constructor(
         userId: UUID,
     ): SaveEvidenceResult {
         if (photos.isEmpty()) throw IllegalArgumentException("Add at least one photo before saving.")
-        val context = createEvidenceUploadContext(roomId, title, notes, propertyId, userId)
+        val context = createEvidenceUploadContext(roomId, title, notes, propertyId, userId, ProofPhase.MoveIn)
         var saved = 0
         for (photo in photos) {
             if (uploadSingleEvidencePhoto(context, photo)) saved++
@@ -210,13 +214,23 @@ class PropertyStore @Inject constructor(
         return commitEvidenceUpload(context, saved, photos.size)
     }
 
-    private fun applyOptimisticMoveIn(roomId: UUID, itemId: UUID, title: String, photoCount: Int) {
+    private fun applyOptimisticEvidence(
+        roomId: UUID,
+        itemId: UUID,
+        title: String,
+        photoCount: Int,
+        phase: ProofPhase,
+    ) {
         val prop = _currentProperty.value ?: return
         val updatedRooms = prop.rooms.map { room ->
             if (room.id != roomId) return@map room
-            val existing = room.evidence.firstOrNull()
-            val evidence = if (existing != null) {
-                room.evidence.map { e ->
+            val existingList = when (phase) {
+                ProofPhase.MoveIn -> room.moveInEvidence
+                ProofPhase.MoveOut -> room.moveOutEvidence
+            }
+            val existing = existingList.firstOrNull()
+            val updatedEvidence = if (existing != null) {
+                existingList.map { e ->
                     if (e.id == existing.id) e.copy(photoCount = e.photoCount + photoCount) else e
                 }
             } else {
@@ -229,7 +243,10 @@ class PropertyStore @Inject constructor(
                     ),
                 )
             }
-            room.copy(evidence = evidence)
+            when (phase) {
+                ProofPhase.MoveIn -> room.copy(moveInEvidence = updatedEvidence)
+                ProofPhase.MoveOut -> room.copy(moveOutEvidence = updatedEvidence)
+            }
         }
         _currentProperty.value = prop.copy(rooms = updatedRooms)
     }
