@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import android.util.Log
 import com.surensureshkumar.movemark.data.models.CreatePropertyInput
 import com.surensureshkumar.movemark.data.models.EvidenceRecord
 import com.surensureshkumar.movemark.data.models.PropertyRecord
@@ -110,6 +111,88 @@ class PropertyStore @Inject constructor(
         }
     }
 
+    private companion object {
+        const val UPLOAD_TAG = "MoveMarkUpload"
+        const val UPLOAD_FAILURE_MESSAGE =
+            "Photos couldn't upload. Check your connection and try again."
+    }
+
+    suspend fun createEvidenceUploadContext(
+        roomId: UUID,
+        title: String,
+        notes: String,
+        propertyId: UUID,
+        userId: UUID,
+    ): EvidenceUploadContext {
+        val inspectionId = inspectionRepository.upsertInspection(propertyId, userId, "move_in")
+        val itemId = inspectionRepository.insertInspectionItem(
+            inspectionId = inspectionId,
+            roomId = roomId,
+            notes = "$title\n$notes",
+            conditionRating = 4,
+        )
+        return EvidenceUploadContext(
+            inspectionItemId = itemId,
+            roomId = roomId,
+            title = title,
+            propertyId = propertyId,
+            userId = userId,
+        )
+    }
+
+    suspend fun uploadSingleEvidencePhoto(
+        context: EvidenceUploadContext,
+        photo: ByteArray,
+    ): Boolean {
+        val path =
+            "${context.userId}/${context.propertyId}/move-in/${context.roomId}/${UUID.randomUUID()}.jpg"
+        return try {
+            inspectionRepository.uploadPhoto(photo, path)
+            inspectionRepository.insertEvidenceFile(
+                context.propertyId,
+                context.inspectionItemId,
+                path,
+            )
+            true
+        } catch (e: Exception) {
+            Log.e(UPLOAD_TAG, "Photo upload failed room=${context.roomId} path=$path", e)
+            inspectionRepository.removeOrphanUpload(path)
+            false
+        }
+    }
+
+    suspend fun commitEvidenceUpload(
+        context: EvidenceUploadContext,
+        uploadedCount: Int,
+        attemptedCount: Int,
+    ): SaveEvidenceResult {
+        if (uploadedCount <= 0) {
+            runCatching {
+                inspectionRepository.deleteInspectionItem(context.inspectionItemId)
+            }.onFailure {
+                Log.e(UPLOAD_TAG, "Failed to roll back empty evidence item", it)
+            }
+            throw IllegalStateException(UPLOAD_FAILURE_MESSAGE)
+        }
+        applyOptimisticMoveIn(
+            context.roomId,
+            context.inspectionItemId,
+            context.title,
+            uploadedCount,
+        )
+        val refreshed = refreshActive(context.userId)
+        return SaveEvidenceResult(uploadedCount, attemptedCount, refreshed)
+    }
+
+    suspend fun abandonEvidenceUpload(context: EvidenceUploadContext) {
+        runCatching {
+            inspectionRepository.deleteInspectionItem(context.inspectionItemId)
+        }.onFailure {
+            Log.e(UPLOAD_TAG, "Failed to abandon evidence upload", it)
+        }
+    }
+
+    /** @deprecated Prefer [createEvidenceUploadContext] + per-photo upload for progress/retry. */
     suspend fun addEvidence(
         roomId: UUID,
         title: String,
@@ -119,31 +202,12 @@ class PropertyStore @Inject constructor(
         userId: UUID,
     ): SaveEvidenceResult {
         if (photos.isEmpty()) throw IllegalArgumentException("Add at least one photo before saving.")
-        val inspectionId = inspectionRepository.upsertInspection(propertyId, userId, "move_in")
-        val itemId = inspectionRepository.insertInspectionItem(
-            inspectionId = inspectionId,
-            roomId = roomId,
-            notes = "$title\n$notes",
-            conditionRating = 4,
-        )
+        val context = createEvidenceUploadContext(roomId, title, notes, propertyId, userId)
         var saved = 0
         for (photo in photos) {
-            val path = "${userId}/${propertyId}/move-in/${roomId}/${UUID.randomUUID()}.jpg"
-            try {
-                inspectionRepository.uploadPhoto(photo, path)
-                inspectionRepository.insertEvidenceFile(propertyId, itemId, path)
-                saved++
-            } catch (_: Exception) {
-                inspectionRepository.removeOrphanUpload(path)
-            }
+            if (uploadSingleEvidencePhoto(context, photo)) saved++
         }
-        if (saved == 0) {
-            inspectionRepository.deleteInspectionItem(itemId)
-            throw IllegalStateException("Photos could not be uploaded. Check your connection and try again.")
-        }
-        applyOptimisticMoveIn(roomId, itemId, title, saved)
-        val refreshed = refreshActive(userId)
-        return SaveEvidenceResult(saved, photos.size, refreshed)
+        return commitEvidenceUpload(context, saved, photos.size)
     }
 
     private fun applyOptimisticMoveIn(roomId: UUID, itemId: UUID, title: String, photoCount: Int) {

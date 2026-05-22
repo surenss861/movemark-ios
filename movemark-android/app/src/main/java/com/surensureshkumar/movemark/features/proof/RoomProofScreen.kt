@@ -4,14 +4,18 @@ import android.Manifest
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -24,12 +28,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.surensureshkumar.movemark.core.design.MMBackground
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
@@ -48,12 +52,19 @@ fun RoomProofScreen(
     viewModel: RoomProofViewModel = hiltViewModel(),
 ) {
     val room by viewModel.room.collectAsState()
+    val photos by viewModel.photos.collectAsState()
     val photoCount by viewModel.photoCount.collectAsState()
-    val uploading by viewModel.uploading.collectAsState()
+    val saveState by viewModel.saveState.collectAsState()
+    val saveButtonLabel by viewModel.saveButtonLabel.collectAsState()
     val message by viewModel.message.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var cameraDenied by remember { mutableStateOf(false) }
+    var showLeaveUploadDialog by remember { mutableStateOf(false) }
+
+    val isBusy = saveState.isBusy
+    val isPartial = saveState is RoomProofSaveState.PartialSuccess
+    val isFailed = saveState is RoomProofSaveState.Failed
 
     LaunchedEffect(Unit) {
         viewModel.proofSaved.collect { payload -> onProofSaved(payload.roomId) }
@@ -104,32 +115,86 @@ fun RoomProofScreen(
         context.startActivity(intent)
     }
 
+    fun handleBack() {
+        if (viewModel.isUploadInProgress()) {
+            showLeaveUploadDialog = true
+        } else {
+            onBack()
+        }
+    }
+
+    BackHandler { handleBack() }
+
+    if (showLeaveUploadDialog) {
+        AlertDialog(
+            onDismissRequest = { showLeaveUploadDialog = false },
+            title = { Text("Leave this screen?") },
+            text = { Text("Upload is still running. Leave this screen?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showLeaveUploadDialog = false
+                    onBack()
+                }) { Text("Leave", color = MMColors.SemanticDanger) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLeaveUploadDialog = false }) {
+                    Text("Stay", color = MMColors.Primary)
+                }
+            },
+        )
+    }
+
     MMBackground {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = MMSpacing.ScreenHorizontal.dp, vertical = 24.dp),
         ) {
-            TextButton(onClick = onBack) { Text("Back", color = MMColors.TextSecondary) }
+            TextButton(onClick = { handleBack() }) { Text("Back", color = MMColors.TextSecondary) }
             Text(
                 text = room?.name ?: "Room",
                 style = androidx.compose.material3.MaterialTheme.typography.headlineLarge,
             )
             Spacer(Modifier.height(8.dp))
             val documented = room?.let { RoomProofMetrics.isDocumented(it) } == true
+            val pendingSelected = photos.count { it.status != PhotoUploadStatus.Uploaded }
+            val uploadingProgress = saveState as? RoomProofSaveState.Uploading
             Text(
                 text = when {
-                    photoCount > 0 -> "$photoCount photos selected"
+                    uploadingProgress != null ->
+                        "Uploading ${uploadingProgress.currentIndex} of ${uploadingProgress.total}…"
+                    pendingSelected > 0 -> "$pendingSelected photos selected"
                     documented -> "Room has saved proof on file"
                     else -> "No photos yet"
                 },
                 color = MMColors.TextSecondary,
             )
+
+            if (photos.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                RoomProofPhotoStrip(photos = photos, modifier = Modifier.fillMaxWidth())
+            }
+
+            if (isBusy) {
+                Spacer(Modifier.height(12.dp))
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MMColors.Primary,
+                )
+            }
+
             message?.let {
                 Spacer(Modifier.height(8.dp))
-                val partial = it.contains(" of ") && it.contains("uploaded")
-                val isSuccess = it.startsWith("Proof saved") || partial
-                Text(it, color = if (isSuccess) MMColors.Primary else MMColors.SemanticDanger)
+                val isError = isFailed || it.contains("couldn't", ignoreCase = true)
+                val isPartialMsg = it.contains(" of ") && it.contains("saved")
+                Text(
+                    it,
+                    color = when {
+                        isError -> MMColors.SemanticDanger
+                        isPartialMsg -> MMColors.SemanticWarning
+                        else -> MMColors.Primary
+                    },
+                )
             }
 
             if (cameraDenied) {
@@ -158,7 +223,7 @@ fun RoomProofScreen(
             MMButton(
                 text = "Take photos",
                 onClick = ::launchCamera,
-                enabled = !uploading,
+                enabled = !isBusy,
             )
             Spacer(Modifier.height(12.dp))
             MMButton(
@@ -167,15 +232,36 @@ fun RoomProofScreen(
                     picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 },
                 style = MMButtonStyle.Secondary,
-                enabled = !uploading,
+                enabled = !isBusy,
             )
             Spacer(Modifier.height(12.dp))
             MMButton(
-                text = if (uploading) "Saving…" else "Save proof",
+                text = saveButtonLabel,
                 onClick = viewModel::save,
-                loading = uploading,
-                enabled = photoCount > 0 && !uploading,
+                loading = isBusy,
+                enabled = photoCount > 0 && !isBusy && !isPartial,
             )
+
+            if (isPartial) {
+                Spacer(Modifier.height(10.dp))
+                MMButton(
+                    text = "Continue with saved proof",
+                    onClick = viewModel::continueWithSavedProof,
+                )
+                Spacer(Modifier.height(8.dp))
+                MMButton(
+                    text = RoomProofUploadMessages.RETRY_LABEL,
+                    onClick = viewModel::retryFailedUploads,
+                    style = MMButtonStyle.Secondary,
+                )
+            } else if (isFailed) {
+                Spacer(Modifier.height(10.dp))
+                MMButton(
+                    text = RoomProofUploadMessages.RETRY_LABEL,
+                    onClick = viewModel::retryFailedUploads,
+                    enabled = photoCount > 0,
+                )
+            }
         }
     }
 }
