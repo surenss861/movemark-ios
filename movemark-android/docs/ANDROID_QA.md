@@ -21,6 +21,21 @@ cd /Volumes/sss/movemark/movemork/movemark-android
 | 6 | After save | Vault / Rooms | Kitchen documented (`photoCount > 0`); count +1 | | |
 | 7 | Reports | Report | `Make report` enabled when ≥1 room documented | | |
 
+## P2 — Move-out proof + report (mock Pro)
+
+| # | Flow | Expected |
+|---|------|----------|
+| 12 | Vault → Open move-out proof | Pro/mock: room list opens; Free: paywall |
+| 13 | Capture 2 move-out photos | Receipt “Move-out proof saved”; move-out count updates |
+| 14 | Move-in counts | Move-in room/photo counts unchanged after move-out save |
+| 15 | Reports → Move-out | No photos: “Capture move-out proof first.” + Open move-out proof |
+| 16 | Make move-out report | With move-out photos: “Make move-out report” → building → ready |
+| 17 | Duplicate tap | Second tap while building shows “already building” (no duplicate row) |
+| 18 | Reopen app | Processing state still shown until ready or failed |
+| 19 | Share | Ready: View/Share opens PDF chooser |
+| 20 | Failed retry | Failed export: Retry report queues again |
+| 21 | Free Reports CTA | Move-out report button → paywall “Move-out reports need Pro.” |
+
 ## Rules (must not break)
 
 - `photoCount == 0` → **not** documented

@@ -65,6 +65,8 @@ fun MainShellScreen(
                     MainTab.Reports -> ReportsScreen(
                         modifier = Modifier.padding(padding),
                         onContinueRoomProof = { tab = MainTab.Rooms },
+                        onOpenMoveOutProof = onOpenMoveOutProof,
+                        onShowPaywall = { paywallReason = it },
                     )
                     MainTab.Account -> AccountScreen(
                         modifier = Modifier.padding(padding),

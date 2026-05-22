@@ -4,14 +4,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.surensureshkumar.movemark.data.export.ExportRepository
 import com.surensureshkumar.movemark.data.export.ExportRow
+import com.surensureshkumar.movemark.data.export.MoveOutReportReadiness
+import com.surensureshkumar.movemark.data.export.MoveOutReportReadinessMapper
 import com.surensureshkumar.movemark.data.export.ReportReadiness
 import com.surensureshkumar.movemark.data.export.ReportReadinessMapper
 import com.surensureshkumar.movemark.data.models.PropertyRecord
 import com.surensureshkumar.movemark.data.property.PropertyStore
+import com.surensureshkumar.movemark.data.subscription.SubscriptionRepository
 import com.surensureshkumar.movemark.domain.ProofPhase
 import com.surensureshkumar.movemark.domain.RoomProofMetrics
 import com.surensureshkumar.movemark.features.reports.components.ChecklistItemState
 import com.surensureshkumar.movemark.features.reports.components.ReportChecklistItem
+import com.surensureshkumar.movemark.features.subscription.PaywallReason
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -41,19 +45,23 @@ data class ReportsUiState(
     val bannerIsError: Boolean = false,
     val moveOutPhotos: Int = 0,
     val moveOutDocumentedRooms: Int = 0,
+    val moveOutReadiness: MoveOutReportReadiness = MoveOutReportReadiness.NoProof,
     val moveOutReportStatus: String = "Capture move-out proof first.",
-    val moveOutReportReady: Boolean = false,
 )
 
 @HiltViewModel
 class ReportsViewModel @Inject constructor(
     private val propertyStore: PropertyStore,
     private val exportRepository: ExportRepository,
+    subscriptionRepository: SubscriptionRepository,
 ) : ViewModel() {
+
+    val hasPro: StateFlow<Boolean> = subscriptionRepository.hasPro
 
     private val _exports = MutableStateFlow<List<ExportRow>>(emptyList())
     private val _exportsLoading = MutableStateFlow(false)
     private val _actionInProgress = MutableStateFlow(false)
+    private val _moveOutActionInProgress = MutableStateFlow(false)
     private val _banner = MutableStateFlow<Pair<String, Boolean>?>(null)
 
     private val _uiState = MutableStateFlow(ReportsUiState())
@@ -70,17 +78,28 @@ class ReportsViewModel @Inject constructor(
                     propertyStore.isLoading,
                     _exports,
                 ) { property, loading, exports -> Triple(property, loading, exports) },
-                combine(_exportsLoading, _actionInProgress, _banner) { exportsLoading, actionBusy, banner ->
-                    Triple(exportsLoading, actionBusy, banner)
+                combine(
+                    _exportsLoading,
+                    _actionInProgress,
+                    _moveOutActionInProgress,
+                    _banner,
+                ) { exportsLoading, moveInBusy, moveOutBusy, banner ->
+                    listOf(exportsLoading, moveInBusy, moveOutBusy, banner)
                 },
-            ) { left, right ->
+            ) { propTriple, flags ->
+                @Suppress("UNCHECKED_CAST")
+                val exportsLoading = flags[0] as Boolean
+                val moveInBusy = flags[1] as Boolean
+                val moveOutBusy = flags[2] as Boolean
+                val banner = flags[3] as Pair<String, Boolean>?
                 buildUiState(
-                    property = left.first,
-                    propertyLoading = left.second,
-                    exports = left.third,
-                    exportsLoading = right.first,
-                    actionBusy = right.second,
-                    banner = right.third,
+                    property = propTriple.first,
+                    propertyLoading = propTriple.second,
+                    exports = propTriple.third,
+                    exportsLoading = exportsLoading,
+                    moveInBusy = moveInBusy,
+                    moveOutBusy = moveOutBusy,
+                    banner = banner,
                 )
             }.collect { _uiState.value = it }
         }
@@ -117,9 +136,27 @@ class ReportsViewModel @Inject constructor(
         when (_uiState.value.readiness) {
             ReportReadiness.NotReady, ReportReadiness.NoVault -> onContinueRoomProof()
             ReportReadiness.ReadyToMake -> queueMoveInReport()
-            ReportReadiness.ReadyToShare -> shareReadyReport()
+            ReportReadiness.ReadyToShare -> shareMoveInReport()
             ReportReadiness.Failed -> queueMoveInReport()
             ReportReadiness.Processing -> Unit
+        }
+    }
+
+    fun onMoveOutPrimaryAction(
+        hasPro: Boolean,
+        onOpenMoveOutProof: () -> Unit,
+        onShowPaywall: (PaywallReason) -> Unit,
+    ) {
+        if (!hasPro) {
+            onShowPaywall(PaywallReason.MoveOutReport)
+            return
+        }
+        when (_uiState.value.moveOutReadiness) {
+            MoveOutReportReadiness.NoProof -> onOpenMoveOutProof()
+            MoveOutReportReadiness.ReadyToMake -> queueMoveOutReport()
+            MoveOutReportReadiness.ReadyToShare -> shareMoveOutReport()
+            MoveOutReportReadiness.Failed -> queueMoveOutReport()
+            MoveOutReportReadiness.Processing -> Unit
         }
     }
 
@@ -147,11 +184,45 @@ class ReportsViewModel @Inject constructor(
         }
     }
 
-    private fun shareReadyReport() {
-        val row = ReportReadinessMapper.firstReadyExport(_exports.value) ?: return
-        if (_actionInProgress.value) return
+    private fun queueMoveOutReport() {
+        val property = propertyStore.currentProperty.value ?: return
+        if (_moveOutActionInProgress.value) return
+        if (MoveOutReportReadinessMapper.hasActiveMoveOutJob(_exports.value)) {
+            _banner.value = "A move-out report is already building. Check status below." to false
+            return
+        }
         viewModelScope.launch {
-            _actionInProgress.value = true
+            _moveOutActionInProgress.value = true
+            _banner.value = null
+            try {
+                withContext(Dispatchers.IO) {
+                    exportRepository.queueMoveOutReport(property.id)
+                }
+                _banner.value = "Move-out report queued. Building your PDF…" to false
+                refreshExports()
+            } catch (e: Exception) {
+                _banner.value = exportRepository.userMessage(e) to true
+            } finally {
+                _moveOutActionInProgress.value = false
+            }
+        }
+    }
+
+    private fun shareMoveInReport() {
+        val row = ReportReadinessMapper.firstReadyExport(_exports.value) ?: return
+        shareExport(row)
+    }
+
+    private fun shareMoveOutReport() {
+        val row = MoveOutReportReadinessMapper.firstReadyMoveOutExport(_exports.value) ?: return
+        shareExport(row)
+    }
+
+    private fun shareExport(row: ExportRow) {
+        if (_actionInProgress.value || _moveOutActionInProgress.value) return
+        viewModelScope.launch {
+            _moveOutActionInProgress.value = row.type == ReportReadinessMapper.MOVE_OUT_REPORT_TYPE
+            _actionInProgress.value = row.type == ReportReadinessMapper.MOVE_IN_REPORT_TYPE
             _banner.value = null
             try {
                 val url = withContext(Dispatchers.IO) {
@@ -162,6 +233,7 @@ class ReportsViewModel @Inject constructor(
                 _banner.value = exportRepository.userMessage(e) to true
             } finally {
                 _actionInProgress.value = false
+                _moveOutActionInProgress.value = false
             }
         }
     }
@@ -171,7 +243,8 @@ class ReportsViewModel @Inject constructor(
         propertyLoading: Boolean,
         exports: List<ExportRow>,
         exportsLoading: Boolean,
-        actionBusy: Boolean,
+        moveInBusy: Boolean,
+        moveOutBusy: Boolean,
         banner: Pair<String, Boolean>?,
     ): ReportsUiState {
         if (propertyLoading && property == null) {
@@ -192,10 +265,7 @@ class ReportsViewModel @Inject constructor(
         val photos = RoomProofMetrics.totalPhotoCount(property, ProofPhase.MoveIn)
         val moveOutPhotos = RoomProofMetrics.totalPhotoCount(property, ProofPhase.MoveOut)
         val moveOutDocumented = RoomProofMetrics.moveOutDocumentedCount(property)
-        val moveOutReportStatus = when {
-            moveOutPhotos == 0 -> "Capture move-out proof first."
-            else -> "Move-out proof saved"
-        }
+        val moveOutReadiness = MoveOutReportReadinessMapper.resolve(moveOutPhotos, exports)
         val readiness = ReportReadinessMapper.resolve(
             hasVault = true,
             documentedRooms = documented,
@@ -212,13 +282,13 @@ class ReportsViewModel @Inject constructor(
             proofChips = buildProofChips(documented, total, photos),
             checklistItems = buildChecklist(documented, total, readiness),
             exports = exports,
-            actionInProgress = actionBusy,
+            actionInProgress = moveInBusy || moveOutBusy,
             banner = banner?.first,
             bannerIsError = banner?.second == true,
             moveOutPhotos = moveOutPhotos,
             moveOutDocumentedRooms = moveOutDocumented,
-            moveOutReportStatus = moveOutReportStatus,
-            moveOutReportReady = moveOutPhotos > 0,
+            moveOutReadiness = moveOutReadiness,
+            moveOutReportStatus = moveOutStatusLine(moveOutReadiness),
         )
     }
 
@@ -271,6 +341,14 @@ class ReportsViewModel @Inject constructor(
     }
 }
 
+private fun moveOutStatusLine(readiness: MoveOutReportReadiness): String = when (readiness) {
+    MoveOutReportReadiness.NoProof -> "Capture move-out proof first."
+    MoveOutReportReadiness.ReadyToMake -> "Move-out report can be made."
+    MoveOutReportReadiness.Processing -> "Building move-out report…"
+    MoveOutReportReadiness.ReadyToShare -> "Move-out report ready."
+    MoveOutReportReadiness.Failed -> "Move-out report failed. Retry."
+}
+
 private fun primaryCta(readiness: ReportReadiness, loading: Boolean, busy: Boolean): Triple<String, Boolean, Boolean> {
     if (loading) return Triple("Checking report…", false, false)
     return when (readiness) {
@@ -279,6 +357,23 @@ private fun primaryCta(readiness: ReportReadiness, loading: Boolean, busy: Boole
         ReportReadiness.ReadyToShare -> Triple(if (busy) "Opening…" else "View / Share report", !busy, busy)
         ReportReadiness.Processing -> Triple("Building…", false, false)
         ReportReadiness.Failed -> Triple(if (busy) "Retrying…" else "Retry report", !busy, busy)
+    }
+}
+
+fun moveOutPrimaryCta(
+    readiness: MoveOutReportReadiness,
+    loading: Boolean,
+    busy: Boolean,
+): Triple<String, Boolean, Boolean> {
+    if (loading) return Triple("Checking move-out report…", false, false)
+    return when (readiness) {
+        MoveOutReportReadiness.NoProof -> Triple("Open move-out proof", true, false)
+        MoveOutReportReadiness.ReadyToMake ->
+            Triple(if (busy) "Making move-out report…" else "Make move-out report", !busy, busy)
+        MoveOutReportReadiness.ReadyToShare ->
+            Triple(if (busy) "Opening…" else "View / Share report", !busy, busy)
+        MoveOutReportReadiness.Processing -> Triple("Building…", false, false)
+        MoveOutReportReadiness.Failed -> Triple(if (busy) "Retrying…" else "Retry report", !busy, busy)
     }
 }
 
@@ -306,3 +401,6 @@ fun ReportsUiState.metricsLine(): String? {
 
 fun ReportsUiState.primaryCta(): Triple<String, Boolean, Boolean> =
     primaryCta(readiness, propertyLoading || exportsLoading, actionInProgress)
+
+fun ReportsUiState.moveOutCta(): Triple<String, Boolean, Boolean> =
+    moveOutPrimaryCta(moveOutReadiness, propertyLoading || exportsLoading, actionInProgress)

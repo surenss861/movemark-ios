@@ -96,6 +96,43 @@ object ReportReadinessMapper {
         }
 
     const val MOVE_IN_REPORT_TYPE = "move_in_report"
+    const val MOVE_OUT_REPORT_TYPE = "move_out_report"
+}
+
+enum class MoveOutReportReadiness {
+    NoProof,
+    ReadyToMake,
+    Processing,
+    ReadyToShare,
+    Failed,
+}
+
+object MoveOutReportReadinessMapper {
+    fun resolve(moveOutPhotos: Int, exports: List<ExportRow>): MoveOutReportReadiness {
+        if (moveOutPhotos <= 0) return MoveOutReportReadiness.NoProof
+        val moveOut = exports.filter { it.type == ReportReadinessMapper.MOVE_OUT_REPORT_TYPE }
+        if (moveOut.any { it.verification == ExportVerificationStatus.ServerFailed }) {
+            return MoveOutReportReadiness.Failed
+        }
+        if (moveOut.any { it.verification.isActiveJob }) {
+            return MoveOutReportReadiness.Processing
+        }
+        if (moveOut.any { it.verification == ExportVerificationStatus.Ready }) {
+            return MoveOutReportReadiness.ReadyToShare
+        }
+        return MoveOutReportReadiness.ReadyToMake
+    }
+
+    fun hasActiveMoveOutJob(exports: List<ExportRow>): Boolean =
+        exports.any {
+            it.type == ReportReadinessMapper.MOVE_OUT_REPORT_TYPE && it.verification.isActiveJob
+        }
+
+    fun firstReadyMoveOutExport(exports: List<ExportRow>): ExportRow? =
+        exports.firstOrNull {
+            it.type == ReportReadinessMapper.MOVE_OUT_REPORT_TYPE &&
+                it.verification == ExportVerificationStatus.Ready
+        }
 }
 
 val ExportVerificationStatus.isActiveJob: Boolean

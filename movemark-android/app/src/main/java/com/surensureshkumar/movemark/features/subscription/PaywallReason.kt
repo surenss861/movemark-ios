@@ -6,6 +6,7 @@ enum class PaywallReason {
     DisputePacket,
     MoveOutExport,
     MoveOutProof,
+    MoveOutReport,
     ;
 
     val headline: String
@@ -15,6 +16,7 @@ enum class PaywallReason {
             DisputePacket -> "Build a dispute-ready packet."
             MoveOutExport -> "Document move-out proof."
             MoveOutProof -> "Move-out proof needs Pro."
+            MoveOutReport -> "Move-out reports need Pro."
         }
 
     val subheadline: String
@@ -24,6 +26,7 @@ enum class PaywallReason {
             DisputePacket -> "Organize proof into a stronger dispute workflow."
             MoveOutExport -> "Re-capture rooms and export move-out reports with Pro."
             MoveOutProof -> "Re-capture each room before you return the keys."
+            MoveOutReport -> "Make and share a move-out PDF from saved room proof."
         }
 
     val valueProp: String

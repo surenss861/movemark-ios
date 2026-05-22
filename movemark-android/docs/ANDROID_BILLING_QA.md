@@ -28,4 +28,5 @@ Run on an **internal testing** build installed from Play Console with a **licens
 ## Notes
 
 - Raw RevenueCat / Play errors must not appear in UI.
-- Reports / move-out / dispute limits are TODO for a later gate pass.
+- Move-out **proof** and **reports** require Pro (or mock Pro). Free users see paywall on those CTAs.
+- Move-in report flow is unchanged; move-out metrics use move-out photos only.

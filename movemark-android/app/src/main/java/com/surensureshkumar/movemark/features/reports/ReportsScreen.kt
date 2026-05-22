@@ -23,19 +23,25 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
-import com.surensureshkumar.movemark.data.export.ReportReadiness
+import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMProofCard
+import com.surensureshkumar.movemark.data.export.MoveOutReportReadiness
+import com.surensureshkumar.movemark.data.export.ReportReadiness
 import com.surensureshkumar.movemark.features.reports.components.ExportHistorySection
 import com.surensureshkumar.movemark.features.reports.components.MMReportPreviewHero
 import com.surensureshkumar.movemark.features.reports.components.MMReportReadinessChecklist
+import com.surensureshkumar.movemark.features.subscription.PaywallReason
 
 @Composable
 fun ReportsScreen(
     onContinueRoomProof: () -> Unit,
+    onOpenMoveOutProof: () -> Unit,
+    onShowPaywall: (PaywallReason) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ReportsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val hasPro by viewModel.hasPro.collectAsState()
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
@@ -43,21 +49,21 @@ fun ReportsScreen(
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            val chooser = Intent.createChooser(intent, "Share move-in report")
+            val chooser = Intent.createChooser(intent, "Share report")
             runCatching { context.startActivity(chooser) }
                 .onFailure {
-                    // fallback: generic send
                     val send = Intent(Intent.ACTION_SEND).apply {
                         type = "application/pdf"
                         putExtra(Intent.EXTRA_TEXT, url)
                     }
-                    context.startActivity(Intent.createChooser(send, "Share move-in report"))
+                    context.startActivity(Intent.createChooser(send, "Share report"))
                 }
         }
     }
 
     val scroll = rememberScrollState()
     val (ctaTitle, ctaEnabled, ctaLoading) = state.primaryCta()
+    val (moveOutCtaTitle, moveOutCtaEnabled, moveOutCtaLoading) = state.moveOutCta()
     val showChecklist = state.readiness != ReportReadiness.NoVault
 
     Column(
@@ -106,36 +112,47 @@ fun ReportsScreen(
                     Spacer(Modifier.height(24.dp))
                     ExportHistorySection(exports = state.exports)
                 }
-                if (!state.noVault) {
-                    Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(24.dp))
+                Text(
+                    "Move-out report",
+                    style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
+                    color = MMColors.TextPrimary,
+                )
+                Spacer(Modifier.height(8.dp))
+                MMProofCard {
                     Text(
-                        "Move-out report",
-                        style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
-                        color = MMColors.TextPrimary,
+                        state.moveOutReportStatus,
+                        color = when (state.moveOutReadiness) {
+                            MoveOutReportReadiness.ReadyToShare -> MMColors.Primary
+                            MoveOutReportReadiness.Failed -> MMColors.SemanticDanger
+                            MoveOutReportReadiness.Processing -> MMColors.TextSecondary
+                            MoveOutReportReadiness.ReadyToMake -> MMColors.TextPrimary
+                            MoveOutReportReadiness.NoProof -> MMColors.TextSecondary
+                        },
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
                     )
-                    Spacer(Modifier.height(8.dp))
-                    MMProofCard {
+                    if (state.moveOutPhotos > 0) {
+                        Spacer(Modifier.height(6.dp))
                         Text(
-                            state.moveOutReportStatus,
-                            color = if (state.moveOutReportReady) MMColors.Primary else MMColors.TextSecondary,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium,
+                            "${state.moveOutDocumentedRooms} of ${state.totalRooms} rooms · ${state.moveOutPhotos} move-out photos",
+                            color = MMColors.TextMuted,
+                            fontSize = 13.sp,
                         )
-                        if (state.moveOutPhotos > 0) {
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                "${state.moveOutDocumentedRooms} of ${state.totalRooms} rooms · ${state.moveOutPhotos} photos",
-                                color = MMColors.TextMuted,
-                                fontSize = 13.sp,
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                "Report generation coming soon.",
-                                color = MMColors.TextMuted,
-                                fontSize = 13.sp,
-                            )
-                        }
                     }
+                    Spacer(Modifier.height(12.dp))
+                    MMButton(
+                        text = moveOutCtaTitle,
+                        onClick = {
+                            viewModel.onMoveOutPrimaryAction(
+                                hasPro = hasPro,
+                                onOpenMoveOutProof = onOpenMoveOutProof,
+                                onShowPaywall = onShowPaywall,
+                            )
+                        },
+                        enabled = moveOutCtaEnabled,
+                        loading = moveOutCtaLoading,
+                    )
                 }
             }
         }

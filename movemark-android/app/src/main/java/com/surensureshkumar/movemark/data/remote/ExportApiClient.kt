@@ -76,15 +76,22 @@ class ExportApiClient @Inject constructor(
         throw ExportApiException.Network()
     }
 
-    suspend fun requestMoveInExport(accessToken: String, propertyId: UUID): MoveInExportResponse = try {
-        val payload = """{"propertyId":"$propertyId","format":"pdf"}"""
-        val body = executePost("$base/api/exports/move-in", accessToken, payload)
-        json.decodeFromString(body)
-    } catch (e: ExportApiException) {
-        throw ExportApiException.QueueFailed()
-    } catch (_: Exception) {
-        throw ExportApiException.QueueFailed()
-    }
+    suspend fun requestMoveInExport(accessToken: String, propertyId: UUID): MoveInExportResponse =
+        requestExport("$base/api/exports/move-in", accessToken, propertyId)
+
+    suspend fun requestMoveOutExport(accessToken: String, propertyId: UUID): MoveInExportResponse =
+        requestExport("$base/api/exports/move-out", accessToken, propertyId)
+
+    private suspend fun requestExport(url: String, accessToken: String, propertyId: UUID): MoveInExportResponse =
+        try {
+            val payload = """{"propertyId":"$propertyId","format":"pdf"}"""
+            val body = executePost(url, accessToken, payload)
+            json.decodeFromString(body)
+        } catch (e: ExportApiException) {
+            throw e
+        } catch (_: Exception) {
+            throw ExportApiException.QueueFailed()
+        }
 
     suspend fun fetchDownloadUrl(accessToken: String, exportId: String): ExportDownloadResponse = try {
         val url = "$base/api/exports/$exportId/download"
@@ -122,12 +129,18 @@ class ExportApiClient @Inject constructor(
     private fun execute(request: Request, allow409: Boolean = false): String {
         client.newCall(request).execute().use { resp ->
             val body = resp.body?.string().orEmpty()
+            val err = runCatching { json.decodeFromString<ApiErrorBody>(body) }.getOrNull()
             when {
                 allow409 && resp.code == 409 -> throw ExportApiException.NotReady()
+                resp.code == 409 && err?.code == "export_already_processing" ->
+                    throw ExportApiException.QueueFailed("A move-out report is already building. Check back shortly.")
                 resp.code == 400 -> {
-                    val err = runCatching { json.decodeFromString<ApiErrorBody>(body) }.getOrNull()
-                    if (err?.code == "export_failed") {
-                        throw ExportApiException.ServerFailed()
+                    when (err?.code) {
+                        "export_failed" -> throw ExportApiException.ServerFailed()
+                        "not_enough_move_out_proof" ->
+                            throw ExportApiException.QueueFailed(
+                                "Capture move-out proof for at least one room first.",
+                            )
                     }
                     throw ExportApiException.Network(sanitizeMessage(body, resp.message))
                 }
