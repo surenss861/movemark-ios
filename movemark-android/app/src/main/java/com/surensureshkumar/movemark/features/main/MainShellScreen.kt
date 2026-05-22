@@ -42,7 +42,10 @@ fun MainShellScreen(
                     modifier = Modifier.padding(padding),
                     onOpenRoom = onOpenRoom,
                 )
-                MainTab.Reports -> ReportsScreen(Modifier.padding(padding))
+                MainTab.Reports -> ReportsScreen(
+                    modifier = Modifier.padding(padding),
+                    onContinueRoomProof = { tab = MainTab.Rooms },
+                )
                 MainTab.Account -> AccountScreen(
                     modifier = Modifier.padding(padding),
                     onSignOut = onSignOut,

@@ -12,6 +12,9 @@ object RoomProofMetrics {
     fun documentedCount(property: PropertyRecord): Int =
         property.rooms.count { isDocumented(it) }
 
+    fun totalPhotoCount(property: PropertyRecord): Int =
+        property.rooms.sumOf { photoCount(it) }
+
     fun nextRoom(property: PropertyRecord): RoomRecord? =
         property.rooms.firstOrNull { !isDocumented(it) }
 }

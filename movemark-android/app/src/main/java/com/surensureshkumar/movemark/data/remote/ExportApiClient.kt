@@ -19,25 +19,44 @@ enum class ExportJobStatus {
     @SerialName("failed") Failed,
 }
 
+/** Matches movemark-api list JSON (camelCase). */
 @Serializable
 data class ExportListItem(
     val id: String,
-    @SerialName("property_id") val propertyId: String,
+    val userId: String? = null,
+    val propertyId: String,
     val type: String,
     val status: ExportJobStatus,
-    @SerialName("requested_at") val requestedAt: String? = null,
-    @SerialName("completed_at") val completedAt: String? = null,
-    @SerialName("file_path") val filePath: String? = null,
+    val requestedAt: String? = null,
+    val completedAt: String? = null,
+    val filePath: String? = null,
+    val createdAt: String? = null,
 )
 
 @Serializable
 data class MoveInExportResponse(
-    @SerialName("export_id") val exportId: String,
+    val exportId: String,
     val status: ExportJobStatus,
 )
 
 @Serializable
-private data class ApiErrorBody(val error: String? = null)
+data class ExportDownloadResponse(
+    val exportId: String,
+    val status: ExportJobStatus,
+    val downloadUrl: String,
+    val expiresInSeconds: Int = 3600,
+)
+
+sealed class ExportApiException(message: String) : Exception(message) {
+    class NotReady : ExportApiException("Report is still processing.")
+    class ServerFailed : ExportApiException("This report failed on the server. Try making a new one.")
+    class Network(message: String = "Report couldn't load. Try again.") : ExportApiException(message)
+    class QueueFailed(message: String = "Report couldn't be started. Try again.") : ExportApiException(message)
+    class DownloadFailed(message: String = "Report couldn't be opened. Try again.") : ExportApiException(message)
+}
+
+@Serializable
+private data class ApiErrorBody(val error: String? = null, val code: String? = null)
 
 @Singleton
 class ExportApiClient @Inject constructor(
@@ -47,25 +66,47 @@ class ExportApiClient @Inject constructor(
     private val client = OkHttpClient()
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun listExports(accessToken: String, propertyId: UUID): List<ExportListItem> {
+    suspend fun listExports(accessToken: String, propertyId: UUID): List<ExportListItem> = try {
         val url = "$base/api/exports?propertyId=$propertyId"
         val body = executeGet(url, accessToken)
-        return json.decodeFromString(body)
+        json.decodeFromString(body)
+    } catch (e: ExportApiException) {
+        throw e
+    } catch (_: Exception) {
+        throw ExportApiException.Network()
     }
 
-    suspend fun requestMoveInExport(accessToken: String, propertyId: UUID): MoveInExportResponse {
+    suspend fun requestMoveInExport(accessToken: String, propertyId: UUID): MoveInExportResponse = try {
         val payload = """{"propertyId":"$propertyId","format":"pdf"}"""
         val body = executePost("$base/api/exports/move-in", accessToken, payload)
-        return json.decodeFromString(body)
+        json.decodeFromString(body)
+    } catch (e: ExportApiException) {
+        throw ExportApiException.QueueFailed()
+    } catch (_: Exception) {
+        throw ExportApiException.QueueFailed()
     }
 
-    private fun executeGet(url: String, accessToken: String): String {
+    suspend fun fetchDownloadUrl(accessToken: String, exportId: String): ExportDownloadResponse = try {
+        val url = "$base/api/exports/$exportId/download"
+        val body = executeGet(url, accessToken, allow409 = true)
+        json.decodeFromString(body)
+    } catch (e: ExportApiException) {
+        throw when (e) {
+            is ExportApiException.NotReady -> ExportApiException.DownloadFailed("Report is still building. Check back shortly.")
+            is ExportApiException.ServerFailed -> ExportApiException.DownloadFailed()
+            else -> ExportApiException.DownloadFailed()
+        }
+    } catch (_: Exception) {
+        throw ExportApiException.DownloadFailed()
+    }
+
+    private fun executeGet(url: String, accessToken: String, allow409: Boolean = false): String {
         val request = Request.Builder()
             .url(url)
             .header("Authorization", "Bearer $accessToken")
             .get()
             .build()
-        return execute(request)
+        return execute(request, allow409 = allow409)
     }
 
     private fun executePost(url: String, accessToken: String, jsonBody: String): String {
@@ -78,17 +119,30 @@ class ExportApiClient @Inject constructor(
         return execute(request)
     }
 
-    private fun execute(request: Request): String {
+    private fun execute(request: Request, allow409: Boolean = false): String {
         client.newCall(request).execute().use { resp ->
             val body = resp.body?.string().orEmpty()
-            if (!resp.isSuccessful) {
-                val msg = runCatching { json.decodeFromString<ApiErrorBody>(body).error }
-                    .getOrNull()
-                    ?.takeIf { it.isNotBlank() }
-                    ?: resp.message
-                throw IllegalStateException(msg)
+            when {
+                allow409 && resp.code == 409 -> throw ExportApiException.NotReady()
+                resp.code == 400 -> {
+                    val err = runCatching { json.decodeFromString<ApiErrorBody>(body) }.getOrNull()
+                    if (err?.code == "export_failed") {
+                        throw ExportApiException.ServerFailed()
+                    }
+                    throw ExportApiException.Network(sanitizeMessage(body, resp.message))
+                }
+                !resp.isSuccessful -> throw ExportApiException.Network(sanitizeMessage(body, resp.message))
             }
             return body
         }
+    }
+
+    private fun sanitizeMessage(body: String, fallback: String): String {
+        val err = runCatching { json.decodeFromString<ApiErrorBody>(body) }.getOrNull()
+        val raw = err?.error?.trim().orEmpty()
+        if (raw.isBlank() || raw.contains("RevenueCat", ignoreCase = true)) {
+            return "Report couldn't load. Try again."
+        }
+        return raw
     }
 }
