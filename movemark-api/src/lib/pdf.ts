@@ -5,12 +5,14 @@ import {
   drawDisclaimerFooter,
   drawPhotoGrid,
   drawRule,
+  drawRoomMetaBlock,
   drawSectionHeader,
   drawTextBlock,
   embedStandardFonts,
   formatReportDate,
   newLayoutContext,
   propertyAddressLines,
+  stampAllPageFooters,
   strProp,
 } from "./pdfLayout.js";
 import {
@@ -130,39 +132,45 @@ async function drawRoomEvidenceSections(input: RoomSectionInput): Promise<Buffer
   for (const roomId of roomOrderIds) {
     const items = byRoom.get(roomId) ?? [];
     const roomName = roomNameById.get(roomId) ?? "Room";
-    const roomPhotos = items.flatMap((item) => {
+    const roomEmbedded = items.flatMap((item) => {
       const id = item["id"] as string | undefined;
       return id ? photosByItem.get(id) ?? [] : [];
     });
 
-    if (roomPhotos.length === 0 && items.every((item) => numProp(item, "pdf_photo_count") === 0)) {
+    if (roomEmbedded.length === 0 && items.every((item) => numProp(item, "pdf_photo_count") === 0)) {
       continue;
     }
 
-    ctx.y -= 4;
-    await drawSectionHeader(ctx, roomName);
+    const roomPhotoCount = items.reduce((sum, item) => {
+      const id = item["id"] as string | undefined;
+      return sum + (id ? photoCountByItem.get(id) ?? numProp(item, "pdf_photo_count") : 0);
+    }, 0);
+    const allTags = [...new Set(items.flatMap((item) => tagsProp(item)))];
+    const latestTimestamp = items
+      .map((item) => formatTimestamp(strProp(item, "created_at")))
+      .filter(Boolean)
+      .sort()
+      .pop() ?? "";
+    const primaryCondition = items.find((item) => item["condition_rating"] != null)?.["condition_rating"];
+
+    await drawRoomMetaBlock(ctx, {
+      roomName,
+      phaseLabel: input.phaseLabel,
+      photoCount: roomPhotoCount,
+      tags: allTags,
+      timestamp: latestTimestamp,
+      condition: primaryCondition as string | number | null | undefined,
+    });
 
     for (const item of items) {
-      const itemId = item["id"] as string | undefined;
       const notes = strProp(item, "notes");
-      const rating = item["condition_rating"];
-      const created = formatTimestamp(strProp(item, "created_at"));
-      const photos = itemId ? photoCountByItem.get(itemId) ?? numProp(item, "pdf_photo_count") : 0;
-      const tags = tagsProp(item);
-
-      await drawTextBlock(ctx, `Condition: ${rating ?? "—"} · ${photos} photo(s)`, 11, { bold: true });
-      const meta: string[] = [];
-      if (created) meta.push(`Logged ${created}`);
-      if (tags.length) meta.push(`Tags: ${tags.join(", ")}`);
-      if (meta.length) await drawTextBlock(ctx, meta.join(" · "), 9, { muted: true });
       if (notes) await drawTextBlock(ctx, notes.replace(/\n/g, " "), 10);
-
-      const embedded = itemId ? photosByItem.get(itemId) ?? [] : [];
-      if (embedded.length > 0) {
-        await drawPhotoGrid(ctx, embedded, { columns: 3, cellSize: 92, maxPhotos: 6 });
-      }
-      ctx.y -= 6;
     }
+
+    if (roomEmbedded.length > 0) {
+      await drawPhotoGrid(ctx, roomEmbedded, { columns: 2, maxPhotos: 4 });
+    }
+    ctx.y -= 8;
   }
 
   const missingRooms = input.rooms
@@ -176,7 +184,7 @@ async function drawRoomEvidenceSections(input: RoomSectionInput): Promise<Buffer
     await drawSectionHeader(ctx, input.missingRoomsTitle);
     await drawBulletList(
       ctx,
-      missingRooms.map((name) => `${name} — no photos on file`)
+      missingRooms.map((name) => `${name} — not yet documented`)
     );
   }
 
@@ -200,6 +208,7 @@ async function drawRoomEvidenceSections(input: RoomSectionInput): Promise<Buffer
   }
 
   await drawDisclaimerFooter(ctx);
+  stampAllPageFooters(pdf, fonts);
   return Buffer.from(await pdf.save());
 }
 
@@ -217,7 +226,7 @@ export async function generateMoveInPdfBuffer(input: {
     rooms: input.rooms,
     inspectionItems: input.inspectionItems,
     phaseLabel: "Move-in",
-    missingRoomsTitle: "Rooms without move-in photos",
+    missingRoomsTitle: "Rooms not yet documented",
     propertyDocuments: input.propertyDocuments,
   });
 }
@@ -235,7 +244,7 @@ export async function generateMoveOutPdfBuffer(input: {
     rooms: input.rooms,
     inspectionItems: input.inspectionItems,
     phaseLabel: "Move-out",
-    missingRoomsTitle: "Rooms without move-out photos",
+    missingRoomsTitle: "Rooms not yet documented",
   });
 }
 
@@ -309,6 +318,7 @@ export async function generateDisputePacketPdfBuffer(input: {
   );
 
   await drawDisclaimerFooter(ctx);
+  stampAllPageFooters(pdf, fonts);
   return Buffer.from(await pdf.save());
 }
 

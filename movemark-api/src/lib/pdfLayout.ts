@@ -3,7 +3,11 @@ import { PDFDocument, PDFPage, PDFFont, rgb, RGB } from "pdf-lib";
 export const PAGE_W = 612;
 export const PAGE_H = 792;
 export const MARGIN = 48;
+export const FOOTER_H = 36;
 export const CONTENT_W = PAGE_W - 2 * MARGIN;
+export const PAGE_BOTTOM = MARGIN + FOOTER_H;
+
+export const FOOTER_TAGLINE = "Organized proof record — not legal advice";
 
 export const COLORS = {
   text: rgb(0.08, 0.09, 0.11),
@@ -95,7 +99,7 @@ function wrapLine(font: PDFFont, text: string, size: number, maxW: number): stri
 }
 
 export async function ensureSpace(ctx: PdfLayoutContext, need: number): Promise<void> {
-  if (ctx.y - need < MARGIN) {
+  if (ctx.y - need < PAGE_BOTTOM) {
     ctx.page = ctx.pdf.addPage([PAGE_W, PAGE_H]);
     ctx.y = PAGE_H - MARGIN;
   }
@@ -217,7 +221,9 @@ export async function drawCoverPage(
     ctx.y -= 4;
   }
   await drawTextBlock(ctx, `Generated ${formatReportDate(input.generatedAt)}`, 10, { muted: true });
-  ctx.y -= 20;
+  ctx.y -= 12;
+  await drawTextBlock(ctx, LEGAL_DISCLAIMER, 9, { muted: true });
+  ctx.y -= 16;
   await drawRule(ctx);
 }
 
@@ -254,10 +260,10 @@ export async function drawPhotoGrid(
   photos: EmbeddedPhoto[],
   opts: { columns?: number; cellSize?: number; gap?: number; maxPhotos?: number } = {}
 ): Promise<void> {
-  const columns = opts.columns ?? 3;
-  const cellSize = opts.cellSize ?? 96;
-  const gap = opts.gap ?? 8;
-  const maxPhotos = opts.maxPhotos ?? 6;
+  const columns = opts.columns ?? 2;
+  const gap = opts.gap ?? 10;
+  const maxPhotos = opts.maxPhotos ?? 4;
+  const cellSize = opts.cellSize ?? Math.floor((CONTENT_W - gap * (columns - 1)) / columns);
   const slice = photos.slice(0, maxPhotos);
 
   if (slice.length === 0) {
@@ -303,5 +309,70 @@ export async function drawPhotoGrid(
   ctx.y -= gridH + 8;
   if (photos.length > maxPhotos) {
     await drawTextBlock(ctx, `+ ${photos.length - maxPhotos} more photo(s) on file`, 9, { muted: true });
+  }
+}
+
+/** Page numbers + MoveMark footer on every page (call before pdf.save). */
+export function stampAllPageFooters(pdf: PDFDocument, fonts: PdfFonts): void {
+  const pages = pdf.getPages();
+  const total = pages.length;
+  pages.forEach((page, index) => {
+    const footerY = 22;
+    page.drawLine({
+      start: { x: MARGIN, y: footerY + 12 },
+      end: { x: PAGE_W - MARGIN, y: footerY + 12 },
+      thickness: 0.5,
+      color: COLORS.rule,
+    });
+    page.drawText("MoveMark", {
+      x: MARGIN,
+      y: footerY,
+      size: 8,
+      font: fonts.bold,
+      color: COLORS.muted,
+    });
+    page.drawText(FOOTER_TAGLINE, {
+      x: MARGIN,
+      y: footerY - 10,
+      size: 7,
+      font: fonts.regular,
+      color: COLORS.muted,
+    });
+    const pageLabel = `Page ${index + 1} of ${total}`;
+    const labelW = fonts.regular.widthOfTextAtSize(pageLabel, 8);
+    page.drawText(pageLabel, {
+      x: PAGE_W - MARGIN - labelW,
+      y: footerY,
+      size: 8,
+      font: fonts.regular,
+      color: COLORS.muted,
+    });
+  });
+}
+
+export async function drawRoomMetaBlock(
+  ctx: PdfLayoutContext,
+  input: {
+    roomName: string;
+    phaseLabel: string;
+    photoCount: number;
+    tags: string[];
+    timestamp: string;
+    condition?: string | number | null;
+  }
+): Promise<void> {
+  ctx.y -= 4;
+  await drawSectionHeader(ctx, input.roomName);
+  await drawTextBlock(ctx, `Phase: ${input.phaseLabel}`, 10, { muted: true });
+  const detailParts = [`${input.photoCount} photo(s) on file`];
+  if (input.condition != null && `${input.condition}`.trim()) {
+    detailParts.unshift(`Condition: ${input.condition}`);
+  }
+  await drawTextBlock(ctx, detailParts.join(" · "), 11, { bold: true });
+  if (input.tags.length > 0) {
+    await drawTextBlock(ctx, `Issue tags: ${input.tags.join(", ")}`, 10, { muted: true });
+  }
+  if (input.timestamp) {
+    await drawTextBlock(ctx, `Captured ${input.timestamp}`, 9, { muted: true });
   }
 }
