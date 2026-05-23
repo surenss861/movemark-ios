@@ -46,7 +46,15 @@ import com.surensureshkumar.movemark.core.design.MMMotion
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
-import com.surensureshkumar.movemark.core.design.components.MMProofCard
+import com.surensureshkumar.movemark.core.design.components.MMProofCaseCard
+import com.surensureshkumar.movemark.core.design.components.MMProofPhotoPane
+import com.surensureshkumar.movemark.core.design.components.MMProofPhotoPaneSize
+import com.surensureshkumar.movemark.core.design.components.MMProofReceiptStrip
+import com.surensureshkumar.movemark.core.design.components.MMProofReceiptStripLayout
+import com.surensureshkumar.movemark.core.design.components.MMProofReceiptStripModel
+import com.surensureshkumar.movemark.core.design.components.MMProofCaseAccentRail
+import com.surensureshkumar.movemark.core.design.components.MMProofCaseHeader
+import com.surensureshkumar.movemark.core.design.components.MMProofStatusTone
 import com.surensureshkumar.movemark.domain.ProofPhase
 import kotlinx.coroutines.delay
 import java.util.UUID
@@ -138,62 +146,42 @@ fun SavedProofReceiptScreen(
                                     .background(MMColors.Primary.copy(alpha = 0.12f), RoundedCornerShape(22.dp)),
                             )
                         }
-                        MMProofCard(
+                        MMProofCaseCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .graphicsLayer { alpha = 1f - pulseAlpha.value * 0.3f },
+                            header = MMProofCaseHeader(
+                                eyebrow = if (state.proofPhase == ProofPhase.MoveOut) "Move-out proof" else "Move-in proof",
+                                statusLabel = "Saved",
+                                statusTone = MMProofStatusTone.Success,
+                                accentRail = MMProofCaseAccentRail.Saved,
+                            ),
+                            footer = {
+                                MMProofReceiptStrip(
+                                    model = MMProofReceiptStripModel(
+                                        detailTitle = state.roomName,
+                                        detailSubtitle = state.receiptSubtitle,
+                                        savedTitle = "Saved to your vault",
+                                        timestampLabel = state.timestampLabel,
+                                        statusBadge = "Ready",
+                                        statusTone = MMProofStatusTone.Success,
+                                    ),
+                                    layout = MMProofReceiptStripLayout.CaseFile,
+                                )
+                            },
                         ) {
-                            Row(verticalAlignment = Alignment.Top) {
-                                state.thumbnailJpeg?.let { bytes ->
-                                    val bitmap = remember(bytes) {
-                                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                    }
-                                    bitmap?.let {
-                                        Image(
-                                            bitmap = it.asImageBitmap(),
-                                            contentDescription = null,
-                                            modifier = Modifier
-                                                .size(72.dp)
-                                                .background(MMColors.FieldFill, RoundedCornerShape(12.dp)),
-                                            contentScale = ContentScale.Crop,
-                                        )
-                                        Spacer(Modifier.width(14.dp))
-                                    }
-                                }
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        proofMetaTitle(state),
-                                        color = MMColors.TextPrimary,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 17.sp,
-                                    )
-                                    Spacer(Modifier.height(6.dp))
-                                    Text(
-                                        state.receiptSubtitle,
-                                        color = MMColors.TextSecondary,
-                                        fontSize = 15.sp,
-                                    )
-                                    Spacer(Modifier.height(6.dp))
-                                    Text(
-                                        state.timestampLabel,
-                                        color = MMColors.TextMuted,
-                                        fontSize = 13.sp,
-                                    )
-                                    if (state.isRoomDocumented && state.roomDocumentedLabel.isNotBlank()) {
-                                        Spacer(Modifier.height(8.dp))
-                                        Text(
-                                            state.roomDocumentedLabel,
-                                            color = MMColors.Primary,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                        )
-                                    }
-                                    state.partialMessage?.let { partial ->
-                                        Spacer(Modifier.height(8.dp))
-                                        Text(partial, color = MMColors.SemanticWarning, fontSize = 13.sp)
-                                    }
-                                }
+                            val bitmap = state.thumbnailJpeg?.let { bytes ->
+                                remember(bytes) { BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
                             }
+                            MMProofPhotoPane(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp),
+                                size = MMProofPhotoPaneSize.Receipt,
+                                imageBitmap = bitmap?.asImageBitmap(),
+                                roomName = state.roomName,
+                                phaseLabel = state.receiptSubtitle,
+                            )
                         }
                     }
                 }

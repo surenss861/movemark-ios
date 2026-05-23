@@ -2,26 +2,19 @@ package com.surensureshkumar.movemark.core.design.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,70 +33,63 @@ fun MMVaultProofHeroCard(
     onPrimary: () -> Unit,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
+    previewImage: ImageBitmap? = null,
 ) {
     val clamped = progress.coerceIn(0f, 1f)
+    val hasProof = clamped > 0f
     val progressWidth by animateFloatAsState(
         targetValue = clamped,
         animationSpec = MMMotion.welcomeEnterSpec(reduceMotion, durationMillis = 360),
         label = "vaultProgress",
     )
+    val statusLabel = when {
+        clamped >= 1f -> "All rooms ready"
+        hasProof -> progressLine
+        else -> "Needs photos"
+    }
+    val statusTone = if (hasProof) MMProofStatusTone.Success else MMProofStatusTone.Warning
+    val accentRail = if (hasProof) MMProofCaseAccentRail.Saved else MMProofCaseAccentRail.NeedsProof
 
-    MMProofCard(modifier = modifier) {
-        Row(verticalAlignment = Alignment.Top) {
-            Box(
+    MMProofCaseCard(
+        modifier = modifier,
+        cornerRadius = 22.dp,
+        header = MMProofCaseHeader(
+            eyebrow = phaseLabel,
+            statusLabel = statusLabel,
+            statusTone = statusTone,
+            accentRail = accentRail,
+        ),
+        contentPadding = 16.dp,
+    ) {
+        if (hasProof || previewImage != null) {
+            MMProofPhotoPane(
                 modifier = Modifier
-                    .size(72.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MMColors.FieldFill)
-                    .border(1.dp, MMColors.CardStroke, RoundedCornerShape(14.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Default.PhotoCamera,
-                    contentDescription = null,
-                    tint = MMColors.TextMuted.copy(alpha = 0.7f),
-                    modifier = Modifier.size(26.dp),
-                )
-            }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    propertyName,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MMColors.TextPrimary,
-                )
-                if (!location.isNullOrBlank()) {
-                    Text(
-                        location,
-                        fontSize = 13.sp,
-                        color = MMColors.TextMuted,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
-                Text(
-                    phaseLabel,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MMColors.Primary.copy(alpha = 0.9f),
-                    modifier = Modifier.padding(top = 6.dp),
-                )
-                Text(
-                    progressLine,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MMColors.TextSecondary,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                Text(
-                    nextLine,
-                    fontSize = 13.sp,
-                    color = MMColors.TextMuted,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
+                    .fillMaxWidth()
+                    .height(120.dp)
+                    .clip(RoundedCornerShape(14.dp)),
+                size = MMProofPhotoPaneSize.Medium,
+                imageBitmap = previewImage,
+                roomName = propertyName,
+                phaseLabel = progressLine,
+            )
+            Spacer(Modifier.height(14.dp))
+        } else {
+            MMProofPhotoPane(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(96.dp)
+                    .clip(RoundedCornerShape(14.dp)),
+                size = MMProofPhotoPaneSize.Medium,
+            )
+            Spacer(Modifier.height(14.dp))
         }
-        Spacer(Modifier.height(14.dp))
+
+        if (!location.isNullOrBlank()) {
+            Text(location, fontSize = 13.sp, color = MMColors.TextMuted)
+            Spacer(Modifier.height(4.dp))
+        }
+        Text(nextLine, fontSize = 13.sp, color = MMColors.TextSecondary)
+        Spacer(Modifier.height(12.dp))
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -116,9 +102,7 @@ fun MMVaultProofHeroCard(
                     .fillMaxWidth(progressWidth.coerceAtLeast(0.04f))
                     .height(4.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(
-                        MMColors.Primary.copy(alpha = if (clamped > 0f) 0.9f else 0.35f),
-                    ),
+                    .background(MMColors.Primary.copy(alpha = if (hasProof) 0.9f else 0.35f)),
             )
         }
         Spacer(Modifier.height(14.dp))

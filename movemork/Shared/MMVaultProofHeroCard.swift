@@ -2,14 +2,13 @@
 //  MMVaultProofHeroCard.swift
 //  movemork
 //
-//  Evidence-first vault hero — photo, progress, one next action (not a dashboard tile).
-//
 
 import SwiftUI
 
 struct MMVaultProofHeroCard: View {
     let propertyName: String
     var location: String? = nil
+    var phaseLabel: String = "Move-in proof"
     let progressLine: String
     let nextLine: String
     let progress: Double
@@ -20,40 +19,42 @@ struct MMVaultProofHeroCard: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var clampedProgress: Double { min(1, max(0, progress)) }
+    private var hasProof: Bool { clampedProgress > 0 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 14) {
-                proofThumbnail
+        ProofCaseCard(
+            cornerRadius: 22,
+            header: ProofCaseHeader(
+                eyebrow: phaseLabel,
+                statusLabel: statusLabel,
+                statusTone: hasProof ? .success : .warning,
+                accentRail: hasProof ? .saved : .needsProof
+            ),
+            contentPadding: 16
+        ) {
+            ProofPhotoPane(
+                size: .medium,
+                imageURL: previewURL,
+                roomName: propertyName,
+                phaseLabel: progressLine
+            )
+            .frame(maxWidth: .infinity)
+            .frame(height: hasProof || previewURL != nil ? 120 : 96)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(.bottom, 14)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(propertyName)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                        .lineLimit(2)
-
-                    if let location, !location.isEmpty {
-                        Text(location)
-                            .font(MoveMarkTheme.Typography.footnote)
-                            .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                            .lineLimit(1)
-                    }
-
-                    Text(progressLine)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        .padding(.top, 2)
-
-                    Text(nextLine)
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                        .lineLimit(2)
-                }
-
-                Spacer(minLength: 0)
+            if let location, !location.isEmpty {
+                Text(location)
+                    .font(MoveMarkTheme.Typography.footnote)
+                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
             }
+            Text(nextLine)
+                .font(MoveMarkTheme.Typography.footnote)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .padding(.top, 4)
 
             progressBar
+                .padding(.top, 12)
 
             MMButton(
                 title: primaryTitle,
@@ -64,42 +65,14 @@ struct MMVaultProofHeroCard: View {
                 kind: .primary,
                 size: .standard
             )
+            .padding(.top, 14)
         }
-        .padding(16)
-        .mmProofCardSurface(.neutral, cornerRadius: 20)
     }
 
-    @ViewBuilder
-    private var proofThumbnail: some View {
-        Group {
-            if let previewURL {
-                AsyncImage(url: previewURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        thumbnailPlaceholder
-                    }
-                }
-            } else {
-                thumbnailPlaceholder
-            }
-        }
-        .frame(width: 72, height: 72)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
-        )
-    }
-
-    private var thumbnailPlaceholder: some View {
-        ZStack {
-            MoveMarkTheme.Colors.fieldFill.opacity(0.95)
-            Image(systemName: "camera.fill")
-                .font(.system(size: 22, weight: .medium))
-                .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.7))
-        }
+    private var statusLabel: String {
+        if clampedProgress >= 1 { return "All rooms ready" }
+        if hasProof { return progressLine }
+        return "Needs photos"
     }
 
     private var progressBar: some View {

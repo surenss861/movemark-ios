@@ -29,7 +29,9 @@ import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.mmAppearRise
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
-import com.surensureshkumar.movemark.core.design.components.MMProofCard
+import com.surensureshkumar.movemark.core.design.components.MMCompactProofRow
+import com.surensureshkumar.movemark.core.design.components.MMProofCaseCard
+import com.surensureshkumar.movemark.core.design.components.MMProofCaseSecondaryCard
 import com.surensureshkumar.movemark.core.design.components.MMProofSectionHeader
 import com.surensureshkumar.movemark.core.design.components.MMVaultProofHeroCard
 import com.surensureshkumar.movemark.data.models.PropertyRow
@@ -141,9 +143,8 @@ fun VaultScreen(
                 )
 
                 Spacer(Modifier.height(12.dp))
-                MMProofCard(
-                    modifier = Modifier
-                        .mmAppearRise(hasAnimatedIn, reduceMotion, label = "leaseCard"),
+                MMProofCaseSecondaryCard(
+                    modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "leaseCard"),
                 ) {
                     Text(
                         "Lease & deposit records",
@@ -159,7 +160,7 @@ fun VaultScreen(
                 }
 
                 Spacer(Modifier.height(12.dp))
-                MMProofCard(
+                MMProofCaseCard(
                     modifier = Modifier
                         .clickable {
                             if (hasPro) onOpenMoveOutProof() else onShowPaywall(PaywallReason.MoveOutProof)
@@ -220,13 +221,10 @@ private fun OtherRentalRow(
     onClick: () -> Unit,
 ) {
     val location = listOf(row.city, row.provinceState).filter { it.isNotBlank() }.joinToString(", ")
-    MMProofCard(modifier = Modifier.clickable(onClick = onClick)) {
-        Text(row.title, style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
-        if (location.isNotBlank()) {
-            Spacer(Modifier.height(2.dp))
-            Text(location, color = MMColors.TextMuted, fontSize = 13.sp)
-        }
-        Spacer(Modifier.height(4.dp))
-        Text("Tap to switch vault", color = MMColors.TextSecondary, fontSize = 13.sp)
-    }
+    MMCompactProofRow(
+        title = row.title,
+        subtitle = if (location.isNotBlank()) location else "Tap to switch vault",
+        meta = "Tap to switch vault".takeIf { location.isNotBlank() },
+        onClick = onClick,
+    )
 }

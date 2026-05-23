@@ -1,16 +1,15 @@
 package com.surensureshkumar.movemark.core.design.components
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,9 +29,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -108,23 +107,7 @@ fun MMRoomProofRow(
                     )
                     if (isNext && !documented) {
                         Spacer(Modifier.width(8.dp))
-                        Text(
-                            "Next",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MMColors.SemanticWarning,
-                            modifier = Modifier
-                                .background(
-                                    MMColors.SemanticWarning.copy(alpha = 0.14f),
-                                    CircleShape,
-                                )
-                                .border(
-                                    0.85.dp,
-                                    MMColors.SemanticWarning.copy(alpha = 0.45f),
-                                    CircleShape,
-                                )
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                        )
+                        MMProofStatusBadge(text = "Next", tone = MMProofStatusTone.Warning)
                     }
                 }
                 Spacer(Modifier.height(6.dp))
@@ -133,11 +116,7 @@ fun MMRoomProofRow(
                     transitionSpec = { fadeIn() togetherWith fadeOut() },
                     label = "roomStatus",
                 ) { line ->
-                    Text(
-                        line,
-                        fontSize = 13.sp,
-                        color = statusColor,
-                    )
+                    Text(line, fontSize = 13.sp, color = statusColor)
                 }
             }
             Icon(
