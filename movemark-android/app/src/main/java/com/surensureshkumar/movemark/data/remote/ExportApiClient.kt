@@ -16,6 +16,7 @@ import javax.inject.Singleton
 enum class ExportJobStatus {
     @SerialName("queued") Queued,
     @SerialName("processing") Processing,
+    @SerialName("verifying") Verifying,
     @SerialName("completed") Completed,
     @SerialName("failed") Failed,
 }
@@ -137,10 +138,14 @@ class ExportApiClient @Inject constructor(
             when {
                 allow409 && resp.code == 409 -> throw ExportApiException.NotReady()
                 resp.code == 409 && err?.code == "export_already_processing" ->
-                    throw ExportApiException.QueueFailed("A move-out report is already building. Check back shortly.")
+                    throw ExportApiException.QueueFailed("A report is already building. Check back shortly.")
                 resp.code == 400 -> {
                     when (err?.code) {
                         "export_failed" -> throw ExportApiException.ServerFailed()
+                        "not_enough_proof" ->
+                            throw ExportApiException.QueueFailed(
+                                "Document at least one room with photos first.",
+                            )
                         "not_enough_move_out_proof" ->
                             throw ExportApiException.QueueFailed(
                                 "Capture move-out proof for at least one room first.",

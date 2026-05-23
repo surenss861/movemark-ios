@@ -14,6 +14,7 @@ enum ExportType: String, Codable {
 enum ExportJobStatus: String, Codable {
     case queued
     case processing
+    case verifying
     case completed
     case failed
 }
@@ -154,7 +155,27 @@ final class ExportAPIClient {
         }
 
         guard 200..<300 ~= httpResponse.statusCode else {
-            throw APIClientError.serverError(Self.serverMessage(from: data))
+            struct ErrBody: Decodable {
+                let error: String?
+                let code: String?
+            }
+            let body = (try? Self.decoder.decode(ErrBody.self, from: data))
+            let code = body?.code ?? ""
+            let message = Self.serverMessage(from: data)
+            switch httpResponse.statusCode {
+            case 409 where code == "export_already_processing":
+                throw APIClientError.serverError("A report is already building. Check back shortly.")
+            case 400 where code == "not_enough_proof":
+                throw APIClientError.serverError("Document at least one room with photos first.")
+            case 400 where code == "not_enough_move_out_proof":
+                throw APIClientError.serverError("Capture move-out proof for at least one room first.")
+            case 400 where code == "not_enough_dispute_proof":
+                throw APIClientError.serverError("Add move-in room proof before building a dispute packet.")
+            case 400 where code == "export_failed":
+                throw APIClientError.exportFailed
+            default:
+                throw APIClientError.serverError(message)
+            }
         }
 
         do {

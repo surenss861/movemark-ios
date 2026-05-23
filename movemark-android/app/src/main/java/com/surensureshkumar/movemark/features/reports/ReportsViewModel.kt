@@ -6,6 +6,8 @@ import com.surensureshkumar.movemark.data.export.DisputePacketReadiness
 import com.surensureshkumar.movemark.data.export.DisputePacketReadinessMapper
 import com.surensureshkumar.movemark.data.export.ExportRepository
 import com.surensureshkumar.movemark.data.export.ExportRow
+import com.surensureshkumar.movemark.data.export.ExportVerificationStatus
+import com.surensureshkumar.movemark.data.export.isActiveJob
 import com.surensureshkumar.movemark.data.export.MoveOutReportReadiness
 import com.surensureshkumar.movemark.data.export.MoveOutReportReadinessMapper
 import com.surensureshkumar.movemark.data.export.ReportReadiness
@@ -26,7 +28,9 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -117,23 +121,41 @@ class ReportsViewModel @Inject constructor(
                 }
             }
         }
+        viewModelScope.launch {
+            while (isActive) {
+                delay(4_000)
+                if (_exports.value.any { it.verification.isActiveJob }) {
+                    refreshExports(silent = true)
+                }
+            }
+        }
     }
 
-    fun refreshExports() {
+    fun refreshExports(silent: Boolean = false) {
         val property = propertyStore.currentProperty.value ?: return
         viewModelScope.launch {
-            _exportsLoading.value = true
-            _banner.value = null
+            if (!silent) _exportsLoading.value = true
+            if (!silent) _banner.value = null
             try {
                 _exports.value = withContext(Dispatchers.IO) {
                     exportRepository.loadExports(property.id)
                 }
             } catch (e: Exception) {
-                _banner.value = exportRepository.userMessage(e) to true
-                _exports.value = emptyList()
+                if (!silent) {
+                    _banner.value = exportRepository.userMessage(e) to true
+                    _exports.value = emptyList()
+                }
             } finally {
-                _exportsLoading.value = false
+                if (!silent) _exportsLoading.value = false
             }
+        }
+    }
+
+    fun retryExport(row: ExportRow) {
+        when (row.type) {
+            ReportReadinessMapper.MOVE_IN_REPORT_TYPE -> queueMoveInReport()
+            ReportReadinessMapper.MOVE_OUT_REPORT_TYPE -> queueMoveOutReport()
+            ReportReadinessMapper.DISPUTE_PACKET_TYPE -> queueDisputePacket()
         }
     }
 

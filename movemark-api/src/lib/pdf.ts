@@ -1,106 +1,23 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-
-const PAGE_W = 612;
-const PAGE_H = 792;
-const MARGIN = 50;
-const LINE = 14;
-const BODY = 11;
-const TITLE = 18;
-const HEAD = 12;
-const META = 9;
-
-/** Max prefix of `s` (from start) that fits at `size` within `maxW`; at least one code unit if `s` is non-empty. */
-function longestFittingPrefix(
-  font: { widthOfTextAtSize: (t: string, s: number) => number },
-  s: string,
-  size: number,
-  maxW: number
-): string {
-  if (!s) return "";
-  if (font.widthOfTextAtSize(s, size) <= maxW) return s;
-  let lo = 1;
-  let hi = s.length;
-  let best = "";
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    const sub = s.slice(0, mid);
-    if (font.widthOfTextAtSize(sub, size) <= maxW) {
-      best = sub;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
-  }
-  return best || s.slice(0, 1);
-}
-
-/**
- * Word-wrap for PDF body text. Breaks unbroken tokens (URLs, long filenames) so lines stay within the content width
- * and `drawParagraph` + `ensureSpace` cannot paint off the page horizontally.
- */
-function wrapLine(font: { widthOfTextAtSize: (t: string, s: number) => number }, text: string, size: number, maxW: number): string[] {
-  const t = text.trim() || " ";
-  const words = t.split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let cur = "";
-  for (const w of words) {
-    const test = cur ? `${cur} ${w}` : w;
-    if (font.widthOfTextAtSize(test, size) <= maxW) {
-      cur = test;
-    } else {
-      if (cur) lines.push(cur);
-      cur = "";
-      let rest = w;
-      while (rest.length > 0) {
-        const chunk = longestFittingPrefix(font, rest, size, maxW);
-        lines.push(chunk);
-        rest = rest.slice(chunk.length);
-      }
-    }
-  }
-  if (cur) lines.push(cur);
-  return lines.length ? lines : [" "];
-}
-
-type DrawCtx = {
-  pdf: PDFDocument;
-  page: ReturnType<PDFDocument["addPage"]>;
-  y: number;
-  font: Awaited<ReturnType<PDFDocument["embedFont"]>>;
-  fontBold: Awaited<ReturnType<PDFDocument["embedFont"]>>;
-};
-
-const PAGE_BOTTOM = MARGIN;
-
-async function ensureSpace(ctx: DrawCtx, need: number): Promise<void> {
-  if (ctx.y - need < PAGE_BOTTOM) {
-    ctx.page = ctx.pdf.addPage([PAGE_W, PAGE_H]);
-    ctx.y = PAGE_H - MARGIN;
-  }
-}
-
-async function drawParagraph(ctx: DrawCtx, text: string, size: number, bold = false, muted = false): Promise<void> {
-  const maxW = PAGE_W - 2 * MARGIN;
-  const font = bold ? ctx.fontBold : ctx.font;
-  const lines = wrapLine(font, text, size, maxW);
-  const color = muted ? rgb(0.38, 0.38, 0.42) : rgb(0.1, 0.1, 0.12);
-  for (const line of lines) {
-    await ensureSpace(ctx, LINE);
-    ctx.page.drawText(line, {
-      x: MARGIN,
-      y: ctx.y,
-      size,
-      font,
-      color,
-    });
-    ctx.y -= LINE;
-  }
-}
-
-function strProp(row: Record<string, unknown>, snake: string, camel?: string): string {
-  const v = (row[snake] ?? (camel ? row[camel] : undefined)) as string | undefined;
-  return (v ?? "").trim();
-}
+import { PDFDocument } from "pdf-lib";
+import {
+  drawBulletList,
+  drawCoverPage,
+  drawDisclaimerFooter,
+  drawPhotoGrid,
+  drawRule,
+  drawSectionHeader,
+  drawTextBlock,
+  embedStandardFonts,
+  formatReportDate,
+  newLayoutContext,
+  propertyAddressLines,
+  strProp,
+} from "./pdfLayout.js";
+import {
+  embedEvidencePhotosByItem,
+  fetchEvidenceFilesForItems,
+  type EvidenceFileRow,
+} from "./pdfEvidence.js";
 
 function numProp(row: Record<string, unknown>, key: string): number {
   const v = row[key];
@@ -114,294 +31,212 @@ function tagsProp(row: Record<string, unknown>): string[] {
   return raw.filter((x): x is string => typeof x === "string" && x.length > 0);
 }
 
+function formatTimestamp(raw: string | undefined): string {
+  if (!raw?.trim()) return "";
+  try {
+    return new Date(raw).toLocaleString("en-CA", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return raw;
+  }
+}
+
+type RoomSectionInput = {
+  property: Record<string, unknown>;
+  propertyId: string;
+  rooms: Array<Record<string, unknown>>;
+  inspectionItems: Array<Record<string, unknown>>;
+  phaseLabel: string;
+  missingRoomsTitle: string;
+  propertyDocuments?: Array<Record<string, unknown>>;
+};
+
+async function drawRoomEvidenceSections(input: RoomSectionInput): Promise<Buffer> {
+  const pdf = await PDFDocument.create();
+  const fonts = await embedStandardFonts(pdf);
+  const ctx = newLayoutContext(pdf, fonts);
+
+  const title = strProp(input.property, "title") || "Untitled rental";
+  const addressLines = propertyAddressLines(input.property);
+  const generatedAt = new Date().toISOString();
+
+  const roomNameById = new Map<string, string>();
+  for (const r of input.rooms) {
+    const id = r["id"] as string | undefined;
+    if (id) roomNameById.set(id, ((r["name"] as string) ?? id).trim() || id);
+  }
+
+  const itemIds = input.inspectionItems
+    .map((row) => row["id"] as string | undefined)
+    .filter((id): id is string => Boolean(id));
+
+  const evidenceRows = await fetchEvidenceFilesForItems(input.propertyId, itemIds);
+  const photosByItem = await embedEvidencePhotosByItem(pdf, evidenceRows);
+
+  const photoCountByItem = new Map<string, number>();
+  for (const row of evidenceRows) {
+    photoCountByItem.set(
+      row.inspection_item_id,
+      (photoCountByItem.get(row.inspection_item_id) ?? 0) + 1
+    );
+  }
+
+  const byRoom = new Map<string, Array<Record<string, unknown>>>();
+  for (const item of input.inspectionItems) {
+    const rid = (item["room_id"] as string | undefined) ?? "";
+    const list = byRoom.get(rid) ?? [];
+    list.push(item);
+    byRoom.set(rid, list);
+  }
+
+  const documentedRoomIds = new Set<string>();
+  for (const [roomId, items] of byRoom) {
+    const hasPhotos = items.some((item) => {
+      const id = item["id"] as string | undefined;
+      return id ? (photoCountByItem.get(id) ?? numProp(item, "pdf_photo_count")) > 0 : false;
+    });
+    if (hasPhotos) documentedRoomIds.add(roomId);
+  }
+
+  const totalPhotos = [...photoCountByItem.values()].reduce((a, b) => a + b, 0);
+  const documentedRooms = documentedRoomIds.size;
+  const totalRooms = input.rooms.length;
+
+  await drawCoverPage(ctx, {
+    reportTitle: `${input.phaseLabel} Proof Report`,
+    reportType: input.phaseLabel,
+    property: { title, addressLines },
+    generatedAt,
+    subtitle: `${documentedRooms} of ${totalRooms} room(s) documented · ${totalPhotos} photo(s) on file`,
+  });
+
+  await drawSectionHeader(ctx, "Proof summary");
+  await drawTextBlock(ctx, `Report type: ${input.phaseLabel}`, 11);
+  await drawTextBlock(ctx, `Rooms documented: ${documentedRooms} of ${totalRooms}`, 11);
+  await drawTextBlock(ctx, `Photos on file: ${totalPhotos}`, 11);
+  await drawTextBlock(ctx, `Generated: ${formatReportDate(generatedAt)}`, 10, { muted: true });
+  ctx.y -= 8;
+
+  await drawSectionHeader(ctx, "Room-by-room evidence");
+  const roomOrderIds = input.rooms
+    .map((r) => r["id"] as string | undefined)
+    .filter((id): id is string => Boolean(id));
+
+  for (const roomId of roomOrderIds) {
+    const items = byRoom.get(roomId) ?? [];
+    const roomName = roomNameById.get(roomId) ?? "Room";
+    const roomPhotos = items.flatMap((item) => {
+      const id = item["id"] as string | undefined;
+      return id ? photosByItem.get(id) ?? [] : [];
+    });
+
+    if (roomPhotos.length === 0 && items.every((item) => numProp(item, "pdf_photo_count") === 0)) {
+      continue;
+    }
+
+    ctx.y -= 4;
+    await drawSectionHeader(ctx, roomName);
+
+    for (const item of items) {
+      const itemId = item["id"] as string | undefined;
+      const notes = strProp(item, "notes");
+      const rating = item["condition_rating"];
+      const created = formatTimestamp(strProp(item, "created_at"));
+      const photos = itemId ? photoCountByItem.get(itemId) ?? numProp(item, "pdf_photo_count") : 0;
+      const tags = tagsProp(item);
+
+      await drawTextBlock(ctx, `Condition: ${rating ?? "—"} · ${photos} photo(s)`, 11, { bold: true });
+      const meta: string[] = [];
+      if (created) meta.push(`Logged ${created}`);
+      if (tags.length) meta.push(`Tags: ${tags.join(", ")}`);
+      if (meta.length) await drawTextBlock(ctx, meta.join(" · "), 9, { muted: true });
+      if (notes) await drawTextBlock(ctx, notes.replace(/\n/g, " "), 10);
+
+      const embedded = itemId ? photosByItem.get(itemId) ?? [] : [];
+      if (embedded.length > 0) {
+        await drawPhotoGrid(ctx, embedded, { columns: 3, cellSize: 92, maxPhotos: 6 });
+      }
+      ctx.y -= 6;
+    }
+  }
+
+  const missingRooms = input.rooms
+    .filter((r) => {
+      const id = r["id"] as string | undefined;
+      return id && !documentedRoomIds.has(id);
+    })
+    .map((r) => ((r["name"] as string) ?? "Room").trim() || "Room");
+
+  if (missingRooms.length > 0) {
+    await drawSectionHeader(ctx, input.missingRoomsTitle);
+    await drawBulletList(
+      ctx,
+      missingRooms.map((name) => `${name} — no photos on file`)
+    );
+  }
+
+  ctx.y -= 8;
+  await drawSectionHeader(ctx, "Final proof summary");
+  await drawTextBlock(
+    ctx,
+    `${documentedRooms} room(s) documented with ${totalPhotos} photo(s) for this ${input.phaseLabel.toLowerCase()} report.`,
+    11
+  );
+
+  if (input.propertyDocuments && input.propertyDocuments.length > 0) {
+    ctx.y -= 8;
+    await drawSectionHeader(ctx, "Supporting documents on file");
+    const docs = input.propertyDocuments.map((d) => {
+      const dt = (d["document_type"] as string | undefined) ?? "document";
+      const fn = (d["file_name"] as string | undefined) ?? "";
+      return `${dt}${fn ? ` — ${fn}` : ""}`;
+    });
+    await drawBulletList(ctx, docs);
+  }
+
+  await drawDisclaimerFooter(ctx);
+  return Buffer.from(await pdf.save());
+}
+
 export async function generateMoveInPdfBuffer(input: {
   property: Record<string, unknown>;
+  propertyId: string;
   rooms: Array<Record<string, unknown>>;
   inspection: Record<string, unknown> | null;
   inspectionItems: Array<Record<string, unknown>>;
   propertyDocuments: Array<Record<string, unknown>>;
 }): Promise<Buffer> {
-  const pdf = await PDFDocument.create();
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
-
-  let page = pdf.addPage([PAGE_W, PAGE_H]);
-  const ctx: DrawCtx = { pdf, page, y: PAGE_H - MARGIN, font, fontBold };
-
-  const title = strProp(input.property, "title") || "Untitled";
-  const line1 = strProp(input.property, "address_line_1", "address_line1");
-  const line2 = strProp(input.property, "address_line_2", "address_line2");
-  const city = strProp(input.property, "city");
-  const region = strProp(input.property, "province_state");
-  const postal = strProp(input.property, "postal_code");
-
-  const cityLine = [city, region].filter(Boolean).join(", ");
-  const addressBits = [line1, line2, cityLine, postal].filter(Boolean);
-
-  await drawParagraph(ctx, "MoveMark — Move-in report", TITLE, true);
-  ctx.y -= 6;
-  await drawParagraph(ctx, `Property: ${title}`, HEAD, true);
-  for (const bit of addressBits) {
-    await drawParagraph(ctx, bit, BODY);
-  }
-  if (addressBits.length === 0) {
-    await drawParagraph(ctx, "Address not on file.", BODY, false, true);
-  }
-
-  ctx.y -= 8;
-  await drawParagraph(
-    ctx,
-    `Summary: ${input.rooms.length} room(s), ${input.inspectionItems.length} inspection item(s), ${input.propertyDocuments.length} supporting document(s).`,
-    BODY
-  );
-  ctx.y -= 12;
-
-  await drawParagraph(ctx, "Rooms", HEAD, true);
-  if (input.rooms.length === 0) {
-    await drawParagraph(ctx, "No rooms recorded.", BODY);
-  } else {
-    for (const r of input.rooms) {
-      await ensureSpace(ctx, LINE + 2);
-      const name = (r["name"] as string | undefined)?.trim() || "Room";
-      await drawParagraph(ctx, `• ${name}`, BODY);
-    }
-  }
-  ctx.y -= 10;
-
-  await drawParagraph(ctx, "Move-in proof by room", HEAD, true);
-  if (input.inspectionItems.length === 0) {
-    await drawParagraph(ctx, "No move-in inspection items.", BODY);
-  } else {
-    const roomNameById = new Map<string, string>();
-    for (const r of input.rooms) {
-      const id = r["id"] as string | undefined;
-      if (id) roomNameById.set(id, ((r["name"] as string) ?? id).trim() || id);
-    }
-
-    const byRoom = new Map<string, Array<Record<string, unknown>>>();
-    for (const item of input.inspectionItems) {
-      const rid = (item["room_id"] as string | undefined) ?? "";
-      const list = byRoom.get(rid) ?? [];
-      list.push(item);
-      byRoom.set(rid, list);
-    }
-
-    const roomOrderIds = input.rooms.map((r) => r["id"] as string | undefined).filter((id): id is string => Boolean(id));
-    const seen = new Set<string>();
-    const orderedRoomKeys: string[] = [];
-    for (const id of roomOrderIds) {
-      if (byRoom.has(id)) {
-        orderedRoomKeys.push(id);
-        seen.add(id);
-      }
-    }
-    for (const k of byRoom.keys()) {
-      if (!seen.has(k)) orderedRoomKeys.push(k);
-    }
-
-    for (const roomKey of orderedRoomKeys) {
-      const items = byRoom.get(roomKey) ?? [];
-      if (items.length === 0) continue;
-
-      const roomLabel =
-        roomKey && roomNameById.has(roomKey) ? (roomNameById.get(roomKey) as string) : roomKey ? `Room ${roomKey.slice(0, 8)}…` : "Unassigned room";
-
-      await ensureSpace(ctx, 72);
-      await drawParagraph(ctx, roomLabel, HEAD, true);
-      ctx.y -= 4;
-
-      for (const item of items) {
-        // Upper bound for one entry: header + meta + generous notes/tags (actual height grows per wrapped line).
-        await ensureSpace(ctx, 140);
-
-        const notes = strProp(item, "notes");
-        const rating = item["condition_rating"];
-        const created = strProp(item, "created_at");
-        const photos = numProp(item, "pdf_photo_count");
-        const tags = tagsProp(item);
-
-        await drawParagraph(ctx, `Condition: ${rating ?? "—"}`, BODY, true);
-
-        const meta: string[] = [];
-        if (photos > 0) meta.push(`Photos on file: ${photos}`);
-        if (created) meta.push(`Logged: ${created}`);
-        if (meta.length) {
-          await drawParagraph(ctx, meta.join(" · "), META, false, true);
-        }
-
-        if (notes) {
-          ctx.y -= 2;
-          await drawParagraph(ctx, notes.replace(/\n/g, " "), BODY);
-        }
-
-        if (tags.length > 0) {
-          ctx.y -= 2;
-          await drawParagraph(ctx, `Tags: ${tags.join(", ")}`, META, false, true);
-        }
-
-        ctx.y -= 8;
-      }
-    }
-  }
-
-  ctx.y -= 8;
-
-  await drawParagraph(ctx, "Supporting documents on file", HEAD, true);
-  if (input.propertyDocuments.length === 0) {
-    await drawParagraph(ctx, "None listed.", BODY);
-  } else {
-    for (const d of input.propertyDocuments) {
-      await ensureSpace(ctx, LINE + 4);
-      const dt = (d["document_type"] as string | undefined) ?? "document";
-      const fn = (d["file_name"] as string | undefined) ?? "";
-      await drawParagraph(ctx, `• ${dt}${fn ? ` — ${fn}` : ""}`, BODY);
-    }
-  }
-
-  ctx.y -= 14;
-  await drawParagraph(ctx, `Generated ${new Date().toISOString()}`, META, false, true);
-
-  const bytes = await pdf.save();
-  return Buffer.from(bytes);
+  return drawRoomEvidenceSections({
+    property: input.property,
+    propertyId: input.propertyId,
+    rooms: input.rooms,
+    inspectionItems: input.inspectionItems,
+    phaseLabel: "Move-in",
+    missingRoomsTitle: "Rooms without move-in photos",
+    propertyDocuments: input.propertyDocuments,
+  });
 }
 
 export async function generateMoveOutPdfBuffer(input: {
   property: Record<string, unknown>;
+  propertyId: string;
   rooms: Array<Record<string, unknown>>;
   inspection: Record<string, unknown> | null;
   inspectionItems: Array<Record<string, unknown>>;
 }): Promise<Buffer> {
-  const pdf = await PDFDocument.create();
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
-
-  let page = pdf.addPage([PAGE_W, PAGE_H]);
-  const ctx: DrawCtx = { pdf, page, y: PAGE_H - MARGIN, font, fontBold };
-
-  const title = strProp(input.property, "title") || "Untitled";
-  const line1 = strProp(input.property, "address_line_1", "address_line1");
-  const line2 = strProp(input.property, "address_line_2", "address_line2");
-  const city = strProp(input.property, "city");
-  const region = strProp(input.property, "province_state");
-  const postal = strProp(input.property, "postal_code");
-
-  const cityLine = [city, region].filter(Boolean).join(", ");
-  const addressBits = [line1, line2, cityLine, postal].filter(Boolean);
-
-  await drawParagraph(ctx, "MoveMark — Move-out report", TITLE, true);
-  ctx.y -= 6;
-  await drawParagraph(ctx, `Property: ${title}`, HEAD, true);
-  for (const bit of addressBits) {
-    await drawParagraph(ctx, bit, BODY);
-  }
-  if (addressBits.length === 0) {
-    await drawParagraph(ctx, "Address not on file.", BODY, false, true);
-  }
-
-  ctx.y -= 8;
-  const totalPhotos = input.inspectionItems.reduce(
-    (sum, item) => sum + numProp(item, "pdf_photo_count"),
-    0
-  );
-  await drawParagraph(
-    ctx,
-    `Summary: ${input.rooms.length} room(s), ${input.inspectionItems.length} move-out item(s), ${totalPhotos} photo(s) on file.`,
-    BODY
-  );
-  ctx.y -= 12;
-
-  await drawParagraph(ctx, "Rooms", HEAD, true);
-  if (input.rooms.length === 0) {
-    await drawParagraph(ctx, "No rooms recorded.", BODY);
-  } else {
-    for (const r of input.rooms) {
-      await ensureSpace(ctx, LINE + 2);
-      const name = (r["name"] as string | undefined)?.trim() || "Room";
-      await drawParagraph(ctx, `• ${name}`, BODY);
-    }
-  }
-  ctx.y -= 10;
-
-  await drawParagraph(ctx, "Move-out proof by room", HEAD, true);
-  if (input.inspectionItems.length === 0) {
-    await drawParagraph(ctx, "No move-out inspection items.", BODY);
-  } else {
-    const roomNameById = new Map<string, string>();
-    for (const r of input.rooms) {
-      const id = r["id"] as string | undefined;
-      if (id) roomNameById.set(id, ((r["name"] as string) ?? id).trim() || id);
-    }
-
-    const byRoom = new Map<string, Array<Record<string, unknown>>>();
-    for (const item of input.inspectionItems) {
-      const rid = (item["room_id"] as string | undefined) ?? "";
-      const list = byRoom.get(rid) ?? [];
-      list.push(item);
-      byRoom.set(rid, list);
-    }
-
-    const roomOrderIds = input.rooms.map((r) => r["id"] as string | undefined).filter((id): id is string => Boolean(id));
-    const seen = new Set<string>();
-    const orderedRoomKeys: string[] = [];
-    for (const id of roomOrderIds) {
-      if (byRoom.has(id)) {
-        orderedRoomKeys.push(id);
-        seen.add(id);
-      }
-    }
-    for (const k of byRoom.keys()) {
-      if (!seen.has(k)) orderedRoomKeys.push(k);
-    }
-
-    for (const roomKey of orderedRoomKeys) {
-      const items = byRoom.get(roomKey) ?? [];
-      if (items.length === 0) continue;
-
-      const roomLabel =
-        roomKey && roomNameById.has(roomKey) ? (roomNameById.get(roomKey) as string) : roomKey ? `Room ${roomKey.slice(0, 8)}…` : "Unassigned room";
-
-      await ensureSpace(ctx, 72);
-      await drawParagraph(ctx, roomLabel, HEAD, true);
-      ctx.y -= 4;
-
-      for (const item of items) {
-        await ensureSpace(ctx, 140);
-
-        const notes = strProp(item, "notes");
-        const rating = item["condition_rating"];
-        const created = strProp(item, "created_at");
-        const photos = numProp(item, "pdf_photo_count");
-        const tags = tagsProp(item);
-
-        await drawParagraph(ctx, `Condition: ${rating ?? "—"}`, BODY, true);
-
-        const meta: string[] = [];
-        if (photos > 0) meta.push(`Move-out photos on file: ${photos}`);
-        if (created) meta.push(`Logged: ${created}`);
-        if (meta.length) {
-          await drawParagraph(ctx, meta.join(" · "), META, false, true);
-        }
-
-        if (notes) {
-          ctx.y -= 2;
-          await drawParagraph(ctx, notes.replace(/\n/g, " "), BODY);
-        }
-
-        if (tags.length > 0) {
-          ctx.y -= 2;
-          await drawParagraph(ctx, `Tags: ${tags.join(", ")}`, META, false, true);
-        }
-
-        ctx.y -= 8;
-      }
-    }
-  }
-
-  ctx.y -= 14;
-  await drawParagraph(ctx, `Generated ${new Date().toISOString()}`, META, false, true);
-
-  const bytes = await pdf.save();
-  return Buffer.from(bytes);
+  return drawRoomEvidenceSections({
+    property: input.property,
+    propertyId: input.propertyId,
+    rooms: input.rooms,
+    inspectionItems: input.inspectionItems,
+    phaseLabel: "Move-out",
+    missingRoomsTitle: "Rooms without move-out photos",
+  });
 }
 
 export type DisputePacketChecklist = {
@@ -415,72 +250,66 @@ export type DisputePacketChecklist = {
 export async function generateDisputePacketPdfBuffer(input: {
   property: Record<string, unknown>;
   checklist: DisputePacketChecklist;
+  moveInStats?: { documentedRooms: number; totalPhotos: number };
+  moveOutStats?: { documentedRooms: number; totalPhotos: number };
 }): Promise<Buffer> {
   const pdf = await PDFDocument.create();
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const fonts = await embedStandardFonts(pdf);
+  const ctx = newLayoutContext(pdf, fonts);
 
-  let page = pdf.addPage([PAGE_W, PAGE_H]);
-  const ctx: DrawCtx = { pdf, page, y: PAGE_H - MARGIN, font, fontBold };
+  const title = strProp(input.property, "title") || "Untitled rental";
+  const addressLines = propertyAddressLines(input.property);
+  const generatedAt = new Date().toISOString();
+  const moveIn = input.moveInStats ?? { documentedRooms: 0, totalPhotos: 0 };
+  const moveOut = input.moveOutStats ?? { documentedRooms: 0, totalPhotos: 0 };
 
-  const title = strProp(input.property, "title") || "Untitled";
-  const line1 = strProp(input.property, "address_line_1", "address_line1");
-  const city = strProp(input.property, "city");
-  const region = strProp(input.property, "province_state");
+  await drawCoverPage(ctx, {
+    reportTitle: "Dispute Proof Packet",
+    reportType: "Dispute packet",
+    property: { title, addressLines },
+    generatedAt,
+    subtitle: "Organized renter proof — not legal advice or a guaranteed outcome.",
+  });
 
-  await drawParagraph(ctx, "MoveMark — Dispute packet", TITLE, true);
+  await drawSectionHeader(ctx, "Property summary");
+  await drawTextBlock(ctx, title, 12, { bold: true });
+  for (const line of addressLines) {
+    await drawTextBlock(ctx, line, 11);
+  }
   ctx.y -= 6;
-  await drawParagraph(ctx, `Property: ${title}`, HEAD, true);
-  const addressLine = [line1, [city, region].filter(Boolean).join(", ")].filter(Boolean).join(" · ");
-  if (addressLine) await drawParagraph(ctx, addressLine, BODY);
-  ctx.y -= 8;
-  await drawParagraph(
-    ctx,
-    "MoveMark organizes your proof. It does not provide legal advice.",
-    META,
-    false,
-    true
-  );
-  ctx.y -= 12;
 
-  await drawParagraph(ctx, "Proof checklist", HEAD, true);
+  await drawSectionHeader(ctx, "Proof status");
+  await drawTextBlock(ctx, `Move-in proof: ${moveIn.documentedRooms} room(s), ${moveIn.totalPhotos} photo(s)`, 11);
+  await drawTextBlock(ctx, `Move-out proof: ${moveOut.documentedRooms} room(s), ${moveOut.totalPhotos} photo(s)`, 11);
+  ctx.y -= 6;
+
+  await drawSectionHeader(ctx, "Reports included");
+  await drawTextBlock(ctx, `Move-in report: ${input.checklist.moveInReport}`, 11);
+  await drawTextBlock(ctx, `Move-out report: ${input.checklist.moveOutReport}`, 11);
+  ctx.y -= 6;
+
+  await drawSectionHeader(ctx, "Lease & deposit documents");
+  await drawBulletList(ctx, input.checklist.leaseAndDepositDocs);
   ctx.y -= 4;
-  await drawParagraph(ctx, `Move-in report: ${input.checklist.moveInReport}`, BODY);
-  await drawParagraph(ctx, `Move-out report: ${input.checklist.moveOutReport}`, BODY);
+
+  await drawSectionHeader(ctx, "Room issues & damage tags");
+  await drawBulletList(ctx, input.checklist.damageNotes);
+  ctx.y -= 4;
+
+  await drawSectionHeader(ctx, "Timeline summary");
+  await drawBulletList(ctx, input.checklist.timeline);
   ctx.y -= 8;
 
-  await drawParagraph(ctx, "Lease / deposit documents", HEAD, true);
-  if (input.checklist.leaseAndDepositDocs.length === 0) {
-    await drawParagraph(ctx, "None on file.", BODY, false, true);
-  } else {
-    for (const doc of input.checklist.leaseAndDepositDocs) {
-      await drawParagraph(ctx, `• ${doc}`, BODY);
-    }
-  }
-  ctx.y -= 8;
+  await drawSectionHeader(ctx, "Important notice");
+  await drawTextBlock(
+    ctx,
+    "This packet organizes your renter proof for your records. MoveMark does not provide legal advice and does not guarantee any dispute outcome.",
+    10,
+    { muted: true }
+  );
 
-  await drawParagraph(ctx, "Damage notes", HEAD, true);
-  if (input.checklist.damageNotes.length === 0) {
-    await drawParagraph(ctx, "No tagged damage notes on file.", BODY, false, true);
-  } else {
-    for (const note of input.checklist.damageNotes) {
-      await drawParagraph(ctx, `• ${note}`, BODY);
-    }
-  }
-  ctx.y -= 8;
-
-  await drawParagraph(ctx, "Timeline summary", HEAD, true);
-  if (input.checklist.timeline.length === 0) {
-    await drawParagraph(ctx, "No dated events on file.", BODY, false, true);
-  } else {
-    for (const line of input.checklist.timeline) {
-      await drawParagraph(ctx, `• ${line}`, BODY);
-    }
-  }
-
-  ctx.y -= 14;
-  await drawParagraph(ctx, `Generated ${new Date().toISOString()}`, META, false, true);
-
-  const bytes = await pdf.save();
-  return Buffer.from(bytes);
+  await drawDisclaimerFooter(ctx);
+  return Buffer.from(await pdf.save());
 }
+
+export type { EvidenceFileRow };

@@ -13,12 +13,14 @@ export type ExportResponseBody = {
 };
 
 export type ExportErrorCode =
+  | "not_enough_proof"
   | "not_enough_move_out_proof"
+  | "not_enough_dispute_proof"
   | "export_already_processing"
   | "export_failed"
   | "export_generation_failed";
 
-export type ExportJobStatus = "queued" | "processing" | "completed" | "failed";
+export type ExportJobStatus = "queued" | "processing" | "verifying" | "completed" | "failed";
 
 export type ExportListItem = {
   id: string;

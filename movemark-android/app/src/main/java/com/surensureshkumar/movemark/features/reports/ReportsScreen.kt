@@ -172,6 +172,7 @@ fun ReportsScreen(
                     ExportHistorySection(
                         exports = state.exports,
                         onShare = { row -> viewModel.shareExport(row) },
+                        onRetry = { row -> viewModel.retryExport(row) },
                     )
                 }
             }

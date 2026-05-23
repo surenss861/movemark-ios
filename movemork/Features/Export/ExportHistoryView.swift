@@ -171,6 +171,16 @@ struct ExportHistoryView: View {
         .task(id: resolvedExportPropertyId) {
             await loadExports()
         }
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                let hasActive = exports.contains { row in
+                    isActiveExportJob(verificationStatus[row.id] ?? .unknown)
+                }
+                guard hasActive else { continue }
+                await loadExports()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .moveMarkExportsShouldRefresh)) { _ in
             Task { await loadExports() }
         }
@@ -483,7 +493,7 @@ struct ExportHistoryView: View {
         case .processing:
             return ("Building…", {})
         case .failed:
-            return ("Try again", { Task { await loadExports() } })
+            return ("Retry report", { requestMoveInExport() })
         case .noVault:
             return ("Open vaults", { onOpenVaults?() })
         }
@@ -582,7 +592,9 @@ struct ExportHistoryView: View {
                         statusTone: historyStatusTone(verificationStatus[row.id] ?? .unknown),
                         isProcessing: isActiveExportJob(verificationStatus[row.id] ?? .unknown),
                         canShare: canShareExport(verificationStatus[row.id] ?? .unknown),
-                        onShare: { share(row) }
+                        canRetry: verificationStatus[row.id] == .serverFailed,
+                        onShare: { share(row) },
+                        onRetry: { retryExport(row) }
                     )
                 }
             }
@@ -783,6 +795,11 @@ struct ExportHistoryView: View {
 
         isMoveOutExporting = true
         errorMessage = nil
+        guard !hasActiveMoveOutExportJob else {
+            errorMessage = "A move-out report is already building. Check status below."
+            isMoveOutExporting = false
+            return
+        }
 
         Task { @MainActor in
             defer { isMoveOutExporting = false }
@@ -822,6 +839,11 @@ struct ExportHistoryView: View {
 
         isDisputeExporting = true
         errorMessage = nil
+        guard !hasActiveDisputeExportJob else {
+            errorMessage = "A dispute packet is already building. Check status below."
+            isDisputeExporting = false
+            return
+        }
 
         Task { @MainActor in
             defer { isDisputeExporting = false }
@@ -1219,12 +1241,14 @@ struct ExportHistoryView: View {
                     nextVerification[item.id] = .queued
                 case .processing:
                     nextVerification[item.id] = .processing
+                case .verifying:
+                    nextVerification[item.id] = .verifying
                 case .failed:
                     nextVerification[item.id] = .serverFailed
                 case .completed:
                     let fp = (item.filePath ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                     if fp.isEmpty {
-                        nextVerification[item.id] = .missingPath
+                        nextVerification[item.id] = .verifying
                     } else {
                         nextVerification[item.id] = .ready
                     }
@@ -1317,6 +1341,45 @@ struct ExportHistoryView: View {
             default:
                 return false
             }
+        }
+    }
+
+    private var hasActiveMoveOutExportJob: Bool {
+        exports.contains { row in
+            guard row.exportType == "move_out_report" else { return false }
+            guard let status = verificationStatus[row.id] else { return false }
+            switch status {
+            case .queued, .processing, .verifying:
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
+    private var hasActiveDisputeExportJob: Bool {
+        exports.contains { row in
+            guard row.exportType == "dispute_packet" else { return false }
+            guard let status = verificationStatus[row.id] else { return false }
+            switch status {
+            case .queued, .processing, .verifying:
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
+    private func retryExport(_ row: ExportRow) {
+        switch row.exportType {
+        case "move_in_report":
+            requestMoveInExport()
+        case "move_out_report":
+            requestMoveOutExport()
+        case "dispute_packet":
+            requestDisputePacketExport()
+        default:
+            break
         }
     }
 

@@ -22,11 +22,11 @@ enum ExportVerificationStatus: Equatable {
 
     var displayLabel: String {
         switch self {
-        case .queued: return "Queued"
+        case .queued: return "Building…"
         case .unknown: return "Not checked"
-        case .verifying: return "Checking file"
+        case .verifying: return "Building…"
         case .ready: return "Ready to share"
-        case .processing: return "Still processing"
+        case .processing: return "Building…"
         case .missingPath: return "Missing file path"
         case .invalidURL: return "Link unavailable"
         case .serverFailed: return "Export failed"

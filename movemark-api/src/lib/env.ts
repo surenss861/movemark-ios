@@ -11,6 +11,7 @@ export const env = {
   SUPABASE_URL: process.env.SUPABASE_URL ?? "",
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
   EXPORT_BUCKET_NAME: process.env.EXPORT_BUCKET_NAME ?? "exports",
+  INSPECTION_MEDIA_BUCKET: process.env.INSPECTION_MEDIA_BUCKET ?? "inspection-media",
   REVENUECAT_WEBHOOK_SECRET: process.env.REVENUECAT_WEBHOOK_SECRET ?? "",
   APP_ENV: process.env.APP_ENV ?? "development",
 };

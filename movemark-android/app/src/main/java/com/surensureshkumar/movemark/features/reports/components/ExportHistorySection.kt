@@ -35,6 +35,7 @@ import java.util.Locale
 fun ExportHistorySection(
     exports: List<ExportRow>,
     onShare: (ExportRow) -> Unit,
+    onRetry: (ExportRow) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (exports.isEmpty()) return
@@ -47,7 +48,7 @@ fun ExportHistorySection(
             modifier = Modifier.padding(start = 2.dp, bottom = 10.dp),
         )
         exports.forEach { row ->
-            ExportHistoryRow(row = row, onShare = { onShare(row) })
+            ExportHistoryRow(row = row, onShare = { onShare(row) }, onRetry = { onRetry(row) })
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -57,8 +58,10 @@ fun ExportHistorySection(
 private fun ExportHistoryRow(
     row: ExportRow,
     onShare: () -> Unit,
+    onRetry: () -> Unit,
 ) {
     val isReady = row.verification == ExportVerificationStatus.Ready
+    val isFailed = row.verification == ExportVerificationStatus.ServerFailed
   Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -96,6 +99,13 @@ private fun ExportHistoryRow(
             MMButton(
                 text = "Share",
                 onClick = onShare,
+                style = MMButtonStyle.Secondary,
+                modifier = Modifier.width(88.dp),
+            )
+        } else if (isFailed) {
+            MMButton(
+                text = "Retry",
+                onClick = onRetry,
                 style = MMButtonStyle.Secondary,
                 modifier = Modifier.width(88.dp),
             )

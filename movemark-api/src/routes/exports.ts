@@ -17,11 +17,15 @@ import {
   MOVE_OUT_REPORT_TYPE,
 } from "../lib/exportGuards.js";
 import {
+  findActiveExport,
+  markExportFailed,
+  runExportPipeline,
+} from "../lib/exportPipeline.js";
+import {
   generateDisputePacketPdfBuffer,
   generateMoveInPdfBuffer,
   generateMoveOutPdfBuffer,
 } from "../lib/pdf.js";
-import { uploadExportToSupabaseStorage } from "../lib/storage.js";
 import { supabaseAdmin } from "../lib/supabase.js";
 import type {
   ExportDownloadResponseBody,
@@ -29,22 +33,6 @@ import type {
   ExportRequestBody,
   ExportResponseBody,
 } from "../types/exports.js";
-
-async function markExportFailed(exportId: string, reason: string): Promise<void> {
-  try {
-    const { error } = await supabaseAdmin
-      .from("exports")
-      .update({ status: "failed" })
-      .eq("id", exportId);
-    if (error) {
-      console.error(`[movemark-api:exports] markExportFailed update error id=${exportId}`, error);
-    } else {
-      console.log(`[movemark-api:exports] export status=failed id=${exportId} reason=${reason}`);
-    }
-  } catch (e) {
-    console.error(`[movemark-api:exports] markExportFailed exception id=${exportId}`, e);
-  }
-}
 
 function handleExportsError(c: Context, error: unknown, logLabel: string) {
   if (error instanceof Error && error.message === "Unauthorized") {
@@ -254,6 +242,14 @@ exportsRouter.post("/move-in", async (c) => {
       return c.json({ error: "Property not found" }, 404);
     }
 
+    const activeMoveIn = await findActiveExport(userId, body.propertyId, MOVE_IN_REPORT_TYPE);
+    if (activeMoveIn) {
+      return c.json(
+        { error: "A move-in report is already being built.", code: "export_already_processing" },
+        409
+      );
+    }
+
     const { data: rooms } = await supabaseAdmin
       .from("rooms")
       .select("*")
@@ -326,6 +322,17 @@ exportsRouter.post("/move-in", async (c) => {
       };
     });
 
+    const moveInStats = computeMoveInProofStats(inspectionItems, photoCountByItem);
+    if (moveInStats.documentedRooms === 0 || moveInStats.totalPhotos === 0) {
+      return c.json(
+        {
+          error: "Document at least one room with photos before making a move-in report.",
+          code: "not_enough_proof",
+        },
+        400
+      );
+    }
+
     const { data: propertyDocuments } = await supabaseAdmin
       .from("property_documents")
       .select("*")
@@ -352,33 +359,19 @@ exportsRouter.post("/move-in", async (c) => {
     }
 
     try {
-      const pdfBuffer = await generateMoveInPdfBuffer({
-        property,
-        rooms: rooms ?? [],
-        inspection: inspection ?? null,
-        inspectionItems: inspectionItemsForPdf,
-        propertyDocuments: propertyDocuments ?? [],
-      });
-
-      const upload = await uploadExportToSupabaseStorage({
+      await runExportPipeline({
         userId,
         exportId: exportRow.id,
-        fileBuffer: pdfBuffer,
+        generatePdf: () =>
+          generateMoveInPdfBuffer({
+            property,
+            propertyId: body.propertyId,
+            rooms: rooms ?? [],
+            inspection: inspection ?? null,
+            inspectionItems: inspectionItemsForPdf,
+            propertyDocuments: propertyDocuments ?? [],
+          }),
       });
-
-      const { error: updateError } = await supabaseAdmin
-        .from("exports")
-        .update({
-          status: "completed",
-          file_path: upload.path,
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", exportRow.id);
-
-      if (updateError) {
-        console.error("[movemark-api:exports] move-in finalize", updateError);
-        throw new Error(`finalize: ${updateError.message}`);
-      }
 
       const response: ExportResponseBody = {
         exportId: exportRow.id,
@@ -550,32 +543,18 @@ exportsRouter.post("/move-out", async (c) => {
     }
 
     try {
-      const pdfBuffer = await generateMoveOutPdfBuffer({
-        property,
-        rooms: rooms ?? [],
-        inspection: inspection ?? null,
-        inspectionItems: inspectionItemsForPdf,
-      });
-
-      const upload = await uploadExportToSupabaseStorage({
+      await runExportPipeline({
         userId,
         exportId: exportRow.id,
-        fileBuffer: pdfBuffer,
+        generatePdf: () =>
+          generateMoveOutPdfBuffer({
+            property,
+            propertyId: body.propertyId,
+            rooms: rooms ?? [],
+            inspection: inspection ?? null,
+            inspectionItems: inspectionItemsForPdf,
+          }),
       });
-
-      const { error: updateError } = await supabaseAdmin
-        .from("exports")
-        .update({
-          status: "completed",
-          file_path: upload.path,
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", exportRow.id);
-
-      if (updateError) {
-        console.error("[movemark-api:exports] move-out finalize", updateError);
-        throw new Error(`finalize: ${updateError.message}`);
-      }
 
       const response: ExportResponseBody = {
         exportId: exportRow.id,
@@ -690,6 +669,45 @@ exportsRouter.post("/dispute-packet", async (c) => {
 
     const moveInStats = computeMoveInProofStats(moveInItems, photoCountByMoveInItem);
 
+    const { data: moveOutInspection } = await supabaseAdmin
+      .from("inspections")
+      .select("id")
+      .eq("property_id", body.propertyId)
+      .eq("user_id", userId)
+      .eq("inspection_type", "move_out")
+      .maybeSingle();
+
+    let moveOutItems: Array<Record<string, unknown>> = [];
+    const photoCountByMoveOutItem = new Map<string, number>();
+
+    if (moveOutInspection?.id) {
+      const { data: items } = await supabaseAdmin
+        .from("inspection_items")
+        .select("id,room_id")
+        .eq("inspection_id", moveOutInspection.id);
+
+      moveOutItems = items ?? [];
+      const moveOutItemIds = moveOutItems
+        .map((row) => row["id"] as string | undefined)
+        .filter((id): id is string => Boolean(id));
+
+      if (moveOutItemIds.length > 0) {
+        const { data: evidenceRows } = await supabaseAdmin
+          .from("evidence_files")
+          .select("inspection_item_id")
+          .eq("property_id", body.propertyId)
+          .in("inspection_item_id", moveOutItemIds);
+
+        for (const er of evidenceRows ?? []) {
+          const iid = er.inspection_item_id as string | undefined;
+          if (!iid) continue;
+          photoCountByMoveOutItem.set(iid, (photoCountByMoveOutItem.get(iid) ?? 0) + 1);
+        }
+      }
+    }
+
+    const moveOutStats = computeMoveOutProofStats(moveOutItems, photoCountByMoveOutItem);
+
     if (
       !hasEnoughDisputeProof(
         moveInStats.documentedRooms,
@@ -746,30 +764,17 @@ exportsRouter.post("/dispute-packet", async (c) => {
     }
 
     try {
-      const pdfBuffer = await generateDisputePacketPdfBuffer({
-        property,
-        checklist,
-      });
-
-      const upload = await uploadExportToSupabaseStorage({
+      await runExportPipeline({
         userId,
         exportId: exportRow.id,
-        fileBuffer: pdfBuffer,
+        generatePdf: () =>
+          generateDisputePacketPdfBuffer({
+            property,
+            checklist,
+            moveInStats,
+            moveOutStats,
+          }),
       });
-
-      const { error: updateError } = await supabaseAdmin
-        .from("exports")
-        .update({
-          status: "completed",
-          file_path: upload.path,
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", exportRow.id);
-
-      if (updateError) {
-        console.error("[movemark-api:exports] dispute-packet finalize", updateError);
-        throw new Error(`finalize: ${updateError.message}`);
-      }
 
       const response: ExportResponseBody = {
         exportId: exportRow.id,

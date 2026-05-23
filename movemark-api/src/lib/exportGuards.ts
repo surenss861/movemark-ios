@@ -18,7 +18,7 @@ export type ExportRowLike = {
 /** Queued/processing, or completed but file not written yet (verifying). */
 export function isActiveExportJob(row: ExportRowLike): boolean {
   const status = row.status?.toLowerCase() ?? "";
-  if (status === "queued" || status === "processing") return true;
+  if (status === "queued" || status === "processing" || status === "verifying") return true;
   if (status === "completed") {
     const path = row.file_path?.trim() ?? "";
     return path.length === 0;

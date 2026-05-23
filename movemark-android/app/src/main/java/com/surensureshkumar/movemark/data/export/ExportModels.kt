@@ -16,12 +16,12 @@ enum class ExportVerificationStatus {
 
     val displayLabel: String
         get() = when (this) {
-            Queued -> "Queued"
-            Processing -> "Still processing"
-            Verifying -> "Checking file"
+            Queued -> "Building…"
+            Processing -> "Building…"
+            Verifying -> "Building…"
             Ready -> "Ready to share"
             ServerFailed -> "Export failed"
-            MissingPath -> "Missing file path"
+            MissingPath -> "Building…"
         }
 }
 
@@ -38,6 +38,7 @@ fun ExportListItem.toExportRow(): ExportRow {
     val verification = when (status) {
         ExportJobStatus.Queued -> ExportVerificationStatus.Queued
         ExportJobStatus.Processing -> ExportVerificationStatus.Processing
+        ExportJobStatus.Verifying -> ExportVerificationStatus.Verifying
         ExportJobStatus.Failed -> ExportVerificationStatus.ServerFailed
         ExportJobStatus.Completed -> {
             val path = filePath?.trim().orEmpty()
