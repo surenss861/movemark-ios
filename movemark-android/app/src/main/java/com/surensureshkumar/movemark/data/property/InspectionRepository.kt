@@ -7,6 +7,7 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.storage.storage
 import io.ktor.http.ContentType
+import kotlin.time.Duration.Companion.seconds
 import java.time.Instant
 import java.util.UUID
 import javax.inject.Inject
@@ -118,6 +119,12 @@ class InspectionRepository @Inject constructor(
             upsert = false
             contentType = ContentType.Image.JPEG
         }
+    }
+
+    suspend fun signedUrl(path: String, expiresSeconds: Int = 3600): String {
+        val trimmed = path.trim()
+        require(trimmed.isNotEmpty()) { "Missing file path." }
+        return client.storage.from(EVIDENCE_BUCKET).createSignedUrl(trimmed, expiresSeconds.seconds)
     }
 
     suspend fun removeOrphanUpload(path: String) {

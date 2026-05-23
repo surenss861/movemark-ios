@@ -32,6 +32,7 @@ fun MMVaultProofHeroCard(
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
     previewImage: ImageBitmap? = null,
+    previewImageUrl: String? = null,
     roomName: String? = null,
     photoCount: Int = 0,
     issueCount: Int = 0,
@@ -50,9 +51,10 @@ fun MMVaultProofHeroCard(
     }
     val statusTone = if (hasProof) MMProofStatusTone.Success else MMProofStatusTone.Warning
     val displayRoom = roomName ?: propertyName
+    val hasPreview = previewImage != null || !previewImageUrl.isNullOrBlank()
 
     Column(modifier = modifier) {
-        if (previewImage != null) {
+        if (hasPreview) {
             MMProofArtifactCard(
                 model = MMProofArtifactModel(
                     phaseEyebrow = "Room Proof",
@@ -66,6 +68,7 @@ fun MMVaultProofHeroCard(
                     statusTone = statusTone,
                 ),
                 imageBitmap = previewImage,
+                imageUrl = previewImageUrl,
                 photoHeight = 148.dp,
                 cornerRadius = 20.dp,
                 reduceMotion = reduceMotion,

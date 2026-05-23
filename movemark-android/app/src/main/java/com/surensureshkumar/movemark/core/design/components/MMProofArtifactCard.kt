@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMMotion
 
@@ -66,6 +67,7 @@ fun MMProofArtifactCard(
     cornerRadius: Dp = 20.dp,
     drawableResId: Int? = null,
     imageBitmap: ImageBitmap? = null,
+    imageUrl: String? = null,
     showReportPeek: Boolean = false,
     tagsVisible: Boolean = true,
     reduceMotion: Boolean = false,
@@ -85,6 +87,7 @@ fun MMProofArtifactCard(
             cornerRadius = cornerRadius,
             drawableResId = drawableResId,
             imageBitmap = imageBitmap,
+            imageUrl = imageUrl,
             tagsVisible = tagsVisible,
             reduceMotion = reduceMotion,
             modifier = Modifier.fillMaxWidth(),
@@ -123,6 +126,7 @@ private fun MMProofArtifactSurface(
     cornerRadius: Dp,
     drawableResId: Int?,
     imageBitmap: ImageBitmap?,
+    imageUrl: String?,
     tagsVisible: Boolean,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
@@ -147,6 +151,12 @@ private fun MMProofArtifactSurface(
                 when {
                     imageBitmap != null -> Image(
                         bitmap = imageBitmap,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    !imageUrl.isNullOrBlank() -> AsyncImage(
+                        model = imageUrl,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),

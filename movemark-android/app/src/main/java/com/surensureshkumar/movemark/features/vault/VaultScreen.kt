@@ -54,6 +54,7 @@ fun VaultScreen(
     val error by viewModel.error.collectAsState()
     val hasPro by viewModel.hasPro.collectAsState()
     val propertyCount by viewModel.propertyCount.collectAsState()
+    val previewImageUrl by viewModel.previewImageUrl.collectAsState()
     val reduceMotion = MMMotion.rememberReduceMotion()
     var hasAnimatedIn by remember { mutableStateOf(reduceMotion) }
 
@@ -119,7 +120,7 @@ fun VaultScreen(
                 val progressLine = when {
                     total == 0 -> "Add rooms to document damage"
                     documented == 0 -> "Start with one room"
-                    else -> "$documented of $total rooms ready"
+                    else -> "$documented of $total rooms documented"
                 }
                 val primaryTitle = when {
                     documented == 0 -> "Start room proof"
@@ -127,7 +128,9 @@ fun VaultScreen(
                     else -> "Review rooms"
                 }
 
-                val featuredRoom = next ?: p.rooms.firstOrNull { RoomProofMetrics.isDocumented(it) }
+                val featuredRoom = RoomProofMetrics.firstPreviewRoom(p)
+                    ?: next
+                    ?: p.rooms.firstOrNull { RoomProofMetrics.isDocumented(it) }
                 val featuredPhotoCount = featuredRoom?.let { RoomProofMetrics.photoCount(it) } ?: 0
 
                 MMVaultProofHeroCard(
@@ -142,6 +145,7 @@ fun VaultScreen(
                         (next ?: p.rooms.firstOrNull())?.let { onOpenRoom(it.id) }
                     },
                     reduceMotion = reduceMotion,
+                    previewImageUrl = previewImageUrl,
                     roomName = featuredRoom?.name ?: next?.name,
                     photoCount = featuredPhotoCount,
                     modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "vaultHero"),
