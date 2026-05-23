@@ -34,11 +34,15 @@ struct ProofCaseMetadataRow: View {
             Spacer(minLength: 8)
 
             if let statusLabel {
-                Text(statusLabel.uppercased())
-                    .font(.system(size: 10, weight: .semibold))
-                    .tracking(0.6)
-                    .foregroundStyle(statusColor)
-                    .lineLimit(1)
+                if statusTone == .success || statusTone == .warning {
+                    ProofStatusBadge(text: statusLabel, tone: statusTone)
+                } else {
+                    Text(statusLabel.uppercased())
+                        .font(.system(size: 10, weight: .semibold))
+                        .tracking(0.6)
+                        .foregroundStyle(statusColor)
+                        .lineLimit(1)
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -79,6 +83,40 @@ struct ProofCaseDetailSection: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+}
+
+struct ProofCaseReceiptRow: View {
+    let savedTitle: String
+    var timestampLabel: String?
+    var statusBadge: String?
+    var statusTone: ProofStatusTone = .success
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(MoveMarkTheme.Colors.primary)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(savedTitle)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                if let timestampLabel {
+                    Text(timestampLabel)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            if let statusBadge {
+                ProofStatusBadge(text: statusBadge, tone: statusTone)
+            }
+        }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
     }

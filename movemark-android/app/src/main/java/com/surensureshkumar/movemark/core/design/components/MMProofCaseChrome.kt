@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -47,14 +50,18 @@ fun MMProofCaseMetadataRow(
         )
         statusLabel?.let {
             Spacer(Modifier.width(8.dp))
-            Text(
-                it.uppercase(),
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.6.sp,
-                color = statusTextColor(statusTone),
-                maxLines = 1,
-            )
+            if (statusTone == MMProofStatusTone.Success || statusTone == MMProofStatusTone.Warning) {
+                MMProofStatusBadge(text = it, tone = statusTone)
+            } else {
+                Text(
+                    it.uppercase(),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.6.sp,
+                    color = statusTextColor(statusTone),
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -133,4 +140,35 @@ private fun statusTextColor(tone: MMProofStatusTone) = when (tone) {
     MMProofStatusTone.Warning -> MMColors.SemanticWarning
     MMProofStatusTone.Danger -> MMColors.SemanticDanger
     MMProofStatusTone.Neutral -> MMColors.TextMuted
+}
+
+@Composable
+fun MMProofCaseReceiptRow(
+    savedTitle: String,
+    timestampLabel: String? = null,
+    statusBadge: String? = null,
+    statusTone: MMProofStatusTone = MMProofStatusTone.Success,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        androidx.compose.material3.Icon(
+            imageVector = Icons.Default.CheckCircle,
+            contentDescription = null,
+            tint = MMColors.Primary,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Column(Modifier.weight(1f)) {
+            Text(savedTitle, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MMColors.TextPrimary)
+            timestampLabel?.let {
+                Text(it, fontSize = 11.sp, color = MMColors.TextMuted, modifier = Modifier.padding(top = 2.dp))
+            }
+        }
+        statusBadge?.let { MMProofStatusBadge(text = it, tone = statusTone) }
+    }
 }

@@ -82,12 +82,10 @@ struct WelcomeScreen: View {
 
             WelcomeDepositCaseFile(
                 maxWidth: cardWidth,
-                heroHeight: layout.heroHeight,
                 cardVisible: cardVisible,
                 tagsVisible: tagsVisible
             )
             .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: layout.heroHeight)
 
             primaryCopyBlock
                 .padding(.top, layout.heroToCopyGap)
@@ -257,14 +255,11 @@ struct WelcomeScreen: View {
 // MARK: - Zone layout
 
 private struct WelcomeZoneLayout {
-    let heroHeight: CGFloat
     let topPadding: CGFloat
     let brandToHeroGap: CGFloat
     let heroToCopyGap: CGFloat
 
     init(screenHeight: CGFloat, safeTop: CGFloat, safeBottom: CGFloat) {
-        let usable = screenHeight - safeTop - safeBottom - 12
-        heroHeight = usable * 0.38
         topPadding = max(4, safeTop - 71)
         brandToHeroGap = 14
         heroToCopyGap = 34

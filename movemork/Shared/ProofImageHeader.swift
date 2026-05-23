@@ -7,6 +7,12 @@
 
 import SwiftUI
 
+enum ProofPhotoOverlayStyle {
+    case full
+    case tagsOnly
+    case minimal
+}
+
 enum ProofPhotoPaneSize {
     case large
     case medium
@@ -35,7 +41,9 @@ struct ProofPhotoPane: View {
     var phaseBadge: String? = nil
     var issueTags: [ProofIssueTag] = []
     var tagsVisible: Bool = true
+    var overlayStyle: ProofPhotoOverlayStyle = .full
     var showScanCorners: Bool = false
+    var embeddedInCaseFile: Bool = false
     var topCornerRadius: CGFloat = MoveMarkTheme.Spacing.cornerRadius
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -88,7 +96,12 @@ struct ProofPhotoPane: View {
     }
 
     private var heroBody: some View {
-        ZStack(alignment: .topLeading) {
+        let showTopOverlay = overlayStyle == .full
+        let showTags = overlayStyle != .minimal && !issueTags.isEmpty && size != .medium
+        let compactTags = overlayStyle == .tagsOnly
+        let cornerRadius: CGFloat = embeddedInCaseFile ? 12 : topCornerRadius
+
+        return ZStack(alignment: .topLeading) {
             Group {
                 if let imageName {
                     Image(imageName)
@@ -104,11 +117,11 @@ struct ProofPhotoPane: View {
             VStack {
                 Spacer(minLength: 0)
                 LinearGradient(
-                    colors: [.clear, Color.black.opacity(0.22), Color.black.opacity(0.45)],
+                    colors: [.clear, Color.black.opacity(0.18), Color.black.opacity(0.42)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(height: 96)
+                .frame(height: 72)
             }
             .allowsHitTesting(false)
 
@@ -116,66 +129,68 @@ struct ProofPhotoPane: View {
                 focusBrackets
             }
 
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        if let roomName {
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(MoveMarkTheme.Colors.primary)
-                                    .frame(width: 8, height: 8)
-                                    .overlay(Circle().stroke(Color.white.opacity(0.4), lineWidth: 0.5))
-                                Text(roomName)
-                                    .font(.system(size: 15, weight: .bold))
-                                    .foregroundStyle(Color.white)
+            if showTopOverlay || showTags {
+                VStack(alignment: .leading, spacing: 0) {
+                    if showTopOverlay {
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                if let roomName {
+                                    HStack(spacing: 6) {
+                                        Circle()
+                                            .fill(MoveMarkTheme.Colors.primary)
+                                            .frame(width: 8, height: 8)
+                                            .overlay(Circle().stroke(Color.white.opacity(0.4), lineWidth: 0.5))
+                                        Text(roomName)
+                                            .font(.system(size: 15, weight: .bold))
+                                            .foregroundStyle(Color.white)
+                                    }
+                                }
+                                if let phaseLabel {
+                                    Text(phaseLabel)
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(Color.white.opacity(0.88))
+                                }
+                            }
+                            Spacer(minLength: 8)
+                            if let phaseBadge {
+                                Text(phaseBadge)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(Color.white.opacity(0.95))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 5)
+                                    .background(Capsule().fill(Color.black.opacity(0.55)))
+                                    .overlay(Capsule().stroke(Color.white.opacity(0.22), lineWidth: 0.8))
                             }
                         }
-                        if let phaseLabel {
-                            Text(phaseLabel)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(Color.white.opacity(0.88))
-                        }
+                        .padding(.horizontal, 12)
+                        .padding(.top, 12)
+                    } else {
+                        Spacer(minLength: 0)
+                            .frame(height: 10)
                     }
-                    Spacer(minLength: 8)
-                    if let phaseBadge {
-                        Text(phaseBadge)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.95))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(Capsule().fill(Color.black.opacity(0.55)))
-                            .overlay(Capsule().stroke(Color.white.opacity(0.22), lineWidth: 0.8))
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.top, 12)
 
-                Spacer(minLength: 0)
+                    Spacer(minLength: 0)
 
-                if !issueTags.isEmpty {
-                    VStack(alignment: .leading, spacing: 5) {
-                        ForEach(Array(issueTags.enumerated()), id: \.element.id) { index, tag in
-                            evidenceMarker(tag.label, priorDamage: tag.priorDamage)
-                                .padding(.leading, tag.leadingInset)
-                                .scaleEffect(tagScale(for: index))
-                                .animation(
-                                    reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.78)
-                                        .delay(0.04 + Double(index) * 0.05),
-                                    value: tagsVisible
-                                )
+                    if showTags {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(Array(issueTags.enumerated()), id: \.element.id) { index, tag in
+                                evidenceMarker(tag.label, priorDamage: tag.priorDamage, compact: compactTags)
+                                    .padding(.leading, tag.leadingInset)
+                                    .scaleEffect(tagScale(for: index))
+                                    .animation(
+                                        reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.78)
+                                            .delay(0.04 + Double(index) * 0.05),
+                                        value: tagsVisible
+                                    )
+                            }
                         }
+                        .padding(.horizontal, 10)
+                        .padding(.bottom, 12)
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 12)
                 }
             }
         }
-        .clipShape(
-            UnevenRoundedRectangle(
-                topLeadingRadius: topCornerRadius,
-                topTrailingRadius: topCornerRadius
-            )
-        )
+        .proofPhotoClip(embeddedInCaseFile: embeddedInCaseFile, cornerRadius: cornerRadius)
     }
 
     private func tagScale(for index: Int) -> CGFloat {
@@ -183,7 +198,7 @@ struct ProofPhotoPane: View {
         return tagsVisible ? 1 : 0.9
     }
 
-    private func evidenceMarker(_ label: String, priorDamage: Bool) -> some View {
+    private func evidenceMarker(_ label: String, priorDamage: Bool, compact: Bool = false) -> some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 Circle()
@@ -196,7 +211,10 @@ struct ProofPhotoPane: View {
             .padding(.trailing, 5)
 
             Text(label)
-                .font(.system(size: priorDamage ? 12 : 11, weight: priorDamage ? .bold : .semibold))
+                .font(.system(
+                    size: compact ? (priorDamage ? 11 : 10) : (priorDamage ? 12 : 11),
+                    weight: priorDamage ? .bold : .semibold
+                ))
                 .foregroundStyle(Color.white.opacity(priorDamage ? 1 : 0.96))
                 .padding(.horizontal, priorDamage ? 10 : 9)
                 .padding(.vertical, 5)
@@ -328,3 +346,19 @@ struct ProofDocumentPreview: View {
 }
 
 typealias ProofImageHeader = ProofPhotoPane
+
+private extension View {
+    @ViewBuilder
+    func proofPhotoClip(embeddedInCaseFile: Bool, cornerRadius: CGFloat) -> some View {
+        if embeddedInCaseFile {
+            clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        } else {
+            clipShape(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: cornerRadius,
+                    topTrailingRadius: cornerRadius
+                )
+            )
+        }
+    }
+}

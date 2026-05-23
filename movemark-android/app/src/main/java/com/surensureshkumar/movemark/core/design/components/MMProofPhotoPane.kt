@@ -38,6 +38,15 @@ import androidx.compose.ui.unit.sp
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMMotion
 
+enum class MMProofPhotoOverlayStyle {
+    /** Room label, phase, badge, and issue tags. */
+    Full,
+    /** Issue tags only — room/title lives in the case detail section below. */
+    TagsOnly,
+    /** Image only. */
+    Minimal,
+}
+
 enum class MMProofPhotoPaneSize {
     /** Welcome demo — large evidence pane inside case card. */
     Large,
@@ -67,6 +76,7 @@ fun MMProofPhotoPane(
     phaseBadge: String? = null,
     issueTags: List<MMProofIssueTag> = emptyList(),
     tagsVisible: Boolean = true,
+    overlayStyle: MMProofPhotoOverlayStyle = MMProofPhotoOverlayStyle.Full,
     showScanCorners: Boolean = false,
     reduceMotion: Boolean = false,
 ) {
@@ -86,6 +96,7 @@ fun MMProofPhotoPane(
             phaseBadge = phaseBadge,
             issueTags = issueTags,
             tagsVisible = tagsVisible,
+            overlayStyle = overlayStyle,
             showScanCorners = showScanCorners,
             reduceMotion = reduceMotion,
         )
@@ -125,89 +136,99 @@ private fun EvidencePane(
     phaseBadge: String?,
     issueTags: List<MMProofIssueTag>,
     tagsVisible: Boolean,
+    overlayStyle: MMProofPhotoOverlayStyle,
     showScanCorners: Boolean,
     reduceMotion: Boolean,
 ) {
     val inspectionGreen = Color(0xFF1A7A52)
-    val contentScale = if (size == MMProofPhotoPaneSize.Large) ContentScale.FillWidth else ContentScale.Crop
+    val contentScale = if (size == MMProofPhotoPaneSize.Large) ContentScale.Crop else ContentScale.Crop
+    val showTopOverlay = overlayStyle == MMProofPhotoOverlayStyle.Full
+    val showTags = overlayStyle != MMProofPhotoOverlayStyle.Minimal && issueTags.isNotEmpty() &&
+        size != MMProofPhotoPaneSize.Medium
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color.Black.copy(alpha = 0.35f)),
+            .clip(RoundedCornerShape(12.dp))
+            .background(MMColors.FieldFill),
     ) {
         when {
-            imageBitmap != null -> Image(bitmap = imageBitmap, contentDescription = null, contentScale = contentScale, modifier = Modifier.fillMaxWidth())
-            drawableResId != null -> Image(painter = painterResource(drawableResId), contentDescription = null, contentScale = contentScale, modifier = Modifier.fillMaxWidth())
+            imageBitmap != null -> Image(bitmap = imageBitmap, contentDescription = null, contentScale = contentScale, modifier = Modifier.fillMaxSize())
+            drawableResId != null -> Image(painter = painterResource(drawableResId), contentDescription = null, contentScale = contentScale, modifier = Modifier.fillMaxSize())
         }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (size == MMProofPhotoPaneSize.Medium) 72.dp else 96.dp)
+                .height(if (size == MMProofPhotoPaneSize.Medium) 56.dp else 72.dp)
                 .align(Alignment.BottomCenter)
                 .background(
                     androidx.compose.ui.graphics.Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Black.copy(0.22f), Color.Black.copy(0.45f)),
+                        colors = listOf(Color.Transparent, Color.Black.copy(0.18f), Color.Black.copy(0.42f)),
                     ),
                 ),
         )
         if (showScanCorners) MMProofFocusBrackets(Modifier.fillMaxSize())
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 12.dp, vertical = 12.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top,
+        if (showTopOverlay || showTags) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
             ) {
-                Column {
-                    roomName?.let {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(MMColors.Primary)
-                                    .border(0.5.dp, Color.White.copy(0.4f), CircleShape),
+                if (showTopOverlay) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Column {
+                            roomName?.let {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        Modifier
+                                            .size(7.dp)
+                                            .clip(CircleShape)
+                                            .background(MMColors.Primary)
+                                            .border(0.5.dp, Color.White.copy(0.4f), CircleShape),
+                                    )
+                                    Spacer(Modifier.width(5.dp))
+                                    Text(it, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                            }
+                            phaseLabel?.let {
+                                Text(it, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(0.88f))
+                            }
+                        }
+                        phaseBadge?.let {
+                            Text(
+                                it,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White.copy(0.95f),
+                                modifier = Modifier
+                                    .background(Color.Black.copy(0.55f), CircleShape)
+                                    .border(0.8.dp, Color.White.copy(0.22f), CircleShape)
+                                    .padding(horizontal = 7.dp, vertical = 4.dp),
                             )
-                            Spacer(Modifier.width(6.dp))
-                            Text(it, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     }
-                    phaseLabel?.let {
-                        Text(it, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(0.88f))
-                    }
                 }
-                phaseBadge?.let {
-                    Text(
-                        it,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White.copy(0.95f),
-                        modifier = Modifier
-                            .background(Color.Black.copy(0.55f), CircleShape)
-                            .border(0.8.dp, Color.White.copy(0.22f), CircleShape)
-                            .padding(horizontal = 8.dp, vertical = 5.dp),
-                    )
-                }
-            }
-            Spacer(Modifier.weight(1f))
-            if (issueTags.isNotEmpty() && size != MMProofPhotoPaneSize.Medium) {
-                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    issueTags.forEachIndexed { index, tag ->
-                        val tagScale by animateFloatAsState(
-                            if (tagsVisible) 1f else 0.9f,
-                            MMMotion.welcomeTagEnterSpec(reduceMotion),
-                            label = "tag$index",
-                        )
-                        MMProofIssueMarker(
-                            label = tag.label,
-                            priorDamage = tag.priorDamage,
-                            inspectionGreen = inspectionGreen,
-                            modifier = Modifier.scale(tagScale).padding(start = tag.leadingInset),
-                        )
+                Spacer(Modifier.weight(1f))
+                if (showTags) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        issueTags.forEachIndexed { index, tag ->
+                            val tagScale by animateFloatAsState(
+                                if (tagsVisible) 1f else 0.9f,
+                                MMMotion.welcomeTagEnterSpec(reduceMotion),
+                                label = "tag$index",
+                            )
+                            MMProofIssueMarker(
+                                label = tag.label,
+                                priorDamage = tag.priorDamage,
+                                inspectionGreen = inspectionGreen,
+                                compact = overlayStyle == MMProofPhotoOverlayStyle.TagsOnly,
+                                modifier = Modifier.scale(tagScale).padding(start = tag.leadingInset),
+                            )
+                        }
                     }
                 }
             }
@@ -220,8 +241,14 @@ private fun MMProofIssueMarker(
     label: String,
     priorDamage: Boolean,
     inspectionGreen: Color,
+    compact: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    val fontSize = if (compact) {
+        if (priorDamage) 11.sp else 10.sp
+    } else {
+        if (priorDamage) 12.sp else 11.sp
+    }
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
@@ -235,7 +262,7 @@ private fun MMProofIssueMarker(
         Spacer(Modifier.width(5.dp))
         Text(
             label,
-            fontSize = if (priorDamage) 12.sp else 11.sp,
+            fontSize = fontSize,
             fontWeight = if (priorDamage) FontWeight.Bold else FontWeight.SemiBold,
             color = Color.White.copy(if (priorDamage) 1f else 0.96f),
             modifier = Modifier

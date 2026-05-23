@@ -29,7 +29,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -97,13 +96,6 @@ fun WelcomeScreen(
                 .statusBarsPadding()
                 .navigationBarsPadding(),
         ) {
-            val density = LocalDensity.current
-            val usableHeightPx = with(density) { maxHeight.toPx() - 12.dp.toPx() }
-            val heroHeight = with(density) {
-                (usableHeightPx * 0.34f - 56.dp.toPx())
-                    .coerceAtLeast(200.dp.toPx())
-                    .toDp()
-            }
             val horizontalPad = 20.dp
             val cardMaxWidth = minOf(maxWidth - horizontalPad * 2, 420.dp)
 
@@ -120,7 +112,6 @@ fun WelcomeScreen(
                 )
 
                 WelcomeDepositCaseFile(
-                    heroHeight = heroHeight,
                     cardVisible = cardVisible,
                     tagsVisible = tagsVisible,
                     reduceMotion = reduceMotion,
