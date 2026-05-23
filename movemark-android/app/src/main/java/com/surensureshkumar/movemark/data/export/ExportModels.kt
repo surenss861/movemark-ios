@@ -96,6 +96,86 @@ object ReportReadinessMapper {
         }
 
     const val MOVE_IN_REPORT_TYPE = "move_in_report"
+    const val MOVE_OUT_REPORT_TYPE = "move_out_report"
+    const val DISPUTE_PACKET_TYPE = "dispute_packet"
+}
+
+enum class DisputePacketReadiness {
+    NoProof,
+    ReadyToMake,
+    Processing,
+    ReadyToShare,
+    Failed,
+}
+
+object DisputePacketReadinessMapper {
+    fun resolve(moveInDocumentedRooms: Int, exports: List<ExportRow>): DisputePacketReadiness {
+        val hasMoveInProof = moveInDocumentedRooms > 0 ||
+            exports.any {
+                it.type == ReportReadinessMapper.MOVE_IN_REPORT_TYPE &&
+                    it.verification == ExportVerificationStatus.Ready
+            }
+        if (!hasMoveInProof) return DisputePacketReadiness.NoProof
+
+        val dispute = exports.filter { it.type == ReportReadinessMapper.DISPUTE_PACKET_TYPE }
+        if (dispute.any { it.verification == ExportVerificationStatus.ServerFailed }) {
+            return DisputePacketReadiness.Failed
+        }
+        if (dispute.any { it.verification.isActiveJob }) {
+            return DisputePacketReadiness.Processing
+        }
+        if (dispute.any { it.verification == ExportVerificationStatus.Ready }) {
+            return DisputePacketReadiness.ReadyToShare
+        }
+        return DisputePacketReadiness.ReadyToMake
+    }
+
+    fun hasActiveDisputeJob(exports: List<ExportRow>): Boolean =
+        exports.any {
+            it.type == ReportReadinessMapper.DISPUTE_PACKET_TYPE && it.verification.isActiveJob
+        }
+
+    fun firstReadyDisputeExport(exports: List<ExportRow>): ExportRow? =
+        exports.firstOrNull {
+            it.type == ReportReadinessMapper.DISPUTE_PACKET_TYPE &&
+                it.verification == ExportVerificationStatus.Ready
+        }
+}
+
+enum class MoveOutReportReadiness {
+    NoProof,
+    ReadyToMake,
+    Processing,
+    ReadyToShare,
+    Failed,
+}
+
+object MoveOutReportReadinessMapper {
+    fun resolve(moveOutPhotos: Int, exports: List<ExportRow>): MoveOutReportReadiness {
+        if (moveOutPhotos <= 0) return MoveOutReportReadiness.NoProof
+        val moveOut = exports.filter { it.type == ReportReadinessMapper.MOVE_OUT_REPORT_TYPE }
+        if (moveOut.any { it.verification == ExportVerificationStatus.ServerFailed }) {
+            return MoveOutReportReadiness.Failed
+        }
+        if (moveOut.any { it.verification.isActiveJob }) {
+            return MoveOutReportReadiness.Processing
+        }
+        if (moveOut.any { it.verification == ExportVerificationStatus.Ready }) {
+            return MoveOutReportReadiness.ReadyToShare
+        }
+        return MoveOutReportReadiness.ReadyToMake
+    }
+
+    fun hasActiveMoveOutJob(exports: List<ExportRow>): Boolean =
+        exports.any {
+            it.type == ReportReadinessMapper.MOVE_OUT_REPORT_TYPE && it.verification.isActiveJob
+        }
+
+    fun firstReadyMoveOutExport(exports: List<ExportRow>): ExportRow? =
+        exports.firstOrNull {
+            it.type == ReportReadinessMapper.MOVE_OUT_REPORT_TYPE &&
+                it.verification == ExportVerificationStatus.Ready
+        }
 }
 
 val ExportVerificationStatus.isActiveJob: Boolean

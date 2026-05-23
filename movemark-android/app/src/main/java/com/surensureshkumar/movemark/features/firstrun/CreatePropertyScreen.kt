@@ -9,14 +9,23 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.surensureshkumar.movemark.core.design.MMBackground
+import com.surensureshkumar.movemark.core.design.MMColors
+import com.surensureshkumar.movemark.core.design.MMMotion
 import com.surensureshkumar.movemark.core.design.MMSpacing
+import com.surensureshkumar.movemark.core.design.mmAppearRise
 import com.surensureshkumar.movemark.core.design.components.MMButton
+import com.surensureshkumar.movemark.core.design.components.MMProofSectionHeader
 import com.surensureshkumar.movemark.core.design.components.MMTextField
 
 @Composable
@@ -30,37 +39,47 @@ fun CreatePropertyScreen(
     val region by viewModel.region.collectAsState()
     val loading by viewModel.loading.collectAsState()
     val error by viewModel.error.collectAsState()
+    val reduceMotion = MMMotion.rememberReduceMotion()
+    var appeared by remember { mutableStateOf(reduceMotion) }
+
+    LaunchedEffect(reduceMotion) {
+        if (!reduceMotion) appeared = true
+    }
 
     MMBackground {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = MMSpacing.ScreenHorizontal.dp, vertical = 32.dp),
+                .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
+                .padding(top = 24.dp, bottom = MMSpacing.TabScrollBottom.dp),
         ) {
-            Text("Create your proof vault", style = androidx.compose.material3.MaterialTheme.typography.headlineLarge)
-            Text(
-                "Add your rental so you can start room proof.",
-                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+            MMProofSectionHeader(
+                title = "Create your proof vault",
+                subtitle = "Add your rental so you can start room proof.",
+                modifier = Modifier.mmAppearRise(appeared, reduceMotion, label = "createHeader"),
             )
             Spacer(Modifier.height(20.dp))
-            MMTextField(title, viewModel::setTitle, "Rental name")
-            Spacer(Modifier.height(12.dp))
-            MMTextField(address, viewModel::setAddress, "Street address")
-            Spacer(Modifier.height(12.dp))
-            MMTextField(city, viewModel::setCity, "City")
-            Spacer(Modifier.height(12.dp))
-            MMTextField(region, viewModel::setRegion, "Province / State")
-            error?.let {
-                Spacer(Modifier.height(8.dp))
-                Text(it, color = com.surensureshkumar.movemark.core.design.MMColors.SemanticDanger)
+            Column(Modifier.mmAppearRise(appeared, reduceMotion, label = "createForm")) {
+                MMTextField(title, viewModel::setTitle, "Rental name")
+                Spacer(Modifier.height(12.dp))
+                MMTextField(address, viewModel::setAddress, "Street address")
+                Spacer(Modifier.height(12.dp))
+                MMTextField(city, viewModel::setCity, "City")
+                Spacer(Modifier.height(12.dp))
+                MMTextField(region, viewModel::setRegion, "Province / State")
+                error?.let {
+                    Spacer(Modifier.height(12.dp))
+                    Text(it, color = MMColors.SemanticDanger, fontSize = 14.sp)
+                }
+                Spacer(Modifier.height(24.dp))
+                MMButton(
+                    text = if (loading) "Creating rental…" else "Create rental",
+                    onClick = { viewModel.create(onCreated) },
+                    loading = loading,
+                    enabled = !loading,
+                )
             }
-            Spacer(Modifier.height(24.dp))
-            MMButton(
-                text = "Create rental",
-                onClick = { viewModel.create(onCreated) },
-                loading = loading,
-            )
         }
     }
 }

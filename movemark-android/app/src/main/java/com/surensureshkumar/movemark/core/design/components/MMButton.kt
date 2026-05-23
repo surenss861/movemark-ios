@@ -1,9 +1,15 @@
 package com.surensureshkumar.movemark.core.design.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.scale
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
@@ -26,13 +32,22 @@ fun MMButton(
     loading: Boolean = false,
 ) {
     val shape = RoundedCornerShape(MMSpacing.CornerRadius.dp)
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed && enabled && !loading) 0.97f else 1f,
+        label = "buttonPress",
+    )
+    val scaledModifier = modifier
+        .scale(scale)
+        .fillMaxWidth()
+        .height(MMSpacing.ButtonHeight.dp)
     when (style) {
         MMButtonStyle.Primary -> Button(
             onClick = onClick,
             enabled = enabled && !loading,
-            modifier = modifier
-                .fillMaxWidth()
-                .height(MMSpacing.ButtonHeight.dp),
+            interactionSource = interactionSource,
+            modifier = scaledModifier,
             shape = shape,
             colors = ButtonDefaults.buttonColors(
                 containerColor = MMColors.Primary,
@@ -53,9 +68,8 @@ fun MMButton(
         MMButtonStyle.Secondary -> OutlinedButton(
             onClick = onClick,
             enabled = enabled && !loading,
-            modifier = modifier
-                .fillMaxWidth()
-                .height(MMSpacing.ButtonHeight.dp),
+            interactionSource = interactionSource,
+            modifier = scaledModifier,
             shape = shape,
             colors = ButtonDefaults.outlinedButtonColors(contentColor = MMColors.TextPrimary),
         ) {

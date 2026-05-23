@@ -47,6 +47,7 @@ import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
 import com.surensureshkumar.movemark.core.design.components.MMProofCard
+import com.surensureshkumar.movemark.domain.ProofPhase
 import kotlinx.coroutines.delay
 import java.util.UUID
 
@@ -80,7 +81,7 @@ fun SavedProofReceiptScreen(
 
     val animatedCheck = animateFloatAsState(checkScale, MMMotion.checkPopSpec(reduceMotion), label = "check")
     val pulseAlpha = animateFloatAsState(
-        if (savedPulse > 0f) 0.14f else 0f,
+        if (savedPulse > 0f) 0.18f else 0f,
         MMMotion.receiptEnterSpec(reduceMotion),
         label = "pulse",
     )
@@ -102,72 +103,95 @@ fun SavedProofReceiptScreen(
                             contentDescription = null,
                             tint = MMColors.Primary,
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(36.dp)
                                 .scale(animatedCheck.value),
                         )
-                        Spacer(Modifier.width(10.dp))
+                        Spacer(Modifier.width(12.dp))
                         Column {
                             Text(
-                                "Saved to your vault",
+                                state.receiptTitle,
                                 color = MMColors.TextPrimary,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 22.sp,
+                                fontSize = 24.sp,
                             )
                             Text(
-                                "Your room proof is stored with the timestamp.",
+                                "${state.roomName} proof",
                                 color = MMColors.TextSecondary,
+                                fontSize = 15.sp,
+                            )
+                            Text(
+                                state.receiptSubtitle,
+                                color = MMColors.Primary.copy(alpha = 0.9f),
                                 fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(top = 2.dp),
                             )
                         }
                     }
                     Spacer(Modifier.height(20.dp))
-                    MMProofCard(
-                        modifier = Modifier.graphicsLayer { alpha = 1f - pulseAlpha.value * 0.5f },
-                    ) {
-                        Row(verticalAlignment = Alignment.Top) {
-                            state.thumbnailJpeg?.let { bytes ->
-                                val bitmap = remember(bytes) {
-                                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        if (savedPulse > 0f && !reduceMotion) {
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .graphicsLayer { alpha = pulseAlpha.value }
+                                    .background(MMColors.Primary.copy(alpha = 0.12f), RoundedCornerShape(22.dp)),
+                            )
+                        }
+                        MMProofCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .graphicsLayer { alpha = 1f - pulseAlpha.value * 0.3f },
+                        ) {
+                            Row(verticalAlignment = Alignment.Top) {
+                                state.thumbnailJpeg?.let { bytes ->
+                                    val bitmap = remember(bytes) {
+                                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                    }
+                                    bitmap?.let {
+                                        Image(
+                                            bitmap = it.asImageBitmap(),
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .size(72.dp)
+                                                .background(MMColors.FieldFill, RoundedCornerShape(12.dp)),
+                                            contentScale = ContentScale.Crop,
+                                        )
+                                        Spacer(Modifier.width(14.dp))
+                                    }
                                 }
-                                bitmap?.let {
-                                    Image(
-                                        bitmap = it.asImageBitmap(),
-                                        contentDescription = null,
-                                        modifier = Modifier
-                                            .size(64.dp)
-                                            .background(MMColors.FieldFill, RoundedCornerShape(10.dp)),
-                                        contentScale = ContentScale.Crop,
-                                    )
-                                    Spacer(Modifier.width(14.dp))
-                                }
-                            }
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    "${state.roomName} proof",
-                                    color = MMColors.TextPrimary,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 17.sp,
-                                )
-                                Spacer(Modifier.height(6.dp))
-                                Text(
-                                    photoLine(state.savedCount),
-                                    color = MMColors.TextSecondary,
-                                    fontSize = 14.sp,
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                Text(state.timestampLabel, color = MMColors.TextMuted, fontSize = 13.sp)
-                                if (state.isRoomDocumented) {
-                                    Spacer(Modifier.height(8.dp))
+                                Column(Modifier.weight(1f)) {
                                     Text(
-                                        "Room now documented",
-                                        color = MMColors.Primary,
-                                        fontSize = 12.sp,
+                                        proofMetaTitle(state),
+                                        color = MMColors.TextPrimary,
                                         fontWeight = FontWeight.SemiBold,
+                                        fontSize = 17.sp,
                                     )
-                                }
-                                state.partialMessage?.let { partial ->
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(partial, color = MMColors.SemanticWarning, fontSize = 13.sp)
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        state.receiptSubtitle,
+                                        color = MMColors.TextSecondary,
+                                        fontSize = 15.sp,
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        state.timestampLabel,
+                                        color = MMColors.TextMuted,
+                                        fontSize = 13.sp,
+                                    )
+                                    if (state.isRoomDocumented && state.roomDocumentedLabel.isNotBlank()) {
+                                        Spacer(Modifier.height(8.dp))
+                                        Text(
+                                            state.roomDocumentedLabel,
+                                            color = MMColors.Primary,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                    }
+                                    state.partialMessage?.let { partial ->
+                                        Spacer(Modifier.height(8.dp))
+                                        Text(partial, color = MMColors.SemanticWarning, fontSize = 13.sp)
+                                    }
                                 }
                             }
                         }
@@ -176,7 +200,7 @@ fun SavedProofReceiptScreen(
             }
             Spacer(Modifier.weight(1f))
             MMButton(
-                text = "Continue next room",
+                text = state.continueNextRoomLabel,
                 onClick = { onContinueNextRoom(viewModel.nextUndocumentedRoomId()) },
             )
             Spacer(Modifier.height(10.dp))
@@ -191,17 +215,13 @@ fun SavedProofReceiptScreen(
                 onClick = { onAddMorePhotos(roomId) },
                 style = MMButtonStyle.Secondary,
             )
-            Spacer(Modifier.height(8.dp))
-            MMButton(
-                text = "Done",
-                onClick = onBackSafe,
-                style = MMButtonStyle.Secondary,
-            )
         }
     }
 }
 
-private fun photoLine(count: Int): String {
-    val photos = if (count == 1) "1 photo saved" else "$count photos saved"
-    return "$photos · Move-in"
-}
+private fun proofMetaTitle(state: SavedProofReceiptUiState): String =
+    if (state.proofPhase == ProofPhase.MoveOut) {
+        "${state.roomName} · Move-out"
+    } else {
+        "${state.roomName} proof"
+    }

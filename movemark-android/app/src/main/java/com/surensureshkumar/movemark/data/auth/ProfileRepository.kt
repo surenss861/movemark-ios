@@ -22,6 +22,11 @@ private data class ProfileInsert(
     @SerialName("full_name") val fullName: String = "",
 )
 
+@Serializable
+private data class ProfileNameUpdate(
+    @SerialName("full_name") val fullName: String,
+)
+
 @Singleton
 class ProfileRepository @Inject constructor(
     private val client: SupabaseClient,
@@ -40,5 +45,27 @@ class ProfileRepository @Inject constructor(
 
         client.from("profiles")
             .insert(ProfileInsert(id = userId.toString(), email = email))
+    }
+
+    suspend fun fetchFullName(userId: UUID): String? = runCatching {
+        client.from("profiles")
+            .select {
+                filter { eq("id", userId.toString()) }
+                limit(1)
+            }
+            .decodeList<ProfileRow>()
+            .firstOrNull()
+            ?.fullName
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+    }.getOrNull()
+
+    suspend fun updateFullName(userId: UUID, fullName: String) {
+        val trimmed = fullName.trim()
+        require(trimmed.isNotEmpty()) { "Enter your full name." }
+        client.from("profiles")
+            .update(ProfileNameUpdate(trimmed)) {
+                filter { eq("id", userId.toString()) }
+            }
     }
 }

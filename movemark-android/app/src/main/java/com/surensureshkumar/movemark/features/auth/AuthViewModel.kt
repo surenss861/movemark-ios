@@ -2,6 +2,7 @@ package com.surensureshkumar.movemark.features.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.surensureshkumar.movemark.core.util.MMUserMessages
 import com.surensureshkumar.movemark.data.auth.AuthException
 import com.surensureshkumar.movemark.data.auth.SessionManager
 import com.surensureshkumar.movemark.data.property.PropertyStore
@@ -19,7 +20,12 @@ class AuthViewModel @Inject constructor(
     private val sessionManager: SessionManager,
     private val propertyStore: PropertyStore,
 ) : ViewModel() {
-    var mode: AuthMode = AuthMode.SignIn
+    private val _mode = MutableStateFlow(AuthMode.SignIn)
+    val mode: StateFlow<AuthMode> = _mode.asStateFlow()
+
+    fun setMode(value: AuthMode) {
+        _mode.value = value
+    }
 
     private val _email = MutableStateFlow("")
     val email: StateFlow<String> = _email.asStateFlow()
@@ -41,15 +47,15 @@ class AuthViewModel @Inject constructor(
             _loading.value = true
             _message.value = null
             try {
-                when (mode) {
+                when (_mode.value) {
                     AuthMode.SignUp -> sessionManager.signUp(_email.value, _password.value)
                     AuthMode.SignIn -> sessionManager.signIn(_email.value, _password.value)
                 }
                 sessionManager.userId.value?.let { propertyStore.fetchAll(it) }
             } catch (e: AuthException) {
-                _message.value = e.message
+                _message.value = MMUserMessages.auth(e)
             } catch (e: Exception) {
-                _message.value = e.message ?: "Authentication failed."
+                _message.value = MMUserMessages.auth(e)
             } finally {
                 _loading.value = false
             }
@@ -62,7 +68,7 @@ class AuthViewModel @Inject constructor(
                 sessionManager.resetPassword(_email.value)
                 _message.value = "Check your email for a reset link."
             } catch (e: Exception) {
-                _message.value = e.message
+                _message.value = MMUserMessages.passwordReset(e)
             }
         }
     }

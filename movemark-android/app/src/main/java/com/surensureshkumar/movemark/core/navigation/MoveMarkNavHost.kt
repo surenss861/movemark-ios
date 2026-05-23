@@ -14,16 +14,22 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.surensureshkumar.movemark.core.di.MoveMarkEntryPoints
 import com.surensureshkumar.movemark.data.auth.AuthState
+import com.surensureshkumar.movemark.domain.ProofPhase
 import com.surensureshkumar.movemark.features.auth.AuthMode
 import com.surensureshkumar.movemark.features.auth.AuthScreen
 import com.surensureshkumar.movemark.features.firstrun.CreatePropertyScreen
 import com.surensureshkumar.movemark.features.main.MainShellScreen
+import com.surensureshkumar.movemark.features.moveout.MoveOutRoomsScreen
 import com.surensureshkumar.movemark.features.proof.RoomProofScreen
 import com.surensureshkumar.movemark.features.proof.SavedProofReceiptScreen
+import com.surensureshkumar.movemark.features.proof.camera.CameraCaptureScreen
 import com.surensureshkumar.movemark.features.welcome.WelcomeScreen
 import com.surensureshkumar.movemark.features.welcome.WelcomeViewModel
 import dagger.hilt.android.EntryPointAccessors
 import java.util.UUID
+
+private val proofPhaseNavArg = navArgument(Routes.ProofPhaseArg) { type = NavType.StringType }
+private val roomIdNavArg = navArgument(Routes.RoomProofArg) { type = NavType.StringType }
 
 @Composable
 fun MoveMarkNavHost() {
@@ -70,7 +76,7 @@ fun MoveMarkNavHost() {
                 onStartMoveIn = {
                     navController.navigate(Routes.auth("signUp"))
                 },
-                onContinue = {
+                onSignIn = {
                     navController.navigate(Routes.auth("signIn"))
                 },
             )
@@ -97,45 +103,81 @@ fun MoveMarkNavHost() {
         composable(Routes.Main) {
             MainShellScreen(
                 onOpenRoom = { roomId ->
-                    navController.navigate(Routes.roomProof(roomId.toString()))
+                    navController.navigate(Routes.roomProof(roomId.toString(), ProofPhase.MoveIn))
+                },
+                onOpenMoveOutProof = {
+                    navController.navigate(Routes.MoveOutRooms)
                 },
                 onSignOut = {
                     navController.navigate(Routes.Welcome) {
                         popUpTo(0) { inclusive = true }
                     }
                 },
+                onAddProperty = { navController.navigate(Routes.AddProperty) },
+            )
+        }
+        composable(Routes.AddProperty) {
+            CreatePropertyScreen(
+                onCreated = { navController.popBackStack() },
+            )
+        }
+        composable(Routes.MoveOutRooms) {
+            MoveOutRoomsScreen(
+                onBack = { navController.popBackStack() },
+                onOpenRoom = { roomId ->
+                    navController.navigate(Routes.roomProof(roomId.toString(), ProofPhase.MoveOut))
+                },
             )
         }
         composable(
             route = Routes.RoomProof,
-            arguments = listOf(navArgument(Routes.RoomProofArg) { type = NavType.StringType }),
+            arguments = listOf(proofPhaseNavArg, roomIdNavArg),
         ) { entry ->
             val roomId = entry.arguments?.getString(Routes.RoomProofArg)?.let { UUID.fromString(it) }
+            val phase = ProofPhase.fromKey(entry.arguments?.getString(Routes.ProofPhaseArg))
             if (roomId != null) {
                 RoomProofScreen(
                     roomId = roomId,
                     onBack = { navController.popBackStack() },
+                    onOpenCamera = {
+                        navController.navigate(Routes.cameraCapture(roomId.toString(), phase))
+                    },
                     onProofSaved = { savedRoomId ->
-                        navController.navigate(Routes.savedProofReceipt(savedRoomId.toString())) {
-                            popUpTo(Routes.roomProof(savedRoomId.toString())) { inclusive = true }
+                        navController.navigate(Routes.savedProofReceipt(savedRoomId.toString(), phase)) {
+                            popUpTo(Routes.roomProof(savedRoomId.toString(), phase)) { inclusive = true }
                         }
                     },
                 )
             }
         }
         composable(
-            route = Routes.SavedProofReceipt,
-            arguments = listOf(navArgument(Routes.SavedProofReceiptArg) { type = NavType.StringType }),
+            route = Routes.CameraCapture,
+            arguments = listOf(proofPhaseNavArg, roomIdNavArg),
         ) { entry ->
-            val roomId = entry.arguments?.getString(Routes.SavedProofReceiptArg)?.let { UUID.fromString(it) }
+            val roomId = entry.arguments?.getString(Routes.RoomProofArg)?.let { UUID.fromString(it) }
+            if (roomId != null) {
+                CameraCaptureScreen(
+                    onClose = { navController.popBackStack() },
+                    onDone = { navController.popBackStack() },
+                )
+            }
+        }
+        composable(
+            route = Routes.SavedProofReceipt,
+            arguments = listOf(proofPhaseNavArg, roomIdNavArg),
+        ) { entry ->
+            val roomId = entry.arguments?.getString(Routes.RoomProofArg)?.let { UUID.fromString(it) }
+            val phase = ProofPhase.fromKey(entry.arguments?.getString(Routes.ProofPhaseArg))
             if (roomId != null) {
                 SavedProofReceiptScreen(
                     roomId = roomId,
                     onContinueNextRoom = { nextRoomId ->
                         if (nextRoomId != null) {
-                            navController.navigate(Routes.roomProof(nextRoomId.toString())) {
+                            navController.navigate(Routes.roomProof(nextRoomId.toString(), phase)) {
                                 popUpTo(Routes.SavedProofReceipt) { inclusive = true }
                             }
+                        } else if (phase == ProofPhase.MoveOut) {
+                            navController.popBackStack(Routes.MoveOutRooms, false)
                         } else {
                             mainTabRequest.request(MainTab.Reports)
                             navController.popBackStack(Routes.Main, false)
@@ -146,12 +188,16 @@ fun MoveMarkNavHost() {
                         navController.popBackStack(Routes.Main, false)
                     },
                     onAddMorePhotos = { id ->
-                        navController.navigate(Routes.roomProof(id.toString())) {
+                        navController.navigate(Routes.roomProof(id.toString(), phase)) {
                             popUpTo(Routes.SavedProofReceipt) { inclusive = true }
                         }
                     },
                     onBackSafe = {
-                        navController.popBackStack(Routes.Main, false)
+                        if (phase == ProofPhase.MoveOut) {
+                            navController.popBackStack(Routes.MoveOutRooms, false)
+                        } else {
+                            navController.popBackStack(Routes.Main, false)
+                        }
                     },
                 )
             }

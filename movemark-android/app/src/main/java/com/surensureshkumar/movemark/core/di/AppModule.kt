@@ -6,7 +6,6 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.surensureshkumar.movemark.BuildConfig
 import com.surensureshkumar.movemark.data.auth.ProfileRepository
-import com.surensureshkumar.movemark.data.auth.SessionManager
 import com.surensureshkumar.movemark.data.property.InspectionRepository
 import com.surensureshkumar.movemark.data.property.PropertyRepository
 import com.surensureshkumar.movemark.data.remote.ExportApiClient
@@ -62,14 +61,6 @@ object AppModule {
     @Singleton
     fun provideProfileRepository(client: SupabaseClient): ProfileRepository =
         ProfileRepository(client)
-
-    @Provides
-    @Singleton
-    fun provideSessionManager(
-        client: SupabaseClient,
-        profileRepository: ProfileRepository,
-        dataStore: DataStore<Preferences>,
-    ): SessionManager = SessionManager(client, profileRepository, dataStore)
 
     @Provides
     @Singleton

@@ -4,10 +4,13 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import android.util.Log
+import com.surensureshkumar.movemark.core.util.MMUserMessages
 import com.surensureshkumar.movemark.data.models.CreatePropertyInput
 import com.surensureshkumar.movemark.data.models.EvidenceRecord
 import com.surensureshkumar.movemark.data.models.PropertyRecord
 import com.surensureshkumar.movemark.data.models.PropertyRow
+import com.surensureshkumar.movemark.domain.ProofPhase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -80,7 +83,8 @@ class PropertyStore @Inject constructor(
             _currentProperty.value = hydrator.hydrate(row)
             _errorMessage.value = null
         } catch (e: Exception) {
-            _errorMessage.value = e.message ?: "Could not load your rentals."
+            Log.e("PropertyStore", "fetchAll failed", e)
+            _errorMessage.value = MMUserMessages.loadRentals(e)
             _currentProperty.value = null
         } finally {
             _isLoading.value = false
@@ -94,6 +98,22 @@ class PropertyStore @Inject constructor(
         _activePropertyId.value = UUID.fromString(created.id)
         dataStore.edit { it[activeKey(userId)] = created.id }
         fetchAll(userId)
+    }
+
+    suspend fun activateProperty(propertyId: UUID, userId: UUID) {
+        val row = _properties.value.firstOrNull { it.id == propertyId.toString() } ?: return
+        _activePropertyId.value = propertyId
+        _isLoading.value = true
+        _errorMessage.value = null
+        try {
+            dataStore.edit { it[activeKey(userId)] = propertyId.toString() }
+            _currentProperty.value = hydrator.hydrate(row)
+        } catch (e: Exception) {
+            Log.e("PropertyStore", "activateProperty failed", e)
+            _errorMessage.value = MMUserMessages.activateRental(e)
+        } finally {
+            _isLoading.value = false
+        }
     }
 
     suspend fun refreshActive(userId: UUID): Boolean {
@@ -110,6 +130,91 @@ class PropertyStore @Inject constructor(
         }
     }
 
+    private companion object {
+        const val UPLOAD_TAG = "MoveMarkUpload"
+        const val UPLOAD_FAILURE_MESSAGE =
+            "Photos couldn't upload. Check your connection and try again."
+    }
+
+    suspend fun createEvidenceUploadContext(
+        roomId: UUID,
+        title: String,
+        notes: String,
+        propertyId: UUID,
+        userId: UUID,
+        proofPhase: ProofPhase = ProofPhase.MoveIn,
+    ): EvidenceUploadContext {
+        val inspectionId = inspectionRepository.upsertInspection(propertyId, userId, proofPhase.key)
+        val itemId = inspectionRepository.insertInspectionItem(
+            inspectionId = inspectionId,
+            roomId = roomId,
+            notes = "$title\n$notes",
+            conditionRating = 4,
+        )
+        return EvidenceUploadContext(
+            inspectionItemId = itemId,
+            roomId = roomId,
+            title = title,
+            propertyId = propertyId,
+            userId = userId,
+            proofPhase = proofPhase,
+        )
+    }
+
+    suspend fun uploadSingleEvidencePhoto(
+        context: EvidenceUploadContext,
+        photo: ByteArray,
+    ): Boolean {
+        val path =
+            "${context.userId}/${context.propertyId}/${context.proofPhase.storageFolder}/${context.roomId}/${UUID.randomUUID()}.jpg"
+        return try {
+            inspectionRepository.uploadPhoto(photo, path)
+            inspectionRepository.insertEvidenceFile(
+                context.propertyId,
+                context.inspectionItemId,
+                path,
+            )
+            true
+        } catch (e: Exception) {
+            Log.e(UPLOAD_TAG, "Photo upload failed room=${context.roomId} path=$path", e)
+            inspectionRepository.removeOrphanUpload(path)
+            false
+        }
+    }
+
+    suspend fun commitEvidenceUpload(
+        context: EvidenceUploadContext,
+        uploadedCount: Int,
+        attemptedCount: Int,
+    ): SaveEvidenceResult {
+        if (uploadedCount <= 0) {
+            runCatching {
+                inspectionRepository.deleteInspectionItem(context.inspectionItemId)
+            }.onFailure {
+                Log.e(UPLOAD_TAG, "Failed to roll back empty evidence item", it)
+            }
+            throw IllegalStateException(UPLOAD_FAILURE_MESSAGE)
+        }
+        applyOptimisticEvidence(
+            context.roomId,
+            context.inspectionItemId,
+            context.title,
+            uploadedCount,
+            context.proofPhase,
+        )
+        val refreshed = refreshActive(context.userId)
+        return SaveEvidenceResult(uploadedCount, attemptedCount, refreshed)
+    }
+
+    suspend fun abandonEvidenceUpload(context: EvidenceUploadContext) {
+        runCatching {
+            inspectionRepository.deleteInspectionItem(context.inspectionItemId)
+        }.onFailure {
+            Log.e(UPLOAD_TAG, "Failed to abandon evidence upload", it)
+        }
+    }
+
+    /** @deprecated Prefer [createEvidenceUploadContext] + per-photo upload for progress/retry. */
     suspend fun addEvidence(
         roomId: UUID,
         title: String,
@@ -119,40 +224,31 @@ class PropertyStore @Inject constructor(
         userId: UUID,
     ): SaveEvidenceResult {
         if (photos.isEmpty()) throw IllegalArgumentException("Add at least one photo before saving.")
-        val inspectionId = inspectionRepository.upsertInspection(propertyId, userId, "move_in")
-        val itemId = inspectionRepository.insertInspectionItem(
-            inspectionId = inspectionId,
-            roomId = roomId,
-            notes = "$title\n$notes",
-            conditionRating = 4,
-        )
+        val context = createEvidenceUploadContext(roomId, title, notes, propertyId, userId, ProofPhase.MoveIn)
         var saved = 0
         for (photo in photos) {
-            val path = "${userId}/${propertyId}/move-in/${roomId}/${UUID.randomUUID()}.jpg"
-            try {
-                inspectionRepository.uploadPhoto(photo, path)
-                inspectionRepository.insertEvidenceFile(propertyId, itemId, path)
-                saved++
-            } catch (_: Exception) {
-                inspectionRepository.removeOrphanUpload(path)
-            }
+            if (uploadSingleEvidencePhoto(context, photo)) saved++
         }
-        if (saved == 0) {
-            inspectionRepository.deleteInspectionItem(itemId)
-            throw IllegalStateException("Photos could not be uploaded. Check your connection and try again.")
-        }
-        applyOptimisticMoveIn(roomId, itemId, title, saved)
-        val refreshed = refreshActive(userId)
-        return SaveEvidenceResult(saved, photos.size, refreshed)
+        return commitEvidenceUpload(context, saved, photos.size)
     }
 
-    private fun applyOptimisticMoveIn(roomId: UUID, itemId: UUID, title: String, photoCount: Int) {
+    private fun applyOptimisticEvidence(
+        roomId: UUID,
+        itemId: UUID,
+        title: String,
+        photoCount: Int,
+        phase: ProofPhase,
+    ) {
         val prop = _currentProperty.value ?: return
         val updatedRooms = prop.rooms.map { room ->
             if (room.id != roomId) return@map room
-            val existing = room.evidence.firstOrNull()
-            val evidence = if (existing != null) {
-                room.evidence.map { e ->
+            val existingList = when (phase) {
+                ProofPhase.MoveIn -> room.moveInEvidence
+                ProofPhase.MoveOut -> room.moveOutEvidence
+            }
+            val existing = existingList.firstOrNull()
+            val updatedEvidence = if (existing != null) {
+                existingList.map { e ->
                     if (e.id == existing.id) e.copy(photoCount = e.photoCount + photoCount) else e
                 }
             } else {
@@ -165,7 +261,10 @@ class PropertyStore @Inject constructor(
                     ),
                 )
             }
-            room.copy(evidence = evidence)
+            when (phase) {
+                ProofPhase.MoveIn -> room.copy(moveInEvidence = updatedEvidence)
+                ProofPhase.MoveOut -> room.copy(moveOutEvidence = updatedEvidence)
+            }
         }
         _currentProperty.value = prop.copy(rooms = updatedRooms)
     }

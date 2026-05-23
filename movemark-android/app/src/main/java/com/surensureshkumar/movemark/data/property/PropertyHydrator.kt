@@ -5,7 +5,7 @@ import com.surensureshkumar.movemark.data.models.EvidenceRecord
 import com.surensureshkumar.movemark.data.models.PropertyRecord
 import com.surensureshkumar.movemark.data.models.PropertyRow
 import com.surensureshkumar.movemark.data.models.RoomRecord
-import com.surensureshkumar.movemark.data.models.RoomRow
+import com.surensureshkumar.movemark.domain.ProofPhase
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,17 +19,17 @@ class PropertyHydrator @Inject constructor(
         val propertyId = UUID.fromString(row.id)
         val rooms = propertyRepository.fetchRooms(propertyId)
         val inspections = inspectionRepository.fetchInspections(propertyId)
-        val moveInIds = inspections
-            .filter {
-                val t = it.inspectionType.lowercase()
-                t == "move_in" || t == "move-in" || t == "movein"
-            }
-            .map { UUID.fromString(it.id) }
+
+        val moveInIds = inspectionIdsFor(inspections, ProofPhase.MoveIn)
+        val moveOutIds = inspectionIdsFor(inspections, ProofPhase.MoveOut)
 
         val moveInItems = inspectionRepository.fetchInspectionItems(moveInIds)
-        val moveInFiles = inspectionRepository.fetchEvidenceFilesByItems(moveInItems.map { UUID.fromString(it.id) })
+        val moveOutItems = inspectionRepository.fetchInspectionItems(moveOutIds)
 
-        val photosByItem = moveInFiles
+        val allItemIds = (moveInItems + moveOutItems).map { UUID.fromString(it.id) }
+        val allFiles = inspectionRepository.fetchEvidenceFilesByItems(allItemIds)
+
+        val photosByItem = allFiles
             .filter { it.inspectionItemId != null }
             .groupBy { UUID.fromString(it.inspectionItemId!!) }
             .mapValues { (_, files) ->
@@ -38,21 +38,22 @@ class PropertyHydrator @Inject constructor(
 
         val roomRecords = rooms.map { roomRow ->
             val roomId = UUID.fromString(roomRow.id)
-            val items = moveInItems.filter { UUID.fromString(it.roomId) == roomId }
-                .sortedByDescending { it.createdAt.orEmpty() }
-            val evidence = items.map { item ->
-                val itemId = UUID.fromString(item.id)
-                val photos = photosByItem[itemId].orEmpty()
-                val (title, notes) = parseNotes(item.notes, "Move-in capture")
-                EvidenceRecord(
-                    id = itemId,
-                    title = title,
-                    notes = notes,
-                    photoCount = photos.size,
-                    photos = photos,
-                )
-            }
-            RoomRecord(id = roomId, name = roomRow.name, evidence = evidence)
+            RoomRecord(
+                id = roomId,
+                name = roomRow.name,
+                moveInEvidence = buildEvidenceForRoom(
+                    roomId = roomId,
+                    items = moveInItems,
+                    photosByItem = photosByItem,
+                    defaultTitle = "Move-in capture",
+                ),
+                moveOutEvidence = buildEvidenceForRoom(
+                    roomId = roomId,
+                    items = moveOutItems,
+                    photosByItem = photosByItem,
+                    defaultTitle = "Move-out capture",
+                ),
+            )
         }
 
         return PropertyRecord(
@@ -63,6 +64,42 @@ class PropertyHydrator @Inject constructor(
             provinceState = row.provinceState,
             rooms = roomRecords,
         )
+    }
+
+    private fun inspectionIdsFor(
+        inspections: List<com.surensureshkumar.movemark.data.models.InspectionRow>,
+        phase: ProofPhase,
+    ): List<UUID> = inspections
+        .filter { normalizeInspectionType(it.inspectionType) == phase.key }
+        .map { UUID.fromString(it.id) }
+
+    private fun normalizeInspectionType(raw: String): String = when (raw.lowercase()) {
+        "move-in", "move_in", "movein" -> ProofPhase.MoveIn.key
+        "move-out", "move_out", "moveout" -> ProofPhase.MoveOut.key
+        else -> raw.lowercase()
+    }
+
+    private fun buildEvidenceForRoom(
+        roomId: UUID,
+        items: List<com.surensureshkumar.movemark.data.models.InspectionItemRow>,
+        photosByItem: Map<UUID, List<EvidencePhoto>>,
+        defaultTitle: String,
+    ): List<EvidenceRecord> {
+        return items
+            .filter { UUID.fromString(it.roomId) == roomId }
+            .sortedByDescending { it.createdAt.orEmpty() }
+            .map { item ->
+                val itemId = UUID.fromString(item.id)
+                val photos = photosByItem[itemId].orEmpty()
+                val (title, notes) = parseNotes(item.notes, defaultTitle)
+                EvidenceRecord(
+                    id = itemId,
+                    title = title,
+                    notes = notes,
+                    photoCount = photos.size,
+                    photos = photos,
+                )
+            }
     }
 
     private fun parseNotes(raw: String?, defaultTitle: String): Pair<String, String> {

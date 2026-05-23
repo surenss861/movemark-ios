@@ -2,6 +2,7 @@ package com.surensureshkumar.movemark.features.firstrun
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.surensureshkumar.movemark.core.util.MMUserMessages
 import com.surensureshkumar.movemark.data.auth.SessionManager
 import com.surensureshkumar.movemark.data.models.CreatePropertyInput
 import com.surensureshkumar.movemark.data.property.PropertyStore
@@ -57,7 +58,7 @@ class CreatePropertyViewModel @Inject constructor(
                 )
                 onDone()
             } catch (e: Exception) {
-                _error.value = e.message
+                _error.value = MMUserMessages.createRental(e)
             } finally {
                 _loading.value = false
             }

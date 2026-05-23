@@ -81,7 +81,10 @@ data class EvidenceRecord(
 data class RoomRecord(
     val id: UUID,
     val name: String,
-    val evidence: List<EvidenceRecord> = emptyList(),
+    /** Move-in inspection evidence only. */
+    val moveInEvidence: List<EvidenceRecord> = emptyList(),
+    /** Move-out inspection evidence only — never mixed with move-in. */
+    val moveOutEvidence: List<EvidenceRecord> = emptyList(),
 )
 
 data class PropertyRecord(

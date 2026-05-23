@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.surensureshkumar.movemark.core.design.MMColors
+import com.surensureshkumar.movemark.core.design.mmAppearRise
 import com.surensureshkumar.movemark.core.design.components.MMProofCard
 
 enum class ChecklistItemState { Complete, Incomplete, Locked }
@@ -36,6 +37,8 @@ data class ReportChecklistItem(
 @Composable
 fun MMReportReadinessChecklist(
     items: List<ReportChecklistItem>,
+    appeared: Boolean,
+    reduceMotion: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier) {
@@ -54,20 +57,33 @@ fun MMReportReadinessChecklist(
                         color = Color.White.copy(alpha = 0.06f),
                     )
                 }
-                ChecklistRow(item)
+                ChecklistRow(
+                    item = item,
+                    modifier = Modifier.mmAppearRise(
+                        visible = appeared,
+                        reduceMotion = reduceMotion,
+                        label = "checklist$index",
+                    ),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ChecklistRow(item: ReportChecklistItem) {
+private fun ChecklistRow(
+    item: ReportChecklistItem,
+    modifier: Modifier = Modifier,
+) {
     val iconColor = when (item.state) {
         ChecklistItemState.Complete -> MMColors.Primary.copy(0.9f)
-        ChecklistItemState.Incomplete -> MMColors.TextMuted.copy(0.75f)
+        ChecklistItemState.Incomplete -> MMColors.SemanticWarning.copy(0.85f)
         ChecklistItemState.Locked -> MMColors.TextMuted.copy(0.45f)
     }
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Icon(
             imageVector = when (item.state) {
                 ChecklistItemState.Complete -> Icons.Filled.CheckCircle
@@ -82,7 +98,11 @@ private fun ChecklistRow(item: ReportChecklistItem) {
         Column(Modifier.weight(1f)) {
             Text(
                 item.title,
-                color = if (item.state == ChecklistItemState.Locked) MMColors.TextMuted else MMColors.TextPrimary.copy(0.92f),
+                color = if (item.state == ChecklistItemState.Locked) {
+                    MMColors.TextMuted
+                } else {
+                    MMColors.TextPrimary.copy(0.92f)
+                },
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
             )
