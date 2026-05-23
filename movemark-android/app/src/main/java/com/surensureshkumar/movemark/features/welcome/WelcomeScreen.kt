@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -93,11 +94,16 @@ fun WelcomeScreen(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
                 .navigationBarsPadding(),
         ) {
             val density = LocalDensity.current
-            val usableHeight = with(density) { maxHeight.toPx() }
-            val heroHeight = with(density) { (usableHeight * 0.38f).toDp().coerceAtLeast(220.dp) }
+            val usableHeightPx = with(density) { maxHeight.toPx() - 12.dp.toPx() }
+            val heroHeight = with(density) {
+                (usableHeightPx * 0.34f - 56.dp.toPx())
+                    .coerceAtLeast(200.dp.toPx())
+                    .toDp()
+            }
             val horizontalPad = 20.dp
             val cardMaxWidth = minOf(maxWidth - horizontalPad * 2, 420.dp)
 
@@ -105,7 +111,7 @@ fun WelcomeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = horizontalPad)
-                    .padding(top = 8.dp, bottom = 24.dp),
+                    .padding(top = 14.dp, bottom = 24.dp),
             ) {
                 BrandRow(
                     visible = cardVisible,

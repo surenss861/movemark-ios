@@ -29,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -42,7 +41,7 @@ import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMMotion
 
 private val CardCorner = 28.dp
-private val ProofBarHeight = 66.dp
+private val ProofBarHeight = 72.dp
 private val InspectionGreen = Color(0xFF1A7A52)
 
 private data class IssueTag(val id: String, val label: String, val priorDamage: Boolean)
@@ -72,7 +71,7 @@ fun WelcomeDepositCaseFile(
         label = "welcomeCardOffset",
     )
 
-    val photoHeight = (heroHeight - ProofBarHeight).coerceAtLeast(160.dp)
+    val photoHeight = (heroHeight - ProofBarHeight).coerceAtLeast(150.dp)
 
     Box(
         modifier = modifier
@@ -114,13 +113,16 @@ private fun PhotoCaptureZone(
         modifier = Modifier
             .fillMaxWidth()
             .height(photoHeight)
-            .clip(RoundedCornerShape(topStart = CardCorner, topEnd = CardCorner)),
+            .clip(RoundedCornerShape(topStart = CardCorner, topEnd = CardCorner))
+            .background(Color.Black.copy(alpha = 0.35f)),
+        contentAlignment = Alignment.Center,
     ) {
         Image(
             painter = painterResource(R.drawable.welcome_kitchen_main),
             contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.FillWidth,
+            alignment = Alignment.Center,
+            modifier = Modifier.fillMaxWidth(),
         )
         Box(
             modifier = Modifier
@@ -265,7 +267,7 @@ private fun ProofCaptureBar() {
             .height(ProofBarHeight)
             .background(MMColors.Card.copy(alpha = 0.98f))
             .padding(horizontal = 14.dp)
-            .padding(bottom = 9.dp),
+            .padding(top = 1.dp, bottom = 8.dp),
     ) {
         Box(
             modifier = Modifier
@@ -273,7 +275,7 @@ private fun ProofCaptureBar() {
                 .height(1.dp)
                 .background(MMColors.CardStroke.copy(alpha = 0.55f)),
         )
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -314,7 +316,8 @@ private fun ProofCaptureBar() {
             "12 photos · 3 issues",
             fontSize = 10.5.sp,
             color = MMColors.TextSecondary.copy(alpha = 0.72f),
-            modifier = Modifier.padding(top = 2.dp),
+            modifier = Modifier.padding(top = 1.dp),
+            maxLines = 1,
         )
     }
 }
