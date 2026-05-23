@@ -117,6 +117,11 @@ struct ProofArtifactCard: View {
                     }
                 } else {
                     MoveMarkTheme.Colors.fieldFill
+                        .overlay {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 28, weight: .medium))
+                                .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.65))
+                        }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

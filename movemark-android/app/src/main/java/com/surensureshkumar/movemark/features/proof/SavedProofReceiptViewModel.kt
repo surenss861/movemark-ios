@@ -26,10 +26,10 @@ data class SavedProofReceiptUiState(
     val thumbnailJpeg: ByteArray? = null,
     val partialMessage: String? = null,
     val proofPhase: ProofPhase = ProofPhase.MoveIn,
-    val receiptTitle: String = "Saved to your vault",
-    val receiptSubtitle: String = "Your room proof is stored with the timestamp.",
+    val headerSubtitle: String = "",
     val roomDocumentedLabel: String = "Room now documented",
-    val continueNextRoomLabel: String = "Continue next room",
+    val primaryActionLabel: String = "Continue next room",
+    val nextRoomName: String? = null,
 )
 
 @HiltViewModel
@@ -53,8 +53,22 @@ class SavedProofReceiptViewModel @Inject constructor(
         val attempted = payload?.attemptedCount ?: saved
         val partial = payload?.hadPartialFailure == true
         val ts = payload?.timestampMillis ?: System.currentTimeMillis()
-        val documented = room?.let { RoomProofMetrics.isDocumented(it, phase) } == true
-        val isMoveOut = phase == ProofPhase.MoveOut
+        val nextRoom = propertyStore.currentProperty.value?.let { RoomProofMetrics.nextRoom(it, phase) }
+        val totalRooms = propertyStore.currentProperty.value?.rooms?.size ?: 0
+        val documented = propertyStore.currentProperty.value?.let { RoomProofMetrics.documentedCount(it, phase) } ?: 0
+        val phaseLabel = phase.displayName
+        val photosSavedLine = when {
+            partial -> "$saved of $attempted photos saved"
+            saved == 1 -> "1 photo saved"
+            else -> "$saved photos saved"
+        }
+        val headerSubtitle = "$roomName proof · $photosSavedLine · $phaseLabel"
+        val primaryActionLabel = when {
+            nextRoom != null -> "Continue with ${nextRoom.name}"
+            documented >= totalRooms && totalRooms > 0 && phase == ProofPhase.MoveIn -> "Go to Reports"
+            phase == ProofPhase.MoveOut -> "Continue next move-out room"
+            else -> "Go to Reports"
+        }
 
         _uiState.value = SavedProofReceiptUiState(
             roomName = roomName,
@@ -62,17 +76,18 @@ class SavedProofReceiptViewModel @Inject constructor(
             attemptedCount = attempted,
             hadPartialFailure = partial,
             timestampLabel = formatTimestamp(ts, phase),
-            isRoomDocumented = documented,
+            isRoomDocumented = room?.let { RoomProofMetrics.isDocumented(it, phase) } == true,
             thumbnailJpeg = payload?.thumbnailJpeg,
-            partialMessage = if (partial) "$saved of $attempted photos uploaded" else null,
+            partialMessage = if (partial) "$saved of $attempted photos saved" else null,
             proofPhase = phase,
-            receiptTitle = if (isMoveOut) "Move-out proof saved" else "Saved to your vault",
-            receiptSubtitle = when {
-                saved == 1 -> "1 photo saved"
-                else -> "$saved photos saved"
+            headerSubtitle = headerSubtitle,
+            roomDocumentedLabel = if (room?.let { RoomProofMetrics.isDocumented(it, phase) } == true) {
+                "Room now documented"
+            } else {
+                ""
             },
-            roomDocumentedLabel = if (documented) "Ready to review" else "",
-            continueNextRoomLabel = if (isMoveOut) "Continue next move-out room" else "Continue next room",
+            primaryActionLabel = primaryActionLabel,
+            nextRoomName = nextRoom?.name,
         )
     }
 
