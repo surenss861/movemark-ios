@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,10 +28,12 @@ import com.surensureshkumar.movemark.core.design.MMMotion
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMProofSectionHeader
 import com.surensureshkumar.movemark.data.export.DisputePacketReadiness
+import com.surensureshkumar.movemark.data.export.ExportRow
 import com.surensureshkumar.movemark.data.export.MoveOutReportReadiness
 import com.surensureshkumar.movemark.data.export.ReportReadiness
 import com.surensureshkumar.movemark.features.reports.components.ExportHistorySection
 import com.surensureshkumar.movemark.features.reports.components.MMReportExportSection
+import com.surensureshkumar.movemark.features.reports.components.MMReportNoVaultPlaceholder
 import com.surensureshkumar.movemark.features.reports.components.MMReportPreviewHero
 import com.surensureshkumar.movemark.features.reports.components.MMReportReadinessChecklist
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
@@ -41,6 +42,7 @@ import com.surensureshkumar.movemark.features.subscription.PaywallReason
 fun ReportsScreen(
     onContinueRoomProof: () -> Unit,
     onOpenMoveOutProof: () -> Unit,
+    onOpenVault: () -> Unit,
     onShowPaywall: (PaywallReason) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ReportsViewModel = hiltViewModel(),
@@ -72,10 +74,11 @@ fun ReportsScreen(
         }
     }
 
+    val isLoading = state.propertyLoading || (state.exportsLoading && state.exports.isEmpty())
     val (ctaTitle, ctaEnabled, ctaLoading) = state.primaryCta()
-    val (moveOutCtaTitle, moveOutCtaEnabled, moveOutCtaLoading) = state.moveOutCta()
-    val (disputeCtaTitle, disputeCtaEnabled, disputeCtaLoading) = state.disputeCta()
-    val showChecklist = state.readiness != ReportReadiness.NoVault && !state.noVault
+    val (moveOutCtaTitle, moveOutCtaEnabled, moveOutCtaLoading) = state.moveOutCta(hasPro)
+    val (disputeCtaTitle, disputeCtaEnabled, disputeCtaLoading) = state.disputeCta(hasPro)
+    val showChecklist = !state.noVault && state.readiness != ReportReadiness.NoVault && !isLoading
 
     Column(
         modifier = modifier
@@ -85,19 +88,14 @@ fun ReportsScreen(
             .padding(top = 24.dp, bottom = MMSpacing.TabScrollBottom.dp),
     ) {
         MMProofSectionHeader(
-            title = "Your move-in report",
-            subtitle = "Build a clean report from saved room proof.",
+            title = "Your reports",
+            subtitle = "Turn saved proof into shareable records.",
         )
         Spacer(Modifier.height(20.dp))
 
         when {
-            state.propertyLoading && state.exports.isEmpty() && state.noVault -> {
-                CircularProgressIndicator(color = MMColors.Primary)
-                Spacer(Modifier.height(12.dp))
-                Text("Checking saved proof…", color = MMColors.TextSecondary, fontSize = 15.sp)
-            }
-            state.noVault -> {
-                Text("Create a rental vault first.", color = MMColors.TextSecondary, fontSize = 15.sp)
+            state.noVault && !state.propertyLoading -> {
+                MMReportNoVaultPlaceholder(onOpenVault = onOpenVault)
             }
             else -> {
                 MMReportPreviewHero(
@@ -112,6 +110,7 @@ fun ReportsScreen(
                     onPrimary = { viewModel.onPrimaryAction(onContinueRoomProof) },
                     appeared = appeared,
                     reduceMotion = reduceMotion,
+                    loading = isLoading,
                 )
                 if (showChecklist) {
                     Spacer(Modifier.height(20.dp))
@@ -124,10 +123,11 @@ fun ReportsScreen(
                 Spacer(Modifier.height(24.dp))
                 MMReportExportSection(
                     sectionTitle = "Move-out report",
-                    sectionSubtitle = null,
-                    statusLine = state.moveOutReportStatus,
+                    sectionSubtitle = "Re-capture rooms before you return the keys.",
+                    statusLine = moveOutStatusLabel(state.moveOutReadiness),
                     statusColor = moveOutStatusColor(state.moveOutReadiness),
                     metricsLine = moveOutMetricsLine(state),
+                    footnote = moveOutFootnote(state.moveOutReadiness),
                     primaryTitle = moveOutCtaTitle,
                     primaryEnabled = moveOutCtaEnabled,
                     primaryLoading = moveOutCtaLoading,
@@ -138,14 +138,19 @@ fun ReportsScreen(
                             onShowPaywall = onShowPaywall,
                         )
                     },
+                    appeared = appeared,
+                    reduceMotion = reduceMotion,
+                    isProcessing = state.moveOutReadiness == MoveOutReportReadiness.Processing,
+                    isProLocked = !hasPro,
                 )
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(20.dp))
                 MMReportExportSection(
                     sectionTitle = "Dispute packet",
                     sectionSubtitle = "Bundle your proof if your deposit is questioned.",
-                    statusLine = state.disputePacketStatus,
+                    statusLine = disputeStatusLabel(state.disputeReadiness),
                     statusColor = disputeStatusColor(state.disputeReadiness),
                     metricsLine = null,
+                    footnote = disputeFootnote(state.disputeReadiness),
                     primaryTitle = disputeCtaTitle,
                     primaryEnabled = disputeCtaEnabled,
                     primaryLoading = disputeCtaLoading,
@@ -156,11 +161,18 @@ fun ReportsScreen(
                             onShowPaywall = onShowPaywall,
                         )
                     },
+                    appeared = appeared,
+                    reduceMotion = reduceMotion,
+                    isProcessing = state.disputeReadiness == DisputePacketReadiness.Processing,
+                    isProLocked = !hasPro,
                     legalNote = "MoveMark organizes your proof. It does not provide legal advice.",
                 )
                 if (state.exports.isNotEmpty()) {
                     Spacer(Modifier.height(24.dp))
-                    ExportHistorySection(exports = state.exports)
+                    ExportHistorySection(
+                        exports = state.exports,
+                        onShare = { row -> viewModel.shareExport(row) },
+                    )
                 }
             }
         }
@@ -175,6 +187,22 @@ fun ReportsScreen(
             )
         }
     }
+}
+
+private fun moveOutStatusLabel(readiness: MoveOutReportReadiness): String = when (readiness) {
+    MoveOutReportReadiness.NoProof -> "Needs proof"
+    MoveOutReportReadiness.ReadyToMake -> "Report can be made"
+    MoveOutReportReadiness.Processing -> "Building report"
+    MoveOutReportReadiness.ReadyToShare -> "Ready to share"
+    MoveOutReportReadiness.Failed -> "Failed"
+}
+
+private fun disputeStatusLabel(readiness: DisputePacketReadiness): String = when (readiness) {
+    DisputePacketReadiness.NoProof -> "Needs proof"
+    DisputePacketReadiness.ReadyToMake -> "Report can be made"
+    DisputePacketReadiness.Processing -> "Building report"
+    DisputePacketReadiness.ReadyToShare -> "Ready to share"
+    DisputePacketReadiness.Failed -> "Failed"
 }
 
 private fun moveOutStatusColor(readiness: MoveOutReportReadiness) = when (readiness) {
@@ -196,4 +224,20 @@ private fun disputeStatusColor(readiness: DisputePacketReadiness) = when (readin
 private fun moveOutMetricsLine(state: ReportsUiState): String? {
     if (state.moveOutPhotos <= 0) return null
     return "${state.moveOutDocumentedRooms} of ${state.totalRooms} rooms · ${state.moveOutPhotos} move-out photos"
+}
+
+private fun moveOutFootnote(readiness: MoveOutReportReadiness): String? = when (readiness) {
+    MoveOutReportReadiness.NoProof -> "Capture move-out room photos first."
+    MoveOutReportReadiness.ReadyToMake -> "Add more move-out proof for a stronger report."
+    MoveOutReportReadiness.ReadyToShare -> "Your move-out report is ready to share."
+    MoveOutReportReadiness.Failed -> "Something went wrong. Try again when you're ready."
+    MoveOutReportReadiness.Processing -> null
+}
+
+private fun disputeFootnote(readiness: DisputePacketReadiness): String? = when (readiness) {
+    DisputePacketReadiness.NoProof -> "Save move-in room proof before building a packet."
+    DisputePacketReadiness.ReadyToMake -> "Add more proof for a stronger packet."
+    DisputePacketReadiness.ReadyToShare -> "Your dispute packet is ready to share."
+    DisputePacketReadiness.Failed -> "Something went wrong. Try again when you're ready."
+    DisputePacketReadiness.Processing -> null
 }

@@ -45,17 +45,19 @@ fun MMProofReportCard(
     primaryLoading: Boolean = false,
     isBright: Boolean = false,
     isProcessing: Boolean = false,
+    isCompact: Boolean = false,
     proofChips: List<String> = emptyList(),
     legalNote: String? = null,
     reduceMotion: Boolean = false,
 ) {
+    val cardPadding = if (isCompact) 12.dp else 14.dp
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(if (isCompact) 16.dp else 20.dp),
         color = MMColors.EvidenceCard,
         border = BorderStroke(1.dp, MMColors.CardStroke),
     ) {
-        Column(Modifier.padding(14.dp)) {
+        Column(Modifier.padding(cardPadding)) {
             Text(
                 model.reportTitle.uppercase(),
                 fontSize = 10.sp,
@@ -79,7 +81,7 @@ fun MMProofReportCard(
                 verticalAlignment = Alignment.Top,
             ) {
                 MMProofDocumentPreview(
-                    large = true,
+                    large = !isCompact,
                     isBright = isBright,
                     isProcessing = isProcessing,
                     reduceMotion = reduceMotion,

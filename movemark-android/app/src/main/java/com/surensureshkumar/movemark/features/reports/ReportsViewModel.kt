@@ -270,7 +270,7 @@ class ReportsViewModel @Inject constructor(
         }
     }
 
-    private fun shareExport(row: ExportRow) {
+    fun shareExport(row: ExportRow) {
         if (_actionInProgress.value || _moveOutActionInProgress.value || _disputeActionInProgress.value) {
             return
         }
@@ -462,7 +462,7 @@ private fun primaryCta(readiness: ReportReadiness, loading: Boolean, busy: Boole
     if (loading) return Triple("Checking report…", false, false)
     return when (readiness) {
         ReportReadiness.NotReady, ReportReadiness.NoVault -> Triple("Continue room proof", true, false)
-        ReportReadiness.ReadyToMake -> Triple(if (busy) "Making report…" else "Make move-in report", !busy, busy)
+        ReportReadiness.ReadyToMake -> Triple(if (busy) "Making report…" else "Make report", !busy, busy)
         ReportReadiness.ReadyToShare -> Triple(if (busy) "Opening…" else "View / Share report", !busy, busy)
         ReportReadiness.Processing -> Triple("Building report…", false, false)
         ReportReadiness.Failed -> Triple(if (busy) "Retrying…" else "Retry report", !busy, busy)
@@ -504,15 +504,20 @@ fun ReportsUiState.heroFootnote(): String? = when (readiness) {
 fun ReportsUiState.metricsLine(): String? {
     if (propertyLoading || exportsLoading) return null
     val parts = mutableListOf<String>()
-    if (totalRooms > 0) parts += "$documentedRooms of $totalRooms rooms ready"
+    if (totalRooms > 0) parts += "$documentedRooms of $totalRooms rooms"
+    if (totalPhotos > 0) parts += if (totalPhotos == 1) "1 photo" else "$totalPhotos photos"
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 }
 
 fun ReportsUiState.primaryCta(): Triple<String, Boolean, Boolean> =
     primaryCta(readiness, propertyLoading || exportsLoading, moveInActionInProgress)
 
-fun ReportsUiState.moveOutCta(): Triple<String, Boolean, Boolean> =
-    moveOutPrimaryCta(moveOutReadiness, propertyLoading || exportsLoading, moveOutActionInProgress)
+fun ReportsUiState.moveOutCta(hasPro: Boolean): Triple<String, Boolean, Boolean> {
+    if (!hasPro) return Triple("Upgrade to Pro", true, false)
+    return moveOutPrimaryCta(moveOutReadiness, propertyLoading || exportsLoading, moveOutActionInProgress)
+}
 
-fun ReportsUiState.disputeCta(): Triple<String, Boolean, Boolean> =
-    disputePrimaryCta(disputeReadiness, propertyLoading || exportsLoading, disputeActionInProgress)
+fun ReportsUiState.disputeCta(hasPro: Boolean): Triple<String, Boolean, Boolean> {
+    if (!hasPro) return Triple("Upgrade to Pro", true, false)
+    return disputePrimaryCta(disputeReadiness, propertyLoading || exportsLoading, disputeActionInProgress)
+}

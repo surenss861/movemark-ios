@@ -21,26 +21,28 @@ fun MMReportPreviewHero(
     onPrimary: () -> Unit,
     appeared: Boolean,
     reduceMotion: Boolean,
+    loading: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val isBright = readiness == ReportReadiness.ReadyToMake || readiness == ReportReadiness.ReadyToShare
-    val isProcessing = readiness == ReportReadiness.Processing
+    val isBright = !loading && readiness == ReportReadiness.ReadyToShare
+    val isProcessing = !loading && readiness == ReportReadiness.Processing
 
     MMProofReportCard(
         model = MMProofReportModel(
             reportTitle = "Move-in report",
-            metricsLine = metricsLine ?: headline,
-            statusLabel = statusLabel(readiness),
-            statusTone = statusTone(readiness),
-            footnote = footnote?.takeIf { metricsLine != null && headline != metricsLine } ?: headline.takeIf { metricsLine == null },
+            metricsLine = if (loading) "Checking saved proof…" else metricsLine ?: headline,
+            statusLabel = if (loading) "Checking proof" else statusLabel(readiness),
+            statusTone = if (loading) MMProofStatusTone.Neutral else statusTone(readiness),
+            footnote = footnote?.takeIf { !loading && metricsLine != null && headline != metricsLine }
+                ?: headline.takeIf { !loading && metricsLine == null },
         ),
         primaryTitle = primaryTitle,
         onPrimary = onPrimary,
-        primaryEnabled = primaryEnabled,
-        primaryLoading = primaryLoading,
+        primaryEnabled = primaryEnabled && !loading,
+        primaryLoading = primaryLoading || loading,
         isBright = isBright,
         isProcessing = isProcessing,
-        proofChips = proofChips,
+        proofChips = if (loading) emptyList() else proofChips,
         reduceMotion = reduceMotion,
         modifier = modifier.mmAppearRise(appeared, reduceMotion, label = "reportHero"),
     )
@@ -49,13 +51,14 @@ fun MMReportPreviewHero(
 private fun statusLabel(readiness: ReportReadiness): String = when (readiness) {
     ReportReadiness.ReadyToMake -> "Report can be made"
     ReportReadiness.ReadyToShare -> "Ready to share"
-    ReportReadiness.Processing -> "Building"
+    ReportReadiness.Processing -> "Building report"
     ReportReadiness.Failed -> "Failed"
     ReportReadiness.NotReady, ReportReadiness.NoVault -> "Needs proof"
 }
 
 private fun statusTone(readiness: ReportReadiness): MMProofStatusTone = when (readiness) {
-    ReportReadiness.ReadyToMake, ReportReadiness.ReadyToShare -> MMProofStatusTone.Success
+    ReportReadiness.ReadyToShare -> MMProofStatusTone.Success
+    ReportReadiness.ReadyToMake -> MMProofStatusTone.Neutral
     ReportReadiness.Processing -> MMProofStatusTone.Warning
     ReportReadiness.Failed -> MMProofStatusTone.Danger
     ReportReadiness.NotReady, ReportReadiness.NoVault -> MMProofStatusTone.Warning

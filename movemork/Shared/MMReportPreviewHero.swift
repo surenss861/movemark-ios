@@ -30,7 +30,7 @@ struct MMReportPreviewHero: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isDocumentBright: Bool {
-        state == .canMake || state == .ready
+        state == .ready
     }
 
   var body: some View {
@@ -61,7 +61,7 @@ struct MMReportPreviewHero: View {
         case .loading: return "Checking proof"
         case .notReady: return "Needs proof"
         case .canMake: return "Report can be made"
-        case .processing: return "Building"
+        case .processing: return "Building report"
         case .ready: return "Ready to share"
         case .failed: return "Failed"
         }
@@ -69,7 +69,8 @@ struct MMReportPreviewHero: View {
 
     private var statusTone: ProofStatusTone {
         switch state {
-        case .canMake, .ready: return .success
+        case .ready: return .success
+        case .canMake: return .neutral
         case .processing, .loading: return .warning
         case .failed: return .danger
         case .notReady: return .warning

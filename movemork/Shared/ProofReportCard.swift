@@ -22,12 +22,16 @@ struct ProofReportCard: View {
     var primaryEnabled: Bool = true
     var isBright: Bool = false
     var isProcessing: Bool = false
+    var isCompact: Bool = false
     var proofChips: [String] = []
     var legalNote: String?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        let cardPadding: CGFloat = isCompact ? 12 : 14
+        let cornerRadius: CGFloat = isCompact ? 16 : 20
+
         VStack(alignment: .leading, spacing: 0) {
             Text(model.reportTitle.uppercased())
                 .font(.system(size: 10, weight: .semibold))
@@ -43,7 +47,7 @@ struct ProofReportCard: View {
 
             HStack(alignment: .top, spacing: 14) {
                 ProofDocumentPreview(
-                    large: true,
+                    large: !isCompact,
                     isBright: isBright,
                     isProcessing: isProcessing
                 )
@@ -92,12 +96,12 @@ struct ProofReportCard: View {
             )
             .padding(.top, 14)
         }
-        .padding(14)
+        .padding(cardPadding)
         .background(MoveMarkTheme.Colors.evidenceCard)
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .stroke(MoveMarkTheme.Colors.cardStroke, lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }

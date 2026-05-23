@@ -122,11 +122,23 @@ final class ExportAPIClient {
     }
 
     func requestMoveInExport(propertyId: UUID, accessToken: String) async throws -> MoveInExportResponse {
+        try await requestExport(path: "api/exports/move-in", propertyId: propertyId, accessToken: accessToken)
+    }
+
+    func requestMoveOutExport(propertyId: UUID, accessToken: String) async throws -> MoveInExportResponse {
+        try await requestExport(path: "api/exports/move-out", propertyId: propertyId, accessToken: accessToken)
+    }
+
+    func requestDisputePacketExport(propertyId: UUID, accessToken: String) async throws -> MoveInExportResponse {
+        try await requestExport(path: "api/exports/dispute-packet", propertyId: propertyId, accessToken: accessToken)
+    }
+
+    private func requestExport(path: String, propertyId: UUID, accessToken: String) async throws -> MoveInExportResponse {
         guard !accessToken.isEmpty else {
             throw APIClientError.missingAuthToken
         }
 
-        let endpoint = baseURL.appendingPathComponent("api/exports/move-in")
+        let endpoint = baseURL.appendingPathComponent(path)
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
