@@ -67,7 +67,8 @@ fun AccountScreen(
         hasPro && isMockMode ->
             "Test mode · Unlimited vaults, reports, move-out proof, and dispute tools."
         hasPro -> "Unlimited vaults, reports, move-out proof, and dispute tools."
-        else -> "1 property. 1 move-in report."
+        isMockMode -> "Test mode · 1 proof vault · 1 move-in report"
+        else -> "1 proof vault · 1 move-in report"
     }
 
     if (showEditName) {
@@ -141,7 +142,7 @@ fun AccountScreen(
                     MMSettingsDivider()
                     MMSettingsRow(
                         title = "Upgrade to Pro",
-                        subtitle = "More properties and reports",
+                        subtitle = "Unlimited vaults, reports, and dispute tools",
                         onClick = {
                             viewModel.dismissNotice()
                             onShowPaywall(PaywallReason.ExtraProperty)
@@ -163,6 +164,15 @@ fun AccountScreen(
                         title = "Reset test subscription",
                         subtitle = "Clear mock Pro for local QA",
                         onClick = viewModel::resetTestSubscription,
+                    )
+                }
+                if (isMockMode && !hasPro) {
+                    MMSettingsDivider()
+                    MMSettingsRow(
+                        title = "Test mode",
+                        subtitle = "Mock billing is active in this build",
+                        accessory = MMSettingsAccessory.None,
+                        onClick = null,
                     )
                 }
                 MMSettingsDivider()
