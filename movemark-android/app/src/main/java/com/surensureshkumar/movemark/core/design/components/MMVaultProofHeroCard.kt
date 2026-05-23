@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -15,7 +14,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.surensureshkumar.movemark.core.design.MMColors
@@ -39,7 +37,7 @@ fun MMVaultProofHeroCard(
     issueCount: Int = 0,
 ) {
     val clamped = progress.coerceIn(0f, 1f)
-    val hasProof = clamped > 0f || previewImage != null
+    val hasProof = clamped > 0f
     val progressWidth by animateFloatAsState(
         targetValue = clamped,
         animationSpec = MMMotion.welcomeEnterSpec(reduceMotion, durationMillis = 360),
@@ -51,14 +49,15 @@ fun MMVaultProofHeroCard(
         else -> "Needs photos"
     }
     val statusTone = if (hasProof) MMProofStatusTone.Success else MMProofStatusTone.Warning
+    val displayRoom = roomName ?: propertyName
 
     Column(modifier = modifier) {
-        if (hasProof && previewImage != null) {
+        if (previewImage != null) {
             MMProofArtifactCard(
                 model = MMProofArtifactModel(
                     phaseEyebrow = "Room Proof",
                     phaseLabel = phaseLabel,
-                    roomName = roomName ?: propertyName,
+                    roomName = displayRoom,
                     photoCount = photoCount.coerceAtLeast(1),
                     issueCount = issueCount,
                     verifiedLabel = progressLine,
@@ -67,31 +66,36 @@ fun MMVaultProofHeroCard(
                     statusTone = statusTone,
                 ),
                 imageBitmap = previewImage,
-                photoHeight = 140.dp,
+                photoHeight = 148.dp,
                 cornerRadius = 20.dp,
                 reduceMotion = reduceMotion,
             )
-            Spacer(Modifier.height(14.dp))
-        } else {
+        } else if (!hasProof) {
             MMProofTaskCard(
-                title = if (roomName != null) "Start with $roomName" else "Start move-in proof",
+                title = roomName?.let { "Start with $it" } ?: "Start move-in proof",
                 reason = nextLine,
                 onClick = onPrimary,
                 statusLabel = statusLabel,
                 statusTone = statusTone,
                 showChevron = false,
             )
-            Spacer(Modifier.height(12.dp))
-            MMButton(text = primaryTitle, onClick = onPrimary)
-            Spacer(Modifier.height(14.dp))
+        } else {
+            MMProofTaskCard(
+                title = displayRoom,
+                reason = "$progressLine · $nextLine",
+                onClick = onPrimary,
+                statusLabel = statusLabel,
+                statusTone = statusTone,
+                showChevron = false,
+            )
         }
 
         if (!location.isNullOrBlank()) {
+            Spacer(Modifier.height(10.dp))
             Text(location, fontSize = 13.sp, color = MMColors.TextMuted)
-            Spacer(Modifier.height(4.dp))
         }
+
         if (hasProof) {
-            Text(nextLine, fontSize = 13.sp, color = MMColors.TextSecondary)
             Spacer(Modifier.height(10.dp))
             Box(
                 modifier = Modifier
@@ -105,11 +109,12 @@ fun MMVaultProofHeroCard(
                         .fillMaxWidth(progressWidth.coerceAtLeast(0.04f))
                         .height(4.dp)
                         .clip(RoundedCornerShape(2.dp))
-                        .background(MMColors.Primary.copy(alpha = if (hasProof) 0.9f else 0.35f)),
+                        .background(MMColors.Primary.copy(alpha = 0.9f)),
                 )
             }
-            Spacer(Modifier.height(14.dp))
-            MMButton(text = primaryTitle, onClick = onPrimary)
         }
+
+        Spacer(Modifier.height(14.dp))
+        MMButton(text = primaryTitle, onClick = onPrimary)
     }
 }

@@ -255,21 +255,21 @@ private fun MMProofArtifactFooter(model: MMProofArtifactModel) {
         ) {
             Text(
                 "${model.photoCount} photos · ${model.issueCount} issues",
-                fontSize = 13.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 color = MMColors.TextSecondary,
                 modifier = Modifier.weight(1f),
             )
             Text(
                 model.savedLabel,
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = MMColors.Primary.copy(alpha = 0.9f),
+                color = MMColors.Primary.copy(alpha = 0.98f),
             )
         }
         Text(
             model.verifiedLabel,
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             color = MMColors.TextMuted,
             modifier = Modifier.padding(top = 4.dp),

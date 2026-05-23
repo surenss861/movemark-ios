@@ -30,7 +30,7 @@ struct WelcomeDepositCaseFile: View {
     var body: some View {
         ProofArtifactCard(
             model: welcomeArtifact,
-            photoHeight: 168,
+            photoHeight: 180,
             cornerRadius: 20,
             imageName: "welcome-kitchen-main",
             showReportPeek: true,

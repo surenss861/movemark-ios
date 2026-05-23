@@ -60,7 +60,7 @@ fun WelcomeDepositCaseFile(
         MMProofArtifactCard(
             model = WelcomeArtifact,
             drawableResId = R.drawable.welcome_kitchen_main,
-            photoHeight = 168.dp,
+            photoHeight = 180.dp,
             cornerRadius = 20.dp,
             showReportPeek = true,
             tagsVisible = tagsVisible,

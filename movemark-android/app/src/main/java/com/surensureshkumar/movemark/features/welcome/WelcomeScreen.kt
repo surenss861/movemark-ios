@@ -96,8 +96,8 @@ fun WelcomeScreen(
                 .statusBarsPadding()
                 .navigationBarsPadding(),
         ) {
-            val horizontalPad = 20.dp
-            val cardMaxWidth = minOf(maxWidth - horizontalPad * 2, 420.dp)
+            val horizontalPad = 18.dp
+            val cardMaxWidth = minOf(maxWidth - horizontalPad * 2, 450.dp)
 
             Column(
                 modifier = Modifier
@@ -120,7 +120,7 @@ fun WelcomeScreen(
 
                 Column(
                     modifier = Modifier
-                        .padding(top = 34.dp)
+                        .padding(top = 40.dp)
                         .alpha(copyAlpha)
                         .offset(y = copyOffsetY.dp),
                 ) {

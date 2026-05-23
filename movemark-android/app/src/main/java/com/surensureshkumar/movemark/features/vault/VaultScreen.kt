@@ -127,10 +127,13 @@ fun VaultScreen(
                     else -> "Review rooms"
                 }
 
+                val featuredRoom = next ?: p.rooms.firstOrNull { RoomProofMetrics.isDocumented(it) }
+                val featuredPhotoCount = featuredRoom?.let { RoomProofMetrics.photoCount(it) } ?: 0
+
                 MMVaultProofHeroCard(
                     propertyName = p.title,
                     location = location.ifBlank { null },
-                    phaseLabel = "Move-in proof",
+                    phaseLabel = "Move-in",
                     progressLine = progressLine,
                     nextLine = nextLine,
                     progress = progress,
@@ -139,6 +142,8 @@ fun VaultScreen(
                         (next ?: p.rooms.firstOrNull())?.let { onOpenRoom(it.id) }
                     },
                     reduceMotion = reduceMotion,
+                    roomName = featuredRoom?.name ?: next?.name,
+                    photoCount = featuredPhotoCount,
                     modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "vaultHero"),
                 )
 

@@ -159,16 +159,16 @@ struct ProofArtifactCard: View {
                 .padding(.top, 12)
             HStack(alignment: .center, spacing: 8) {
                 Text("\(model.photoCount) photos · \(model.issueCount) issues")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 Spacer(minLength: 8)
                 Text(model.savedLabel)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.9))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.98))
             }
             .padding(.top, 10)
             Text(model.verifiedLabel)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                 .padding(.top, 4)
         }

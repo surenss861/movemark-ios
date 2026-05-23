@@ -21,7 +21,7 @@ struct WelcomeScreen: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let contentPadding: CGFloat = 20
+    private let contentPadding: CGFloat = 18
     /// Screen-edge inset for the bottom launch dock (38–40pt total).
     private let launchDockHorizontalInset: CGFloat = 38
 
@@ -33,7 +33,7 @@ struct WelcomeScreen: View {
                     safeTop: geo.safeAreaInsets.top,
                     safeBottom: geo.safeAreaInsets.bottom
                 )
-                let cardWidth = min(geo.size.width - contentPadding * 2, 420)
+                let cardWidth = min(geo.size.width - contentPadding * 2, 450)
                 let dockSideInset = max(0, launchDockHorizontalInset - contentPadding)
 
             ZStack {
@@ -262,7 +262,7 @@ private struct WelcomeZoneLayout {
     init(screenHeight: CGFloat, safeTop: CGFloat, safeBottom: CGFloat) {
         topPadding = max(4, safeTop - 71)
         brandToHeroGap = 14
-        heroToCopyGap = 34
+        heroToCopyGap = 40
     }
 
     func bottomDockPadding(safeBottom: CGFloat) -> CGFloat {
