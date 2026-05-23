@@ -148,7 +148,6 @@ private fun EvidencePane(
 
     Box(
         modifier = modifier
-            .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(MMColors.FieldFill),
     ) {

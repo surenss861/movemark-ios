@@ -71,59 +71,65 @@ fun MMRoomProofRow(
 
     MMProofCard(
         modifier = modifier
-            .padding(bottom = 12.dp)
+            .padding(bottom = 10.dp)
             .scale(scale)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 modifier = Modifier
-                    .size(34.dp)
+                    .size(32.dp)
                     .clip(CircleShape)
                     .background(
-                        if (isNext) MMColors.Primary.copy(alpha = 0.16f)
-                        else MMColors.TextMuted.copy(alpha = 0.12f),
+                        if (documented) MMColors.Primary.copy(alpha = 0.14f)
+                        else if (isNext) MMColors.SemanticWarning.copy(alpha = 0.12f)
+                        else MMColors.TextMuted.copy(alpha = 0.1f),
                     ),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     "$index",
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isNext) MMColors.Primary else MMColors.TextMuted,
+                    color = when {
+                        documented -> MMColors.Primary
+                        isNext -> MMColors.SemanticWarning
+                        else -> MMColors.TextMuted
+                    },
                 )
             }
-            Spacer(Modifier.width(14.dp))
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        room.name,
-                        style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                        color = MMColors.TextPrimary,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    if (isNext && !documented) {
-                        Spacer(Modifier.width(8.dp))
-                        MMProofStatusBadge(text = "Next", tone = MMProofStatusTone.Warning)
-                    }
-                }
-                Spacer(Modifier.height(6.dp))
+                Text(
+                    room.name,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MMColors.TextPrimary,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.height(4.dp))
                 AnimatedContent(
                     targetState = detailLine,
                     transitionSpec = { fadeIn() togetherWith fadeOut() },
                     label = "roomStatus",
                 ) { line ->
-                    Text(line, fontSize = 13.sp, color = statusColor)
+                    Text(line, fontSize = 12.sp, color = statusColor, maxLines = 1)
                 }
+            }
+            if (isNext && !documented) {
+                MMProofStatusBadge(text = "Next", tone = MMProofStatusTone.Warning)
+                Spacer(Modifier.width(6.dp))
             }
             Icon(
                 imageVector = if (documented) Icons.Default.CheckCircle else Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                tint = if (documented) MMColors.Primary else MMColors.TextSecondary,
-                modifier = Modifier.size(if (documented) 22.dp else 18.dp),
+                tint = if (documented) MMColors.Primary.copy(alpha = 0.9f) else MMColors.TextMuted,
+                modifier = Modifier.size(if (documented) 20.dp else 16.dp),
             )
         }
     }

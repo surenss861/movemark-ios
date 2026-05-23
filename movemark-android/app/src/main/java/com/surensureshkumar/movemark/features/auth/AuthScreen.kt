@@ -45,8 +45,17 @@ fun AuthScreen(
             TextButton(onClick = onDismiss) { Text("Back", color = MMColors.TextSecondary) }
             Spacer(Modifier.height(8.dp))
             Text(
-                text = if (mode == AuthMode.SignUp) "Create your vault" else "Sign in",
+                text = if (mode == AuthMode.SignUp) "Create your proof vault" else "Sign in",
                 style = androidx.compose.material3.MaterialTheme.typography.headlineLarge,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = if (mode == AuthMode.SignUp) {
+                    "Save room photos, lease docs, and reports under one rental."
+                } else {
+                    "Continue your proof vault."
+                },
+                color = MMColors.TextSecondary,
             )
             Spacer(Modifier.height(8.dp))
             Text(

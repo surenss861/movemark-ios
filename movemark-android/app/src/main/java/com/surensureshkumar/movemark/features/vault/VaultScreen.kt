@@ -30,8 +30,8 @@ import com.surensureshkumar.movemark.core.design.mmAppearRise
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
 import com.surensureshkumar.movemark.core.design.components.MMCompactProofRow
-import com.surensureshkumar.movemark.core.design.components.MMProofCaseCard
-import com.surensureshkumar.movemark.core.design.components.MMProofCaseSecondaryCard
+import com.surensureshkumar.movemark.core.design.components.MMProofStatusTone
+import com.surensureshkumar.movemark.core.design.components.MMProofTaskCard
 import com.surensureshkumar.movemark.core.design.components.MMProofSectionHeader
 import com.surensureshkumar.movemark.core.design.components.MMVaultProofHeroCard
 import com.surensureshkumar.movemark.data.models.PropertyRow
@@ -143,52 +143,25 @@ fun VaultScreen(
                 )
 
                 Spacer(Modifier.height(12.dp))
-                MMProofCaseSecondaryCard(
+                MMProofTaskCard(
+                    title = "Lease & deposit records",
+                    reason = "Helps if your deposit is questioned later.",
+                    onClick = { /* future: lease docs */ },
+                    showChevron = true,
                     modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "leaseCard"),
-                ) {
-                    Text(
-                        "Lease & deposit records",
-                        style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                        color = MMColors.TextPrimary,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Helps if your deposit is questioned later.",
-                        color = MMColors.TextSecondary,
-                        fontSize = 14.sp,
-                    )
-                }
+                )
 
-                Spacer(Modifier.height(12.dp))
-                MMProofCaseCard(
-                    modifier = Modifier
-                        .clickable {
-                            if (hasPro) onOpenMoveOutProof() else onShowPaywall(PaywallReason.MoveOutProof)
-                        }
-                        .mmAppearRise(hasAnimatedIn, reduceMotion, label = "moveOutCard"),
-                ) {
-                    Text(
-                        "Move-out proof",
-                        style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                        color = MMColors.TextSecondary,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Re-capture rooms before you return the keys.",
-                        color = MMColors.TextMuted,
-                        fontSize = 14.sp,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        RoomProofMetrics.moveOutStatusLine(p),
-                        color = MMColors.TextMuted,
-                        fontSize = 13.sp,
-                    )
-                    if (!hasPro) {
-                        Spacer(Modifier.height(4.dp))
-                        Text("Pro", color = MMColors.TextMuted, fontSize = 12.sp)
-                    }
-                }
+                Spacer(Modifier.height(10.dp))
+                MMProofTaskCard(
+                    title = "Move-out proof",
+                    reason = RoomProofMetrics.moveOutStatusLine(p),
+                    onClick = {
+                        if (hasPro) onOpenMoveOutProof() else onShowPaywall(PaywallReason.MoveOutProof)
+                    },
+                    statusLabel = if (hasPro) null else "Pro",
+                    statusTone = MMProofStatusTone.Neutral,
+                    modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "moveOutCard"),
+                )
 
                 val otherRentals = properties.filter { it.id != p.id.toString() }
                 if (otherRentals.isNotEmpty()) {

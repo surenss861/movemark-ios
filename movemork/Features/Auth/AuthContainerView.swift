@@ -46,13 +46,13 @@ struct AuthContainerView: View {
     }
 
     private var headerTitle: String {
-        mode == .signIn ? "Welcome back." : "Start your move-in proof."
+        mode == .signIn ? "Welcome back." : "Create your proof vault"
     }
 
     private var headerSubtitle: String {
         mode == .signIn
             ? "Continue your proof vault."
-            : "Save this proof in a private vault."
+            : "Save room photos, lease docs, and reports under one rental."
     }
 
     init(initialMode: Mode, onDismiss: @escaping () -> Void = {}) {

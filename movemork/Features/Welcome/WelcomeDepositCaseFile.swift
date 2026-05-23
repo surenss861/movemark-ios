@@ -12,54 +12,32 @@ struct WelcomeDepositCaseFile: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let cornerRadius: CGFloat = 28
-    private let embeddedPhotoHeight: CGFloat = 148
-
-    private let issueTags: [ProofIssueTag] = [
-        ProofIssueTag(id: "prior", label: "Already there", priorDamage: true, leadingInset: 4),
-        ProofIssueTag(id: "paint", label: "Chipped paint", leadingInset: 22),
-        ProofIssueTag(id: "stain", label: "Water stain", leadingInset: 36)
-    ]
+    private var welcomeArtifact: ProofArtifactModel {
+        ProofArtifactModel(
+            phaseEyebrow: "Room Proof",
+            phaseLabel: "Move-in",
+            roomName: "Kitchen",
+            photoCount: 12,
+            issueCount: 3,
+            verifiedLabel: "Verified Apr 14 · 5:42 PM",
+            savedLabel: "Saved to vault",
+            statusLabel: "Ready",
+            statusTone: .success,
+            issueTags: ["Already there", "Chipped paint"]
+        )
+    }
 
     var body: some View {
-        ProofCaseCard(
-            style: .standard,
-            cornerRadius: cornerRadius,
-            header: ProofCaseHeader(
-                eyebrow: "Move-in proof",
-                statusLabel: "Report ready",
-                statusTone: .success,
-                accentRail: .saved
-            ),
-            content: {
-                ProofPhotoPane(
-                    size: .large,
-                    imageName: "welcome-kitchen-main",
-                    issueTags: issueTags,
-                    tagsVisible: tagsVisible,
-                    overlayStyle: .tagsOnly,
-                    showScanCorners: true,
-                    embeddedInCaseFile: true
-                )
-                .frame(height: embeddedPhotoHeight)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-
-                ProofCaseDivider()
-                ProofCaseDetailSection(
-                    title: "Kitchen",
-                    subtitle: "12 photos · 3 issues"
-                )
-                ProofCaseDivider()
-                ProofCaseReceiptRow(
-                    savedTitle: "Saved to your vault",
-                    timestampLabel: "Move-in · Apr 14 · 5:42 PM",
-                    statusBadge: "Ready",
-                    statusTone: .success
-                )
-            }
+        ProofArtifactCard(
+            model: welcomeArtifact,
+            photoHeight: 168,
+            cornerRadius: 20,
+            imageName: "welcome-kitchen-main",
+            showReportPeek: true,
+            tagsVisible: tagsVisible
         )
         .frame(maxWidth: maxWidth)
+        .padding(.top, 8)
         .opacity(cardVisible ? 1 : 0)
         .offset(y: cardVisible ? 0 : 14)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.48), value: cardVisible)

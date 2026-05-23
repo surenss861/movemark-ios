@@ -32,7 +32,9 @@ struct FirstRunProofSavedView: View {
                 MMProofReceiptCard(
                     statusLabel: "Saved proof",
                     title: summary.roomName,
-                    metaLine: metaLine
+                    metaLine: metaLine,
+                    photoCount: summary.photoCount,
+                    issueCount: summary.issueCount
                 )
 
                 VStack(spacing: 12) {

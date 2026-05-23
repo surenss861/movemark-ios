@@ -2,7 +2,7 @@
 //  MMProofReceiptCard.swift
 //  movemork
 //
-//  Shared proof receipt — photo, room, saved status, meta.
+//  Strongest proof moment — artifact card with saved photo.
 //
 
 import SwiftUI
@@ -13,31 +13,28 @@ struct MMProofReceiptCard: View {
     let metaLine: String
     var thumbnailImageName: String? = "welcome-kitchen-main"
     var thumbnailURL: URL? = nil
+    var photoCount: Int = 1
+    var issueCount: Int = 0
+    var phaseLabel: String = "Move-in"
 
     var body: some View {
-        ProofReceiptStrip(
-            model: ProofReceiptStripModel(
-                statusBadge: statusLabel,
-                statusTone: .neutral,
-                cardTitle: title,
-                cardMeta: metaLine
+        ProofArtifactCard(
+            model: ProofArtifactModel(
+                phaseEyebrow: "Room Proof",
+                phaseLabel: phaseLabel,
+                roomName: title,
+                photoCount: photoCount,
+                issueCount: issueCount,
+                verifiedLabel: metaLine,
+                savedLabel: "Saved to vault",
+                statusLabel: statusLabel,
+                statusTone: .success
             ),
-            layout: .horizontal,
-            leading: {
-                ProofPhotoPane(
-                    size: .thumbnail,
-                    imageName: thumbnailImageName,
-                    imageURL: thumbnailURL
-                )
-            }
-        )
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(MoveMarkTheme.Colors.card.opacity(0.94))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.52), lineWidth: 0.75)
+            photoHeight: 196,
+            cornerRadius: 20,
+            imageName: thumbnailImageName,
+            imageURL: thumbnailURL,
+            tagsVisible: false
         )
     }
 }

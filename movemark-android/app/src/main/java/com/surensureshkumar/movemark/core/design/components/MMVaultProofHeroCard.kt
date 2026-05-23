@@ -34,9 +34,12 @@ fun MMVaultProofHeroCard(
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
     previewImage: ImageBitmap? = null,
+    roomName: String? = null,
+    photoCount: Int = 0,
+    issueCount: Int = 0,
 ) {
     val clamped = progress.coerceIn(0f, 1f)
-    val hasProof = clamped > 0f
+    val hasProof = clamped > 0f || previewImage != null
     val progressWidth by animateFloatAsState(
         targetValue = clamped,
         animationSpec = MMMotion.welcomeEnterSpec(reduceMotion, durationMillis = 360),
@@ -44,43 +47,42 @@ fun MMVaultProofHeroCard(
     )
     val statusLabel = when {
         clamped >= 1f -> "All rooms ready"
-        hasProof -> progressLine
+        hasProof -> "In progress"
         else -> "Needs photos"
     }
     val statusTone = if (hasProof) MMProofStatusTone.Success else MMProofStatusTone.Warning
-    val accentRail = if (hasProof) MMProofCaseAccentRail.Saved else MMProofCaseAccentRail.NeedsProof
 
-    MMProofCaseCard(
-        modifier = modifier,
-        cornerRadius = 22.dp,
-        header = MMProofCaseHeader(
-            eyebrow = phaseLabel,
-            statusLabel = statusLabel,
-            statusTone = statusTone,
-            accentRail = accentRail,
-        ),
-        contentPadding = 16.dp,
-    ) {
-        if (hasProof || previewImage != null) {
-            MMProofPhotoPane(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp)
-                    .clip(RoundedCornerShape(14.dp)),
-                size = MMProofPhotoPaneSize.Medium,
+    Column(modifier = modifier) {
+        if (hasProof && previewImage != null) {
+            MMProofArtifactCard(
+                model = MMProofArtifactModel(
+                    phaseEyebrow = "Room Proof",
+                    phaseLabel = phaseLabel,
+                    roomName = roomName ?: propertyName,
+                    photoCount = photoCount.coerceAtLeast(1),
+                    issueCount = issueCount,
+                    verifiedLabel = progressLine,
+                    savedLabel = "Saved to vault",
+                    statusLabel = statusLabel,
+                    statusTone = statusTone,
+                ),
                 imageBitmap = previewImage,
-                roomName = propertyName,
-                phaseLabel = progressLine,
+                photoHeight = 140.dp,
+                cornerRadius = 20.dp,
+                reduceMotion = reduceMotion,
             )
             Spacer(Modifier.height(14.dp))
         } else {
-            MMProofPhotoPane(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(96.dp)
-                    .clip(RoundedCornerShape(14.dp)),
-                size = MMProofPhotoPaneSize.Medium,
+            MMProofTaskCard(
+                title = if (roomName != null) "Start with $roomName" else "Start move-in proof",
+                reason = nextLine,
+                onClick = onPrimary,
+                statusLabel = statusLabel,
+                statusTone = statusTone,
+                showChevron = false,
             )
+            Spacer(Modifier.height(12.dp))
+            MMButton(text = primaryTitle, onClick = onPrimary)
             Spacer(Modifier.height(14.dp))
         }
 
@@ -88,24 +90,26 @@ fun MMVaultProofHeroCard(
             Text(location, fontSize = 13.sp, color = MMColors.TextMuted)
             Spacer(Modifier.height(4.dp))
         }
-        Text(nextLine, fontSize = 13.sp, color = MMColors.TextSecondary)
-        Spacer(Modifier.height(12.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(MMColors.FieldFill.copy(alpha = 0.85f)),
-        ) {
+        if (hasProof) {
+            Text(nextLine, fontSize = 13.sp, color = MMColors.TextSecondary)
+            Spacer(Modifier.height(10.dp))
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(progressWidth.coerceAtLeast(0.04f))
+                    .fillMaxWidth()
                     .height(4.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(MMColors.Primary.copy(alpha = if (hasProof) 0.9f else 0.35f)),
-            )
+                    .background(MMColors.FieldFill.copy(alpha = 0.85f)),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progressWidth.coerceAtLeast(0.04f))
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(MMColors.Primary.copy(alpha = if (hasProof) 0.9f else 0.35f)),
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            MMButton(text = primaryTitle, onClick = onPrimary)
         }
-        Spacer(Modifier.height(14.dp))
-        MMButton(text = primaryTitle, onClick = onPrimary)
     }
 }

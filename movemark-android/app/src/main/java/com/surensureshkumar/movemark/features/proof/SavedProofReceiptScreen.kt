@@ -46,14 +46,8 @@ import com.surensureshkumar.movemark.core.design.MMMotion
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
-import com.surensureshkumar.movemark.core.design.components.MMProofCaseCard
-import com.surensureshkumar.movemark.core.design.components.MMProofPhotoPane
-import com.surensureshkumar.movemark.core.design.components.MMProofPhotoPaneSize
-import com.surensureshkumar.movemark.core.design.components.MMProofReceiptStrip
-import com.surensureshkumar.movemark.core.design.components.MMProofReceiptStripLayout
-import com.surensureshkumar.movemark.core.design.components.MMProofReceiptStripModel
-import com.surensureshkumar.movemark.core.design.components.MMProofCaseAccentRail
-import com.surensureshkumar.movemark.core.design.components.MMProofCaseHeader
+import com.surensureshkumar.movemark.core.design.components.MMProofArtifactCard
+import com.surensureshkumar.movemark.core.design.components.MMProofArtifactModel
 import com.surensureshkumar.movemark.core.design.components.MMProofStatusTone
 import com.surensureshkumar.movemark.domain.ProofPhase
 import kotlinx.coroutines.delay
@@ -146,43 +140,28 @@ fun SavedProofReceiptScreen(
                                     .background(MMColors.Primary.copy(alpha = 0.12f), RoundedCornerShape(22.dp)),
                             )
                         }
-                        MMProofCaseCard(
+                        MMProofArtifactCard(
+                            model = MMProofArtifactModel(
+                                phaseEyebrow = "Room Proof",
+                                phaseLabel = if (state.proofPhase == ProofPhase.MoveOut) "Move-out" else "Move-in",
+                                roomName = state.roomName,
+                                photoCount = state.savedCount.coerceAtLeast(1),
+                                issueCount = 0,
+                                verifiedLabel = state.timestampLabel,
+                                savedLabel = "Saved to vault",
+                                statusLabel = "Saved",
+                                statusTone = MMProofStatusTone.Success,
+                            ),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .graphicsLayer { alpha = 1f - pulseAlpha.value * 0.3f },
-                            header = MMProofCaseHeader(
-                                eyebrow = if (state.proofPhase == ProofPhase.MoveOut) "Move-out proof" else "Move-in proof",
-                                statusLabel = "Saved",
-                                statusTone = MMProofStatusTone.Success,
-                                accentRail = MMProofCaseAccentRail.Saved,
-                            ),
-                            footer = {
-                                MMProofReceiptStrip(
-                                    model = MMProofReceiptStripModel(
-                                        detailTitle = state.roomName,
-                                        detailSubtitle = state.receiptSubtitle,
-                                        savedTitle = "Saved to your vault",
-                                        timestampLabel = state.timestampLabel,
-                                        statusBadge = "Ready",
-                                        statusTone = MMProofStatusTone.Success,
-                                    ),
-                                    layout = MMProofReceiptStripLayout.CaseFile,
-                                )
+                            imageBitmap = state.thumbnailJpeg?.let { bytes ->
+                                remember(bytes) { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() }
                             },
-                        ) {
-                            val bitmap = state.thumbnailJpeg?.let { bytes ->
-                                remember(bytes) { BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
-                            }
-                            MMProofPhotoPane(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(180.dp),
-                                size = MMProofPhotoPaneSize.Receipt,
-                                imageBitmap = bitmap?.asImageBitmap(),
-                                roomName = state.roomName,
-                                phaseLabel = state.receiptSubtitle,
-                            )
-                        }
+                            photoHeight = 196.dp,
+                            cornerRadius = 20.dp,
+                            reduceMotion = reduceMotion,
+                        )
                     }
                 }
             }
