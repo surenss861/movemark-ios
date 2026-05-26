@@ -35,6 +35,7 @@ import com.surensureshkumar.movemark.core.design.components.MMProofTaskCard
 import com.surensureshkumar.movemark.core.design.components.MMProofSectionHeader
 import com.surensureshkumar.movemark.core.design.components.MMVaultProofHeroCard
 import com.surensureshkumar.movemark.data.models.PropertyRow
+import com.surensureshkumar.movemark.domain.LifecycleNudge
 import com.surensureshkumar.movemark.domain.RoomProofMetrics
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
 import java.util.UUID
@@ -45,6 +46,7 @@ fun VaultScreen(
     onOpenMoveOutProof: () -> Unit,
     onAddProperty: () -> Unit,
     onShowPaywall: (PaywallReason) -> Unit,
+    onOpenReports: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: VaultViewModel = hiltViewModel(),
 ) {
@@ -150,6 +152,32 @@ fun VaultScreen(
                     photoCount = featuredPhotoCount,
                     modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "vaultHero"),
                 )
+
+                val propertyRow = properties.firstOrNull { it.id == p.id.toString() }
+                val lifecycleNudge = propertyRow?.let { row ->
+                    LifecycleNudge.forProperty(row, p)
+                }
+                lifecycleNudge?.let { nudge ->
+                    Spacer(Modifier.height(12.dp))
+                    MMProofTaskCard(
+                        title = nudge.title,
+                        reason = nudge.reason,
+                        onClick = {
+                            when (nudge) {
+                                is LifecycleNudge.FinishRoomsBeforeUnpacking ->
+                                    (next ?: p.rooms.firstOrNull())?.let { onOpenRoom(it.id) }
+                                is LifecycleNudge.AddLeaseAndDepositDocs -> Unit
+                                is LifecycleNudge.MakeMoveInReport -> onOpenReports()
+                                is LifecycleNudge.MidLeaseMaintenance -> Unit
+                                is LifecycleNudge.MoveOutProofReminder ->
+                                    if (hasPro) onOpenMoveOutProof()
+                                    else onShowPaywall(PaywallReason.MoveOutProof)
+                            }
+                        },
+                        showChevron = true,
+                        modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "lifecycleNudge"),
+                    )
+                }
 
                 Spacer(Modifier.height(12.dp))
                 MMProofTaskCard(

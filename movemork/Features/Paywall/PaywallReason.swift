@@ -17,13 +17,13 @@ enum PaywallReason: Equatable {
     var headline: String {
         switch self {
         case .extraProperty:
-            return "Protect more than one rental"
+            return "Protect more than one rental."
         case .unlimitedExports:
-            return "Make more move-in reports"
+            return "Turn proof into more reports."
         case .disputePacket:
-            return "Build a dispute-ready packet"
+            return "Build a dispute-ready packet."
         case .moveOutExport:
-            return "Document move-out proof"
+            return "Document move-out proof."
         }
     }
 
@@ -31,13 +31,13 @@ enum PaywallReason: Equatable {
     var subheadline: String {
         switch self {
         case .extraProperty:
-            return "Add another rental vault when you move."
+            return "Free includes 1 proof vault. Add another when you move."
         case .unlimitedExports:
             return "You’ve used your free move-in report on this account."
         case .disputePacket:
-            return "Organize proof into a stronger dispute workflow."
+            return "Organize photos and docs when your deposit is questioned."
         case .moveOutExport:
-            return "Re-capture rooms and export move-out reports with Pro."
+            return "Re-capture rooms and export move-out PDFs with Pro."
         }
     }
 

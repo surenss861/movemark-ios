@@ -137,7 +137,7 @@ struct ProPaywallView: View {
     }
 
     private var sharedValueLine: String {
-        "MoveMark Pro gives you unlimited proof vaults, move-out proof, and dispute-ready reports."
+        MoveMarkGrowthCopy.paywallValueLine
     }
 
     private var benefitsCard: some View {
@@ -624,11 +624,7 @@ struct ProPaywallView: View {
     }
 
     private var benefits: [(title: String, subtitle: String)] {
-        [
-            ("Unlimited property vaults", "One proof vault per rental, kept separate."),
-            ("Unlimited move-in reports", "PDF reports from saved room proof."),
-            ("Move-out proof", "Re-capture rooms and export move-out reports."),
-            ("Dispute tools", "Organize proof when your deposit is questioned."),
+        MoveMarkGrowthCopy.paywallBenefits + [
             ("Export history", "Reports and packets in one place."),
         ]
     }

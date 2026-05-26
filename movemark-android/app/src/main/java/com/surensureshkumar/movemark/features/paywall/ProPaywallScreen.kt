@@ -44,6 +44,7 @@ import com.surensureshkumar.movemark.core.design.components.MMProofCard
 import com.surensureshkumar.movemark.data.subscription.PlanPackageUi
 import com.surensureshkumar.movemark.features.account.AccountViewModel
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
+import com.surensureshkumar.movemark.core.growth.MoveMarkGrowthCopy
 import com.surensureshkumar.movemark.features.subscription.SubscriptionViewModel
 
 @Composable
@@ -108,7 +109,27 @@ fun ProPaywallScreen(
                     fontSize = 12.sp,
                 )
             }
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(16.dp))
+            MMProofCard {
+                Text("MoveMark Pro includes", color = MMColors.TextPrimary, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(12.dp))
+                MoveMarkGrowthCopy.PAYWALL_BENEFITS.forEach { (title, subtitle) ->
+                    Row(Modifier.fillMaxWidth()) {
+                        Icon(
+                            Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = MMColors.Primary,
+                            modifier = Modifier.padding(end = 8.dp),
+                        )
+                        Column {
+                            Text(title, color = MMColors.TextPrimary, fontWeight = FontWeight.Medium, fontSize = 15.sp)
+                            Text(subtitle, color = MMColors.TextSecondary, fontSize = 13.sp)
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                }
+            }
+            Spacer(Modifier.height(16.dp))
 
             when {
                 loading && packages.isEmpty() -> {

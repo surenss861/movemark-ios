@@ -18,6 +18,7 @@ struct WelcomeScreen: View {
     @State private var tagsVisible = false
     @State private var copyVisible = false
     @State private var ctaVisible = false
+    @State private var storyPage = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -89,6 +90,11 @@ struct WelcomeScreen: View {
 
             primaryCopyBlock
                 .padding(.top, layout.heroToCopyGap)
+
+            WelcomeOnboardingStoryView(page: $storyPage)
+                .padding(.top, 20)
+                .opacity(copyVisible ? 1 : 0)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.44).delay(0.26), value: copyVisible)
 
             Spacer(minLength: 24)
 
@@ -169,7 +175,17 @@ struct WelcomeScreen: View {
 
     private var primaryCopyBlock: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Prove what was already there.")
+            Text(MoveMarkGrowthCopy.audienceChip)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.95))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule()
+                        .fill(MoveMarkTheme.Colors.primary.opacity(0.12))
+                )
+
+            Text(MoveMarkGrowthCopy.welcomeHeadline)
                 .font(.system(size: 32, weight: .bold))
                 .tracking(-0.7)
                 .lineSpacing(2)
@@ -178,12 +194,12 @@ struct WelcomeScreen: View {
                 .minimumScaleFactor(0.92)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("Take move-in photos now. Make a report when you need it.")
+            Text(MoveMarkGrowthCopy.welcomeBody)
                 .font(MoveMarkTheme.Typography.body)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.98))
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("Old damage becomes saved proof.")
+            Text(MoveMarkGrowthCopy.welcomePainLine)
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
                 .fixedSize(horizontal: false, vertical: true)
@@ -199,7 +215,7 @@ struct WelcomeScreen: View {
     private var bottomLaunchDock: some View {
         VStack(spacing: 0) {
             MMButton(
-                title: "Start move-in proof",
+                title: MoveMarkGrowthCopy.welcomeCTA,
                 action: { launchAuth(mode: .signUp) },
                 showsTrailingArrow: true
             )

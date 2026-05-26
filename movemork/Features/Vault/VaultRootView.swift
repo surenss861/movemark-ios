@@ -123,6 +123,10 @@ struct VaultRootView: View {
                         .mmAppearRise(isVisible: hasAnimatedIn, delay: 0.06, offset: 6)
                 }
 
+                lifecycleNudgeCard
+                    .opacity(hasAnimatedIn ? 1 : 0)
+                    .animation(MMMotion.cardReveal.delay(0.10), value: hasAnimatedIn)
+
                 missingDocsCard
                     .opacity(hasAnimatedIn ? 1 : 0)
                     .animation(MMMotion.cardReveal.delay(0.12), value: hasAnimatedIn)
@@ -188,6 +192,39 @@ struct VaultRootView: View {
             primaryTitle: featuredContinueProofTitle,
             onPrimary: { openFeaturedVaultOrContinue() }
         )
+    }
+
+    @ViewBuilder
+    private var lifecycleNudgeCard: some View {
+        if let prop = propertyStore.currentProperty,
+           let nudge = propertyStore.lifecycleNudge(for: prop) {
+            MMLifecycleNudgeCard(nudge: nudge) {
+                handleLifecycleNudge(nudge, property: prop)
+            }
+        }
+    }
+
+    private func handleLifecycleNudge(_ nudge: PropertyStore.LifecycleNudge, property: PropertyRecord) {
+        switch nudge {
+        case .finishRoomsBeforeUnpacking:
+            switch propertyStore.primaryNextAction(for: property) {
+            case .captureRoom:
+                path.append(.walkthrough)
+            default:
+                if let row = featuredPropertyRow { openVaultDetail(for: row) }
+            }
+        case .addLeaseAndDepositDocs, .midLeaseMaintenance:
+            if let row = featuredPropertyRow { openVaultDetail(for: row) }
+        case .makeMoveInReport:
+            path.append(.exports)
+        case .moveOutProofReminder:
+            if subscriptionManager.hasPro {
+                path.append(.moveOut)
+            } else {
+                activePaywallReason = .moveOutExport
+                showPaywall = true
+            }
+        }
     }
 
     @ViewBuilder

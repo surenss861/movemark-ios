@@ -18,6 +18,7 @@ import com.surensureshkumar.movemark.domain.ProofPhase
 import com.surensureshkumar.movemark.features.auth.AuthMode
 import com.surensureshkumar.movemark.features.auth.AuthScreen
 import com.surensureshkumar.movemark.features.firstrun.CreatePropertyScreen
+import com.surensureshkumar.movemark.features.firstrun.FirstRunRoomPickerScreen
 import com.surensureshkumar.movemark.features.main.MainShellScreen
 import com.surensureshkumar.movemark.features.moveout.MoveOutRoomsScreen
 import com.surensureshkumar.movemark.features.proof.RoomProofScreen
@@ -34,18 +35,20 @@ private val roomIdNavArg = navArgument(Routes.RoomProofArg) { type = NavType.Str
 @Composable
 fun MoveMarkNavHost() {
     val context = LocalContext.current
-    val mainTabRequest = remember(context) {
+    val entryPoints = remember(context) {
         EntryPointAccessors.fromApplication(
             context.applicationContext,
             MoveMarkEntryPoints::class.java,
-        ).mainTabRequest()
+        )
     }
+    val mainTabRequest = remember(entryPoints) { entryPoints.mainTabRequest() }
     val navController = rememberNavController()
     val welcomeVm: WelcomeViewModel = hiltViewModel()
     val authState by welcomeVm.authState.collectAsState()
     val hasProperty by welcomeVm.hasProperty.collectAsState()
+    val firstRunComplete by welcomeVm.firstRunComplete.collectAsState()
 
-    LaunchedEffect(authState, hasProperty) {
+    LaunchedEffect(authState, hasProperty, firstRunComplete) {
         when (authState) {
             AuthState.Loading -> Unit
             AuthState.SignedOut -> {
@@ -58,6 +61,7 @@ fun MoveMarkNavHost() {
             AuthState.SignedIn -> {
                 val dest = when {
                     hasProperty == false -> Routes.CreateProperty
+                    hasProperty == true && firstRunComplete == false -> Routes.FirstRunRoomPicker
                     hasProperty == true -> Routes.Main
                     else -> return@LaunchedEffect
                 }
@@ -93,11 +97,15 @@ fun MoveMarkNavHost() {
         }
         composable(Routes.CreateProperty) {
             CreatePropertyScreen(
-                onCreated = {
-                    navController.navigate(Routes.Main) {
-                        popUpTo(0) { inclusive = true }
-                    }
+                onCreated = { welcomeVm.refreshFirstRunState() },
+            )
+        }
+        composable(Routes.FirstRunRoomPicker) {
+            FirstRunRoomPickerScreen(
+                onStartProof = { roomId ->
+                    navController.navigate(Routes.roomProof(roomId.toString(), ProofPhase.MoveIn))
                 },
+                onSkipToMain = { welcomeVm.markFirstRunComplete() },
             )
         }
         composable(Routes.Main) {
@@ -179,11 +187,13 @@ fun MoveMarkNavHost() {
                         } else if (phase == ProofPhase.MoveOut) {
                             navController.popBackStack(Routes.MoveOutRooms, false)
                         } else {
+                            if (phase == ProofPhase.MoveIn) welcomeVm.markFirstRunComplete()
                             mainTabRequest.request(MainTab.Reports)
                             navController.popBackStack(Routes.Main, false)
                         }
                     },
                     onViewVault = {
+                        if (phase == ProofPhase.MoveIn) welcomeVm.markFirstRunComplete()
                         mainTabRequest.request(MainTab.Vault)
                         navController.popBackStack(Routes.Main, false)
                     },

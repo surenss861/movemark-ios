@@ -56,8 +56,8 @@ struct FirstRunRoomPickerView: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 24) {
                 MMRenterHeader(
-                    title: "Start with one room.",
-                    subtitle: "Pick a room and save what was already there."
+                    title: MoveMarkGrowthCopy.firstRunRoomTitle,
+                    subtitle: MoveMarkGrowthCopy.firstRunRoomSubtitle
                 )
 
                 VStack(spacing: 10) {
