@@ -72,9 +72,12 @@ class AccountViewModel @Inject constructor(
     }
 
     fun resetTestSubscription() {
+        if (!isMockMode) return
         viewModelScope.launch {
+            _notice.value = null
             subscriptionRepository.resetMockSubscription()
-            _notice.value = AccountNotice("Test subscription reset.")
+            subscriptionRepository.refreshCustomerInfo()
+            _notice.value = AccountNotice("Test subscription reset. You're on MoveMark Free.")
         }
     }
 

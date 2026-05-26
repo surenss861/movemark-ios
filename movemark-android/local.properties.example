@@ -9,5 +9,9 @@ MOVE_MARK_API_BASE_URL=https://movemark-api-production.up.railway.app
 # Billing: mock (local QA) | revenuecat (Play + RevenueCat). Debug defaults to mock when key is empty.
 BILLING_MODE=mock
 
-# RevenueCat Android public SDK key (when enabling Play Billing)
+# RevenueCat Android public SDK key (goog_...) — required for revenuecat mode
 REVENUECAT_PUBLIC_KEY=
+
+# Play Console subscription product IDs (must match RevenueCat + Play):
+# movemark_pro_monthly, movemark_pro_yearly
+# Entitlement in app: movemark_pro1

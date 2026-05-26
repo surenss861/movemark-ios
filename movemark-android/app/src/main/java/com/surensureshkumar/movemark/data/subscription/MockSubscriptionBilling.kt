@@ -1,6 +1,7 @@
 package com.surensureshkumar.movemark.data.subscription
 
 import android.app.Activity
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -85,6 +86,11 @@ class MockSubscriptionBilling @Inject constructor(
             setMockPro(true)
             _restoreMessage.value = "Pro unlocked for testing."
             PurchaseOutcome.Success
+        } catch (e: Exception) {
+            Log.e("MoveMarkBilling", "mock purchase failed", e)
+            val msg = "Purchase couldn't complete. Try again."
+            _errorMessage.value = msg
+            PurchaseOutcome.Failed(msg)
         } finally {
             _purchasing.value = false
         }

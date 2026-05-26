@@ -57,5 +57,8 @@ class SubscriptionRepository @Inject constructor(
 
     fun clearError() = impl.clearError()
 
-    suspend fun resetMockSubscription() = impl.resetMockSubscription()
+    suspend fun resetMockSubscription() {
+        if (!BillingConfig.isMockMode) return
+        impl.resetMockSubscription()
+    }
 }

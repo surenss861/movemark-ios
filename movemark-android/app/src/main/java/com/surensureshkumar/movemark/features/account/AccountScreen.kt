@@ -148,6 +148,17 @@ fun AccountScreen(
                             onShowPaywall(PaywallReason.ExtraProperty)
                         },
                     )
+                    if (isMockMode) {
+                        MMSettingsDivider()
+                        MMSettingsRow(
+                            title = "Unlock Pro for testing",
+                            subtitle = "Mock purchase — no Play Console required",
+                            onClick = {
+                                viewModel.dismissNotice()
+                                onShowPaywall(PaywallReason.ExtraProperty)
+                            },
+                        )
+                    }
                 }
                 if (hasPro && !isMockMode) {
                     MMSettingsDivider()
@@ -231,6 +242,15 @@ fun AccountScreen(
                     accessory = MMSettingsAccessory.None,
                     onClick = null,
                 )
+                if (isMockMode) {
+                    MMSettingsDivider()
+                    MMSettingsRow(
+                        title = "Billing mode",
+                        value = "Mock (local QA)",
+                        accessory = MMSettingsAccessory.None,
+                        onClick = null,
+                    )
+                }
             }
             Spacer(Modifier.height(8.dp))
             Text(
