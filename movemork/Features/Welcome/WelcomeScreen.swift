@@ -18,7 +18,6 @@ struct WelcomeScreen: View {
     @State private var tagsVisible = false
     @State private var copyVisible = false
     @State private var ctaVisible = false
-    @State private var storyPage = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -91,12 +90,7 @@ struct WelcomeScreen: View {
             primaryCopyBlock
                 .padding(.top, layout.heroToCopyGap)
 
-            WelcomeOnboardingStoryView(page: $storyPage)
-                .padding(.top, 20)
-                .opacity(copyVisible ? 1 : 0)
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.44).delay(0.26), value: copyVisible)
-
-            Spacer(minLength: 24)
+            Spacer(minLength: 16)
 
             bottomLaunchDock
                 .padding(.horizontal, dockSideInset)
@@ -174,18 +168,8 @@ struct WelcomeScreen: View {
     // MARK: - Copy (hero explains; dock launches)
 
     private var primaryCopyBlock: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(MoveMarkGrowthCopy.audienceChip)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.95))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(
-                    Capsule()
-                        .fill(MoveMarkTheme.Colors.primary.opacity(0.12))
-                )
-
-            Text(MoveMarkGrowthCopy.welcomeHeadline)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Prove what was already there.")
                 .font(.system(size: 32, weight: .bold))
                 .tracking(-0.7)
                 .lineSpacing(2)
@@ -194,14 +178,9 @@ struct WelcomeScreen: View {
                 .minimumScaleFactor(0.92)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text(MoveMarkGrowthCopy.welcomeBody)
+            Text("Take room photos before you unpack. Turn them into a report when you need it.")
                 .font(MoveMarkTheme.Typography.body)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.98))
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text(MoveMarkGrowthCopy.welcomePainLine)
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -215,7 +194,7 @@ struct WelcomeScreen: View {
     private var bottomLaunchDock: some View {
         VStack(spacing: 0) {
             MMButton(
-                title: MoveMarkGrowthCopy.welcomeCTA,
+                title: "Start move-in proof",
                 action: { launchAuth(mode: .signUp) },
                 showsTrailingArrow: true
             )
@@ -278,7 +257,7 @@ private struct WelcomeZoneLayout {
     init(screenHeight: CGFloat, safeTop: CGFloat, safeBottom: CGFloat) {
         topPadding = max(4, safeTop - 71)
         brandToHeroGap = 14
-        heroToCopyGap = 40
+        heroToCopyGap = 28
     }
 
     func bottomDockPadding(safeBottom: CGFloat) -> CGFloat {

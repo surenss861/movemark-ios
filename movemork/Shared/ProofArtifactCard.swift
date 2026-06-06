@@ -102,37 +102,43 @@ struct ProofArtifactCard: View {
 
     private var photoPane: some View {
         ZStack(alignment: .bottomLeading) {
-            Group {
-                if let imageName {
-                    Image(imageName)
-                        .resizable()
-                        .scaledToFill()
-                } else if let imageURL {
-                    AsyncImage(url: imageURL) { phase in
-                        if case .success(let image) = phase {
-                            image.resizable().scaledToFill()
-                        } else {
-                            MoveMarkTheme.Colors.fieldFill
+            ZStack {
+                Group {
+                    if let imageName {
+                        Image(imageName)
+                            .resizable()
+                            .scaledToFill()
+                    } else if let imageURL {
+                        AsyncImage(url: imageURL) { phase in
+                            if case .success(let image) = phase {
+                                image.resizable().scaledToFill()
+                            } else {
+                                MoveMarkTheme.Colors.fieldFill
+                            }
                         }
+                    } else {
+                        MoveMarkTheme.Colors.fieldFill
+                            .overlay {
+                                Image(systemName: "camera.fill")
+                                    .font(.system(size: 28, weight: .medium))
+                                    .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.65))
+                            }
                     }
-                } else {
-                    MoveMarkTheme.Colors.fieldFill
-                        .overlay {
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 28, weight: .medium))
-                                .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.65))
-                        }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+
+                VStack {
+                    Spacer(minLength: 0)
+                    LinearGradient(
+                        colors: [.clear, Color.black.opacity(0.45)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 64)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
-
-            LinearGradient(
-                colors: [.clear, Color.black.opacity(0.45)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 64)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
             if tagsVisible, !model.issueTags.isEmpty {
                 HStack(spacing: 6) {
@@ -141,6 +147,7 @@ struct ProofArtifactCard: View {
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(Color.white.opacity(0.95))
                             .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(Color.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -148,11 +155,12 @@ struct ProofArtifactCard: View {
                             .animation(reduceMotion ? nil : .easeOut(duration: 0.34).delay(Double(index) * 0.04), value: tagsVisible)
                     }
                 }
-                .padding(10)
+                .padding(.leading, 12)
+                .padding(.bottom, 12)
+                .padding(.trailing, 8)
             }
         }
         .frame(height: photoHeight)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .padding(.horizontal, 14)
     }
 

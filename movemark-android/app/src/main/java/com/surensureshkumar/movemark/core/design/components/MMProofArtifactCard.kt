@@ -144,57 +144,62 @@ private fun MMProofArtifactSurface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 14.dp)
-                    .height(photoHeight)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MMColors.FieldFill),
+                    .height(photoHeight),
             ) {
-                when {
-                    imageBitmap != null -> Image(
-                        bitmap = imageBitmap,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    !imageUrl.isNullOrBlank() -> AsyncImage(
-                        model = imageUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    drawableResId != null -> Image(
-                        painter = painterResource(drawableResId),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    else -> Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        androidx.compose.material3.Icon(
-                            imageVector = Icons.Default.PhotoCamera,
-                            contentDescription = null,
-                            tint = MMColors.TextMuted.copy(alpha = 0.65f),
-                            modifier = Modifier.size(36.dp),
-                        )
-                    }
-                }
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(64.dp)
-                        .align(Alignment.BottomCenter)
-                        .background(
-                            androidx.compose.ui.graphics.Brush.verticalGradient(
-                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.45f)),
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MMColors.FieldFill),
+                ) {
+                    when {
+                        imageBitmap != null -> Image(
+                            bitmap = imageBitmap,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        !imageUrl.isNullOrBlank() -> AsyncImage(
+                            model = imageUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        drawableResId != null -> Image(
+                            painter = painterResource(drawableResId),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        else -> Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            androidx.compose.material3.Icon(
+                                imageVector = Icons.Default.PhotoCamera,
+                                contentDescription = null,
+                                tint = MMColors.TextMuted.copy(alpha = 0.65f),
+                                modifier = Modifier.size(36.dp),
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                androidx.compose.ui.graphics.Brush.verticalGradient(
+                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.45f)),
+                                ),
                             ),
-                        ),
-                )
+                    )
+                }
                 if (tagsVisible && model.issueTags.isNotEmpty()) {
                     Row(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
-                            .padding(10.dp),
+                            .padding(start = 12.dp, bottom = 12.dp, end = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         model.issueTags.take(2).forEachIndexed { index, tag ->

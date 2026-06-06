@@ -39,9 +39,6 @@ import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMMotion
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
-import com.surensureshkumar.movemark.core.growth.MoveMarkGrowthCopy
-import androidx.compose.foundation.background
-
 @Composable
 fun WelcomeScreen(
     onStartMoveIn: () -> Unit,
@@ -122,47 +119,24 @@ fun WelcomeScreen(
 
                 Column(
                     modifier = Modifier
-                        .padding(top = 40.dp)
+                        .padding(top = 28.dp)
                         .alpha(copyAlpha)
                         .offset(y = copyOffsetY.dp),
                 ) {
                     Text(
-                        text = MoveMarkGrowthCopy.AUDIENCE_CHIP,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MMColors.Primary.copy(alpha = 0.95f),
-                        modifier = Modifier
-                            .background(MMColors.Primary.copy(alpha = 0.12f), RoundedCornerShape(50))
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    Text(
-                        text = MoveMarkGrowthCopy.WELCOME_HEADLINE,
+                        text = "Prove what was already there.",
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Bold,
                         color = MMColors.TextPrimary,
                         lineHeight = 36.sp,
                     )
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(12.dp))
                     Text(
-                        text = MoveMarkGrowthCopy.WELCOME_BODY,
+                        text = "Take room photos before you unpack. Turn them into a report when you need it.",
                         style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
                         color = MMColors.TextSecondary,
                     )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = MoveMarkGrowthCopy.WELCOME_PAIN_LINE,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MMColors.TextSecondary.copy(alpha = 0.9f),
-                    )
                 }
-
-                WelcomeOnboardingStory(
-                    modifier = Modifier
-                        .padding(top = 20.dp)
-                        .alpha(copyAlpha),
-                )
 
                 Spacer(Modifier.weight(1f))
 
@@ -173,7 +147,7 @@ fun WelcomeScreen(
                         .alpha(ctaAlpha)
                         .offset(y = ctaOffsetY.dp),
                 ) {
-                    MMButton(text = MoveMarkGrowthCopy.WELCOME_CTA, onClick = onStartMoveIn)
+                    MMButton(text = "Start move-in proof", onClick = onStartMoveIn)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
