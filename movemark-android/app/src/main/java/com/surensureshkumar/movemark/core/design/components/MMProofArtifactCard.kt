@@ -90,7 +90,9 @@ fun MMProofArtifactCard(
             imageUrl = imageUrl,
             tagsVisible = tagsVisible,
             reduceMotion = reduceMotion,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (showReportPeek) Modifier.padding(top = 20.dp) else Modifier),
         )
     }
 }
@@ -144,6 +146,7 @@ private fun MMProofArtifactSurface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 14.dp)
+                    .padding(top = 4.dp)
                     .height(photoHeight),
             ) {
                 Box(
@@ -233,7 +236,9 @@ private fun MMProofArtifactHeader(model: MMProofArtifactModel) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .background(MMColors.EvidenceCard)
+            .padding(horizontal = 14.dp)
+            .padding(top = 12.dp, bottom = 8.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -260,7 +265,7 @@ private fun MMProofArtifactHeader(model: MMProofArtifactModel) {
             color = MMColors.TextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier.padding(top = 6.dp),
         )
     }
 }

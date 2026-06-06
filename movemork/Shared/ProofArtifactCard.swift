@@ -40,6 +40,7 @@ struct ProofArtifactCard: View {
                     .padding(.horizontal, 8)
             }
             artifactSurface
+                .padding(.top, showReportPeek ? 20 : 0)
         }
     }
 
@@ -79,7 +80,7 @@ struct ProofArtifactCard: View {
     }
 
     private var artifactHeader: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 8) {
                 Text("\(model.phaseEyebrow.uppercased()) · \(model.phaseLabel.uppercased())")
                     .font(.system(size: 10, weight: .semibold))
@@ -95,9 +96,14 @@ struct ProofArtifactCard: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .background(MoveMarkTheme.Colors.evidenceCard)
+        .zIndex(1)
     }
 
     private var photoPane: some View {
@@ -138,6 +144,7 @@ struct ProofArtifactCard: View {
                     .frame(height: 64)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
             if tagsVisible, !model.issueTags.isEmpty {
@@ -160,8 +167,10 @@ struct ProofArtifactCard: View {
                 .padding(.trailing, 8)
             }
         }
+        .frame(maxWidth: .infinity)
         .frame(height: photoHeight)
         .padding(.horizontal, 14)
+        .padding(.top, 4)
     }
 
     private var artifactFooter: some View {
