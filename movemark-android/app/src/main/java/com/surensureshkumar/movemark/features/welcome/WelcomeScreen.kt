@@ -119,7 +119,7 @@ fun WelcomeScreen(
 
                 Column(
                     modifier = Modifier
-                        .padding(top = 28.dp)
+                        .padding(top = 22.dp)
                         .alpha(copyAlpha)
                         .offset(y = copyOffsetY.dp),
                 ) {
@@ -138,7 +138,8 @@ fun WelcomeScreen(
                     )
                 }
 
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.weight(1f, fill = false))
+                Spacer(Modifier.height(8.dp))
 
                 Column(
                     modifier = Modifier

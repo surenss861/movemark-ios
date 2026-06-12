@@ -1,16 +1,16 @@
 //
-//  WelcomeProofPreviewCard.swift
+//  WelcomeProofReceiptCard.swift
 //  movemork
 //
-//  Welcome-only saved proof preview — simpler than in-app ProofArtifactCard.
+//  Welcome-only saved proof receipt — photo-first, no report peek.
 //
 
 import SwiftUI
 
-struct WelcomeProofPreviewCard: View {
+struct WelcomeProofReceiptCard: View {
     var imageName: String = "welcome-kitchen-main"
-    var photoHeight: CGFloat = 160
-    var cornerRadius: CGFloat = 20
+    var photoHeight: CGFloat = 186
+    var cornerRadius: CGFloat = 28
     var tagsVisible: Bool = true
 
     private let issueTags = ["Already there", "Chipped paint"]
@@ -21,7 +21,7 @@ struct WelcomeProofPreviewCard: View {
         VStack(spacing: 0) {
             headerRow
             photoPane
-            receiptFooter
+            receiptStrip
         }
         .background(MoveMarkTheme.Colors.evidenceCard)
         .overlay(
@@ -35,27 +35,17 @@ struct WelcomeProofPreviewCard: View {
         HStack(alignment: .center, spacing: 8) {
             Text("MOVE-IN PROOF")
                 .font(.system(size: 10, weight: .semibold))
-                .tracking(0.7)
+                .tracking(0.8)
                 .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                 .lineLimit(1)
             Spacer(minLength: 8)
             Text("SAVED")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.95))
-                .padding(.horizontal, 9)
-                .padding(.vertical, 5)
-                .background(
-                    Capsule()
-                        .fill(MoveMarkTheme.Colors.primary.opacity(0.16))
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(MoveMarkTheme.Colors.primary.opacity(0.48), lineWidth: 0.85)
-                )
+                .tracking(0.5)
+                .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.88))
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 12)
-        .padding(.bottom, 10)
+        .frame(height: 44)
+        .padding(.horizontal, 16)
     }
 
     private var photoPane: some View {
@@ -70,14 +60,14 @@ struct WelcomeProofPreviewCard: View {
                 VStack {
                     Spacer(minLength: 0)
                     LinearGradient(
-                        colors: [.clear, Color.black.opacity(0.42)],
+                        colors: [.clear, Color.black.opacity(0.38)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .frame(height: 56)
+                    .frame(height: 52)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
 
             if tagsVisible {
                 HStack(spacing: 6) {
@@ -89,10 +79,7 @@ struct WelcomeProofPreviewCard: View {
                             .minimumScaleFactor(0.85)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(
-                                Color.black.opacity(0.72),
-                                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            )
+                            .background(tagBackground(for: index))
                             .scaleEffect(reduceMotion ? 1 : (tagsVisible ? 1 : 0.92))
                             .animation(
                                 reduceMotion ? nil : .easeOut(duration: 0.34).delay(Double(index) * 0.04),
@@ -100,9 +87,9 @@ struct WelcomeProofPreviewCard: View {
                             )
                     }
                 }
-                .padding(.leading, 12)
-                .padding(.bottom, 12)
-                .padding(.trailing, 8)
+                .padding(.leading, 14)
+                .padding(.bottom, 14)
+                .padding(.trailing, 10)
             }
         }
         .frame(maxWidth: .infinity)
@@ -110,31 +97,54 @@ struct WelcomeProofPreviewCard: View {
         .padding(.horizontal, 14)
     }
 
-    private var receiptFooter: some View {
+    @ViewBuilder
+    private func tagBackground(for index: Int) -> some View {
+        if index == 0 {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.black.opacity(0.72))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
+                )
+        } else {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(MoveMarkTheme.Colors.primary.opacity(0.22))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(MoveMarkTheme.Colors.primary.opacity(0.32), lineWidth: 0.5)
+                )
+        }
+    }
+
+    private var receiptStrip: some View {
         VStack(alignment: .leading, spacing: 4) {
             Rectangle()
-                .fill(MoveMarkTheme.Colors.cardStroke.opacity(0.65))
+                .fill(MoveMarkTheme.Colors.cardStroke.opacity(0.55))
                 .frame(height: 1)
-                .padding(.top, 12)
 
-            HStack(alignment: .center, spacing: 6) {
+            HStack(alignment: .center, spacing: 8) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.95))
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.9))
 
-                Text("Kitchen documented")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Kitchen documented")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                        .lineLimit(1)
+
+                    Text("12 photos · Verified Apr 14")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                        .lineLimit(1)
+                }
             }
-            .padding(.top, 10)
-
-            Text("12 photos · Verified Apr 14")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+            .padding(.top, 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14)
-        .padding(.bottom, 12)
+        .frame(minHeight: 76)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(MoveMarkTheme.Colors.fieldFill.opacity(0.45))
     }
 }

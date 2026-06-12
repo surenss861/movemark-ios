@@ -41,15 +41,15 @@ import com.surensureshkumar.movemark.core.design.MMMotion
 private val welcomeIssueTags = listOf("Already there", "Chipped paint")
 
 /**
- * Welcome-only saved proof preview — simpler than in-app [MMProofArtifactCard].
+ * Welcome-only saved proof receipt — photo-first, no report peek or stacked layers.
  */
 @Composable
-fun WelcomeProofPreviewCard(
+fun WelcomeProofReceiptCard(
     tagsVisible: Boolean,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
-    photoHeight: Dp = 160.dp,
-    cornerRadius: Dp = 20.dp,
+    photoHeight: Dp = 186.dp,
+    cornerRadius: Dp = 28.dp,
     drawableResId: Int = R.drawable.welcome_kitchen_main,
 ) {
     val shape = RoundedCornerShape(cornerRadius)
@@ -63,15 +63,15 @@ fun WelcomeProofPreviewCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp)
-                    .padding(top = 12.dp, bottom = 10.dp),
+                    .height(44.dp)
+                    .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     "MOVE-IN PROOF",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.7.sp,
+                    letterSpacing = 0.8.sp,
                     color = MMColors.TextMuted,
                     maxLines = 1,
                     modifier = Modifier.weight(1f, fill = false),
@@ -80,11 +80,8 @@ fun WelcomeProofPreviewCard(
                     "SAVED",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = MMColors.Primary.copy(alpha = 0.95f),
-                    modifier = Modifier
-                        .background(MMColors.Primary.copy(alpha = 0.16f), RoundedCornerShape(50))
-                        .border(0.85.dp, MMColors.Primary.copy(alpha = 0.48f), RoundedCornerShape(50))
-                        .padding(horizontal = 9.dp, vertical = 5.dp),
+                    letterSpacing = 0.5.sp,
+                    color = MMColors.Primary.copy(alpha = 0.88f),
                 )
             }
 
@@ -97,7 +94,7 @@ fun WelcomeProofPreviewCard(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(22.dp))
                         .background(MMColors.FieldFill),
                 ) {
                     Image(
@@ -109,11 +106,11 @@ fun WelcomeProofPreviewCard(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp)
+                            .height(52.dp)
                             .align(Alignment.BottomCenter)
                             .background(
                                 androidx.compose.ui.graphics.Brush.verticalGradient(
-                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.42f)),
+                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.38f)),
                                 ),
                             ),
                     )
@@ -122,26 +119,40 @@ fun WelcomeProofPreviewCard(
                     Row(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
-                            .padding(start = 12.dp, bottom = 12.dp, end = 8.dp),
+                            .padding(start = 14.dp, bottom = 14.dp, end = 10.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         welcomeIssueTags.forEachIndexed { index, tag ->
                             val tagScale by animateFloatAsState(
                                 if (tagsVisible) 1f else 0.92f,
                                 MMMotion.welcomeTagEnterSpec(reduceMotion),
-                                label = "welcomeTag$index",
+                                label = "welcomeReceiptTag$index",
                             )
-                            Text(
-                                tag,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White.copy(alpha = 0.95f),
-                                maxLines = 1,
+                            Box(
                                 modifier = Modifier
                                     .scale(tagScale)
-                                    .background(Color.Black.copy(alpha = 0.72f), RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .then(
+                                        if (index == 0) {
+                                            Modifier
+                                                .background(Color.Black.copy(alpha = 0.72f))
+                                                .border(0.5.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(8.dp))
+                                        } else {
+                                            Modifier
+                                                .background(MMColors.Primary.copy(alpha = 0.22f))
+                                                .border(0.5.dp, MMColors.Primary.copy(alpha = 0.32f), RoundedCornerShape(8.dp))
+                                        },
+                                    )
                                     .padding(horizontal = 8.dp, vertical = 4.dp),
-                            )
+                            ) {
+                                Text(
+                                    tag,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White.copy(alpha = 0.95f),
+                                    maxLines = 1,
+                                )
+                            }
                         }
                     }
                 }
@@ -150,15 +161,15 @@ fun WelcomeProofPreviewCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp)
-                    .padding(bottom = 12.dp),
+                    .height(76.dp)
+                    .background(MMColors.FieldFill.copy(alpha = 0.45f))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(1.dp)
-                        .padding(top = 12.dp)
-                        .background(MMColors.CardStroke.copy(alpha = 0.65f)),
+                        .background(MMColors.CardStroke.copy(alpha = 0.55f)),
                 )
                 Row(
                     modifier = Modifier.padding(top = 10.dp),
@@ -167,25 +178,28 @@ fun WelcomeProofPreviewCard(
                     Icon(
                         Icons.Filled.CheckCircle,
                         contentDescription = null,
-                        tint = MMColors.Primary.copy(alpha = 0.95f),
-                        modifier = Modifier.size(16.dp),
+                        tint = MMColors.Primary.copy(alpha = 0.9f),
+                        modifier = Modifier.size(22.dp),
                     )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "Kitchen documented",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MMColors.TextPrimary,
-                        maxLines = 1,
-                    )
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            "Kitchen documented",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MMColors.TextPrimary,
+                            maxLines = 1,
+                        )
+                        Text(
+                            "12 photos · Verified Apr 14",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MMColors.TextMuted,
+                            modifier = Modifier.padding(top = 2.dp),
+                            maxLines = 1,
+                        )
+                    }
                 }
-                Text(
-                    "12 photos · Verified Apr 14",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MMColors.TextMuted,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
             }
         }
     }

@@ -13,10 +13,10 @@ struct WelcomeDepositCaseFile: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        WelcomeProofPreviewCard(
+        WelcomeProofReceiptCard(
             tagsVisible: tagsVisible
         )
-        .frame(maxWidth: maxWidth)
+        .frame(maxWidth: min(maxWidth, 390))
         .padding(.top, 8)
         .opacity(cardVisible ? 1 : 0)
         .offset(y: cardVisible ? 0 : 14)

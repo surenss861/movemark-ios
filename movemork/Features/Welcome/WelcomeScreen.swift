@@ -90,7 +90,7 @@ struct WelcomeScreen: View {
             primaryCopyBlock
                 .padding(.top, layout.heroToCopyGap)
 
-            Spacer(minLength: 16)
+            Spacer(minLength: 8)
 
             bottomLaunchDock
                 .padding(.horizontal, dockSideInset)
@@ -257,7 +257,7 @@ private struct WelcomeZoneLayout {
     init(screenHeight: CGFloat, safeTop: CGFloat, safeBottom: CGFloat) {
         topPadding = max(4, safeTop - 71)
         brandToHeroGap = 14
-        heroToCopyGap = 28
+        heroToCopyGap = 22
     }
 
     func bottomDockPadding(safeBottom: CGFloat) -> CGFloat {
