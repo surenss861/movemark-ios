@@ -13,7 +13,7 @@ struct WelcomeDepositCaseFile: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        WelcomeProofReceiptCard(
+        WelcomeEvidenceStack(
             tagsVisible: tagsVisible
         )
         .frame(maxWidth: min(maxWidth, 390))

@@ -40,7 +40,7 @@ fun WelcomeDepositCaseFile(
             .offset(y = cardOffsetY.dp)
             .padding(top = 8.dp),
     ) {
-        WelcomeProofReceiptCard(
+        WelcomeEvidenceStack(
             tagsVisible = tagsVisible,
             reduceMotion = reduceMotion,
         )
