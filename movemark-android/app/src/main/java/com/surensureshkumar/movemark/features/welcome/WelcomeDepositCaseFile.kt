@@ -10,27 +10,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.dp
-import com.surensureshkumar.movemark.R
 import com.surensureshkumar.movemark.core.design.MMMotion
-import com.surensureshkumar.movemark.core.design.components.MMProofArtifactCard
-import com.surensureshkumar.movemark.core.design.components.MMProofArtifactModel
-import com.surensureshkumar.movemark.core.design.components.MMProofStatusTone
-
-private val WelcomeArtifact = MMProofArtifactModel(
-    phaseEyebrow = "Room Proof",
-    phaseLabel = "Move-in",
-    roomName = "Kitchen",
-    photoCount = 12,
-    issueCount = 3,
-    verifiedLabel = "Verified Apr 14 · 5:42 PM",
-    savedLabel = "Saved to vault",
-    statusLabel = "Ready",
-    statusTone = MMProofStatusTone.Success,
-    issueTags = listOf("Already there", "Chipped paint"),
-)
 
 /**
- * Welcome hero — layered proof artifact with report peek behind the card.
+ * Welcome hero — premium saved proof preview (not the full in-app artifact card).
  */
 @Composable
 fun WelcomeDepositCaseFile(
@@ -57,12 +40,7 @@ fun WelcomeDepositCaseFile(
             .offset(y = cardOffsetY.dp)
             .padding(top = 8.dp),
     ) {
-        MMProofArtifactCard(
-            model = WelcomeArtifact,
-            drawableResId = R.drawable.welcome_kitchen_main,
-            photoHeight = 168.dp,
-            cornerRadius = 20.dp,
-            showReportPeek = true,
+        WelcomeProofPreviewCard(
             tagsVisible = tagsVisible,
             reduceMotion = reduceMotion,
         )
