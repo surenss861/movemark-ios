@@ -118,22 +118,37 @@ Repo root `railway.toml` builds `movemark-api/Dockerfile`.
 
 ---
 
-```bash
-# No secret → 401
-curl -i -X POST https://YOUR_API_URL/api/webhooks/revenuecat \
-  -H "Content-Type: application/json" \
-  -d '{}'
+## 3. Runtime tests (after security deploy)
 
-# Bad secret → 401
-curl -i -X POST https://YOUR_API_URL/api/webhooks/revenuecat \
+### Webhook bad/missing secret
+
+```bash
+API=https://movemark-api-production.up.railway.app
+
+curl -i -X POST $API/api/webhooks/revenuecat \
+  -H "Content-Type: application/json" -d '{}'
+# Expected: 401
+
+curl -i -X POST $API/api/webhooks/revenuecat \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer wrong-secret" \
-  -d '{}'
+  -H "Authorization: Bearer wrong-secret" -d '{}'
+# Expected: 401
+```
+
+### Health rate limit
+
+```bash
+API=https://movemark-api-production.up.railway.app
+for i in {1..75}; do
+  code=$(curl -s -o /dev/null -w "%{http_code}" $API/api/health)
+  echo "$i $code"
+done
+# Expected: 429 near request 61+ (currently 200×75 on main deploy)
 ```
 
 ---
 
-## 3. Two-account manual QA (required — the real proof)
+## 4. Two-account manual QA (required — the real proof)
 
 Follow `docs/SECURITY_QA.md`.
 
@@ -159,14 +174,14 @@ If B can see or download anything belonging to A, **do not merge**.
 
 ---
 
-## 4. Abuse checks
+## 5. Abuse checks
 
 - Spam export create → `429`
 - Spam `GET /api/health` → `429`
 
 ---
 
-## 5. Secrets
+## 6. Secrets
 
 - [ ] No service role key in iOS/Android builds
 - [ ] Leaked Google service account JSON rotated in GCP
