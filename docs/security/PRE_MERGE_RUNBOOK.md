@@ -5,18 +5,18 @@ Branch `movemark-security-hardening` is **build-green** but **not merge-ready** 
 ## Merge gate (current)
 
 ```text
-✅ Branch build/test passes
-✅ verifying status fixed in migration
-✅ RLS enabled on sensitive tables (rowsecurity = true)
-✅ RLS policies exist (per-table policy_count >= 1)
-✅ Policy definitions enforce ownership (live audit — no bare `true`)
-⬜ exports_status_check verified live includes verifying
-⬜ Two-account test passes (the real proof)
-⬜ Railway REVENUECAT_WEBHOOK_SECRET + APP_ENV=production + redeploy
-⬜ Webhook missing/bad secret → 401
-⬜ Export + health rate limits → 429
+✅ RLS enabled
+✅ Policies exist
+✅ Policy definitions pass (live audit)
+⬜ exports_status_check includes verifying
+⬜ Railway webhook bad/missing secret → 401
+⬜ Two-account cross-user test passes
+⬜ Export spam → 429
+⬜ Health spam → 429
 ⬜ Leaked Google service account key rotated
 ```
+
+**Highest-risk path:** Account B must **not** download Account A's export PDF (signed URL or file bytes).
 
 **Dual protection model:**
 
@@ -125,16 +125,22 @@ curl -i -X POST https://YOUR_API_URL/api/webhooks/revenuecat \
 
 Follow `docs/SECURITY_QA.md`.
 
-**Account A:** create property, upload proof, generate export.
+**Account B** (logged in as different user):
 
-**Account B:** try A's property, rooms, export list, export download, create export on A's property, any signed URL from A.
+1. List/fetch A's property
+2. List/fetch A's rooms
+3. List/fetch A's evidence files
+4. Fetch A's export (list + by ID)
+5. **Download A's export PDF** ← highest risk
+6. Create export using A's `propertyId`
 
 Expected every time:
 
 ```text
-401 — not logged in
-403/404 — logged in but not owner
-never — signed URLs, file access, or A's metadata
+404 / 403 / empty result
+no signed URL
+no metadata leak
+no report download
 ```
 
 If B can see or download anything belonging to A, **do not merge**.
