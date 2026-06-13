@@ -55,8 +55,8 @@ fun CreatePropertyScreen(
                 .padding(top = 24.dp, bottom = MMSpacing.TabScrollBottom.dp),
         ) {
             MMProofSectionHeader(
-                title = "Create your proof vault",
-                subtitle = "Add your rental so you can start room proof.",
+                title = com.surensureshkumar.movemark.core.growth.MoveMarkGrowthCopy.FIRST_RUN_SETUP_TITLE,
+                subtitle = com.surensureshkumar.movemark.core.growth.MoveMarkGrowthCopy.FIRST_RUN_SETUP_SUBTITLE,
                 modifier = Modifier.mmAppearRise(appeared, reduceMotion, label = "createHeader"),
             )
             Spacer(Modifier.height(20.dp))

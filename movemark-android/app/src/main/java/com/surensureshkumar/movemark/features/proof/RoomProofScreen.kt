@@ -11,11 +11,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,7 +30,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -37,12 +37,11 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.surensureshkumar.movemark.core.design.MMBackground
 import com.surensureshkumar.movemark.core.design.MMColors
+import com.surensureshkumar.movemark.core.design.MMMotion
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
 import com.surensureshkumar.movemark.core.design.components.MMProofCard
-import com.surensureshkumar.movemark.domain.ProofPhase
-import com.surensureshkumar.movemark.domain.RoomProofMetrics
 import java.util.UUID
 
 @Composable
@@ -62,12 +61,21 @@ fun RoomProofScreen(
     val message by viewModel.message.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val reduceMotion = MMMotion.rememberReduceMotion()
     var cameraDenied by remember { mutableStateOf(false) }
     var showLeaveUploadDialog by remember { mutableStateOf(false) }
 
     val isBusy = saveState.isBusy
     val isPartial = saveState is RoomProofSaveState.PartialSuccess
     val isFailed = saveState is RoomProofSaveState.Failed
+    val uploadingProgress = saveState as? RoomProofSaveState.Uploading
+
+    val statusLine = when {
+        message != null -> message
+        uploadingProgress != null -> null
+        photoCount > 0 -> "$photoCount photo${if (photoCount == 1) "" else "s"} ready to save"
+        else -> null
+    }
 
     LaunchedEffect(Unit) {
         viewModel.proofSaved.collect { payload -> onProofSaved(payload.roomId) }
@@ -148,134 +156,74 @@ fun RoomProofScreen(
     }
 
     MMBackground {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = MMSpacing.ScreenHorizontal.dp, vertical = 24.dp),
-        ) {
-            TextButton(onClick = { handleBack() }) { Text("Back", color = MMColors.TextSecondary) }
-            val documented = room?.let { RoomProofMetrics.isDocumented(it, proofPhase) } == true
-            val pendingSelected = photos.count { it.status != PhotoUploadStatus.Uploaded }
-            val uploadingProgress = saveState as? RoomProofSaveState.Uploading
-            val onFileCount = room?.let { RoomProofMetrics.photoCount(it, proofPhase) } ?: 0
-            val statusLine = when {
-                uploadingProgress != null ->
-                    "Uploading ${uploadingProgress.currentIndex} of ${uploadingProgress.total}…"
-                pendingSelected > 0 -> "$pendingSelected photos ready to save"
-                documented -> "$onFileCount on file · add more anytime"
-                proofPhase == ProofPhase.MoveOut -> "Capture move-out photos for this room"
-                else -> "Capture move-in photos for this room"
-            }
-            RoomProofCaptureHero(
-                roomName = room?.name ?: "Room",
-                proofPhase = proofPhase,
-                statusLine = statusLine,
-            )
-            Spacer(Modifier.height(16.dp))
-
-            if (photos.isNotEmpty()) {
-                Spacer(Modifier.height(12.dp))
-                RoomProofPhotoStrip(photos = photos, modifier = Modifier.fillMaxWidth())
-            }
-
-            if (isBusy) {
-                Spacer(Modifier.height(12.dp))
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MMColors.Primary,
+        Scaffold(
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            bottomBar = {
+                RoomProofBottomSaveBar(
+                    saveButtonLabel = saveButtonLabel,
+                    statusLine = statusLine,
+                    photoCount = photoCount,
+                    isBusy = isBusy,
+                    isPartial = isPartial,
+                    isFailed = isFailed,
+                    onSave = viewModel::save,
+                    onContinueWithSaved = viewModel::continueWithSavedProof,
+                    onRetry = viewModel::retryFailedUploads,
                 )
-            }
-
-            message?.let {
+            },
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
+                    .padding(top = 16.dp, bottom = MMSpacing.TabScrollBottom.dp),
+            ) {
+                TextButton(onClick = { handleBack() }) {
+                    Text("Back", color = MMColors.TextSecondary)
+                }
                 Spacer(Modifier.height(8.dp))
-                val isError = isFailed || it.contains("couldn't", ignoreCase = true)
-                val isPartialMsg = it.contains(" of ") && it.contains("saved")
-                Text(
-                    it,
-                    color = when {
-                        isError -> MMColors.SemanticDanger
-                        isPartialMsg -> MMColors.SemanticWarning
-                        else -> MMColors.Primary
+
+                RoomProofCaptureHero(
+                    roomName = room?.name ?: "Room",
+                    proofPhase = proofPhase,
+                )
+                Spacer(Modifier.height(20.dp))
+
+                RoomProofMediaModule(
+                    photos = photos,
+                    isBusy = isBusy,
+                    reduceMotion = reduceMotion,
+                    onTakePhotos = ::launchCamera,
+                    onChooseGallery = {
+                        picker.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                        )
                     },
                 )
-            }
 
-            if (cameraDenied) {
-                Spacer(Modifier.height(16.dp))
-                MMProofCard {
-                    Text(
-                        "Camera access is needed to take proof photos.",
-                        color = MMColors.TextSecondary,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    MMButton(text = "Open Settings", onClick = ::openAppSettings)
-                    Spacer(Modifier.height(8.dp))
-                    MMButton(
-                        text = "Choose from gallery",
-                        onClick = {
-                            picker.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                            )
-                        },
-                        style = MMButtonStyle.Secondary,
-                    )
+                if (cameraDenied) {
+                    Spacer(Modifier.height(16.dp))
+                    MMProofCard {
+                        Text(
+                            "Camera access is needed to take proof photos.",
+                            color = MMColors.TextSecondary,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        MMButton(text = "Open Settings", onClick = ::openAppSettings)
+                        Spacer(Modifier.height(8.dp))
+                        MMButton(
+                            text = "Choose from gallery",
+                            onClick = {
+                                picker.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                )
+                            },
+                            style = MMButtonStyle.Secondary,
+                        )
+                    }
                 }
-            }
-
-            Spacer(Modifier.height(20.dp))
-            Text(
-                "Add proof photos",
-                style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                color = MMColors.TextPrimary,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Use the camera or pick from your gallery.",
-                color = MMColors.TextSecondary,
-                fontSize = 14.sp,
-            )
-            Spacer(Modifier.height(16.dp))
-            MMButton(
-                text = "Take photos",
-                onClick = ::launchCamera,
-                enabled = !isBusy,
-            )
-            Spacer(Modifier.height(12.dp))
-            MMButton(
-                text = "Choose from gallery",
-                onClick = {
-                    picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                },
-                style = MMButtonStyle.Secondary,
-                enabled = !isBusy,
-            )
-            Spacer(Modifier.height(12.dp))
-            MMButton(
-                text = saveButtonLabel,
-                onClick = viewModel::save,
-                loading = isBusy,
-                enabled = photoCount > 0 && !isBusy && !isPartial,
-            )
-
-            if (isPartial) {
-                Spacer(Modifier.height(10.dp))
-                MMButton(
-                    text = "Continue with saved proof",
-                    onClick = viewModel::continueWithSavedProof,
-                )
-                Spacer(Modifier.height(8.dp))
-                MMButton(
-                    text = RoomProofUploadMessages.RETRY_LABEL,
-                    onClick = viewModel::retryFailedUploads,
-                    style = MMButtonStyle.Secondary,
-                )
-            } else if (isFailed) {
-                Spacer(Modifier.height(10.dp))
-                MMButton(
-                    text = RoomProofUploadMessages.RETRY_LABEL,
-                    onClick = viewModel::retryFailedUploads,
-                    enabled = photoCount > 0,
-                )
             }
         }
     }

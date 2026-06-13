@@ -17,6 +17,7 @@ struct ExportHistoryView: View {
     var showOpenVaultsCTA: Bool = false
     var onOpenVaults: (() -> Void)? = nil
     var onContinueRoomProof: (() -> Void)? = nil
+    var onOpenMoveOutProof: (() -> Void)? = nil
 
     @State private var exports: [ExportRow] = []
     @State private var isLoading = false
@@ -30,6 +31,8 @@ struct ExportHistoryView: View {
     @State private var reportUnlockPulse = false
     @State private var lastReportReadiness: MMNextBestActionMapper.ReportReadiness? = nil
     @State private var isExporting = false
+    @State private var isMoveOutExporting = false
+    @State private var isDisputeExporting = false
     @State private var showPaywall = false
     @State private var activePaywallReason: PaywallReason = .unlimitedExports
     @State private var reportsContentAppeared = false
@@ -100,6 +103,9 @@ struct ExportHistoryView: View {
                                 appeared: reportsContentAppeared
                             )
                         }
+
+                        secondaryExportSections
+                            .mmAppearRise(isVisible: reportsContentAppeared, delay: 0.12, offset: 6)
                     }
 
                     if let successBanner {
@@ -124,12 +130,8 @@ struct ExportHistoryView: View {
 
                     if !hasActiveVault && !isLoading {
                         noVaultSelectedState
-                    } else if !isLoading, !(hasActiveVault && exports.isEmpty) {
-                        VStack(alignment: .leading, spacing: 18) {
-                            exportSection(title: "Move-in reports", rows: rows(for: "move_in_report"))
-                            exportSection(title: "Move-out reports", rows: rows(for: "move_out_report"))
-                            exportSection(title: "Dispute packets", rows: disputeRows)
-                        }
+                    } else if !isLoading, !exports.isEmpty {
+                        exportHistorySections
                     }
 
                     if rootTabBarVisible {
@@ -194,13 +196,9 @@ struct ExportHistoryView: View {
 
     private var header: some View {
         MMProofSectionHeader(
-            title: "Your move-in report",
-            subtitle: headerSubtitle
+            title: "Your reports",
+            subtitle: "Turn saved proof into shareable records."
         )
-    }
-
-    private var headerSubtitle: String {
-        "Build a clean report from saved room proof."
     }
 
     private var exportContextStrip: some View {
@@ -468,7 +466,7 @@ struct ExportHistoryView: View {
             })
         case .readyToMake:
             if subscriptionManager.canExportMoveIn(forUser: sessionManager.userId) {
-                return (isExporting ? "Making report…" : "Make move-in report", {
+                return (isExporting ? "Making report…" : "Make report", {
                     requestMoveInExport()
                 })
             }
@@ -522,30 +520,328 @@ struct ExportHistoryView: View {
     }
 
     private var noVaultSelectedState: some View {
-        MMCard(tone: .quiet, padding: 18, spacing: 16) {
-            VStack(alignment: .leading, spacing: 14) {
-                reportPreviewMock
+        ProofReportCard(
+            model: ProofReportModel(
+                reportTitle: "Move-in report",
+                metricsLine: "Pick a vault to see report readiness",
+                statusLabel: "Needs proof",
+                statusTone: .neutral,
+                footnote: "Reports belong to one rental. Create or open a vault first."
+            ),
+            primaryTitle: "Open vault",
+            onPrimary: { onOpenVaults?() },
+            primaryEnabled: showOpenVaultsCTA
+        )
+    }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Pick a vault first")
-                        .font(MoveMarkTheme.Typography.cardTitle)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+    private var secondaryExportSections: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            MMReportExportSection(
+                sectionTitle: "Move-out report",
+                sectionSubtitle: "Re-capture rooms before you return the keys.",
+                statusLabel: moveOutStatusLabel,
+                statusTone: moveOutStatusTone,
+                metricsLine: moveOutMetricsLine,
+                footnote: moveOutFootnote,
+                primaryTitle: moveOutPrimaryCTA.title,
+                primaryEnabled: moveOutPrimaryCTA.enabled,
+                isProcessing: moveOutReadiness == .processing,
+                isProLocked: !subscriptionManager.hasPro,
+                onPrimary: moveOutPrimaryCTA.action
+            )
 
-                    Text("Reports belong to one rental. Open a vault on the Proof tab, then come back here.")
-                        .font(MoveMarkTheme.Typography.subheadline)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+            MMReportExportSection(
+                sectionTitle: "Dispute packet",
+                sectionSubtitle: "Bundle your proof if your deposit is questioned.",
+                statusLabel: disputeStatusLabel,
+                statusTone: disputeStatusTone,
+                footnote: disputeFootnote,
+                primaryTitle: disputePrimaryCTA.title,
+                primaryEnabled: disputePrimaryCTA.enabled,
+                isProcessing: disputeReadiness == .processing,
+                isProLocked: !subscriptionManager.hasPro,
+                legalNote: "MoveMark organizes your proof. It does not provide legal advice.",
+                onPrimary: disputePrimaryCTA.action
+            )
+        }
+    }
 
-                if showOpenVaultsCTA {
-                    MMButton(
-                        title: "Open vaults",
-                        action: { onOpenVaults?() },
-                        kind: .primary,
-                        size: .standard
+    private var exportHistorySections: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Export history")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                .padding(.leading, 2)
+
+            VStack(spacing: 8) {
+                ForEach(exports) { row in
+                    ExportHistoryRow(
+                        title: label(for: row.exportType),
+                        dateLine: formattedDate(row.createdAt),
+                        statusLabel: (verificationStatus[row.id] ?? .unknown).displayLabel,
+                        statusTone: historyStatusTone(verificationStatus[row.id] ?? .unknown),
+                        isProcessing: isActiveExportJob(verificationStatus[row.id] ?? .unknown),
+                        canShare: canShareExport(verificationStatus[row.id] ?? .unknown),
+                        onShare: { share(row) }
                     )
-                    .padding(.top, 2)
                 }
+            }
+        }
+    }
+
+    private enum SecondaryReportReadiness {
+        case noProof
+        case readyToMake
+        case processing
+        case readyToShare
+        case failed
+    }
+
+    private var moveOutReadiness: SecondaryReportReadiness {
+        guard let property = resolvedPropertyRecord else { return .noProof }
+        let photos = propertyStore.moveOutPhotoCount(for: property)
+        if photos <= 0 { return .noProof }
+        let moveOutExports = exports.filter { $0.exportType == "move_out_report" }
+        if moveOutExports.contains(where: { verificationStatus[$0.id] == .serverFailed }) { return .failed }
+        if moveOutExports.contains(where: { isActiveExportJob(verificationStatus[$0.id] ?? .unknown) }) { return .processing }
+        if moveOutExports.contains(where: { verificationStatus[$0.id] == .ready }) { return .readyToShare }
+        return .readyToMake
+    }
+
+    private var disputeReadiness: SecondaryReportReadiness {
+        guard let property = resolvedPropertyRecord else { return .noProof }
+        let documented = propertyStore.documentedRoomCount(for: property)
+        let hasProof = documented > 0 || exports.contains {
+            $0.exportType == "move_in_report" && verificationStatus[$0.id] == .ready
+        }
+        if !hasProof { return .noProof }
+        let disputeExports = exports.filter { $0.exportType == "dispute_packet" || $0.exportType == "dispute_summary" }
+        if disputeExports.contains(where: { verificationStatus[$0.id] == .serverFailed }) { return .failed }
+        if disputeExports.contains(where: { isActiveExportJob(verificationStatus[$0.id] ?? .unknown) }) { return .processing }
+        if disputeExports.contains(where: { verificationStatus[$0.id] == .ready }) { return .readyToShare }
+        return .readyToMake
+    }
+
+    private var moveOutStatusLabel: String {
+        switch moveOutReadiness {
+        case .noProof: return "Needs proof"
+        case .readyToMake: return "Report can be made"
+        case .processing: return "Building report"
+        case .readyToShare: return "Ready to share"
+        case .failed: return "Failed"
+        }
+    }
+
+    private var disputeStatusLabel: String {
+        switch disputeReadiness {
+        case .noProof: return "Needs proof"
+        case .readyToMake: return "Report can be made"
+        case .processing: return "Building report"
+        case .readyToShare: return "Ready to share"
+        case .failed: return "Failed"
+        }
+    }
+
+    private var moveOutStatusTone: ProofStatusTone {
+        switch moveOutReadiness {
+        case .readyToShare: return .success
+        case .failed: return .danger
+        case .processing: return .warning
+        case .noProof: return .warning
+        case .readyToMake: return .neutral
+        }
+    }
+
+    private var disputeStatusTone: ProofStatusTone {
+        switch disputeReadiness {
+        case .readyToShare: return .success
+        case .failed: return .danger
+        case .processing: return .warning
+        case .noProof: return .warning
+        case .readyToMake: return .neutral
+        }
+    }
+
+    private var moveOutMetricsLine: String? {
+        guard let property = resolvedPropertyRecord else { return nil }
+        let photos = propertyStore.moveOutPhotoCount(for: property)
+        guard photos > 0 else { return nil }
+        let rooms = propertyStore.moveOutDocumentedRoomCount(for: property)
+        let total = propertyStore.totalRoomCount(for: property)
+        return "\(rooms) of \(total) rooms · \(photos) move-out photos"
+    }
+
+    private var moveOutFootnote: String? {
+        switch moveOutReadiness {
+        case .noProof: return "Capture move-out room photos first."
+        case .readyToMake: return "Add more move-out proof for a stronger report."
+        case .readyToShare: return "Your move-out report is ready to share."
+        case .failed: return "Something went wrong. Try again when you're ready."
+        case .processing: return nil
+        }
+    }
+
+    private var disputeFootnote: String? {
+        switch disputeReadiness {
+        case .noProof: return "Save move-in room proof before building a packet."
+        case .readyToMake: return "Add more proof for a stronger packet."
+        case .readyToShare: return "Your dispute packet is ready to share."
+        case .failed: return "Something went wrong. Try again when you're ready."
+        case .processing: return nil
+        }
+    }
+
+    private var moveOutPrimaryCTA: (title: String, enabled: Bool, action: () -> Void) {
+        if !subscriptionManager.hasPro {
+            return ("Upgrade to Pro", true, {
+                activePaywallReason = .moveOutExport
+                showPaywall = true
+            })
+        }
+        switch moveOutReadiness {
+        case .noProof:
+            return ("Open move-out proof", true, { onOpenMoveOutProof?() })
+        case .readyToMake:
+            return (isMoveOutExporting ? "Making report…" : "Make move-out report", !isMoveOutExporting, { requestMoveOutExport() })
+        case .readyToShare:
+            return ("View / Share report", true, {
+                if let row = exports.first(where: { $0.exportType == "move_out_report" && verificationStatus[$0.id] == .ready }) {
+                    share(row)
+                }
+            })
+        case .processing:
+            return ("Building report…", false, {})
+        case .failed:
+            return (isMoveOutExporting ? "Retrying…" : "Retry report", !isMoveOutExporting, { requestMoveOutExport() })
+        }
+    }
+
+    private var disputePrimaryCTA: (title: String, enabled: Bool, action: () -> Void) {
+        if !subscriptionManager.hasPro {
+            return ("Upgrade to Pro", true, {
+                activePaywallReason = .disputePacket
+                showPaywall = true
+            })
+        }
+        switch disputeReadiness {
+        case .noProof:
+            return ("Continue room proof", true, {
+                if let onContinueRoomProof {
+                    onContinueRoomProof()
+                } else {
+                    onOpenVaults?()
+                }
+            })
+        case .readyToMake:
+            return (isDisputeExporting ? "Building packet…" : "Build dispute packet", !isDisputeExporting, { requestDisputePacketExport() })
+        case .readyToShare:
+            return ("View / Share packet", true, {
+                if let row = exports.first(where: {
+                    ($0.exportType == "dispute_packet" || $0.exportType == "dispute_summary") &&
+                    verificationStatus[$0.id] == .ready
+                }) {
+                    share(row)
+                }
+            })
+        case .processing:
+            return ("Building packet…", false, {})
+        case .failed:
+            return (isDisputeExporting ? "Retrying…" : "Retry packet", !isDisputeExporting, { requestDisputePacketExport() })
+        }
+    }
+
+    private func isActiveExportJob(_ status: ExportVerificationStatus) -> Bool {
+        switch status {
+        case .queued, .processing, .verifying:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func historyStatusTone(_ status: ExportVerificationStatus) -> ProofStatusTone {
+        switch status {
+        case .ready: return .success
+        case .serverFailed: return .danger
+        case .queued, .processing, .verifying: return .warning
+        default: return .neutral
+        }
+    }
+
+    private func requestMoveOutExport() {
+        guard let property = resolvedPropertyRecord ?? propertyStore.currentProperty else { return }
+        guard !isMoveOutExporting else { return }
+        guard subscriptionManager.canExportMoveOut() else {
+            activePaywallReason = .moveOutExport
+            showPaywall = true
+            return
+        }
+        guard let baseURL = apiBaseURL else {
+            errorMessage = "API base URL is missing. Set MoveMarkAPIBaseURL in build settings."
+            return
+        }
+
+        isMoveOutExporting = true
+        errorMessage = nil
+
+        Task { @MainActor in
+            defer { isMoveOutExporting = false }
+            do {
+                let session = try await supabase.auth.session
+                let apiClient = try ExportAPIClient(baseURLString: baseURL)
+                _ = try await apiClient.requestMoveOutExport(
+                    propertyId: property.id,
+                    accessToken: session.accessToken
+                )
+                MMProofToastPresenter.show(.reportQueued(), message: $proofToast, isVisible: $proofToastVisible)
+                NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
+                await loadExports()
+            } catch {
+                errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(
+                    error,
+                    fallback: "Couldn't queue move-out report. Try again.",
+                    intent: .mutate
+                )
+                MMHaptics.error()
+            }
+        }
+    }
+
+    private func requestDisputePacketExport() {
+        guard let property = resolvedPropertyRecord ?? propertyStore.currentProperty else { return }
+        guard !isDisputeExporting else { return }
+        guard subscriptionManager.hasPro else {
+            activePaywallReason = .disputePacket
+            showPaywall = true
+            return
+        }
+        guard let baseURL = apiBaseURL else {
+            errorMessage = "API base URL is missing. Set MoveMarkAPIBaseURL in build settings."
+            return
+        }
+
+        isDisputeExporting = true
+        errorMessage = nil
+
+        Task { @MainActor in
+            defer { isDisputeExporting = false }
+            do {
+                let session = try await supabase.auth.session
+                let apiClient = try ExportAPIClient(baseURLString: baseURL)
+                _ = try await apiClient.requestDisputePacketExport(
+                    propertyId: property.id,
+                    accessToken: session.accessToken
+                )
+                MMProofToastPresenter.show(.reportQueued(), message: $proofToast, isVisible: $proofToastVisible)
+                NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
+                await loadExports()
+            } catch {
+                errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(
+                    error,
+                    fallback: "Couldn't queue dispute packet. Try again.",
+                    intent: .mutate
+                )
+                MMHaptics.error()
             }
         }
     }

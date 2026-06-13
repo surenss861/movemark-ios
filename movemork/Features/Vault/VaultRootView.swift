@@ -123,9 +123,17 @@ struct VaultRootView: View {
                         .mmAppearRise(isVisible: hasAnimatedIn, delay: 0.06, offset: 6)
                 }
 
+                lifecycleNudgeCard
+                    .opacity(hasAnimatedIn ? 1 : 0)
+                    .animation(MMMotion.cardReveal.delay(0.10), value: hasAnimatedIn)
+
                 missingDocsCard
                     .opacity(hasAnimatedIn ? 1 : 0)
                     .animation(MMMotion.cardReveal.delay(0.12), value: hasAnimatedIn)
+
+                vaultSecondaryTasks
+                    .opacity(hasAnimatedIn ? 1 : 0)
+                    .animation(MMMotion.cardReveal.delay(0.14), value: hasAnimatedIn)
 
                 if !otherProperties.isEmpty {
                     Text("Other rentals")
@@ -165,6 +173,13 @@ struct VaultRootView: View {
 
     @ViewBuilder
     private func primaryVaultCard(for row: PropertyRow) -> some View {
+        let prop = propertyStore.currentProperty
+        let featuredRoom = prop?.rooms.first(where: { room in
+            !room.evidence.contains(where: { $0.photoCount > 0 })
+        }) ?? prop?.rooms.first(where: { room in
+            room.evidence.contains(where: { $0.photoCount > 0 })
+        })
+        let featuredPhotoCount = featuredRoom?.evidence.reduce(0) { $0 + $1.photoCount } ?? 0
         MMVaultProofHeroCard(
             propertyName: displayName(for: row),
             location: locationText(for: row).isEmpty ? nil : locationText(for: row),
@@ -172,9 +187,59 @@ struct VaultRootView: View {
             nextLine: vaultHeroNextLine,
             progress: vaultProofProgressValue,
             previewURL: previewURLByPropertyId[row.id],
+            roomName: featuredRoom?.name,
+            photoCount: featuredPhotoCount,
             primaryTitle: featuredContinueProofTitle,
             onPrimary: { openFeaturedVaultOrContinue() }
         )
+    }
+
+    @ViewBuilder
+    private var lifecycleNudgeCard: some View {
+        if let prop = propertyStore.currentProperty,
+           let nudge = propertyStore.lifecycleNudge(for: prop) {
+            MMLifecycleNudgeCard(nudge: nudge) {
+                handleLifecycleNudge(nudge, property: prop)
+            }
+        }
+    }
+
+    private func handleLifecycleNudge(_ nudge: PropertyStore.LifecycleNudge, property: PropertyRecord) {
+        switch nudge {
+        case .finishRoomsBeforeUnpacking:
+            switch propertyStore.primaryNextAction(for: property) {
+            case .captureRoom:
+                path.append(.walkthrough)
+            default:
+                if let row = featuredPropertyRow { openVaultDetail(for: row) }
+            }
+        case .addLeaseAndDepositDocs, .midLeaseMaintenance:
+            if let row = featuredPropertyRow { openVaultDetail(for: row) }
+        case .makeMoveInReport:
+            path.append(.exports)
+        case .moveOutProofReminder:
+            if subscriptionManager.hasPro {
+                path.append(.moveOut)
+            } else {
+                activePaywallReason = .moveOutExport
+                showPaywall = true
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var vaultSecondaryTasks: some View {
+        VStack(spacing: 10) {
+            ProofTaskCard(
+                title: "Lease & deposit records",
+                reason: "Helps if your deposit is questioned later.",
+                action: {
+                    if let row = featuredPropertyRow {
+                        openVaultDetail(for: row)
+                    }
+                }
+            )
+        }
     }
 
     @ViewBuilder
@@ -185,15 +250,16 @@ struct VaultRootView: View {
                !DocumentRepository.documentTypeQueryKeys(type.rawValue)
                    .contains { prop.vaultDocuments.contains($0) }
            }) {
-            MMMissingItemCard(
+            ProofTaskCard(
                 title: "Add \(missing.displayTitle)",
-                message: "Helps if your deposit is questioned later.",
-                actionTitle: MMNextBestAction.addDocs.title,
-                onAction: {
+                reason: "Helps if your deposit is questioned later.",
+                action: {
                     if let row = propertyStore.properties.first(where: { $0.id == prop.id }) {
                         openVaultDetail(for: row)
                     }
-                }
+                },
+                statusLabel: "Needed",
+                statusTone: .warning
             )
         }
     }

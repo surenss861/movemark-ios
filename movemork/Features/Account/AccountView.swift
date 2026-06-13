@@ -2,7 +2,7 @@
 //  AccountView.swift
 //  movemork
 //
-//  MoveMark — quiet iOS-style account settings.
+//  MoveMark — quiet native account settings.
 //
 
 import SwiftUI
@@ -10,6 +10,7 @@ import SwiftUI
 struct AccountView: View {
     @Environment(\.mmRootTabBarVisible) private var rootTabBarVisible
     @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(SessionManager.self) private var sessionManager
     @Environment(PropertyStore.self) private var propertyStore
     @Environment(SubscriptionManager.self) private var subscriptionManager
@@ -20,6 +21,8 @@ struct AccountView: View {
     @State private var resetError: String? = nil
     @State private var isSendingReset = false
     @State private var subscriptionRestoreFeedback: String? = nil
+    @State private var contentAppeared = false
+
     private static let appleSubscriptionsURL = URL(string: "https://apps.apple.com/account/subscriptions")!
 
     private var displayName: String {
@@ -33,32 +36,6 @@ struct AccountView: View {
         return "\(version) (\(build))"
     }
 
-    private var privacyPolicyURL: URL? {
-        legalURL(forInfoKey: "LegalPrivacyPolicyURL")
-    }
-
-    private var termsURL: URL? {
-        legalURL(forInfoKey: "LegalTermsURL")
-    }
-
-    private var supportURL: URL? {
-        legalURL(forInfoKey: "LegalSupportURL")
-    }
-
-    private var accountDeletionURL: URL? {
-        legalURL(forInfoKey: "LegalAccountDeletionURL")
-    }
-
-    private var supportEmail: String {
-        (Bundle.main.object(forInfoDictionaryKey: "LegalSupportEmail") as? String)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    }
-
-    private var supportEmailURL: URL? {
-        guard !supportEmail.isEmpty else { return nil }
-        return URL(string: "mailto:\(supportEmail)")
-    }
-
     var body: some View {
         ZStack {
             Color.clear
@@ -68,16 +45,16 @@ struct AccountView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     MMProofSectionHeader(
                         title: "Account",
-                        subtitle: "Profile, plan, and app settings."
+                        subtitle: "Manage your profile, plan, and proof vaults."
                     )
+                    .mmAppearRise(isVisible: contentAppeared, delay: 0, offset: 6)
 
                     profileSection
                     planSection
                     privacySupportSection
                     securitySection
                     aboutSection
-
-                    signOutButton
+                    signOutSection
 
                     Color.clear
                         .frame(height: rootTabBarVisible
@@ -91,6 +68,9 @@ struct AccountView: View {
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            if !contentAppeared { contentAppeared = true }
+        }
         .sheet(isPresented: $showPaywall) {
             ProPaywallView(
                 reason: .extraProperty,
@@ -117,7 +97,7 @@ struct AccountView: View {
                 MMSettingsRow(
                     title: "Name",
                     accessory: .value(displayName),
-                    action: { showEditName = true }
+                    action: nil
                 )
 
                 MMSettingsDivider()
@@ -129,8 +109,17 @@ struct AccountView: View {
                     ),
                     action: nil
                 )
+
+                MMSettingsDivider()
+
+                MMSettingsRow(
+                    title: "Edit name",
+                    subtitle: "Update how your name appears",
+                    action: { showEditName = true }
+                )
             }
         }
+        .mmAppearRise(isVisible: contentAppeared, delay: 0.04, offset: 6)
     }
 
     // MARK: - Plan
@@ -144,7 +133,7 @@ struct AccountView: View {
 
             MMSettingsGroup {
                 MMSettingsRow(
-                    title: subscriptionManager.hasPro ? "MoveMark Pro" : "Free",
+                    title: subscriptionManager.hasPro ? "MoveMark Pro" : "MoveMark Free",
                     accessory: .pill(
                         subscriptionManager.hasPro ? "Active" : "Current",
                         subscriptionManager.hasPro ? .success : .neutral
@@ -157,7 +146,7 @@ struct AccountView: View {
 
                     MMSettingsRow(
                         title: "Upgrade to Pro",
-                        subtitle: "More properties and reports",
+                        subtitle: "Unlimited vaults, reports, and dispute tools",
                         action: {
                             subscriptionRestoreFeedback = nil
                             showPaywall = true
@@ -195,13 +184,14 @@ struct AccountView: View {
                     .padding(.top, 2)
             }
         }
+        .mmAppearRise(isVisible: contentAppeared, delay: 0.08, offset: 6)
     }
 
     private var planStatusSummary: String {
         if subscriptionManager.hasPro {
-            return subscriptionManager.accountPlanSummaryLine
+            return "Unlimited vaults, reports, move-out proof, and dispute tools."
         }
-        return "1 property. 1 move-in report."
+        return "1 proof vault · 1 move-in report"
     }
 
     // MARK: - Privacy & support
@@ -211,21 +201,38 @@ struct AccountView: View {
             MMSettingsSectionHeader(title: "Privacy & support")
 
             MMSettingsGroup {
-                settingsLinkRow(title: "Privacy Policy", url: privacyPolicyURL)
+                settingsLinkRow(
+                    title: "Privacy Policy",
+                    subtitle: "How we handle your data",
+                    url: privacyPolicyURL
+                )
                 MMSettingsDivider()
-                settingsLinkRow(title: "Terms of Use", url: termsURL)
+                settingsLinkRow(
+                    title: "Terms of Use",
+                    subtitle: "Subscription and service terms",
+                    url: termsURL
+                )
                 MMSettingsDivider()
-                settingsLinkRow(title: "Contact Support", url: supportURL ?? supportEmailURL)
+                settingsLinkRow(
+                    title: "Contact Support",
+                    subtitle: "Get help with your account",
+                    url: supportURL ?? supportEmailURL
+                )
                 MMSettingsDivider()
-                settingsLinkRow(title: "Account & Data Deletion", url: accountDeletionURL)
+                settingsLinkRow(
+                    title: "Account & Data Deletion",
+                    subtitle: "Request account removal",
+                    url: accountDeletionURL
+                )
             }
         }
+        .mmAppearRise(isVisible: contentAppeared, delay: 0.12, offset: 6)
     }
 
-    private func settingsLinkRow(title: String, url: URL?) -> some View {
+    private func settingsLinkRow(title: String, subtitle: String, url: URL?) -> some View {
         MMSettingsRow(
             title: title,
-            subtitle: url == nil ? "Not configured in this build" : nil,
+            subtitle: url == nil ? "Not configured in this build" : subtitle,
             accessory: url == nil ? .none : .external,
             isDisabled: url == nil,
             action: {
@@ -254,16 +261,20 @@ struct AccountView: View {
             if let resetMessage {
                 Text(resetMessage)
                     .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.primary)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     .padding(.horizontal, 4)
                     .padding(.top, 2)
             }
 
             if let resetError {
-                MMErrorBanner(message: resetError)
-                    .padding(.top, 4)
+                Text(resetError)
+                    .font(MoveMarkTheme.Typography.footnote)
+                    .foregroundStyle(MoveMarkTheme.Colors.semanticDanger.opacity(0.92))
+                    .padding(.horizontal, 4)
+                    .padding(.top, 2)
             }
         }
+        .mmAppearRise(isVisible: contentAppeared, delay: 0.16, offset: 6)
     }
 
     // MARK: - About
@@ -274,7 +285,7 @@ struct AccountView: View {
 
             MMSettingsGroup {
                 MMSettingsRow(
-                    title: "Version",
+                    title: "App version",
                     accessory: .value(appVersion),
                     action: nil
                 )
@@ -287,24 +298,51 @@ struct AccountView: View {
                 .padding(.horizontal, 4)
                 .padding(.top, 2)
         }
+        .mmAppearRise(isVisible: contentAppeared, delay: 0.2, offset: 6)
     }
 
     // MARK: - Sign out
 
-    private var signOutButton: some View {
-        Button {
-            propertyStore.clear()
-            Task { await sessionManager.signOut() }
-        } label: {
-            Text("Sign out")
-                .font(.system(size: 17, weight: .regular))
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.88))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+    private var signOutSection: some View {
+        MMSettingsGroup {
+            MMSettingsRow(
+                title: "Sign out",
+                subtitle: "Clear this device and return to Welcome",
+                action: {
+                    propertyStore.clear()
+                    Task { await sessionManager.signOut() }
+                }
+            )
         }
-        .buttonStyle(.plain)
-        .mmProofCardSurface(.neutral, cornerRadius: 14)
-        .padding(.top, 4)
+        .mmAppearRise(isVisible: contentAppeared, delay: 0.24, offset: 6)
+    }
+
+    // MARK: - Legal URLs
+
+    private var privacyPolicyURL: URL? {
+        legalURL(forInfoKey: "LegalPrivacyPolicyURL")
+    }
+
+    private var termsURL: URL? {
+        legalURL(forInfoKey: "LegalTermsURL")
+    }
+
+    private var supportURL: URL? {
+        legalURL(forInfoKey: "LegalSupportURL")
+    }
+
+    private var accountDeletionURL: URL? {
+        legalURL(forInfoKey: "LegalAccountDeletionURL")
+    }
+
+    private var supportEmail: String {
+        (Bundle.main.object(forInfoDictionaryKey: "LegalSupportEmail") as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private var supportEmailURL: URL? {
+        guard !supportEmail.isEmpty else { return nil }
+        return URL(string: "mailto:\(supportEmail)")
     }
 
     // MARK: - Actions
@@ -320,7 +358,7 @@ struct AccountView: View {
                 subscriptionRestoreFeedback = err
             } else {
                 subscriptionRestoreFeedback =
-                    "No active MoveMark subscription was found for this Apple ID. If you subscribed with a different Apple ID, use Manage subscription or sign into that Apple ID in Settings."
+                    "No active MoveMark subscription was found for this Apple ID."
             }
         }
     }
@@ -339,7 +377,7 @@ struct AccountView: View {
     private func sendPasswordReset() {
         let email = sessionManager.userEmail
         guard !email.isEmpty else {
-            resetError = "No email on file."
+            resetError = "No email on file for this account."
             resetMessage = nil
             return
         }
@@ -385,7 +423,9 @@ private struct EditNameSheet: View {
                 MMTextField(title: "Full name", placeholder: "Enter your full name", text: $name)
 
                 if let errorMessage {
-                    MMErrorBanner(message: errorMessage)
+                    Text(errorMessage)
+                        .font(MoveMarkTheme.Typography.footnote)
+                        .foregroundStyle(MoveMarkTheme.Colors.semanticDanger.opacity(0.92))
                 }
             }
             .padding()

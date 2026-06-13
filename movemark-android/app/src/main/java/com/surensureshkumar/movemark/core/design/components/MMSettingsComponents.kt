@@ -62,8 +62,8 @@ fun MMSettingsGroup(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        color = MMColors.Card,
+        shape = RoundedCornerShape(18.dp),
+        color = MMColors.EvidenceCard,
         border = androidx.compose.foundation.BorderStroke(1.dp, MMColors.CardStroke),
     ) {
         Column { content() }

@@ -26,8 +26,8 @@ struct FirstRunPropertySetupView: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 24) {
                 MMRenterHeader(
-                    title: "Start your move-in proof.",
-                    subtitle: "Add your rental, then document each room before you settle in."
+                    title: MoveMarkGrowthCopy.firstRunSetupTitle,
+                    subtitle: MoveMarkGrowthCopy.firstRunSetupSubtitle
                 )
 
                 VStack(alignment: .leading, spacing: 12) {

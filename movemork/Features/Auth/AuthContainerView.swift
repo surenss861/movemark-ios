@@ -46,13 +46,13 @@ struct AuthContainerView: View {
     }
 
     private var headerTitle: String {
-        mode == .signIn ? "Welcome back." : "Start your move-in proof."
+        mode == .signIn ? "Welcome back." : "Create your proof vault"
     }
 
     private var headerSubtitle: String {
         mode == .signIn
             ? "Continue your proof vault."
-            : "Save this proof in a private vault."
+            : "Save room photos, lease docs, and reports under one rental."
     }
 
     init(initialMode: Mode, onDismiss: @escaping () -> Void = {}) {
@@ -70,11 +70,11 @@ struct AuthContainerView: View {
                     headerBlock
 
                     titleBlock
-                        .padding(.top, 20)
-                        .padding(.bottom, 28)
+                        .padding(.top, 14)
+                        .padding(.bottom, 14)
 
                     proofSummarySection
-                        .padding(.bottom, 24)
+                        .padding(.bottom, 14)
                         .opacity(surfaceAppeared ? 1 : 0)
                         .offset(y: surfaceAppeared ? 0 : 8)
 
@@ -84,14 +84,14 @@ struct AuthContainerView: View {
 
                     if mode == .signUp {
                         legalFinePrint
-                            .padding(.top, 18)
+                            .padding(.top, 14)
                             .opacity(formFieldsAppeared ? 1 : 0)
                             .transition(fieldTransition)
                     }
 
                     if mode == .signUp {
                         modeSwitchRow
-                            .padding(.top, 18)
+                            .padding(.top, 14)
                             .opacity(formFieldsAppeared ? 1 : 0)
                     }
                 }
@@ -100,7 +100,7 @@ struct AuthContainerView: View {
                 .padding(.bottom, 24 + keyboardBottomInset)
             }
             .scrollDismissesKeyboard(.interactively)
-            .safeAreaPadding(.top, 6)
+            .safeAreaPadding(.top, 10)
         }
         .offset(y: surfaceAppeared ? 0 : 28)
         .opacity(surfaceAppeared ? 1 : 0)
@@ -146,7 +146,7 @@ struct AuthContainerView: View {
     // MARK: - Header
 
     private var headerBlock: some View {
-        HStack(alignment: .center, spacing: 14) {
+        HStack(alignment: .center, spacing: 0) {
             Button(action: onDismiss) {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 17, weight: .semibold))
@@ -162,28 +162,40 @@ struct AuthContainerView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
 
-            Image("MoveMarkLogo")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 32, height: 32)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .accessibilityHidden(true)
+            Spacer(minLength: 0)
+
+            HStack(spacing: 8) {
+                Image("MoveMarkLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 28, height: 28)
+                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .accessibilityHidden(true)
+
+                Text("MoveMark")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+            }
 
             Spacer(minLength: 0)
+
+            Color.clear
+                .frame(width: 40, height: 40)
+                .accessibilityHidden(true)
         }
     }
 
     private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 5) {
             Text(headerTitle)
-                .font(MoveMarkTheme.Typography.screenTitle)
-                .tracking(-0.6)
+                .font(.system(size: 28, weight: .bold))
+                .tracking(-0.4)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
                 .id("auth-title-\(mode == .signIn ? "in" : "up")")
 
             Text(headerSubtitle)
-                .font(MoveMarkTheme.Typography.body)
+                .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.94))
                 .fixedSize(horizontal: false, vertical: true)
                 .id("auth-subtitle-\(mode == .signIn ? "in" : "up")")
@@ -191,10 +203,10 @@ struct AuthContainerView: View {
         .animation(authSpring, value: mode)
     }
 
-    // MARK: - Proof receipt (anchor during morph)
+    // MARK: - Proof strip
 
     private var proofSummarySection: some View {
-        AuthProofSummaryCard(mode: mode)
+        AuthProofVaultStrip(mode: mode)
             .animation(authSpring, value: mode)
             .matchedGeometryEffect(id: "auth-proof-summary", in: authCardNamespace)
     }
@@ -211,25 +223,27 @@ struct AuthContainerView: View {
     }
 
     private var createFormSurface: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 12) {
             authInputFields
             authStatusMessages
             primaryActionButton
         }
-        .padding(16)
-        .background(authSurfaceBackground(cornerRadius: 26, fillOpacity: 0.9))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
+        .background(authSurfaceBackground(cornerRadius: 22, fillOpacity: 0.88))
         .matchedGeometryEffect(id: "auth-proof-form", in: authCardNamespace)
     }
 
     private var signInFormSurface: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             authInputFields
             authStatusMessages
             primaryActionButton
             modeSwitchRow
         }
-        .padding(18)
-        .background(authSurfaceBackground(cornerRadius: 28, fillOpacity: 0.78))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
+        .background(authSurfaceBackground(cornerRadius: 22, fillOpacity: 0.78))
         .matchedGeometryEffect(id: "auth-proof-form", in: authCardNamespace)
     }
 
@@ -243,7 +257,7 @@ struct AuthContainerView: View {
     }
 
     private var authInputFields: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             MMTextField(
                 title: "Email",
                 placeholder: "you@example.com",
@@ -335,13 +349,13 @@ struct AuthContainerView: View {
 
     private var modeSwitchRow: some View {
         HStack(spacing: 6) {
-            Text(mode == .signIn ? "New to MoveMark?" : "Already have a vault?")
+            Text(mode == .signIn ? "New to MoveMark?" : "Already have an account?")
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
             Button {
                 switchAuthMode()
             } label: {
-                Text(mode == .signIn ? "Create private vault" : "Continue proof vault")
+                Text(mode == .signIn ? "Create private vault" : "Sign in")
                     .font(MoveMarkTheme.Typography.subheadlineMedium)
                     .fontWeight(.semibold)
                     .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.95))

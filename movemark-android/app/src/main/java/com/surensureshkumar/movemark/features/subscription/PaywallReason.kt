@@ -12,23 +12,23 @@ enum class PaywallReason {
     val headline: String
         get() = when (this) {
             ExtraProperty -> "Protect more than one rental."
-            UnlimitedExports -> "Make more move-in reports."
-            DisputePacket -> "Dispute tools need Pro."
+            UnlimitedExports -> "Turn proof into more reports."
+            DisputePacket -> "Build a dispute-ready packet."
             MoveOutExport -> "Document move-out proof."
-            MoveOutProof -> "Move-out proof needs Pro."
-            MoveOutReport -> "Move-out reports need Pro."
+            MoveOutProof -> "Document move-out proof."
+            MoveOutReport -> "Document move-out proof."
         }
 
     val subheadline: String
         get() = when (this) {
             ExtraProperty -> "Free includes 1 proof vault."
             UnlimitedExports -> "You've used your free move-in report on this account."
-            DisputePacket -> "Organize proof into a stronger dispute workflow."
+            DisputePacket -> "Organize photos and docs when your deposit is questioned."
             MoveOutExport -> "Re-capture rooms and export move-out reports with Pro."
             MoveOutProof -> "Re-capture each room before you return the keys."
             MoveOutReport -> "Make and share a move-out PDF from saved room proof."
         }
 
     val valueProp: String
-        get() = "Unlock unlimited proof vaults, reports, move-out proof, and dispute tools."
+        get() = com.surensureshkumar.movemark.core.growth.MoveMarkGrowthCopy.PAYWALL_VALUE_LINE
 }

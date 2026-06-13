@@ -4,9 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,7 +14,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Icon
@@ -33,8 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,7 +44,9 @@ import com.surensureshkumar.movemark.core.design.MMMotion
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
-import com.surensureshkumar.movemark.core.design.components.MMProofCard
+import com.surensureshkumar.movemark.core.design.components.MMProofArtifactCard
+import com.surensureshkumar.movemark.core.design.components.MMProofArtifactModel
+import com.surensureshkumar.movemark.core.design.components.MMProofStatusTone
 import com.surensureshkumar.movemark.domain.ProofPhase
 import kotlinx.coroutines.delay
 import java.util.UUID
@@ -64,143 +64,98 @@ fun SavedProofReceiptScreen(
     BackHandler { onBackSafe() }
     val reduceMotion = MMMotion.rememberReduceMotion()
     var visible by remember { mutableStateOf(reduceMotion) }
-    var checkScale by remember { mutableStateOf(if (reduceMotion) 1f else 0.4f) }
-    var savedPulse by remember { mutableStateOf(0f) }
+    var checkScale by remember { mutableStateOf(if (reduceMotion) 1f else 0.72f) }
 
     LaunchedEffect(Unit) {
         if (!reduceMotion) {
             visible = true
-            delay(80)
+            delay(90)
             checkScale = 1f
-            delay(200)
-            savedPulse = 1f
-            delay(400)
-            savedPulse = 0f
+        } else {
+            visible = true
         }
     }
 
-    val animatedCheck = animateFloatAsState(checkScale, MMMotion.checkPopSpec(reduceMotion), label = "check")
-    val pulseAlpha = animateFloatAsState(
-        if (savedPulse > 0f) 0.18f else 0f,
-        MMMotion.receiptEnterSpec(reduceMotion),
-        label = "pulse",
+    val animatedCheck = animateFloatAsState(
+        targetValue = checkScale,
+        animationSpec = MMMotion.checkPopSpec(reduceMotion),
+        label = "receiptCheck",
     )
+    val phaseLabel = if (state.proofPhase == ProofPhase.MoveOut) "Move-out" else "Move-in"
+    val verifiedLabel = buildString {
+        if (state.hadPartialFailure && state.partialMessage != null) {
+            append(state.partialMessage)
+            append(" · ")
+        }
+        append(state.timestampLabel)
+    }
 
     MMBackground {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = MMSpacing.ScreenHorizontal.dp, vertical = 24.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
+                .padding(top = 20.dp, bottom = 24.dp),
         ) {
             AnimatedVisibility(
                 visible = visible,
-                enter = if (reduceMotion) fadeIn() else fadeIn() + slideInVertically { it / 4 },
+                enter = if (reduceMotion) fadeIn() else fadeIn() + slideInVertically { it / 5 },
             ) {
                 Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.CheckCircle,
-                            contentDescription = null,
-                            tint = MMColors.Primary,
-                            modifier = Modifier
-                                .size(36.dp)
-                                .scale(animatedCheck.value),
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                state.receiptTitle,
-                                color = MMColors.TextPrimary,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 24.sp,
-                            )
-                            Text(
-                                "${state.roomName} proof",
-                                color = MMColors.TextSecondary,
-                                fontSize = 15.sp,
-                            )
-                            Text(
-                                state.receiptSubtitle,
-                                color = MMColors.Primary.copy(alpha = 0.9f),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(top = 2.dp),
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(20.dp))
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        if (savedPulse > 0f && !reduceMotion) {
-                            Box(
-                                modifier = Modifier
-                                    .matchParentSize()
-                                    .graphicsLayer { alpha = pulseAlpha.value }
-                                    .background(MMColors.Primary.copy(alpha = 0.12f), RoundedCornerShape(22.dp)),
-                            )
-                        }
-                        MMProofCard(
+                    ReceiptHeader(
+                        checkScale = animatedCheck.value,
+                        headerSubtitle = state.headerSubtitle,
+                        documentedLabel = state.roomDocumentedLabel,
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    MMProofArtifactCard(
+                        model = MMProofArtifactModel(
+                            phaseEyebrow = "Room Proof",
+                            phaseLabel = phaseLabel,
+                            roomName = state.roomName,
+                            photoCount = state.savedCount.coerceAtLeast(1),
+                            issueCount = 0,
+                            verifiedLabel = verifiedLabel,
+                            savedLabel = "Saved to vault",
+                            statusLabel = "Saved",
+                            statusTone = if (state.hadPartialFailure) {
+                                MMProofStatusTone.Warning
+                            } else {
+                                MMProofStatusTone.Success
+                            },
+                        ),
+                        imageBitmap = state.thumbnailJpeg?.let { bytes ->
+                            remember(bytes) { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() }
+                        },
+                        photoHeight = 220.dp,
+                        cornerRadius = 20.dp,
+                        tagsVisible = false,
+                        reduceMotion = reduceMotion,
+                    )
+                    if (state.hadPartialFailure) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "${state.partialMessage}. You can retry the rest or continue with saved proof.",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MMColors.SemanticWarning,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .graphicsLayer { alpha = 1f - pulseAlpha.value * 0.3f },
-                        ) {
-                            Row(verticalAlignment = Alignment.Top) {
-                                state.thumbnailJpeg?.let { bytes ->
-                                    val bitmap = remember(bytes) {
-                                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                    }
-                                    bitmap?.let {
-                                        Image(
-                                            bitmap = it.asImageBitmap(),
-                                            contentDescription = null,
-                                            modifier = Modifier
-                                                .size(72.dp)
-                                                .background(MMColors.FieldFill, RoundedCornerShape(12.dp)),
-                                            contentScale = ContentScale.Crop,
-                                        )
-                                        Spacer(Modifier.width(14.dp))
-                                    }
-                                }
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        proofMetaTitle(state),
-                                        color = MMColors.TextPrimary,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 17.sp,
-                                    )
-                                    Spacer(Modifier.height(6.dp))
-                                    Text(
-                                        state.receiptSubtitle,
-                                        color = MMColors.TextSecondary,
-                                        fontSize = 15.sp,
-                                    )
-                                    Spacer(Modifier.height(6.dp))
-                                    Text(
-                                        state.timestampLabel,
-                                        color = MMColors.TextMuted,
-                                        fontSize = 13.sp,
-                                    )
-                                    if (state.isRoomDocumented && state.roomDocumentedLabel.isNotBlank()) {
-                                        Spacer(Modifier.height(8.dp))
-                                        Text(
-                                            state.roomDocumentedLabel,
-                                            color = MMColors.Primary,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                        )
-                                    }
-                                    state.partialMessage?.let { partial ->
-                                        Spacer(Modifier.height(8.dp))
-                                        Text(partial, color = MMColors.SemanticWarning, fontSize = 13.sp)
-                                    }
-                                }
-                            }
-                        }
+                                .background(
+                                    MMColors.SemanticWarning.copy(alpha = 0.1f),
+                                    RoundedCornerShape(12.dp),
+                                )
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                        )
                     }
                 }
             }
-            Spacer(Modifier.weight(1f))
+
+            Spacer(Modifier.height(20.dp))
+
             MMButton(
-                text = state.continueNextRoomLabel,
+                text = state.primaryActionLabel,
                 onClick = { onContinueNextRoom(viewModel.nextUndocumentedRoomId()) },
             )
             Spacer(Modifier.height(10.dp))
@@ -215,13 +170,56 @@ fun SavedProofReceiptScreen(
                 onClick = { onAddMorePhotos(roomId) },
                 style = MMButtonStyle.Secondary,
             )
+            if (state.hadPartialFailure) {
+                Spacer(Modifier.height(10.dp))
+                MMButton(
+                    text = RoomProofUploadMessages.RETRY_LABEL,
+                    onClick = { onAddMorePhotos(roomId) },
+                    style = MMButtonStyle.Secondary,
+                )
+            }
         }
     }
 }
 
-private fun proofMetaTitle(state: SavedProofReceiptUiState): String =
-    if (state.proofPhase == ProofPhase.MoveOut) {
-        "${state.roomName} · Move-out"
-    } else {
-        "${state.roomName} proof"
+@Composable
+private fun ReceiptHeader(
+    checkScale: Float,
+    headerSubtitle: String,
+    documentedLabel: String,
+) {
+    Row(verticalAlignment = Alignment.Top) {
+        Icon(
+            imageVector = Icons.Filled.CheckCircle,
+            contentDescription = null,
+            tint = MMColors.Primary,
+            modifier = Modifier
+                .size(28.dp)
+                .scale(checkScale),
+        )
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text(
+                "Saved to your vault",
+                color = MMColors.TextPrimary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 24.sp,
+                lineHeight = 28.sp,
+            )
+            Text(
+                headerSubtitle,
+                color = MMColors.TextSecondary,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            if (documentedLabel.isNotBlank()) {
+                Text(
+                    documentedLabel,
+                    color = MMColors.TextMuted,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
     }
+}

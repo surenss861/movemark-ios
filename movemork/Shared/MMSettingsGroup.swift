@@ -37,7 +37,12 @@ struct MMSettingsGroup<Content: View>: View {
         VStack(spacing: 0) {
             content()
         }
-        .mmProofCardSurface(.neutral, cornerRadius: 14)
+        .background(MoveMarkTheme.Colors.evidenceCard)
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(MoveMarkTheme.Colors.cardStroke, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
@@ -56,13 +61,15 @@ struct MMSettingsRow: View {
     var isDisabled: Bool = false
     let action: (() -> Void)?
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         Group {
             if let action {
                 Button(action: action) {
                     rowContent
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(MMSettingsRowPressStyle(reduceMotion: reduceMotion))
                 .disabled(isDisabled)
             } else {
                 rowContent
@@ -118,6 +125,17 @@ struct MMSettingsRow: View {
         case .pill(let text, let tone):
             MMPill(text: text, tone: tone)
         }
+    }
+}
+
+private struct MMSettingsRowPressStyle: ButtonStyle {
+    let reduceMotion: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.92 : 1)
+            .animation(reduceMotion ? nil : MMMotion.spring, value: configuration.isPressed)
     }
 }
 

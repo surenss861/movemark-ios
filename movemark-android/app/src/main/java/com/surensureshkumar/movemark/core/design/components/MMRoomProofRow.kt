@@ -1,16 +1,15 @@
 package com.surensureshkumar.movemark.core.design.components
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,9 +29,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -72,79 +71,65 @@ fun MMRoomProofRow(
 
     MMProofCard(
         modifier = modifier
-            .padding(bottom = 12.dp)
+            .padding(bottom = 10.dp)
             .scale(scale)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 modifier = Modifier
-                    .size(34.dp)
+                    .size(32.dp)
                     .clip(CircleShape)
                     .background(
-                        if (isNext) MMColors.Primary.copy(alpha = 0.16f)
-                        else MMColors.TextMuted.copy(alpha = 0.12f),
+                        if (documented) MMColors.Primary.copy(alpha = 0.14f)
+                        else if (isNext) MMColors.SemanticWarning.copy(alpha = 0.12f)
+                        else MMColors.TextMuted.copy(alpha = 0.1f),
                     ),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     "$index",
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isNext) MMColors.Primary else MMColors.TextMuted,
+                    color = when {
+                        documented -> MMColors.Primary
+                        isNext -> MMColors.SemanticWarning
+                        else -> MMColors.TextMuted
+                    },
                 )
             }
-            Spacer(Modifier.width(14.dp))
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        room.name,
-                        style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                        color = MMColors.TextPrimary,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    if (isNext && !documented) {
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "Next",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MMColors.SemanticWarning,
-                            modifier = Modifier
-                                .background(
-                                    MMColors.SemanticWarning.copy(alpha = 0.14f),
-                                    CircleShape,
-                                )
-                                .border(
-                                    0.85.dp,
-                                    MMColors.SemanticWarning.copy(alpha = 0.45f),
-                                    CircleShape,
-                                )
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                        )
-                    }
-                }
-                Spacer(Modifier.height(6.dp))
+                Text(
+                    room.name,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MMColors.TextPrimary,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.height(4.dp))
                 AnimatedContent(
                     targetState = detailLine,
                     transitionSpec = { fadeIn() togetherWith fadeOut() },
                     label = "roomStatus",
                 ) { line ->
-                    Text(
-                        line,
-                        fontSize = 13.sp,
-                        color = statusColor,
-                    )
+                    Text(line, fontSize = 12.sp, color = statusColor, maxLines = 1)
                 }
+            }
+            if (isNext && !documented) {
+                MMProofStatusBadge(text = "Next", tone = MMProofStatusTone.Warning)
+                Spacer(Modifier.width(6.dp))
             }
             Icon(
                 imageVector = if (documented) Icons.Default.CheckCircle else Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                tint = if (documented) MMColors.Primary else MMColors.TextSecondary,
-                modifier = Modifier.size(if (documented) 22.dp else 18.dp),
+                tint = if (documented) MMColors.Primary.copy(alpha = 0.9f) else MMColors.TextMuted,
+                modifier = Modifier.size(if (documented) 20.dp else 16.dp),
             )
         }
     }

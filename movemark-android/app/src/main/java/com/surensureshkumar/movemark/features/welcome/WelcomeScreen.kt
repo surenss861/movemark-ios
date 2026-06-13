@@ -29,7 +29,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -40,7 +39,6 @@ import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMMotion
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
-
 @Composable
 fun WelcomeScreen(
     onStartMoveIn: () -> Unit,
@@ -97,15 +95,8 @@ fun WelcomeScreen(
                 .statusBarsPadding()
                 .navigationBarsPadding(),
         ) {
-            val density = LocalDensity.current
-            val usableHeightPx = with(density) { maxHeight.toPx() - 12.dp.toPx() }
-            val heroHeight = with(density) {
-                (usableHeightPx * 0.34f - 56.dp.toPx())
-                    .coerceAtLeast(200.dp.toPx())
-                    .toDp()
-            }
-            val horizontalPad = 20.dp
-            val cardMaxWidth = minOf(maxWidth - horizontalPad * 2, 420.dp)
+            val horizontalPad = 18.dp
+            val cardMaxWidth = minOf(maxWidth - horizontalPad * 2, 450.dp)
 
             Column(
                 modifier = Modifier
@@ -120,7 +111,6 @@ fun WelcomeScreen(
                 )
 
                 WelcomeDepositCaseFile(
-                    heroHeight = heroHeight,
                     cardVisible = cardVisible,
                     tagsVisible = tagsVisible,
                     reduceMotion = reduceMotion,
@@ -129,7 +119,7 @@ fun WelcomeScreen(
 
                 Column(
                     modifier = Modifier
-                        .padding(top = 34.dp)
+                        .padding(top = 22.dp)
                         .alpha(copyAlpha)
                         .offset(y = copyOffsetY.dp),
                 ) {
@@ -140,22 +130,16 @@ fun WelcomeScreen(
                         color = MMColors.TextPrimary,
                         lineHeight = 36.sp,
                     )
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(12.dp))
                     Text(
-                        text = "Take move-in photos now. Make a report when you need it.",
+                        text = "Take room photos before you unpack. Turn them into a report when you need it.",
                         style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
                         color = MMColors.TextSecondary,
                     )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = "Old damage becomes saved proof.",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MMColors.TextSecondary.copy(alpha = 0.9f),
-                    )
                 }
 
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.weight(1f, fill = false))
+                Spacer(Modifier.height(8.dp))
 
                 Column(
                     modifier = Modifier

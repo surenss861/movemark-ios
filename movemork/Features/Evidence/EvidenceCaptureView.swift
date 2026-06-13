@@ -74,18 +74,13 @@ struct EvidenceCaptureView: View {
     var body: some View {
         ZStack {
             Color.clear
-                .mmProofShellBackground(heroFocus: true, ctaBloom: true)
+                .mmProofShellBackground(heroFocus: true, ctaBloom: false)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     EvidenceCaptureHero(
                         roomName: roomName,
                         room: room,
-                        existingEntries: existingEntries,
-                        roomID: roomID,
-                        selectedCondition: selectedCondition,
-                        loadedImages: loadedImages,
-                        loadedImageCount: loadedImages.count,
                         moveOutMode: moveOutMode
                     )
                     .padding(.bottom, 16)

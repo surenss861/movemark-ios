@@ -24,10 +24,10 @@ final class AuthProofFlowUITests: XCTestCase {
         signIn.tap()
 
         XCTAssertTrue(app.staticTexts["Welcome back."].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Last saved"].exists)
+        XCTAssertTrue(app.staticTexts["Proof vault ready"].exists)
         XCTAssertTrue(app.buttons["Continue proof vault"].exists)
         XCTAssertEqual(app.secureTextFields.count, 1)
-        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Ready to save'")).element.exists)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Private proof vault'")).element.exists)
     }
 
     @MainActor
@@ -36,9 +36,8 @@ final class AuthProofFlowUITests: XCTestCase {
         XCTAssertTrue(cta.waitForExistence(timeout: 8))
         cta.tap()
 
-        XCTAssertTrue(app.staticTexts["Start your move-in proof."].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Kitchen proof"].exists)
-        XCTAssertTrue(app.staticTexts["Ready to save"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts["Create your proof vault"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Private proof vault"].exists)
         XCTAssertTrue(app.buttons["Create private vault"].exists)
     }
 
@@ -46,12 +45,12 @@ final class AuthProofFlowUITests: XCTestCase {
     func testCreateToSignInMorph() throws {
         openCreateAuth()
 
-        XCTAssertTrue(app.staticTexts["Kitchen proof"].exists)
+        XCTAssertTrue(app.staticTexts["Private proof vault"].exists)
 
-        app.buttons["Continue proof vault"].tap()
+        app.buttons["Sign in"].tap()
 
         XCTAssertTrue(app.staticTexts["Welcome back."].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Last saved"].exists)
+        XCTAssertTrue(app.staticTexts["Proof vault ready"].exists)
         XCTAssertTrue(app.buttons["Continue proof vault"].exists)
         XCTAssertEqual(app.secureTextFields.count, 1, "Sign-in should show one password field")
         XCTAssertFalse(app.staticTexts["By continuing, you agree to"].exists)
@@ -60,13 +59,13 @@ final class AuthProofFlowUITests: XCTestCase {
     @MainActor
     func testSignInToCreateMorph() throws {
         openCreateAuth()
-        app.buttons["Continue proof vault"].tap()
+        app.buttons["Sign in"].tap()
         XCTAssertTrue(app.staticTexts["Welcome back."].waitForExistence(timeout: 3))
 
         app.buttons["Create private vault"].tap()
 
-        XCTAssertTrue(app.staticTexts["Start your move-in proof."].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Ready to save"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts["Create your proof vault"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Private proof vault"].exists)
         XCTAssertEqual(app.secureTextFields.count, 2, "Create should show password + confirm")
         XCTAssertTrue(
             app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'By continuing'")).firstMatch.exists
@@ -93,15 +92,15 @@ final class AuthProofFlowUITests: XCTestCase {
     @MainActor
     func testDismissAndReopenResetsToCreateMode() throws {
         openCreateAuth()
-        app.buttons["Continue proof vault"].tap()
+        app.buttons["Sign in"].tap()
         XCTAssertTrue(app.staticTexts["Welcome back."].waitForExistence(timeout: 3))
 
         app.buttons["Back"].tap()
         XCTAssertTrue(app.buttons["Start move-in proof"].waitForExistence(timeout: 5))
 
         app.buttons["Start move-in proof"].tap()
-        XCTAssertTrue(app.staticTexts["Start your move-in proof."].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Ready to save"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts["Create your proof vault"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Private proof vault"].exists)
         XCTAssertEqual(app.secureTextFields.count, 2)
     }
 
@@ -112,10 +111,10 @@ final class AuthProofFlowUITests: XCTestCase {
         app.launch()
 
         openCreateAuth()
-        app.buttons["Continue proof vault"].tap()
+        app.buttons["Sign in"].tap()
         XCTAssertTrue(app.staticTexts["Welcome back."].waitForExistence(timeout: 5))
         app.buttons["Create private vault"].tap()
-        XCTAssertTrue(app.staticTexts["Ready to save"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Private proof vault"].waitForExistence(timeout: 5))
     }
 
     // MARK: - Helpers
@@ -124,6 +123,6 @@ final class AuthProofFlowUITests: XCTestCase {
         let cta = app.buttons["Start move-in proof"]
         XCTAssertTrue(cta.waitForExistence(timeout: 8))
         cta.tap()
-        XCTAssertTrue(app.staticTexts["Start your move-in proof."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Create your proof vault"].waitForExistence(timeout: 5))
     }
 }

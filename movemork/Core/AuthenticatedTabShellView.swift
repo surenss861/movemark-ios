@@ -81,6 +81,10 @@ struct AuthenticatedTabShellView: View {
                     onContinueRoomProof: {
                         selectedTab = .vaults
                         vaultPath = [.walkthrough]
+                    },
+                    onOpenMoveOutProof: {
+                        selectedTab = .vaults
+                        vaultPath = [.moveOut]
                     }
                 )
                 .navigationTitle("")

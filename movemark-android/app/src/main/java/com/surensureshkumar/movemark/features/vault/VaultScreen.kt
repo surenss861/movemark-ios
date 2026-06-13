@@ -29,10 +29,13 @@ import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.mmAppearRise
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
-import com.surensureshkumar.movemark.core.design.components.MMProofCard
+import com.surensureshkumar.movemark.core.design.components.MMCompactProofRow
+import com.surensureshkumar.movemark.core.design.components.MMProofStatusTone
+import com.surensureshkumar.movemark.core.design.components.MMProofTaskCard
 import com.surensureshkumar.movemark.core.design.components.MMProofSectionHeader
 import com.surensureshkumar.movemark.core.design.components.MMVaultProofHeroCard
 import com.surensureshkumar.movemark.data.models.PropertyRow
+import com.surensureshkumar.movemark.domain.LifecycleNudge
 import com.surensureshkumar.movemark.domain.RoomProofMetrics
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
 import java.util.UUID
@@ -43,6 +46,7 @@ fun VaultScreen(
     onOpenMoveOutProof: () -> Unit,
     onAddProperty: () -> Unit,
     onShowPaywall: (PaywallReason) -> Unit,
+    onOpenReports: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: VaultViewModel = hiltViewModel(),
 ) {
@@ -52,6 +56,7 @@ fun VaultScreen(
     val error by viewModel.error.collectAsState()
     val hasPro by viewModel.hasPro.collectAsState()
     val propertyCount by viewModel.propertyCount.collectAsState()
+    val previewImageUrl by viewModel.previewImageUrl.collectAsState()
     val reduceMotion = MMMotion.rememberReduceMotion()
     var hasAnimatedIn by remember { mutableStateOf(reduceMotion) }
 
@@ -117,7 +122,7 @@ fun VaultScreen(
                 val progressLine = when {
                     total == 0 -> "Add rooms to document damage"
                     documented == 0 -> "Start with one room"
-                    else -> "$documented of $total rooms ready"
+                    else -> "$documented of $total rooms documented"
                 }
                 val primaryTitle = when {
                     documented == 0 -> "Start room proof"
@@ -125,10 +130,15 @@ fun VaultScreen(
                     else -> "Review rooms"
                 }
 
+                val featuredRoom = RoomProofMetrics.firstPreviewRoom(p)
+                    ?: next
+                    ?: p.rooms.firstOrNull { RoomProofMetrics.isDocumented(it) }
+                val featuredPhotoCount = featuredRoom?.let { RoomProofMetrics.photoCount(it) } ?: 0
+
                 MMVaultProofHeroCard(
                     propertyName = p.title,
                     location = location.ifBlank { null },
-                    phaseLabel = "Move-in proof",
+                    phaseLabel = "Move-in",
                     progressLine = progressLine,
                     nextLine = nextLine,
                     progress = progress,
@@ -137,57 +147,58 @@ fun VaultScreen(
                         (next ?: p.rooms.firstOrNull())?.let { onOpenRoom(it.id) }
                     },
                     reduceMotion = reduceMotion,
+                    previewImageUrl = previewImageUrl,
+                    roomName = featuredRoom?.name ?: next?.name,
+                    photoCount = featuredPhotoCount,
                     modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "vaultHero"),
                 )
 
-                Spacer(Modifier.height(12.dp))
-                MMProofCard(
-                    modifier = Modifier
-                        .mmAppearRise(hasAnimatedIn, reduceMotion, label = "leaseCard"),
-                ) {
-                    Text(
-                        "Lease & deposit records",
-                        style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                        color = MMColors.TextPrimary,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Helps if your deposit is questioned later.",
-                        color = MMColors.TextSecondary,
-                        fontSize = 14.sp,
+                val propertyRow = properties.firstOrNull { it.id == p.id.toString() }
+                val lifecycleNudge = propertyRow?.let { row ->
+                    LifecycleNudge.forProperty(row, p)
+                }
+                lifecycleNudge?.let { nudge ->
+                    Spacer(Modifier.height(12.dp))
+                    MMProofTaskCard(
+                        title = nudge.title,
+                        reason = nudge.reason,
+                        onClick = {
+                            when (nudge) {
+                                is LifecycleNudge.FinishRoomsBeforeUnpacking ->
+                                    (next ?: p.rooms.firstOrNull())?.let { onOpenRoom(it.id) }
+                                is LifecycleNudge.AddLeaseAndDepositDocs -> Unit
+                                is LifecycleNudge.MakeMoveInReport -> onOpenReports()
+                                is LifecycleNudge.MidLeaseMaintenance -> Unit
+                                is LifecycleNudge.MoveOutProofReminder ->
+                                    if (hasPro) onOpenMoveOutProof()
+                                    else onShowPaywall(PaywallReason.MoveOutProof)
+                            }
+                        },
+                        showChevron = true,
+                        modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "lifecycleNudge"),
                     )
                 }
 
                 Spacer(Modifier.height(12.dp))
-                MMProofCard(
-                    modifier = Modifier
-                        .clickable {
-                            if (hasPro) onOpenMoveOutProof() else onShowPaywall(PaywallReason.MoveOutProof)
-                        }
-                        .mmAppearRise(hasAnimatedIn, reduceMotion, label = "moveOutCard"),
-                ) {
-                    Text(
-                        "Move-out proof",
-                        style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                        color = MMColors.TextSecondary,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Re-capture rooms before you return the keys.",
-                        color = MMColors.TextMuted,
-                        fontSize = 14.sp,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        RoomProofMetrics.moveOutStatusLine(p),
-                        color = MMColors.TextMuted,
-                        fontSize = 13.sp,
-                    )
-                    if (!hasPro) {
-                        Spacer(Modifier.height(4.dp))
-                        Text("Pro", color = MMColors.TextMuted, fontSize = 12.sp)
-                    }
-                }
+                MMProofTaskCard(
+                    title = "Lease & deposit records",
+                    reason = "Helps if your deposit is questioned later.",
+                    onClick = { /* future: lease docs */ },
+                    showChevron = true,
+                    modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "leaseCard"),
+                )
+
+                Spacer(Modifier.height(10.dp))
+                MMProofTaskCard(
+                    title = "Move-out proof",
+                    reason = RoomProofMetrics.moveOutStatusLine(p),
+                    onClick = {
+                        if (hasPro) onOpenMoveOutProof() else onShowPaywall(PaywallReason.MoveOutProof)
+                    },
+                    statusLabel = if (hasPro) null else "Pro",
+                    statusTone = MMProofStatusTone.Neutral,
+                    modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "moveOutCard"),
+                )
 
                 val otherRentals = properties.filter { it.id != p.id.toString() }
                 if (otherRentals.isNotEmpty()) {
@@ -220,13 +231,10 @@ private fun OtherRentalRow(
     onClick: () -> Unit,
 ) {
     val location = listOf(row.city, row.provinceState).filter { it.isNotBlank() }.joinToString(", ")
-    MMProofCard(modifier = Modifier.clickable(onClick = onClick)) {
-        Text(row.title, style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
-        if (location.isNotBlank()) {
-            Spacer(Modifier.height(2.dp))
-            Text(location, color = MMColors.TextMuted, fontSize = 13.sp)
-        }
-        Spacer(Modifier.height(4.dp))
-        Text("Tap to switch vault", color = MMColors.TextSecondary, fontSize = 13.sp)
-    }
+    MMCompactProofRow(
+        title = row.title,
+        subtitle = if (location.isNotBlank()) location else "Tap to switch vault",
+        meta = "Tap to switch vault".takeIf { location.isNotBlank() },
+        onClick = onClick,
+    )
 }

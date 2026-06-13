@@ -36,6 +36,28 @@ object RoomProofMetrics {
     fun nextRoom(property: PropertyRecord, phase: ProofPhase = ProofPhase.MoveIn): RoomRecord? =
         property.rooms.firstOrNull { !isDocumented(it, phase) }
 
+    /** First move-in evidence file path for vault/cover preview; null if no saved photos. */
+    fun firstPreviewPhotoPath(property: PropertyRecord, phase: ProofPhase = ProofPhase.MoveIn): String? {
+        for (room in property.rooms) {
+            if (!isDocumented(room, phase)) continue
+            for (evidence in evidenceFor(room, phase)) {
+                val path = evidence.photos.firstOrNull()?.filePath?.trim()
+                if (!path.isNullOrEmpty()) return path
+            }
+        }
+        return null
+    }
+
+    fun firstPreviewRoom(property: PropertyRecord, phase: ProofPhase = ProofPhase.MoveIn): RoomRecord? {
+        for (room in property.rooms) {
+            if (!isDocumented(room, phase)) continue
+            for (evidence in evidenceFor(room, phase)) {
+                if (evidence.photos.any { !it.filePath.isNullOrBlank() }) return room
+            }
+        }
+        return null
+    }
+
     fun moveOutStatusLine(property: PropertyRecord): String {
         val total = property.rooms.size
         if (total == 0) return "Move-out not started"

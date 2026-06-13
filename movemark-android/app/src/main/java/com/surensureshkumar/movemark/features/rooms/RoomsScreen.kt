@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -24,8 +25,8 @@ import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMMotion
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.mmAppearRise
-import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMProofSectionHeader
+import com.surensureshkumar.movemark.core.design.components.MMRoomProgressCard
 import com.surensureshkumar.movemark.core.design.components.MMRoomProofRow
 import com.surensureshkumar.movemark.domain.RoomProofMetrics
 import java.util.UUID
@@ -54,7 +55,7 @@ fun RoomsScreen(
     ) {
         MMProofSectionHeader(
             title = "Room proof",
-            subtitle = "Document each room with photos.",
+            subtitle = "Mark old damage before move-in.",
             modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "roomsHeader"),
         )
         Spacer(Modifier.height(16.dp))
@@ -63,15 +64,50 @@ fun RoomsScreen(
             property == null -> Text("No rooms loaded.", color = MMColors.TextSecondary)
             else -> {
                 val p = property!!
+                val total = p.rooms.size
                 val documented = RoomProofMetrics.documentedCount(p)
-                Text(
-                    "$documented of ${p.rooms.size} rooms ready",
-                    color = MMColors.TextSecondary,
-                    fontSize = 15.sp,
-                    modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "roomsCount"),
+                val next = RoomProofMetrics.nextRoom(p)
+                val allDocumented = total > 0 && documented >= total
+                val progress = if (total > 0) documented.toFloat() / total else 0f
+                val headline = if (total > 0) {
+                    "$documented of $total rooms documented"
+                } else {
+                    "Add a room to start"
+                }
+                val nextLine = when {
+                    allDocumented -> "All rooms documented"
+                    next != null -> "Next: ${next.name}"
+                    else -> "Add a room to start."
+                }
+                val primaryTitle = when {
+                    allDocumented -> "Review your rooms"
+                    next != null -> "Capture ${next.name}"
+                    else -> "Add a room"
+                }
+
+                MMRoomProgressCard(
+                    headline = headline,
+                    nextLine = nextLine,
+                    progress = progress,
+                    primaryTitle = primaryTitle,
+                    onPrimary = {
+                        (next ?: p.rooms.firstOrNull())?.let { onOpenRoom(it.id) }
+                    },
+                    reduceMotion = reduceMotion,
+                    modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "roomsProgress"),
                 )
-                Spacer(Modifier.height(16.dp))
-                val nextId = RoomProofMetrics.nextRoom(p)?.id
+
+                Spacer(Modifier.height(20.dp))
+                Text(
+                    "Rooms",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MMColors.TextSecondary,
+                    modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "roomsLabel"),
+                )
+                Spacer(Modifier.height(12.dp))
+
+                val nextId = next?.id
                 p.rooms.forEachIndexed { index, room ->
                     MMRoomProofRow(
                         room = room,
@@ -79,14 +115,6 @@ fun RoomsScreen(
                         isNext = room.id == nextId,
                         onClick = { onOpenRoom(room.id) },
                         modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "room${room.id}"),
-                    )
-                }
-                nextId?.let { id ->
-                    val next = p.rooms.first { it.id == id }
-                    Spacer(Modifier.height(8.dp))
-                    MMButton(
-                        text = "Capture ${next.name}",
-                        onClick = { onOpenRoom(next.id) },
                     )
                 }
             }

@@ -9,6 +9,7 @@ object Routes {
     fun auth(mode: String) = "auth/$mode"
     const val Main = "main"
     const val CreateProperty = "create_property"
+    const val FirstRunRoomPicker = "first_run_room_picker"
     const val AddProperty = "add_property"
 
     const val ProofPhaseArg = "proofPhase"

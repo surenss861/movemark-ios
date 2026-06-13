@@ -21,7 +21,7 @@ struct WelcomeScreen: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let contentPadding: CGFloat = 20
+    private let contentPadding: CGFloat = 18
     /// Screen-edge inset for the bottom launch dock (38–40pt total).
     private let launchDockHorizontalInset: CGFloat = 38
 
@@ -33,7 +33,7 @@ struct WelcomeScreen: View {
                     safeTop: geo.safeAreaInsets.top,
                     safeBottom: geo.safeAreaInsets.bottom
                 )
-                let cardWidth = min(geo.size.width - contentPadding * 2, 420)
+                let cardWidth = min(geo.size.width - contentPadding * 2, 450)
                 let dockSideInset = max(0, launchDockHorizontalInset - contentPadding)
 
             ZStack {
@@ -82,17 +82,15 @@ struct WelcomeScreen: View {
 
             WelcomeDepositCaseFile(
                 maxWidth: cardWidth,
-                heroHeight: layout.heroHeight,
                 cardVisible: cardVisible,
                 tagsVisible: tagsVisible
             )
             .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: layout.heroHeight)
 
             primaryCopyBlock
                 .padding(.top, layout.heroToCopyGap)
 
-            Spacer(minLength: 24)
+            Spacer(minLength: 8)
 
             bottomLaunchDock
                 .padding(.horizontal, dockSideInset)
@@ -170,7 +168,7 @@ struct WelcomeScreen: View {
     // MARK: - Copy (hero explains; dock launches)
 
     private var primaryCopyBlock: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Prove what was already there.")
                 .font(.system(size: 32, weight: .bold))
                 .tracking(-0.7)
@@ -180,14 +178,9 @@ struct WelcomeScreen: View {
                 .minimumScaleFactor(0.92)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("Take move-in photos now. Make a report when you need it.")
+            Text("Take room photos before you unpack. Turn them into a report when you need it.")
                 .font(MoveMarkTheme.Typography.body)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.98))
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text("Old damage becomes saved proof.")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -257,17 +250,14 @@ struct WelcomeScreen: View {
 // MARK: - Zone layout
 
 private struct WelcomeZoneLayout {
-    let heroHeight: CGFloat
     let topPadding: CGFloat
     let brandToHeroGap: CGFloat
     let heroToCopyGap: CGFloat
 
     init(screenHeight: CGFloat, safeTop: CGFloat, safeBottom: CGFloat) {
-        let usable = screenHeight - safeTop - safeBottom - 12
-        heroHeight = usable * 0.38
         topPadding = max(4, safeTop - 71)
         brandToHeroGap = 14
-        heroToCopyGap = 34
+        heroToCopyGap = 22
     }
 
     func bottomDockPadding(safeBottom: CGFloat) -> CGFloat {

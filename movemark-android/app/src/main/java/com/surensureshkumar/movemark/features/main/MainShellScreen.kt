@@ -57,6 +57,7 @@ fun MainShellScreen(
                         onOpenMoveOutProof = onOpenMoveOutProof,
                         onAddProperty = onAddProperty,
                         onShowPaywall = { paywallReason = it },
+                        onOpenReports = { tab = MainTab.Reports },
                     )
                     MainTab.Rooms -> RoomsScreen(
                         modifier = Modifier.padding(padding),
@@ -66,6 +67,7 @@ fun MainShellScreen(
                         modifier = Modifier.padding(padding),
                         onContinueRoomProof = { tab = MainTab.Rooms },
                         onOpenMoveOutProof = onOpenMoveOutProof,
+                        onOpenVault = { tab = MainTab.Vault },
                         onShowPaywall = { paywallReason = it },
                     )
                     MainTab.Account -> AccountScreen(

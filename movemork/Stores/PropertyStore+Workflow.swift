@@ -114,6 +114,18 @@ extension PropertyStore {
         }
     }
 
+    func moveOutPhotoCount(for property: PropertyRecord) -> Int {
+        property.rooms.reduce(0) { partial, room in
+            partial + room.moveOutEvidence.reduce(0) { $0 + $1.photoCount }
+        }
+    }
+
+    func moveOutDocumentedRoomCount(for property: PropertyRecord) -> Int {
+        property.rooms.filter { room in
+            room.moveOutEvidence.contains { $0.photoCount > 0 }
+        }.count
+    }
+
     func totalIssueTagCount(for property: PropertyRecord) -> Int {
         property.rooms.reduce(0) { partial, room in
             partial + room.evidence.flatMap(\.issueTags).count
