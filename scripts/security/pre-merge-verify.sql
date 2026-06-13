@@ -30,3 +30,37 @@ WHERE schemaname = 'public'
 ORDER BY tablename;
 
 -- Expected: every row shows rowsecurity = true
+
+-- Step 3: RLS policies exist (rowsecurity alone is not enough)
+SELECT schemaname, tablename, policyname, cmd, roles
+FROM pg_policies
+WHERE schemaname = 'public'
+  AND tablename IN (
+    'profiles',
+    'properties',
+    'rooms',
+    'inspections',
+    'evidence_files',
+    'property_documents',
+    'exports'
+  )
+ORDER BY tablename, policyname;
+
+-- Step 3 summary: each sensitive table should have at least one policy
+SELECT tablename, COUNT(*) AS policy_count
+FROM pg_policies
+WHERE schemaname = 'public'
+  AND tablename IN (
+    'profiles',
+    'properties',
+    'rooms',
+    'inspections',
+    'evidence_files',
+    'property_documents',
+    'exports'
+  )
+GROUP BY tablename
+ORDER BY tablename;
+
+-- Expected: policy_count >= 1 on every table above.
+-- Final proof: two-account test in docs/SECURITY_QA.md (Account B cannot read A's rows).
