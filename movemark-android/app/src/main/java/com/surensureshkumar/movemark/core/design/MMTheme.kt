@@ -25,7 +25,7 @@ object MMSpacing {
     const val CornerRadius = 22
     const val ButtonHeight = 58
     /** Scroll content clearance above floating evidence dock. */
-    const val TabScrollBottom = 104
+    const val TabScrollBottom = 168
 }
 
 @Composable

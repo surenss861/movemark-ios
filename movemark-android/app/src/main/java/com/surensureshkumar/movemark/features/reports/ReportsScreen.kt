@@ -85,19 +85,27 @@ fun ReportsScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-            .padding(top = 24.dp, bottom = MMSpacing.TabScrollBottom.dp),
+            .padding(top = 12.dp, bottom = MMSpacing.TabScrollBottom.dp),
     ) {
         MMProofSectionHeader(
             title = "Your reports",
             subtitle = "Turn saved proof into shareable records.",
         )
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(12.dp))
 
         when {
             state.noVault && !state.propertyLoading -> {
                 MMReportNoVaultPlaceholder(onOpenVault = onOpenVault)
             }
             else -> {
+                if (showChecklist) {
+                    MMReportReadinessChecklist(
+                        items = state.checklistItems,
+                        appeared = appeared,
+                        reduceMotion = reduceMotion,
+                    )
+                    Spacer(Modifier.height(14.dp))
+                }
                 MMReportPreviewHero(
                     readiness = state.readiness,
                     metricsLine = state.metricsLine(),
@@ -112,14 +120,6 @@ fun ReportsScreen(
                     reduceMotion = reduceMotion,
                     loading = isLoading,
                 )
-                if (showChecklist) {
-                    Spacer(Modifier.height(20.dp))
-                    MMReportReadinessChecklist(
-                        items = state.checklistItems,
-                        appeared = appeared,
-                        reduceMotion = reduceMotion,
-                    )
-                }
                 Spacer(Modifier.height(24.dp))
                 MMReportExportSection(
                     sectionTitle = "Move-out report",

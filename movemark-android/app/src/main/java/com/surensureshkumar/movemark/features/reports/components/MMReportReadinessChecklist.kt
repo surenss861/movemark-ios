@@ -53,7 +53,7 @@ fun MMReportReadinessChecklist(
             items.forEachIndexed { index, item ->
                 if (index > 0) {
                     HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 8.dp),
+                        modifier = Modifier.padding(vertical = 6.dp),
                         color = Color.White.copy(alpha = 0.06f),
                     )
                 }
@@ -81,7 +81,9 @@ private fun ChecklistRow(
         ChecklistItemState.Locked -> MMColors.TextMuted.copy(0.45f)
     }
     Row(
-        modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 1.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(

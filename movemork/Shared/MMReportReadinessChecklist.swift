@@ -23,7 +23,7 @@ struct MMReportReadinessChecklist: View {
                     if index > 0 {
                         Divider()
                             .background(Color.white.opacity(0.06))
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 6)
                     }
 
                     checklistRow(item)
@@ -31,7 +31,7 @@ struct MMReportReadinessChecklist: View {
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
             .mmProofCardSurface(.neutral, cornerRadius: 16)
         }
     }
@@ -62,7 +62,7 @@ struct MMReportReadinessChecklist: View {
 
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 1)
     }
 
     private func iconName(for state: MMProofChecklistItem.State) -> String {

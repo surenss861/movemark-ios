@@ -91,18 +91,20 @@ struct ExportHistoryView: View {
                 .mmProofShellBackground(heroFocus: false, ctaBloom: false)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardStack) {
+                VStack(alignment: .leading, spacing: 14) {
                     header
-                    if hasActiveVault {
-                        reportPreviewHero
-                            .mmAppearRise(isVisible: reportsContentAppeared, delay: 0, offset: 6)
+                        .padding(.bottom, 24)
 
+                    if hasActiveVault {
                         if shouldShowReportProofTrail {
                             MMReportReadinessChecklist(
                                 items: reportChecklistItems,
                                 appeared: reportsContentAppeared
                             )
                         }
+
+                        reportPreviewHero
+                            .mmAppearRise(isVisible: reportsContentAppeared, delay: 0.06, offset: 6)
 
                         secondaryExportSections
                             .mmAppearRise(isVisible: reportsContentAppeared, delay: 0.12, offset: 6)
@@ -139,9 +141,9 @@ struct ExportHistoryView: View {
                     }
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.top, 12)
+                .padding(.top, 10)
                 .mmScrollContentTopInset(2)
-                .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
+                .padding(.bottom, 12)
             }
             .refreshable {
                 await loadExports()
