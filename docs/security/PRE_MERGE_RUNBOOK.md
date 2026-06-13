@@ -9,7 +9,7 @@ Branch `movemark-security-hardening` is **build-green** but **not merge-ready** 
 ✅ verifying status fixed in migration
 ✅ RLS enabled on sensitive tables (rowsecurity = true)
 ✅ RLS policies exist (per-table policy_count >= 1)
-⬜ Policy definitions enforce ownership (Step 4 SQL — no bare `true`)
+✅ Policy definitions enforce ownership (live audit — no bare `true`)
 ⬜ exports_status_check verified live includes verifying
 ⬜ Two-account test passes (the real proof)
 ⬜ Railway REVENUECAT_WEBHOOK_SECRET + APP_ENV=production + redeploy
@@ -18,7 +18,14 @@ Branch `movemark-security-hardening` is **build-green** but **not merge-ready** 
 ⬜ Leaked Google service account key rotated
 ```
 
-**Note:** Policy count only proves policies exist — not that they are correct. The two-account test answers: *Can User B access User A's data?* That must be **no** every time.
+**Dual protection model:**
+
+```text
+Client Supabase access → RLS (auth.uid() / property ownership)
+Railway API access     → requireAuth + ownership middleware (service role bypasses RLS)
+```
+
+Both layers are required. RLS audit passed live; two-account test still proves it in practice.
 
 ---
 
@@ -76,6 +83,14 @@ ORDER BY tablename, policyname;
 
 **Bad:** bare `true`, `using (true)`, or `auth.role() = 'authenticated'` without user scoping.
 
+**Live audit (passed):** policies tie rows to `auth.uid() = user_id` or property ownership via `properties.user_id`. No wide-open policies observed.
+
+### Post-merge cleanup (not blockers)
+
+- **Duplicate `ALL` + per-cmd policies** on some tables (`properties_own_all`, `exports_own_all`, etc.) — redundant but safe; simplify to one style later for easier audits.
+- **`exports_insert_own` allows `property_id IS NULL`** — OK if API always sets property; tighten later so move-in/move-out/dispute exports always require `property_id`.
+- **In-memory rate limits** — upgrade to Redis/Upstash before horizontal scale.
+
 ---
 
 ## 2. Railway (production API)
@@ -112,7 +127,7 @@ Follow `docs/SECURITY_QA.md`.
 
 **Account A:** create property, upload proof, generate export.
 
-**Account B:** try A's property ID, export list, export download, create export on A's property, any signed URL from A.
+**Account B:** try A's property, rooms, export list, export download, create export on A's property, any signed URL from A.
 
 Expected every time:
 
