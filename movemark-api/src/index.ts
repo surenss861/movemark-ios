@@ -1,40 +1,5 @@
-import { Hono } from "hono";
-import { cors } from "hono/cors";
 import { serve } from "@hono/node-server";
-import { assertEnv, corsAllowedOrigins } from "./lib/env.js";
-import { propertyCapabilitiesRouter } from "./routes/capabilities.js";
-import { disputesRouter } from "./routes/disputes.js";
-import { exportsRouter } from "./routes/exports.js";
-import { vaultsRouter } from "./routes/vaults.js";
-import { webhooksRouter } from "./routes/webhooks.js";
-
-assertEnv();
-
-const app = new Hono();
-
-/** Browser cross-origin only; native apps typically omit `Origin` and do not rely on CORS. Never use `*`. */
-const allowedOrigins = corsAllowedOrigins();
-app.use(
-  "*",
-  cors({
-    origin: (origin) => {
-      if (!origin) return null;
-      if (allowedOrigins.length === 0) return null;
-      return allowedOrigins.includes(origin) ? origin : null;
-    },
-    allowHeaders: ["Authorization", "Content-Type"],
-    allowMethods: ["GET", "POST", "OPTIONS"],
-  })
-);
-
-app.get("/", (c) => c.json({ ok: true, service: "movemark-api" }));
-app.get("/api/health", (c) => c.json({ ok: true, uptime: process.uptime() }));
-
-app.route("/api/exports", exportsRouter);
-app.route("/api/vaults", vaultsRouter);
-app.route("/api/disputes", disputesRouter);
-app.route("/api/properties", propertyCapabilitiesRouter);
-app.route("/api/webhooks", webhooksRouter);
+import app from "./app.js";
 
 const defaultPort = process.env.NODE_ENV === "production" ? 8080 : 3000;
 const port = Number(process.env.PORT) || defaultPort;
@@ -75,5 +40,3 @@ process.on("uncaughtException", (error) => {
 process.on("unhandledRejection", (reason) => {
   console.error("[movemark-api] unhandledRejection", reason);
 });
-
-export default app;

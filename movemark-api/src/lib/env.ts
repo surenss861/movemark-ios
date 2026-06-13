@@ -27,4 +27,8 @@ export function assertEnv(): void {
       throw new Error(`Missing required env var: ${key}`);
     }
   }
+
+  if (env.APP_ENV === "production" && !env.REVENUECAT_WEBHOOK_SECRET) {
+    throw new Error("Missing required env var: REVENUECAT_WEBHOOK_SECRET (production)");
+  }
 }

@@ -1,24 +1,27 @@
 import type { Context } from "hono";
 import { Hono } from "hono";
-import { requireUserIdFromBearer } from "../lib/auth.js";
+import { getUserId, requireAuth } from "../lib/middleware/requireAuth.js";
+import type { AppVariables } from "../lib/middleware/types.js";
+import { isUnauthorizedError, safeJsonError } from "../lib/middleware/safeError.js";
 import { buildPropertyCapabilities } from "../lib/capabilities.js";
 import { requireOwnedProperty } from "../lib/requireOwnedProperty.js";
 
-function handleCapabilitiesError(c: Context, error: unknown, logLabel: string) {
-  if (error instanceof Error && error.message === "Unauthorized") {
-    return c.json({ error: "Unauthorized" }, 401);
+function handleCapabilitiesError(c: Context<{ Variables: AppVariables }>, error: unknown, logLabel: string) {
+  if (isUnauthorizedError(error)) {
+    return safeJsonError(c, 401, "Unauthorized", logLabel);
   }
-  console.error(`[movemark-api:capabilities] ${logLabel}`, error);
-  return c.json({ error: "Failed to load property capabilities" }, 500);
+  return safeJsonError(c, 500, "Failed to load property capabilities", logLabel, error);
 }
 
-export const propertyCapabilitiesRouter = new Hono();
+export const propertyCapabilitiesRouter = new Hono<{ Variables: AppVariables }>();
+
+propertyCapabilitiesRouter.use("*", requireAuth);
 
 propertyCapabilitiesRouter.get("/:propertyId/capabilities", async (c) => {
   const startedAt = Date.now();
 
   try {
-    const userId = await requireUserIdFromBearer(c);
+    const userId = getUserId(c);
     const propertyId = c.req.param("propertyId")?.trim();
 
     if (!propertyId) {

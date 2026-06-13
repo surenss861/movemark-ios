@@ -1,6 +1,14 @@
 import type { Context } from "hono";
 import { Hono } from "hono";
-import { requireUserIdFromBearer } from "../lib/auth.js";
+import { getUserId, requireAuth } from "../lib/middleware/requireAuth.js";
+import {
+  checkExportCreateRateLimit,
+  rateLimitExportDownloadByUser,
+  rateLimitExportsListByUser,
+} from "../lib/middleware/rateLimit.js";
+import type { AppVariables } from "../lib/middleware/types.js";
+import { isUnauthorizedError, safeJsonError } from "../lib/middleware/safeError.js";
+import { requireOwnedExport } from "../lib/requireOwnedExport.js";
 import { env } from "../lib/env.js";
 import { buildDisputeEvidenceCatalog } from "../lib/disputeEvidenceCatalog.js";
 import {
@@ -46,20 +54,21 @@ async function markExportFailed(exportId: string, reason: string): Promise<void>
   }
 }
 
-function handleExportsError(c: Context, error: unknown, logLabel: string) {
-  if (error instanceof Error && error.message === "Unauthorized") {
-    return c.json({ error: "Unauthorized" }, 401);
+function handleExportsError(c: Context<{ Variables: AppVariables }>, error: unknown, logLabel: string) {
+  if (isUnauthorizedError(error)) {
+    return safeJsonError(c, 401, "Unauthorized", logLabel);
   }
-  console.error(`[movemark-api:exports] ${logLabel}`, error);
-  return c.json({ error: "Unexpected server error" }, 500);
+  return safeJsonError(c, 500, "Unexpected server error", logLabel, error);
 }
 
-export const exportsRouter = new Hono();
+export const exportsRouter = new Hono<{ Variables: AppVariables }>();
 
-exportsRouter.get("/", async (c) => {
+exportsRouter.use("*", requireAuth);
+
+exportsRouter.get("/", rateLimitExportsListByUser(), async (c) => {
   const t0 = performance.now();
   try {
-    const userId = await requireUserIdFromBearer(c);
+    const userId = getUserId(c);
     const authMs = Math.round(performance.now() - t0);
 
     const propertyIdFilter = c.req.query("propertyId")?.trim();
@@ -145,10 +154,10 @@ exportsRouter.get("/", async (c) => {
   }
 });
 
-exportsRouter.get("/:id/download", async (c) => {
+exportsRouter.get("/:id/download", rateLimitExportDownloadByUser(), async (c) => {
   const t0 = performance.now();
   try {
-    const userId = await requireUserIdFromBearer(c);
+    const userId = getUserId(c);
     const authMs = Math.round(performance.now() - t0);
 
     const exportId = c.req.param("id");
@@ -160,15 +169,10 @@ exportsRouter.get("/:id/download", async (c) => {
     }
 
     const tRow = performance.now();
-    const { data: row, error } = await supabaseAdmin
-      .from("exports")
-      .select("id,user_id,status,file_path")
-      .eq("id", exportId)
-      .eq("user_id", userId)
-      .single();
+    const row = await requireOwnedExport(userId, exportId);
     const rowMs = Math.round(performance.now() - tRow);
 
-    if (error || !row) {
+    if (!row) {
       console.log(
         `[movemark-api:exports] GET /:id/download timing authMs=${authMs} rowMs=${rowMs} totalMs=${Math.round(performance.now() - t0)} status=404`
       );
@@ -232,7 +236,7 @@ exportsRouter.get("/:id/download", async (c) => {
 
 exportsRouter.post("/move-in", async (c) => {
   try {
-    const userId = await requireUserIdFromBearer(c);
+    const userId = getUserId(c);
     const body = await c.req.json<ExportRequestBody>();
 
     if (!body.propertyId || body.format !== "pdf") {
@@ -241,6 +245,12 @@ exportsRouter.post("/move-in", async (c) => {
 
     if (!isUuidString(body.propertyId)) {
       return c.json({ error: "Invalid propertyId" }, 400);
+    }
+
+    const createLimit = await checkExportCreateRateLimit(userId, body.propertyId, "move_in");
+    if (!createLimit.allowed) {
+      c.header("Retry-After", String(createLimit.retryAfterSec));
+      return c.json({ error: "Too many export requests for this property" }, 429);
     }
 
     const { data: property, error: propertyError } = await supabaseAdmin
@@ -407,7 +417,7 @@ exportsRouter.post("/move-in", async (c) => {
 
 exportsRouter.post("/move-out", async (c) => {
   try {
-    const userId = await requireUserIdFromBearer(c);
+    const userId = getUserId(c);
     const body = await c.req.json<ExportRequestBody>();
 
     if (!body.propertyId || body.format !== "pdf") {
@@ -416,6 +426,12 @@ exportsRouter.post("/move-out", async (c) => {
 
     if (!isUuidString(body.propertyId)) {
       return c.json({ error: "Invalid propertyId" }, 400);
+    }
+
+    const createLimit = await checkExportCreateRateLimit(userId, body.propertyId, "move_out");
+    if (!createLimit.allowed) {
+      c.header("Retry-After", String(createLimit.retryAfterSec));
+      return c.json({ error: "Too many export requests for this property" }, 429);
     }
 
     const { data: property, error: propertyError } = await supabaseAdmin
@@ -604,7 +620,7 @@ exportsRouter.post("/move-out", async (c) => {
 
 exportsRouter.post("/dispute-packet", async (c) => {
   try {
-    const userId = await requireUserIdFromBearer(c);
+    const userId = getUserId(c);
     const body = await c.req.json<ExportRequestBody>();
 
     if (!body.propertyId || body.format !== "pdf") {
@@ -613,6 +629,16 @@ exportsRouter.post("/dispute-packet", async (c) => {
 
     if (!isUuidString(body.propertyId)) {
       return c.json({ error: "Invalid propertyId" }, 400);
+    }
+
+    const createLimit = await checkExportCreateRateLimit(
+      userId,
+      body.propertyId,
+      "dispute_packet"
+    );
+    if (!createLimit.allowed) {
+      c.header("Retry-After", String(createLimit.retryAfterSec));
+      return c.json({ error: "Too many export requests for this property" }, 429);
     }
 
     const { data: property, error: propertyError } = await supabaseAdmin
