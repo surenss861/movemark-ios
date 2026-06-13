@@ -11,15 +11,15 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@hono/node-server": "^1.19.11",
-    "@supabase/supabase-js": "latest",
-    "hono": "latest",
+    "@hono/node-server": "1.19.14",
+    "@supabase/supabase-js": "2.108.1",
+    "hono": "4.12.25",
     "pdf-lib": "^1.17.1"
   },
   "devDependencies": {
-    "@types/node": "latest",
-    "tsx": "latest",
-    "typescript": "latest",
-    "vitest": "latest"
+    "@types/node": "25.9.3",
+    "tsx": "4.22.4",
+    "typescript": "6.0.3",
+    "vitest": "4.1.8"
   }
 }
