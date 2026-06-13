@@ -103,7 +103,9 @@ Rate limits and hardened middleware exist on `movemark-security-hardening` only.
 
 **Option A (safer):** Railway staging service → branch `movemark-security-hardening`
 
-**Option B (faster):** Point existing `movemark-api-production` service at `movemark-security-hardening`, deploy, test, then merge to `main`.
+**Option B (faster — use now):** Railway → `movemark-api` service → Settings → Source → Branch: `movemark-security-hardening` → Save → Redeploy.
+
+After merge to `main`, point production source back to `main` and redeploy again.
 
 Set env and redeploy:
 
@@ -195,5 +197,7 @@ git checkout main && git pull
 git merge movemark-security-hardening
 git push
 ```
+
+Then in Railway: set Source branch back to `main` and redeploy.
 
 Merge **security before export v2**.
