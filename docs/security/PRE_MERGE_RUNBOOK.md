@@ -5,18 +5,22 @@ Branch `movemark-security-hardening` is **build-green** but **not merge-ready** 
 ## Merge gate (current)
 
 ```text
+✅ Branch build/test passes
 ✅ RLS enabled
 ✅ Policies exist
 ✅ Policy definitions pass (live audit)
-⬜ exports_status_check includes verifying
-⬜ Railway webhook bad/missing secret → 401
+✅ exports_status_check includes verifying
+⬜ Security branch deployed to Railway (rate limits only count after this)
+⬜ Webhook bad/missing secret → 401 after hardened deploy
 ⬜ Two-account cross-user test passes
 ⬜ Export spam → 429
 ⬜ Health spam → 429
 ⬜ Leaked Google service account key rotated
 ```
 
-**Highest-risk path:** Account B must **not** download Account A's export PDF (signed URL or file bytes).
+**Important:** 429 tests only pass once Railway runs `movemark-security-hardening`, not `main`. As of last probe, 75× `GET /api/health` returned **200** (no rate limit on current production).
+
+**Highest-risk path:** Account B must **not** download Account A's export PDF.
 
 **Dual protection model:**
 
@@ -93,18 +97,26 @@ ORDER BY tablename, policyname;
 
 ---
 
-## 2. Railway (production API)
+## 2. Deploy security branch to Railway
 
-Set:
+Rate limits and hardened middleware exist on `movemark-security-hardening` only. Deploy before runtime tests.
+
+**Option A (safer):** Railway staging service → branch `movemark-security-hardening`
+
+**Option B (faster):** Point existing `movemark-api-production` service at `movemark-security-hardening`, deploy, test, then merge to `main`.
+
+Set env and redeploy:
 
 ```text
-REVENUECAT_WEBHOOK_SECRET=<your_secret>
+REVENUECAT_WEBHOOK_SECRET=<secret>
 APP_ENV=production
 ```
 
-Redeploy API.
+Production URL (from Android config): `https://movemark-api-production.up.railway.app`
 
-Webhook tests (replace `YOUR_API_URL`):
+Repo root `railway.toml` builds `movemark-api/Dockerfile`.
+
+---
 
 ```bash
 # No secret → 401
