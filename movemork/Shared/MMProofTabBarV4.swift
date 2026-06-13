@@ -18,7 +18,7 @@ struct MMProofTabBarV4: View {
     private let iconSize: CGFloat = 21
 
     private var inactiveForeground: Color {
-        MoveMarkTheme.Colors.textMuted.opacity(0.62)
+        MoveMarkTheme.Colors.textSecondary.opacity(0.82)
     }
 
     var body: some View {
@@ -106,17 +106,18 @@ struct MMProofTabBarV4: View {
 
                 Text(title)
                     .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
-                    .foregroundStyle(isSelected ? MoveMarkTheme.Colors.textPrimary : inactiveForeground.opacity(0.72))
-                    .opacity(isSelected ? 1 : 0.55)
+                    .foregroundStyle(isSelected ? MoveMarkTheme.Colors.textPrimary : inactiveForeground)
+                    .opacity(isSelected ? 1 : 0.9)
                     .animation(reduceMotion ? nil : MMMotion.quick, value: isSelected)
             }
             .frame(maxWidth: .infinity, minHeight: 44)
-            .padding(.vertical, 8)
+            .padding(.vertical, 6)
             .background {
                 if isSelected {
                     Capsule()
                         .fill(MoveMarkTheme.Colors.primary.opacity(0.14))
-                        .padding(.horizontal, 6)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 2)
                         .matchedGeometryEffect(id: "evidenceDockPill", in: tabNamespace)
                 }
             }

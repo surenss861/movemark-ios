@@ -17,6 +17,8 @@ struct MMButton: View {
     enum Size {
         case hero
         case standard
+        /// In-card CTA — slightly shorter than standard.
+        case inline
         /// Auth vault CTA — controlled height, no hero glow.
         case auth
         case compact
@@ -25,6 +27,7 @@ struct MMButton: View {
             switch self {
             case .hero: return MoveMarkTheme.Spacing.heroButtonHeight
             case .standard: return 48
+            case .inline: return 44
             case .auth: return 56
             case .compact: return 38
             }
@@ -33,7 +36,7 @@ struct MMButton: View {
         var horizontalPadding: CGFloat {
             switch self {
             case .hero: return 20
-            case .standard, .auth: return 16
+            case .standard, .auth, .inline: return 16
             case .compact: return 12
             }
         }
@@ -41,7 +44,7 @@ struct MMButton: View {
         var cornerRadius: CGFloat {
             switch self {
             case .hero: return 18
-            case .standard, .auth: return 14
+            case .standard, .auth, .inline: return 14
             case .compact: return 12
             }
         }
@@ -50,7 +53,7 @@ struct MMButton: View {
             switch self {
             case .hero:
                 return MoveMarkTheme.Typography.button
-            case .standard, .auth:
+            case .standard, .auth, .inline:
                 return MoveMarkTheme.Typography.subheadlineMedium
             case .compact:
                 return .system(size: 13.5, weight: .semibold)
@@ -138,7 +141,7 @@ struct MMButton: View {
         guard kind == .primary, !isDisabled else { return .clear }
         switch size {
         case .hero: return MoveMarkTheme.Colors.primary.opacity(0.38)
-        case .auth, .standard: return MoveMarkTheme.Colors.primary.opacity(0.12)
+        case .auth, .standard, .inline: return MoveMarkTheme.Colors.primary.opacity(0.12)
         case .compact: return .clear
         }
     }

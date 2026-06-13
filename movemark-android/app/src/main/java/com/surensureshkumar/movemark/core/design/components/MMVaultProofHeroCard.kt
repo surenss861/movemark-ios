@@ -22,6 +22,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -29,6 +34,15 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMMotion
+
+private val ProofThumbnailBrightness = ColorMatrix(
+    floatArrayOf(
+        1.08f, 0f, 0f, 0f, 14f,
+        0f, 1.08f, 0f, 0f, 14f,
+        0f, 0f, 1.08f, 0f, 14f,
+        0f, 0f, 0f, 1f, 0f,
+    ),
+)
 
 @Composable
 fun MMVaultProofHeroCard(
@@ -55,10 +69,10 @@ fun MMVaultProofHeroCard(
         Row(verticalAlignment = Alignment.Top) {
             Box(
                 modifier = Modifier
-                    .size(72.dp)
+                    .size(80.dp)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(MMColors.FieldFill)
-                    .border(1.dp, MMColors.CardStroke, RoundedCornerShape(14.dp)),
+                    .background(MMColors.FieldFill.copy(alpha = 0.88f))
+                    .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(14.dp)),
                 contentAlignment = Alignment.Center,
             ) {
                 if (!previewImageUrl.isNullOrBlank()) {
@@ -66,15 +80,22 @@ fun MMVaultProofHeroCard(
                         model = previewImageUrl,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
+                        colorFilter = ColorFilter.colorMatrix(ProofThumbnailBrightness),
                         modifier = Modifier
-                            .size(72.dp)
+                            .size(92.dp)
+                            .scale(1.14f)
                             .clip(RoundedCornerShape(14.dp)),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.White.copy(alpha = 0.05f)),
                     )
                 } else {
                     Icon(
                         Icons.Default.PhotoCamera,
                         contentDescription = null,
-                        tint = MMColors.TextMuted.copy(alpha = 0.7f),
+                        tint = MMColors.TextSecondary.copy(alpha = 0.82f),
                         modifier = Modifier.size(26.dp),
                     )
                 }
@@ -136,6 +157,10 @@ fun MMVaultProofHeroCard(
             )
         }
         Spacer(Modifier.height(14.dp))
-        MMButton(text = primaryTitle, onClick = onPrimary)
+        MMButton(
+            text = primaryTitle,
+            onClick = onPrimary,
+            height = 52.dp,
+        )
     }
 }

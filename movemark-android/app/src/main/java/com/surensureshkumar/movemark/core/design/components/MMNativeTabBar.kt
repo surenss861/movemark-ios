@@ -32,12 +32,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMMotion
 import com.surensureshkumar.movemark.core.navigation.MainTab
@@ -92,12 +94,12 @@ private fun DockTabItem(
 ) {
     val active = tab == selected
     val iconTint by animateColorAsState(
-        if (active) MMColors.TextPrimary else MMColors.TextMuted.copy(alpha = 0.62f),
+        if (active) MMColors.TextPrimary else MMColors.TextSecondary.copy(alpha = 0.82f),
         MMMotion.welcomeEnterSpec(reduceMotion, durationMillis = 180),
         label = "dockIconTint",
     )
     val labelAlpha by animateFloatAsState(
-        if (active) 1f else 0.55f,
+        if (active) 1f else 0.9f,
         MMMotion.welcomeEnterSpec(reduceMotion, durationMillis = 180),
         label = "dockLabelAlpha",
     )
@@ -120,14 +122,14 @@ private fun DockTabItem(
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .padding(horizontal = 2.dp, vertical = 6.dp)
+                    .padding(horizontal = 8.dp, vertical = 7.dp)
                     .background(MMColors.Primary.copy(alpha = 0.14f), Capsule),
             )
         }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 5.dp),
         ) {
             Icon(
                 icon,

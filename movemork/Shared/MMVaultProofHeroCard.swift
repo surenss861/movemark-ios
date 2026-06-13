@@ -62,7 +62,7 @@ struct MMVaultProofHeroCard: View {
                     onPrimary()
                 },
                 kind: .primary,
-                size: .standard
+                size: .inline
             )
         }
         .padding(16)
@@ -76,7 +76,12 @@ struct MMVaultProofHeroCard: View {
                 AsyncImage(url: previewURL) { phase in
                     switch phase {
                     case .success(let image):
-                        image.resizable().scaledToFill()
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .scaleEffect(1.14)
+                            .brightness(0.06)
+                            .contrast(1.06)
                     default:
                         thumbnailPlaceholder
                     }
@@ -85,20 +90,26 @@ struct MMVaultProofHeroCard: View {
                 thumbnailPlaceholder
             }
         }
-        .frame(width: 72, height: 72)
+        .frame(width: 80, height: 80)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(previewURL == nil ? 0 : 0.05))
+                .allowsHitTesting(false)
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                .stroke(Color.white.opacity(0.16), lineWidth: 1)
         )
     }
 
     private var thumbnailPlaceholder: some View {
         ZStack {
-            MoveMarkTheme.Colors.fieldFill.opacity(0.95)
+            MoveMarkTheme.Colors.artifactPaper.opacity(0.22)
+            MoveMarkTheme.Colors.fieldFill.opacity(0.88)
             Image(systemName: "camera.fill")
-                .font(.system(size: 22, weight: .medium))
-                .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.7))
+                .font(.system(size: 24, weight: .medium))
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.82))
         }
     }
 

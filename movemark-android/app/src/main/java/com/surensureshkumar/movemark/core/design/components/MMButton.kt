@@ -16,6 +16,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
@@ -30,6 +32,7 @@ fun MMButton(
     style: MMButtonStyle = MMButtonStyle.Primary,
     enabled: Boolean = true,
     loading: Boolean = false,
+    height: Dp = MMSpacing.ButtonHeight.dp,
 ) {
     val shape = RoundedCornerShape(MMSpacing.CornerRadius.dp)
     val interactionSource = remember { MutableInteractionSource() }
@@ -41,7 +44,7 @@ fun MMButton(
     val scaledModifier = modifier
         .scale(scale)
         .fillMaxWidth()
-        .height(MMSpacing.ButtonHeight.dp)
+        .height(height)
     when (style) {
         MMButtonStyle.Primary -> Button(
             onClick = onClick,
