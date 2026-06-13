@@ -27,6 +27,19 @@ MoveMark stores renter photos, leases, deposit receipts, and dispute reports. Th
 
 **Rule:** RLS must stay enabled on every table in exposed schemas (`public`). No data is reachable via the Data API without policies.
 
+**Production gate:** Checklist documentation is not enough — run `docs/SECURITY_QA.md` (two-account isolation) on the **live Supabase project** after migrations are applied. Confirm in SQL editor:
+
+```sql
+SELECT tablename, rowsecurity FROM pg_tables
+WHERE schemaname = 'public'
+  AND tablename IN (
+    'profiles', 'properties', 'rooms', 'inspections',
+    'evidence_files', 'property_documents', 'exports'
+  );
+```
+
+All listed tables must show `rowsecurity = true`, with owner-based policies applied.
+
 ### Storage buckets (private)
 
 | Bucket | Public | Path rule | Migration |
@@ -91,6 +104,18 @@ Rotate any secret that was ever committed or shared in chat.
 
 Export generation is CPU/memory intensive — limits prevent abuse (OWASP API4: Unrestricted Resource Consumption).
 
+**MVP note:** Limits are **in-memory** (single Railway instance). They reset on deploy/restart and do not share state across replicas. Acceptable for early production; upgrade to Redis/Upstash/DB-backed limits before horizontal scale.
+
+### Export status constraint
+
+Allowed `exports.status` values (must match API + export v2):
+
+```text
+queued | processing | verifying | completed | failed
+```
+
+Migration: `20260522100000_security_hardening.sql` (`exports_status_check`)
+
 ---
 
 ## P2 — Abuse + file safety
@@ -154,12 +179,13 @@ Verify:
 
 | Gate | Owner | Date | Pass |
 |------|-------|------|------|
-| RLS applied on Supabase project | | | |
-| Storage buckets private | | | |
-| Railway env secrets set (no service key in apps) | | | |
-| API ownership middleware deployed | | | |
-| Rate limits enabled | | | |
-| Security QA script run (2 accounts) | | | |
-| `npm test` green | | | |
+| [ ] RLS enabled + policies verified on live Supabase (not docs only) | | | |
+| [ ] Export status constraint includes `verifying` | | | |
+| [ ] Storage buckets private | | | |
+| [ ] Railway env secrets set (no service key in apps) | | | |
+| [ ] API ownership middleware deployed | | | |
+| [ ] Rate limits enabled (MVP in-memory; document scale plan) | | | |
+| [ ] Security QA script run (2 accounts) | | | |
+| [ ] `npm test` green | | | |
 
 **Production-ready when all P0 items pass and pre-release QA is signed off.**

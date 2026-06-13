@@ -1,4 +1,5 @@
 -- Security hardening: export status constraint + ownership lookup indexes (idempotent).
+-- Status list includes `verifying` for export v2 compatibility.
 
 DO $exports_status$
 BEGIN
@@ -7,15 +8,15 @@ BEGIN
     RETURN;
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'exports_status_allowed'
-  ) THEN
-    EXECUTE $sql$
-      ALTER TABLE public.exports
-        ADD CONSTRAINT exports_status_allowed
-        CHECK (status IN ('queued', 'processing', 'completed', 'failed'))
-    $sql$;
-  END IF;
+  -- Reconcile legacy constraint names from earlier migrations.
+  EXECUTE 'ALTER TABLE public.exports DROP CONSTRAINT IF EXISTS exports_status_allowed';
+  EXECUTE 'ALTER TABLE public.exports DROP CONSTRAINT IF EXISTS exports_status_check';
+
+  EXECUTE $sql$
+    ALTER TABLE public.exports
+      ADD CONSTRAINT exports_status_check
+      CHECK (status IN ('queued', 'processing', 'verifying', 'completed', 'failed'))
+  $sql$;
 
   EXECUTE $sql$
     CREATE INDEX IF NOT EXISTS idx_exports_user_id_id
