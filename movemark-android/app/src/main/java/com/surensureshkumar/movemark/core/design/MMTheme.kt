@@ -24,8 +24,8 @@ object MMSpacing {
     const val CardStack = 16
     const val CornerRadius = 22
     const val ButtonHeight = 58
-    /** Scroll content clearance above native tab bar. */
-    const val TabScrollBottom = 40
+    /** Scroll content clearance above floating evidence dock. */
+    const val TabScrollBottom = 104
 }
 
 @Composable

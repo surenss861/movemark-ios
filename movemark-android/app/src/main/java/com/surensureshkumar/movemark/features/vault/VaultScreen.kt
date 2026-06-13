@@ -130,11 +130,6 @@ fun VaultScreen(
                     else -> "Review rooms"
                 }
 
-                val featuredRoom = RoomProofMetrics.firstPreviewRoom(p)
-                    ?: next
-                    ?: p.rooms.firstOrNull { RoomProofMetrics.isDocumented(it) }
-                val featuredPhotoCount = featuredRoom?.let { RoomProofMetrics.photoCount(it) } ?: 0
-
                 MMVaultProofHeroCard(
                     propertyName = p.title,
                     location = location.ifBlank { null },
@@ -148,8 +143,6 @@ fun VaultScreen(
                     },
                     reduceMotion = reduceMotion,
                     previewImageUrl = previewImageUrl,
-                    roomName = featuredRoom?.name ?: next?.name,
-                    photoCount = featuredPhotoCount,
                     modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "vaultHero"),
                 )
 

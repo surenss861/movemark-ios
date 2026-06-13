@@ -173,13 +173,6 @@ struct VaultRootView: View {
 
     @ViewBuilder
     private func primaryVaultCard(for row: PropertyRow) -> some View {
-        let prop = propertyStore.currentProperty
-        let featuredRoom = prop?.rooms.first(where: { room in
-            !room.evidence.contains(where: { $0.photoCount > 0 })
-        }) ?? prop?.rooms.first(where: { room in
-            room.evidence.contains(where: { $0.photoCount > 0 })
-        })
-        let featuredPhotoCount = featuredRoom?.evidence.reduce(0) { $0 + $1.photoCount } ?? 0
         MMVaultProofHeroCard(
             propertyName: displayName(for: row),
             location: locationText(for: row).isEmpty ? nil : locationText(for: row),
@@ -187,8 +180,6 @@ struct VaultRootView: View {
             nextLine: vaultHeroNextLine,
             progress: vaultProofProgressValue,
             previewURL: previewURLByPropertyId[row.id],
-            roomName: featuredRoom?.name,
-            photoCount: featuredPhotoCount,
             primaryTitle: featuredContinueProofTitle,
             onPrimary: { openFeaturedVaultOrContinue() }
         )

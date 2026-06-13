@@ -9,6 +9,7 @@ object MMColors {
     val Card = Color(0xFF10231B)
     val CardRaised = Color(0xFF13291F)
     val EvidenceCard = Color(0xFF151716)
+    val EvidenceCardRaised = Color(0xFF1A1C1B)
     val TabBarFill = Color(0xF008130F)
     val Primary = Color(0xFF21B866)
     val PrimaryPressed = Color(0xFF18A957)
