@@ -64,3 +64,30 @@ ORDER BY tablename;
 
 -- Expected: policy_count >= 1 on every table above.
 -- Final proof: two-account test in docs/SECURITY_QA.md (Account B cannot read A's rows).
+
+-- Step 4: Policy definitions — confirm ownership, not open access
+SELECT
+  tablename,
+  policyname,
+  cmd,
+  qual,
+  with_check
+FROM pg_policies
+WHERE schemaname = 'public'
+  AND tablename IN (
+    'profiles',
+    'properties',
+    'rooms',
+    'inspections',
+    'evidence_files',
+    'property_documents',
+    'exports'
+  )
+ORDER BY tablename, policyname;
+
+-- Good signs:
+--   auth.uid() = user_id
+--   property ownership via join to properties.user_id
+-- Bad signs (too open unless intentional):
+--   qual = 'true' or with_check = 'true'
+--   auth.role() = 'authenticated' without user_id check

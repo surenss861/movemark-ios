@@ -8,15 +8,17 @@ Branch `movemark-security-hardening` is **build-green** but **not merge-ready** 
 ✅ Branch build/test passes
 ✅ verifying status fixed in migration
 ✅ RLS enabled on sensitive tables (rowsecurity = true)
+✅ RLS policies exist (per-table policy_count >= 1)
+⬜ Policy definitions enforce ownership (Step 4 SQL — no bare `true`)
 ⬜ exports_status_check verified live includes verifying
-⬜ RLS policies correct (two-account test — the real proof)
+⬜ Two-account test passes (the real proof)
 ⬜ Railway REVENUECAT_WEBHOOK_SECRET + APP_ENV=production + redeploy
 ⬜ Webhook missing/bad secret → 401
 ⬜ Export + health rate limits → 429
 ⬜ Leaked Google service account key rotated
 ```
 
-**Note:** `rowsecurity = true` only means RLS is on. It does not prove policies block cross-user access. The two-account test is mandatory.
+**Note:** Policy count only proves policies exist — not that they are correct. The two-account test answers: *Can User B access User A's data?* That must be **no** every time.
 
 ---
 
@@ -44,6 +46,35 @@ All sensitive tables → `rowsecurity = true` (confirmed live).
 ### C) Policies exist
 
 `pre-merge-verify.sql` Step 3 lists policies per table. Each table needs `policy_count >= 1`.
+
+Healthy live result (example):
+
+```text
+evidence_files      5 policies
+exports             5 policies
+inspections         5 policies
+profiles            3 policies
+properties          5 policies
+property_documents  5 policies
+rooms               5 policies
+```
+
+### D) Policy definitions enforce ownership
+
+Run Step 4 in `pre-merge-verify.sql`:
+
+```sql
+SELECT tablename, policyname, cmd, qual, with_check
+FROM pg_policies
+WHERE schemaname = 'public'
+  AND tablename IN ('profiles', 'properties', 'rooms', 'inspections',
+    'evidence_files', 'property_documents', 'exports')
+ORDER BY tablename, policyname;
+```
+
+**Good:** `auth.uid() = user_id` or property ownership via join.
+
+**Bad:** bare `true`, `using (true)`, or `auth.role() = 'authenticated'` without user scoping.
 
 ---
 
@@ -75,21 +106,23 @@ curl -i -X POST https://YOUR_API_URL/api/webhooks/revenuecat \
 
 ---
 
-## 3. Two-account manual QA (required)
+## 3. Two-account manual QA (required — the real proof)
 
 Follow `docs/SECURITY_QA.md`.
 
-**Account A:** create rental, upload proof, generate export.
+**Account A:** create property, upload proof, generate export.
 
-**Account B:** try A's property ID, export list, export download, create export on A's property.
+**Account B:** try A's property ID, export list, export download, create export on A's property, any signed URL from A.
 
-Expected:
+Expected every time:
 
 ```text
 401 — not logged in
 403/404 — logged in but not owner
-never — signed URLs or A's metadata
+never — signed URLs, file access, or A's metadata
 ```
+
+If B can see or download anything belonging to A, **do not merge**.
 
 ---
 
