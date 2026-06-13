@@ -40,8 +40,8 @@ fun WelcomeDepositCaseFile(
             .offset(y = cardOffsetY.dp)
             .padding(top = 8.dp),
     ) {
-        WelcomeEvidenceStack(
-            tagsVisible = tagsVisible,
+        WelcomeClaimProofStack(
+            proofVisible = tagsVisible,
             reduceMotion = reduceMotion,
         )
     }

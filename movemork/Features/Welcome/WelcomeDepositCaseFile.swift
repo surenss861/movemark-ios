@@ -13,8 +13,8 @@ struct WelcomeDepositCaseFile: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        WelcomeEvidenceStack(
-            tagsVisible: tagsVisible
+        WelcomeClaimProofStack(
+            proofVisible: tagsVisible
         )
         .frame(maxWidth: min(maxWidth, 390))
         .padding(.top, 8)
