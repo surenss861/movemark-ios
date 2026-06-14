@@ -96,6 +96,8 @@ enum MoveMarkTheme {
         static let floatingDockBottomInset: CGFloat = 10
         /// Scroll tail when floating dock is visible (Proof, Reports).
         static let scrollTailRootTabChrome: CGFloat = 168
+        /// Reports tab — extra clearance so pro report cards clear the floating dock.
+        static let scrollTailReportsTabChrome: CGFloat = 204
         /// Account — Sign out clears the bottom dock.
         static let scrollTailAccountTabChrome: CGFloat = 144
         /// Pushed signed-in flows (room proof, property detail) without tab bar.
@@ -272,6 +274,7 @@ extension View {
 struct MMSignedInScrollTailSpacer: View {
     enum Kind {
         case rootTab
+        case reportsTab
         case accountTab
         case focusedSignedIn
     }
@@ -286,6 +289,8 @@ struct MMSignedInScrollTailSpacer: View {
         switch kind {
         case .rootTab:
             MoveMarkTheme.Spacing.scrollTailRootTabChrome
+        case .reportsTab:
+            MoveMarkTheme.Spacing.scrollTailReportsTabChrome
         case .accountTab:
             MoveMarkTheme.Spacing.scrollTailAccountTabChrome
         case .focusedSignedIn:

@@ -137,13 +137,12 @@ struct ExportHistoryView: View {
                     }
 
                     if rootTabBarVisible {
-                        MMSignedInScrollTailSpacer(kind: .rootTab)
+                        MMSignedInScrollTailSpacer(kind: .reportsTab)
                     }
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
                 .padding(.top, 10)
                 .mmScrollContentTopInset(2)
-                .padding(.bottom, 12)
             }
             .refreshable {
                 await loadExports()

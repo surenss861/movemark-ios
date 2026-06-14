@@ -85,7 +85,7 @@ fun ReportsScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-            .padding(top = 12.dp, bottom = MMSpacing.TabScrollBottom.dp),
+            .padding(top = 12.dp, bottom = MMSpacing.ReportsTabScrollBottom.dp),
     ) {
         MMProofSectionHeader(
             title = "Your reports",
