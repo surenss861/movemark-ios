@@ -31,6 +31,7 @@ import com.surensureshkumar.movemark.data.export.DisputePacketReadiness
 import com.surensureshkumar.movemark.data.export.ExportRow
 import com.surensureshkumar.movemark.data.export.MoveOutReportReadiness
 import com.surensureshkumar.movemark.data.export.ReportReadiness
+import com.surensureshkumar.movemark.features.reports.components.ExportHistoryEmptyState
 import com.surensureshkumar.movemark.features.reports.components.ExportHistorySection
 import com.surensureshkumar.movemark.features.reports.components.MMReportExportSection
 import com.surensureshkumar.movemark.features.reports.components.MMReportNoVaultPlaceholder
@@ -165,6 +166,7 @@ fun ReportsScreen(
                     reduceMotion = reduceMotion,
                     isProcessing = state.disputeReadiness == DisputePacketReadiness.Processing,
                     isProLocked = !hasPro,
+                    useQuietPrimaryWhenLocked = true,
                     legalNote = "MoveMark organizes your proof. It does not provide legal advice.",
                 )
                 if (state.exports.isNotEmpty()) {
@@ -172,7 +174,11 @@ fun ReportsScreen(
                     ExportHistorySection(
                         exports = state.exports,
                         onShare = { row -> viewModel.shareExport(row) },
+                        onRetry = { row -> viewModel.retryExport(row) },
                     )
+                } else if (!state.exportsLoading && !state.noVault) {
+                    Spacer(Modifier.height(24.dp))
+                    ExportHistoryEmptyState()
                 }
             }
         }

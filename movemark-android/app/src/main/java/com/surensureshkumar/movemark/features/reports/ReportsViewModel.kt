@@ -296,6 +296,15 @@ class ReportsViewModel @Inject constructor(
         }
     }
 
+    fun retryExport(row: ExportRow) {
+        when (row.type) {
+            ReportReadinessMapper.MOVE_IN_REPORT_TYPE -> queueMoveInReport()
+            ReportReadinessMapper.MOVE_OUT_REPORT_TYPE -> queueMoveOutReport()
+            ReportReadinessMapper.DISPUTE_PACKET_TYPE -> queueDisputePacket()
+            else -> refreshExports()
+        }
+    }
+
     private fun buildUiState(
         property: PropertyRecord?,
         propertyLoading: Boolean,
@@ -488,8 +497,8 @@ fun moveOutPrimaryCta(
 
 fun ReportsUiState.heroHeadline(): String = when (readiness) {
     ReportReadiness.NotReady, ReportReadiness.NoVault -> "Finish room proof first."
-    ReportReadiness.ReadyToMake -> "You can make a report now."
-    ReportReadiness.ReadyToShare -> "Your report is ready to share."
+    ReportReadiness.ReadyToMake -> "You have enough proof to create a move-in report."
+    ReportReadiness.ReadyToShare -> "Your move-in report is ready to share."
     ReportReadiness.Processing -> "Building your PDF report."
     ReportReadiness.Failed -> "We couldn't finish your report."
 }
@@ -518,6 +527,6 @@ fun ReportsUiState.moveOutCta(hasPro: Boolean): Triple<String, Boolean, Boolean>
 }
 
 fun ReportsUiState.disputeCta(hasPro: Boolean): Triple<String, Boolean, Boolean> {
-    if (!hasPro) return Triple("Upgrade to Pro", true, false)
+    if (!hasPro) return Triple("Included with Pro", true, false)
     return disputePrimaryCta(disputeReadiness, propertyLoading || exportsLoading, disputeActionInProgress)
 }

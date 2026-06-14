@@ -132,6 +132,8 @@ struct ExportHistoryView: View {
 
                     if !hasActiveVault && !isLoading {
                         noVaultSelectedState
+                    } else if hasActiveVault && !isLoading && exports.isEmpty {
+                        exportHistoryEmptyState
                     } else if !isLoading, !exports.isEmpty {
                         exportHistorySections
                     }
@@ -279,9 +281,9 @@ struct ExportHistoryView: View {
         case .notReady, .noVault:
             return "Finish room proof first."
         case .readyToMake:
-            return "You can make a report now."
+            return "You have enough proof to create a move-in report."
         case .readyToShare:
-            return "Your report is ready to share."
+            return "Your move-in report is ready to share."
         case .processing:
             return "Building your PDF report."
         case .failed:
@@ -520,6 +522,21 @@ struct ExportHistoryView: View {
         return hasActiveVault ? "Not ready" : "No vault"
     }
 
+    private var exportHistoryEmptyState: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Export history")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                .padding(.leading, 2)
+
+            Text("Create your first move-in report once proof is ready.")
+                .font(MoveMarkTheme.Typography.subheadline)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, 8)
+    }
+
     private var noVaultSelectedState: some View {
         ProofReportCard(
             model: ProofReportModel(
@@ -561,6 +578,7 @@ struct ExportHistoryView: View {
                 primaryEnabled: disputePrimaryCTA.enabled,
                 isProcessing: disputeReadiness == .processing,
                 isProLocked: !subscriptionManager.hasPro,
+                useQuietPrimaryWhenLocked: true,
                 legalNote: "MoveMark organizes your proof. It does not provide legal advice.",
                 onPrimary: disputePrimaryCTA.action
             )
@@ -576,14 +594,17 @@ struct ExportHistoryView: View {
 
             VStack(spacing: 8) {
                 ForEach(exports) { row in
+                    let status = verificationStatus[row.id] ?? .unknown
                     ExportHistoryRow(
                         title: label(for: row.exportType),
                         dateLine: formattedDate(row.createdAt),
-                        statusLabel: (verificationStatus[row.id] ?? .unknown).displayLabel,
-                        statusTone: historyStatusTone(verificationStatus[row.id] ?? .unknown),
-                        isProcessing: isActiveExportJob(verificationStatus[row.id] ?? .unknown),
-                        canShare: canShareExport(verificationStatus[row.id] ?? .unknown),
-                        onShare: { share(row) }
+                        statusLabel: status.displayLabel,
+                        statusTone: historyStatusTone(status),
+                        isProcessing: isActiveExportJob(status),
+                        canShare: canShareExport(status),
+                        canRetry: status == .serverFailed,
+                        onShare: { share(row) },
+                        onRetry: { retryExport(row) }
                     )
                 }
             }
@@ -719,7 +740,7 @@ struct ExportHistoryView: View {
 
     private var disputePrimaryCTA: (title: String, enabled: Bool, action: () -> Void) {
         if !subscriptionManager.hasPro {
-            return ("Upgrade to Pro", true, {
+            return ("Included with Pro", true, {
                 activePaywallReason = .disputePacket
                 showPaywall = true
             })
@@ -1180,11 +1201,24 @@ struct ExportHistoryView: View {
         value?.components(separatedBy: "/").last ?? (value ?? "—")
     }
 
+    private static let exportHistoryDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "MMM d, yyyy · h:mm a"
+        return formatter
+    }()
+
     private func formattedDate(_ value: String?) -> String {
         guard let value else { return "Unknown date" }
-        let formatter = ISO8601DateFormatter()
-        guard let date = formatter.date(from: value) else { return value }
-        return date.formatted(date: .abbreviated, time: .shortened)
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var date = iso.date(from: value)
+        if date == nil {
+            iso.formatOptions = [.withInternetDateTime]
+            date = iso.date(from: value)
+        }
+        guard let date else { return value }
+        return Self.exportHistoryDateFormatter.string(from: date)
     }
 
     private func loadExports() async {
@@ -1251,6 +1285,19 @@ struct ExportHistoryView: View {
             )
             exports = []
             MMHaptics.error()
+        }
+    }
+
+    private func retryExport(_ row: ExportRow) {
+        switch row.exportType {
+        case "move_in_report":
+            requestMoveInExport()
+        case "move_out_report":
+            requestMoveOutExport()
+        case "dispute_packet", "dispute_summary":
+            requestDisputePacketExport()
+        default:
+            Task { await loadExports() }
         }
     }
 

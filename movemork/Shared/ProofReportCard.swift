@@ -20,6 +20,7 @@ struct ProofReportCard: View {
     let primaryTitle: String
     let onPrimary: () -> Void
     var primaryEnabled: Bool = true
+    var primaryKind: MMButton.Kind = .primary
     var isBright: Bool = false
     var isProcessing: Bool = false
     var isCompact: Bool = false
@@ -90,7 +91,7 @@ struct ProofReportCard: View {
             MMButton(
                 title: primaryTitle,
                 action: onPrimary,
-                kind: .primary,
+                kind: primaryKind,
                 size: .standard,
                 isDisabled: !primaryEnabled
             )

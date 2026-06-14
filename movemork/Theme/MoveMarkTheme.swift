@@ -97,7 +97,7 @@ enum MoveMarkTheme {
         /// Scroll tail when floating dock is visible (Proof, Reports).
         static let scrollTailRootTabChrome: CGFloat = 168
         /// Reports tab — extra clearance so pro report cards clear the floating dock.
-        static let scrollTailReportsTabChrome: CGFloat = 204
+        static let scrollTailReportsTabChrome: CGFloat = 210
         /// Account — Sign out clears the bottom dock.
         static let scrollTailAccountTabChrome: CGFloat = 144
         /// Pushed signed-in flows (room proof, property detail) without tab bar.

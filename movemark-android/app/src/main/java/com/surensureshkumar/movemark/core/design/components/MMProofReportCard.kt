@@ -43,6 +43,7 @@ fun MMProofReportCard(
     modifier: Modifier = Modifier,
     primaryEnabled: Boolean = true,
     primaryLoading: Boolean = false,
+    primaryStyle: MMButtonStyle = MMButtonStyle.Primary,
     isBright: Boolean = false,
     isProcessing: Boolean = false,
     isCompact: Boolean = false,
@@ -127,6 +128,7 @@ fun MMProofReportCard(
                 onClick = onPrimary,
                 enabled = primaryEnabled,
                 loading = primaryLoading,
+                style = primaryStyle,
             )
         }
     }

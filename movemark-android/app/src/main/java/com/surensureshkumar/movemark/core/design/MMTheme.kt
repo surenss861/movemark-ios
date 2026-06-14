@@ -27,7 +27,7 @@ object MMSpacing {
     /** Scroll content clearance above floating evidence dock. */
     const val TabScrollBottom = 168
     /** Reports tab — extra clearance for move-out/dispute cards above the dock. */
-    const val ReportsTabScrollBottom = 204
+    const val ReportsTabScrollBottom = 210
 }
 
 @Composable

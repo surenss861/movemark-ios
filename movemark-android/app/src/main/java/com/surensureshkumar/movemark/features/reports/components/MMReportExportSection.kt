@@ -33,6 +33,7 @@ fun MMReportExportSection(
     reduceMotion: Boolean,
     isProcessing: Boolean = false,
     isProLocked: Boolean = false,
+    useQuietPrimaryWhenLocked: Boolean = false,
     legalNote: String? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -55,6 +56,7 @@ fun MMReportExportSection(
                 statusLabel = if (isProLocked) "Pro feature" else statusLine,
                 statusTone = if (isProLocked) MMProofStatusTone.Neutral else statusTone(statusColor, primaryEnabled),
                 footnote = when {
+                    isProLocked && useQuietPrimaryWhenLocked -> "Bundle proof if your deposit is questioned."
                     isProLocked -> "Unlock with MoveMark Pro"
                     else -> footnote
                 },
@@ -66,6 +68,7 @@ fun MMReportExportSection(
             isBright = !isProLocked && statusColor == MMColors.Primary,
             isProcessing = isProcessing,
             isCompact = true,
+            primaryStyle = if (isProLocked && useQuietPrimaryWhenLocked) MMButtonStyle.Secondary else MMButtonStyle.Primary,
             legalNote = legalNote,
             reduceMotion = reduceMotion,
             modifier = Modifier.mmAppearRise(appeared, reduceMotion, label = "export_$sectionTitle"),

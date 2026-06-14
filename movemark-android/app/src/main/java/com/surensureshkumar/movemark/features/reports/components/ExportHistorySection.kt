@@ -32,9 +32,28 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
+fun ExportHistoryEmptyState(modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(
+            "Export history",
+            color = MMColors.TextMuted,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 2.dp, bottom = 10.dp),
+        )
+        Text(
+            "Create your first move-in report once proof is ready.",
+            color = MMColors.TextSecondary,
+            fontSize = 14.sp,
+        )
+    }
+}
+
+@Composable
 fun ExportHistorySection(
     exports: List<ExportRow>,
     onShare: (ExportRow) -> Unit,
+    onRetry: (ExportRow) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     if (exports.isEmpty()) return
@@ -47,7 +66,7 @@ fun ExportHistorySection(
             modifier = Modifier.padding(start = 2.dp, bottom = 10.dp),
         )
         exports.forEach { row ->
-            ExportHistoryRow(row = row, onShare = { onShare(row) })
+            ExportHistoryRow(row = row, onShare = { onShare(row) }, onRetry = { onRetry(row) })
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -57,6 +76,7 @@ fun ExportHistorySection(
 private fun ExportHistoryRow(
     row: ExportRow,
     onShare: () -> Unit,
+    onRetry: () -> Unit,
 ) {
     val isReady = row.verification == ExportVerificationStatus.Ready
   Row(
@@ -96,6 +116,13 @@ private fun ExportHistoryRow(
             MMButton(
                 text = "Share",
                 onClick = onShare,
+                style = MMButtonStyle.Secondary,
+                modifier = Modifier.width(88.dp),
+            )
+        } else if (row.verification == ExportVerificationStatus.ServerFailed) {
+            MMButton(
+                text = "Retry",
+                onClick = onRetry,
                 style = MMButtonStyle.Secondary,
                 modifier = Modifier.width(88.dp),
             )

@@ -14,7 +14,9 @@ struct ExportHistoryRow: View {
     let statusTone: ProofStatusTone
     var isProcessing: Bool = false
     var canShare: Bool = false
+    var canRetry: Bool = false
     let onShare: () -> Void
+    var onRetry: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -43,6 +45,14 @@ struct ExportHistoryRow: View {
                 MMButton(
                     title: "Share",
                     action: onShare,
+                    kind: .quiet,
+                    size: .compact,
+                    expandsToFillWidth: false
+                )
+            } else if canRetry, let onRetry {
+                MMButton(
+                    title: "Retry",
+                    action: onRetry,
                     kind: .quiet,
                     size: .compact,
                     expandsToFillWidth: false

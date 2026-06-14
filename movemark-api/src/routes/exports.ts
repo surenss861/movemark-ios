@@ -29,6 +29,7 @@ import {
   generateMoveInPdfBuffer,
   generateMoveOutPdfBuffer,
 } from "../lib/pdf.js";
+import { loadInspectionEvidencePhotos } from "../lib/pdfEvidence.js";
 import { uploadExportToSupabaseStorage } from "../lib/storage.js";
 import { supabaseAdmin } from "../lib/supabase.js";
 import type {
@@ -343,6 +344,12 @@ exportsRouter.post("/move-in", async (c) => {
       .eq("user_id", userId)
       .order("uploaded_at", { ascending: true });
 
+    const evidencePhotos = await loadInspectionEvidencePhotos(
+      body.propertyId,
+      inspectionItems,
+      tagNamesByItem
+    );
+
     const requestedAt = new Date().toISOString();
 
     const { data: exportRow, error: exportInsertError } = await supabaseAdmin
@@ -368,6 +375,7 @@ exportsRouter.post("/move-in", async (c) => {
         inspection: inspection ?? null,
         inspectionItems: inspectionItemsForPdf,
         propertyDocuments: propertyDocuments ?? [],
+        evidencePhotos,
       });
 
       const upload = await uploadExportToSupabaseStorage({
@@ -547,6 +555,12 @@ exportsRouter.post("/move-out", async (c) => {
       };
     });
 
+    const evidencePhotos = await loadInspectionEvidencePhotos(
+      body.propertyId,
+      inspectionItems,
+      tagNamesByItem
+    );
+
     const requestedAt = new Date().toISOString();
 
     const { data: exportRow, error: exportInsertError } = await supabaseAdmin
@@ -571,6 +585,7 @@ exportsRouter.post("/move-out", async (c) => {
         rooms: rooms ?? [],
         inspection: inspection ?? null,
         inspectionItems: inspectionItemsForPdf,
+        evidencePhotos,
       });
 
       const upload = await uploadExportToSupabaseStorage({

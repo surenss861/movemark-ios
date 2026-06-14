@@ -18,6 +18,7 @@ struct MMReportExportSection: View {
     var primaryEnabled: Bool = true
     var isProcessing: Bool = false
     var isProLocked: Bool = false
+    var useQuietPrimaryWhenLocked: Bool = false
     var legalNote: String? = nil
   let onPrimary: () -> Void
 
@@ -40,11 +41,16 @@ struct MMReportExportSection: View {
                     metricsLine: metricsLine,
                     statusLabel: isProLocked ? "Pro feature" : statusLabel,
                     statusTone: isProLocked ? .neutral : statusTone,
-                    footnote: isProLocked ? "Unlock with MoveMark Pro" : footnote
+                    footnote: isProLocked
+                        ? (useQuietPrimaryWhenLocked
+                            ? "Bundle proof if your deposit is questioned."
+                            : "Unlock with MoveMark Pro")
+                        : footnote
                 ),
                 primaryTitle: primaryTitle,
                 onPrimary: onPrimary,
                 primaryEnabled: primaryEnabled,
+                primaryKind: (isProLocked && useQuietPrimaryWhenLocked) ? .quiet : .primary,
                 isBright: !isProLocked && statusTone == .success,
                 isProcessing: isProcessing,
                 isCompact: true,
