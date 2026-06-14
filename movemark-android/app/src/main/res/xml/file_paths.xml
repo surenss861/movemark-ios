@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <cache-path name="movemark_captures" path="movemark_captures/" />
+    <cache-path name="movemark_reports" path="movemark_reports/" />
 </paths>

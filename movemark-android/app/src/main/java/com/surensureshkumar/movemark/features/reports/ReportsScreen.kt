@@ -1,8 +1,8 @@
 package com.surensureshkumar.movemark.features.reports
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.Column
+import androidx.core.content.FileProvider
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -59,19 +59,27 @@ fun ReportsScreen(
     }
 
     LaunchedEffect(Unit) {
-        viewModel.shareUrl.collect { url ->
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            val chooser = Intent.createChooser(intent, "Share report")
-            runCatching { context.startActivity(chooser) }
-                .onFailure {
-                    val send = Intent(Intent.ACTION_SEND).apply {
-                        type = "application/pdf"
-                        putExtra(Intent.EXTRA_TEXT, url)
+        viewModel.reportPdf.collect { payload ->
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                payload.file,
+            )
+            when (payload.action) {
+                ReportPdfAction.View -> {
+                    val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, "application/pdf")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
-                    context.startActivity(Intent.createChooser(send, "Share report"))
+                    runCatching {
+                        context.startActivity(Intent.createChooser(viewIntent, "View report"))
+                    }.onFailure {
+                        shareLocalPdf(context, uri, payload.displayTitle)
+                    }
                 }
+                ReportPdfAction.Share -> shareLocalPdf(context, uri, payload.displayTitle)
+            }
         }
     }
 
@@ -246,4 +254,18 @@ private fun disputeFootnote(readiness: DisputePacketReadiness): String? = when (
     DisputePacketReadiness.ReadyToShare -> "Your dispute packet is ready to share."
     DisputePacketReadiness.Failed -> "Something went wrong. Try again when you're ready."
     DisputePacketReadiness.Processing -> null
+}
+
+private fun shareLocalPdf(
+    context: android.content.Context,
+    uri: android.net.Uri,
+    displayTitle: String,
+) {
+    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "application/pdf"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        putExtra(Intent.EXTRA_TITLE, displayTitle)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(sendIntent, "Share report"))
 }

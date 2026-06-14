@@ -14,6 +14,12 @@ struct ExportHistoryView: View {
     @Environment(SubscriptionManager.self) private var subscriptionManager
     @Environment(\.mmRootTabBarVisible) private var rootTabBarVisible
 
+    private struct ReportPreviewItem: Identifiable {
+        let id = UUID()
+        let fileURL: URL
+        let title: String
+    }
+
     var showOpenVaultsCTA: Bool = false
     var onOpenVaults: (() -> Void)? = nil
     var onContinueRoomProof: (() -> Void)? = nil
@@ -25,6 +31,9 @@ struct ExportHistoryView: View {
     @State private var successBanner: String? = nil
     @State private var shareItems: [Any] = []
     @State private var showShareSheet = false
+    @State private var reportPreviewItem: ReportPreviewItem?
+    @State private var reportPreviewTempURL: URL?
+    @State private var isDownloadingReport = false
     @State private var verificationStatus: [UUID: ExportVerificationStatus] = [:]
     @State private var proofToast: MMProofToastMessage? = nil
     @State private var proofToastVisible = false
@@ -163,6 +172,41 @@ struct ExportHistoryView: View {
         .sheet(isPresented: $showShareSheet) {
             if !shareItems.isEmpty {
                 ShareSheet(activityItems: shareItems)
+            }
+        }
+        .fullScreenCover(item: $reportPreviewItem, onDismiss: {
+            if let url = reportPreviewTempURL {
+                try? FileManager.default.removeItem(at: url)
+                reportPreviewTempURL = nil
+            }
+        }) { item in
+            NavigationStack {
+                QuickLookPreviewRepresentable(url: item.fileURL)
+                    .ignoresSafeArea(edges: .bottom)
+                    .navigationTitle(item.title)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") {
+                                reportPreviewItem = nil
+                            }
+                        }
+                        ToolbarItem(placement: .primaryAction) {
+                            Button("Share") {
+                                shareItems = [item.fileURL]
+                                showShareSheet = true
+                            }
+                        }
+                    }
+            }
+        }
+        .overlay {
+            if isDownloadingReport {
+                ZStack {
+                    MoveMarkTheme.Colors.textPrimary.opacity(0.25).ignoresSafeArea()
+                    ProgressView("Opening report…")
+                        .tint(MoveMarkTheme.Colors.primary)
+                }
             }
         }
         .sheet(isPresented: $showPaywall) {
@@ -479,8 +523,10 @@ struct ExportHistoryView: View {
             })
         case .readyToShare:
             return ("View / Share report", {
-                if let row = exports.first(where: { verificationStatus[$0.id] == .ready }) {
-                    share(row)
+                if let row = exports.first(where: {
+                    $0.exportType == "move_in_report" && verificationStatus[$0.id] == .ready
+                }) {
+                    viewReport(row)
                 }
             })
         case .processing:
@@ -728,7 +774,7 @@ struct ExportHistoryView: View {
         case .readyToShare:
             return ("View / Share report", true, {
                 if let row = exports.first(where: { $0.exportType == "move_out_report" && verificationStatus[$0.id] == .ready }) {
-                    share(row)
+                    viewReport(row)
                 }
             })
         case .processing:
@@ -762,7 +808,7 @@ struct ExportHistoryView: View {
                     ($0.exportType == "dispute_packet" || $0.exportType == "dispute_summary") &&
                     verificationStatus[$0.id] == .ready
                 }) {
-                    share(row)
+                    viewReport(row)
                 }
             })
         case .processing:
@@ -1301,19 +1347,65 @@ struct ExportHistoryView: View {
         }
     }
 
+    private func prepareLocalReportFile(for row: ExportRow) async throws -> URL {
+        let accessToken = try await currentAccessToken()
+        let client = try makeAPIClient()
+        let response = try await client.fetchDownloadURL(exportId: row.id.uuidString, accessToken: accessToken)
+        guard let signedURL = URL(string: response.downloadUrl) else {
+            throw APIClientError.invalidResponse
+        }
+        return try await ReportFileDownloader.downloadPDF(
+            from: signedURL,
+            exportType: row.exportType
+        )
+    }
+
+    private func viewReport(_ row: ExportRow) {
+        Task { @MainActor in
+            MMHaptics.soft()
+            errorMessage = nil
+            successBanner = nil
+            isDownloadingReport = true
+            defer { isDownloadingReport = false }
+
+            do {
+                let localURL = try await prepareLocalReportFile(for: row)
+                if let old = reportPreviewTempURL, old != localURL {
+                    try? FileManager.default.removeItem(at: old)
+                }
+                reportPreviewTempURL = localURL
+                reportPreviewItem = ReportPreviewItem(
+                    fileURL: localURL,
+                    title: ReportFileDownloader.displayTitle(for: row.exportType)
+                )
+                verificationStatus[row.id] = .ready
+                presentProofToast(
+                    MMProofToastMessage(
+                        kind: .success,
+                        title: "Report ready",
+                        message: "Preview or share your PDF."
+                    )
+                )
+            } catch let api as APIClientError {
+                handleReportDownloadAPIError(api, row: row)
+            } catch {
+                errorMessage = MoveMarkFlowMessage.documentPreviewFailed(error)
+                MMHaptics.error()
+            }
+        }
+    }
+
     private func share(_ row: ExportRow) {
         Task { @MainActor in
             MMHaptics.soft()
             errorMessage = nil
             successBanner = nil
+            isDownloadingReport = true
+            defer { isDownloadingReport = false }
+
             do {
-                let accessToken = try await currentAccessToken()
-                let client = try makeAPIClient()
-                let response = try await client.fetchDownloadURL(exportId: row.id.uuidString, accessToken: accessToken)
-                guard let url = URL(string: response.downloadUrl) else {
-                    throw APIClientError.invalidResponse
-                }
-                shareItems = [url]
+                let localURL = try await prepareLocalReportFile(for: row)
+                shareItems = [localURL]
                 showShareSheet = true
                 verificationStatus[row.id] = .ready
                 successBanner = nil
@@ -1321,37 +1413,39 @@ struct ExportHistoryView: View {
                     MMProofToastMessage(
                         kind: .success,
                         title: "Ready to share",
-                        message: "Use Share to save or send."
+                        message: "Send your PDF report."
                     )
                 )
             } catch let api as APIClientError {
-                if case .exportNotReady = api {
-                    verificationStatus[row.id] = .processing
-                    successBanner = nil
-                    errorMessage = nil
-                } else if case .exportFailed = api {
-                    verificationStatus[row.id] = .serverFailed
-                    successBanner = nil
-                    errorMessage = MoveMarkFlowMessage.exportServerFailedHint
-                    presentProofToast(.reportFailed())
-                } else {
-                    let mapped = MoveMarkFlowMessage.exportOrAPIFailed(
-                        api,
-                        fallback: "Couldn’t prepare download. Try again."
-                    )
-                    verificationStatus[row.id] = .verificationFailed(mapped)
-                    errorMessage = mapped
-                    MMHaptics.error()
-                }
+                handleReportDownloadAPIError(api, row: row)
             } catch {
-                let mapped = MoveMarkFlowMessage.exportOrAPIFailed(
-                    error,
-                    fallback: "Couldn’t prepare download. Try again."
-                )
+                let mapped = MoveMarkFlowMessage.documentPreviewFailed(error)
                 verificationStatus[row.id] = .verificationFailed(mapped)
                 errorMessage = mapped
                 MMHaptics.error()
             }
+        }
+    }
+
+    private func handleReportDownloadAPIError(_ api: APIClientError, row: ExportRow) {
+        if case .exportNotReady = api {
+            verificationStatus[row.id] = .processing
+            successBanner = nil
+            errorMessage = nil
+        } else if case .exportFailed = api {
+            verificationStatus[row.id] = .serverFailed
+            successBanner = nil
+            errorMessage = MoveMarkFlowMessage.exportServerFailedHint
+            presentProofToast(.reportFailed())
+            MMHaptics.error()
+        } else {
+            let mapped = MoveMarkFlowMessage.exportOrAPIFailed(
+                api,
+                fallback: "Couldn’t prepare your report. Try again."
+            )
+            verificationStatus[row.id] = .verificationFailed(mapped)
+            errorMessage = mapped
+            MMHaptics.error()
         }
     }
 

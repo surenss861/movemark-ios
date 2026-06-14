@@ -1,5 +1,6 @@
 package com.surensureshkumar.movemark.features.reports
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.surensureshkumar.movemark.data.export.DisputePacketReadiness
@@ -8,6 +9,7 @@ import com.surensureshkumar.movemark.data.export.ExportRepository
 import com.surensureshkumar.movemark.data.export.ExportRow
 import com.surensureshkumar.movemark.data.export.MoveOutReportReadiness
 import com.surensureshkumar.movemark.data.export.MoveOutReportReadinessMapper
+import com.surensureshkumar.movemark.data.export.ReportFileDownloader
 import com.surensureshkumar.movemark.data.export.ReportReadiness
 import com.surensureshkumar.movemark.data.export.ReportReadinessMapper
 import com.surensureshkumar.movemark.data.models.PropertyRecord
@@ -19,7 +21,9 @@ import com.surensureshkumar.movemark.features.reports.components.ChecklistItemSt
 import com.surensureshkumar.movemark.features.reports.components.ReportChecklistItem
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import java.io.File
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -55,8 +59,20 @@ data class ReportsUiState(
     val disputePacketStatus: String = "Add room proof first.",
 )
 
+enum class ReportPdfAction {
+    View,
+    Share,
+}
+
+data class ReportLocalPdf(
+    val file: File,
+    val displayTitle: String,
+    val action: ReportPdfAction,
+)
+
 @HiltViewModel
 class ReportsViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val propertyStore: PropertyStore,
     private val exportRepository: ExportRepository,
     subscriptionRepository: SubscriptionRepository,
@@ -74,8 +90,8 @@ class ReportsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ReportsUiState())
     val uiState: StateFlow<ReportsUiState> = _uiState.asStateFlow()
 
-    private val _shareUrl = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    val shareUrl: SharedFlow<String> = _shareUrl.asSharedFlow()
+    private val _reportPdf = MutableSharedFlow<ReportLocalPdf>(extraBufferCapacity = 1)
+    val reportPdf: SharedFlow<ReportLocalPdf> = _reportPdf.asSharedFlow()
 
     init {
         viewModelScope.launch {
@@ -233,17 +249,17 @@ class ReportsViewModel @Inject constructor(
 
     private fun shareMoveInReport() {
         val row = ReportReadinessMapper.firstReadyExport(_exports.value) ?: return
-        shareExport(row)
+        openReport(row, ReportPdfAction.View)
     }
 
     private fun shareMoveOutReport() {
         val row = MoveOutReportReadinessMapper.firstReadyMoveOutExport(_exports.value) ?: return
-        shareExport(row)
+        openReport(row, ReportPdfAction.View)
     }
 
     private fun shareDisputePacket() {
         val row = DisputePacketReadinessMapper.firstReadyDisputeExport(_exports.value) ?: return
-        shareExport(row)
+        openReport(row, ReportPdfAction.View)
     }
 
     private fun queueDisputePacket() {
@@ -271,28 +287,41 @@ class ReportsViewModel @Inject constructor(
     }
 
     fun shareExport(row: ExportRow) {
+        openReport(row, ReportPdfAction.Share)
+    }
+
+    private fun openReport(row: ExportRow, action: ReportPdfAction) {
         if (_actionInProgress.value || _moveOutActionInProgress.value || _disputeActionInProgress.value) {
             return
         }
         viewModelScope.launch {
-            when (row.type) {
-                ReportReadinessMapper.MOVE_IN_REPORT_TYPE -> _actionInProgress.value = true
-                ReportReadinessMapper.MOVE_OUT_REPORT_TYPE -> _moveOutActionInProgress.value = true
-                ReportReadinessMapper.DISPUTE_PACKET_TYPE -> _disputeActionInProgress.value = true
-            }
+            setReportBusy(row, true)
             _banner.value = null
             try {
-                val url = withContext(Dispatchers.IO) {
+                val signedUrl = withContext(Dispatchers.IO) {
                     exportRepository.downloadUrl(row.id)
                 }
-                _shareUrl.emit(url)
+                val file = ReportFileDownloader.download(appContext, signedUrl, row.type)
+                _reportPdf.emit(
+                    ReportLocalPdf(
+                        file = file,
+                        displayTitle = ReportFileDownloader.displayTitle(row.type),
+                        action = action,
+                    )
+                )
             } catch (e: Exception) {
                 _banner.value = exportRepository.userMessage(e) to true
             } finally {
-                _actionInProgress.value = false
-                _moveOutActionInProgress.value = false
-                _disputeActionInProgress.value = false
+                setReportBusy(row, false)
             }
+        }
+    }
+
+    private fun setReportBusy(row: ExportRow, busy: Boolean) {
+        when (row.type) {
+            ReportReadinessMapper.MOVE_IN_REPORT_TYPE -> _actionInProgress.value = busy
+            ReportReadinessMapper.MOVE_OUT_REPORT_TYPE -> _moveOutActionInProgress.value = busy
+            ReportReadinessMapper.DISPUTE_PACKET_TYPE -> _disputeActionInProgress.value = busy
         }
     }
 
