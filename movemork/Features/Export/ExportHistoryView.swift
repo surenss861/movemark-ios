@@ -18,6 +18,7 @@ struct ExportHistoryView: View {
         let id = UUID()
         let fileURL: URL
         let title: String
+        let exportType: String
     }
 
     var showOpenVaultsCTA: Bool = false
@@ -32,7 +33,6 @@ struct ExportHistoryView: View {
     @State private var shareItems: [Any] = []
     @State private var showShareSheet = false
     @State private var reportPreviewItem: ReportPreviewItem?
-    @State private var reportPreviewTempURL: URL?
     @State private var isDownloadingReport = false
     @State private var verificationStatus: [UUID: ExportVerificationStatus] = [:]
     @State private var proofToast: MMProofToastMessage? = nil
@@ -171,15 +171,10 @@ struct ExportHistoryView: View {
         }
         .sheet(isPresented: $showShareSheet) {
             if !shareItems.isEmpty {
-                ShareSheet(activityItems: shareItems)
+                ReportPDFShareSheet(activityItems: shareItems)
             }
         }
-        .fullScreenCover(item: $reportPreviewItem, onDismiss: {
-            if let url = reportPreviewTempURL {
-                try? FileManager.default.removeItem(at: url)
-                reportPreviewTempURL = nil
-            }
-        }) { item in
+        .fullScreenCover(item: $reportPreviewItem) { item in
             NavigationStack {
                 QuickLookPreviewRepresentable(url: item.fileURL)
                     .ignoresSafeArea(edges: .bottom)
@@ -193,8 +188,7 @@ struct ExportHistoryView: View {
                         }
                         ToolbarItem(placement: .primaryAction) {
                             Button("Share") {
-                                shareItems = [item.fileURL]
-                                showShareSheet = true
+                                shareCachedReport(at: item.fileURL, exportType: item.exportType)
                             }
                         }
                     }
@@ -1370,13 +1364,11 @@ struct ExportHistoryView: View {
 
             do {
                 let localURL = try await prepareLocalReportFile(for: row)
-                if let old = reportPreviewTempURL, old != localURL {
-                    try? FileManager.default.removeItem(at: old)
-                }
-                reportPreviewTempURL = localURL
+                try ReportFileDownloader.validateReportFile(at: localURL)
                 reportPreviewItem = ReportPreviewItem(
                     fileURL: localURL,
-                    title: ReportFileDownloader.displayTitle(for: row.exportType)
+                    title: ReportFileDownloader.displayTitle(for: row.exportType),
+                    exportType: row.exportType
                 )
                 verificationStatus[row.id] = .ready
                 presentProofToast(
@@ -1386,12 +1378,27 @@ struct ExportHistoryView: View {
                         message: "Preview or share your PDF."
                     )
                 )
+            } catch let reportError as ReportFileError {
+                errorMessage = reportError.localizedDescription
+                MMHaptics.error()
             } catch let api as APIClientError {
                 handleReportDownloadAPIError(api, row: row)
             } catch {
                 errorMessage = MoveMarkFlowMessage.documentPreviewFailed(error)
                 MMHaptics.error()
             }
+        }
+    }
+
+    private func shareCachedReport(at fileURL: URL, exportType: String) {
+        do {
+            let item = try ReportFileDownloader.makeShareItem(for: fileURL, exportType: exportType)
+            shareItems = [item]
+            showShareSheet = true
+        } catch {
+            errorMessage = (error as? ReportFileError)?.localizedDescription
+                ?? "Couldn't share report. Try saving it first."
+            MMHaptics.error()
         }
     }
 
@@ -1405,7 +1412,8 @@ struct ExportHistoryView: View {
 
             do {
                 let localURL = try await prepareLocalReportFile(for: row)
-                shareItems = [localURL]
+                let item = try ReportFileDownloader.makeShareItem(for: localURL, exportType: row.exportType)
+                shareItems = [item]
                 showShareSheet = true
                 verificationStatus[row.id] = .ready
                 successBanner = nil
@@ -1416,6 +1424,9 @@ struct ExportHistoryView: View {
                         message: "Send your PDF report."
                     )
                 )
+            } catch let reportError as ReportFileError {
+                errorMessage = reportError.localizedDescription
+                MMHaptics.error()
             } catch let api as APIClientError {
                 handleReportDownloadAPIError(api, row: row)
             } catch {

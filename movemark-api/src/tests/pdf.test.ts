@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PDFDocument } from "pdf-lib";
 import { generateMoveInPdfBuffer } from "../lib/pdf.js";
 
 describe("generateMoveInPdfBuffer", () => {
@@ -34,5 +35,8 @@ describe("generateMoveInPdfBuffer", () => {
     expect(buffer.length).toBeGreaterThan(1000);
     const header = buffer.subarray(0, 5).toString("utf8");
     expect(header).toBe("%PDF-");
+
+    const doc = await PDFDocument.load(buffer);
+    expect(doc.getPageCount()).toBeGreaterThanOrEqual(2);
   });
 });
