@@ -4,6 +4,7 @@ import { assertEnv, corsAllowedOrigins } from "./lib/env.js";
 import { requestIdMiddleware } from "./lib/middleware/requestId.js";
 import { rateLimitHealthByIp } from "./lib/middleware/rateLimit.js";
 import type { AppVariables } from "./lib/middleware/types.js";
+import { checkReadiness } from "./lib/readiness.js";
 import { propertyCapabilitiesRouter } from "./routes/capabilities.js";
 import { disputesRouter } from "./routes/disputes.js";
 import { exportsRouter } from "./routes/exports.js";
@@ -35,6 +36,20 @@ app.get("/", (c) => c.json({ ok: true, service: "movemark-api" }));
 app.get("/api/health", rateLimitHealthByIp, (c) =>
   c.json({ ok: true, uptime: process.uptime() })
 );
+
+app.get("/api/ready", rateLimitHealthByIp, async (c) => {
+  const result = await checkReadiness();
+  if (!result.ok) {
+    return c.json(
+      {
+        ok: false,
+        checks: result.checks,
+      },
+      503
+    );
+  }
+  return c.json({ ok: true, checks: result.checks }, 200);
+});
 
 app.route("/api/exports", exportsRouter);
 app.route("/api/vaults", vaultsRouter);
