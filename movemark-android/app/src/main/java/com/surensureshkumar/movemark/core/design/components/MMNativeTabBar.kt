@@ -1,6 +1,7 @@
 package com.surensureshkumar.movemark.core.design.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -16,7 +17,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.Capsule
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
@@ -94,18 +94,18 @@ private fun DockTabItem(
 ) {
     val active = tab == selected
     val iconTint by animateColorAsState(
-        if (active) MMColors.TextPrimary else MMColors.TextSecondary.copy(alpha = 0.82f),
-        MMMotion.welcomeEnterSpec(reduceMotion, durationMillis = 180),
+        targetValue = if (active) MMColors.TextPrimary else MMColors.TextSecondary.copy(alpha = 0.82f),
+        animationSpec = if (reduceMotion) tween(0) else tween(durationMillis = 180),
         label = "dockIconTint",
     )
     val labelAlpha by animateFloatAsState(
-        if (active) 1f else 0.9f,
-        MMMotion.welcomeEnterSpec(reduceMotion, durationMillis = 180),
+        targetValue = if (active) 1f else 0.9f,
+        animationSpec = MMMotion.welcomeEnterSpec(reduceMotion, durationMillis = 180),
         label = "dockLabelAlpha",
     )
     val iconScale by animateFloatAsState(
-        if (active && !reduceMotion) 1.04f else 1f,
-        MMMotion.welcomeEnterSpec(reduceMotion, durationMillis = 180),
+        targetValue = if (active && !reduceMotion) 1.04f else 1f,
+        animationSpec = MMMotion.welcomeEnterSpec(reduceMotion, durationMillis = 180),
         label = "dockIconScale",
     )
 
@@ -123,7 +123,7 @@ private fun DockTabItem(
                 modifier = Modifier
                     .matchParentSize()
                     .padding(horizontal = 8.dp, vertical = 7.dp)
-                    .background(MMColors.Primary.copy(alpha = 0.14f), Capsule),
+                    .background(MMColors.Primary.copy(alpha = 0.14f), RoundedCornerShape(percent = 50)),
             )
         }
         Column(

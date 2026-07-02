@@ -33,8 +33,8 @@ jobs:
 
       - name: Prepare local.properties for compile
         run: |
-          cat > local.properties <<'EOF'
-          sdk.dir=${ANDROID_SDK_ROOT}
+          cat > local.properties <<EOF
+          sdk.dir=$ANDROID_SDK_ROOT
           SUPABASE_URL=https://example.supabase.co
           SUPABASE_ANON_KEY=ci_placeholder_anon_key
           MOVE_MARK_API_BASE_URL=https://movemark-api-production.up.railway.app
