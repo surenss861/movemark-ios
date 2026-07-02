@@ -15,6 +15,7 @@
 		2152E0FC2F62213C00EDA905 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 2152E0FB2F62213C00EDA905 /* Storage */; };
 		2152E0FE2F62213C00EDA905 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 2152E0FD2F62213C00EDA905 /* Supabase */; };
 		2159151B2F6DD38800B50C14 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 2152E1072F62240000EDA905 /* RevenueCat */; };
+		21ED60012FF6700000FC0D58 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 21ED60022FF6700000FC0D58 /* Sentry */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -79,6 +80,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2159151B2F6DD38800B50C14 /* RevenueCat in Frameworks */,
+				21ED60012FF6700000FC0D58 /* Sentry in Frameworks */,
 				211FDC712F66461000B6FD43 /* NukeUI in Frameworks */,
 				2152E0F82F62213C00EDA905 /* PostgREST in Frameworks */,
 				2152E0F62F62213C00EDA905 /* Functions in Frameworks */,
@@ -156,6 +158,7 @@
 				2152E0FD2F62213C00EDA905 /* Supabase */,
 				2152E1052F62230000EDA905 /* NukeUI */,
 				2152E1072F62240000EDA905 /* RevenueCat */,
+				21ED60022FF6700000FC0D58 /* Sentry */,
 			);
 			productName = movemork;
 			productReference = 2152E07D2F621A5100EDA905 /* MoveMark.app */;
@@ -243,6 +246,7 @@
 				2152E0F22F62213C00EDA905 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				2152E1042F62230000EDA905 /* XCRemoteSwiftPackageReference "Nuke" */,
 				2152E1062F62240000EDA905 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
+				21ED60002FF6700000FC0D58 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2152E07E2F621A5100EDA905 /* Products */;
@@ -667,6 +671,14 @@
 				minimumVersion = 5.0.0;
 			};
 		};
+		21ED60002FF6700000FC0D58 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -709,6 +721,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 2152E1062F62240000EDA905 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
 			productName = RevenueCat;
+		};
+		21ED60022FF6700000FC0D58 /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 21ED60002FF6700000FC0D58 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
