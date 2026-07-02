@@ -1,0 +1,48 @@
+name: Android CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "movemark-android/**"
+      - ".github/workflows/android-ci.yml"
+  pull_request:
+    paths:
+      - "movemark-android/**"
+      - ".github/workflows/android-ci.yml"
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: movemark-android
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Prepare local.properties for compile
+        run: |
+          cat > local.properties <<'EOF'
+          sdk.dir=${ANDROID_SDK_ROOT}
+          SUPABASE_URL=https://example.supabase.co
+          SUPABASE_ANON_KEY=ci_placeholder_anon_key
+          MOVE_MARK_API_BASE_URL=https://movemark-api-production.up.railway.app
+          BILLING_MODE=mock
+          EOF
+
+      - name: Assemble debug
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Bundle release
+        run: ./gradlew bundleRelease --no-daemon

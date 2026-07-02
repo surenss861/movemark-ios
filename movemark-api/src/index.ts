@@ -1,5 +1,8 @@
 import { serve } from "@hono/node-server";
 import app from "./app.js";
+import { captureException, initSentry } from "./lib/sentry.js";
+
+initSentry();
 
 const defaultPort = process.env.NODE_ENV === "production" ? 8080 : 3000;
 const port = Number(process.env.PORT) || defaultPort;
@@ -35,8 +38,10 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 
 process.on("uncaughtException", (error) => {
   console.error("[movemark-api] uncaughtException", error);
+  captureException(error);
 });
 
 process.on("unhandledRejection", (reason) => {
   console.error("[movemark-api] unhandledRejection", reason);
+  captureException(reason);
 });

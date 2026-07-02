@@ -3,7 +3,8 @@
 ## Endpoints
 
 - `GET /` — service identity JSON
-- `GET /api/health`
+- `GET /api/health` — process liveness (uptime)
+- `GET /api/ready` — database + export storage readiness (**503** when dependencies fail)
 - `GET /api/exports` — requires `Authorization: Bearer <Supabase access token>`
 - `POST /api/exports/move-in` — same auth; body `{ "propertyId": "<uuid>", "format": "pdf" }`
 - `GET /api/exports/:id/download` — same auth; signed URL when export is `completed`
@@ -17,6 +18,8 @@
 - `REVENUECAT_WEBHOOK_SECRET` (optional but recommended)
 - `APP_ENV=production`
 - `CORS_ALLOWED_ORIGINS` — comma-separated browser origins (e.g. `https://admin.example.com,http://localhost:5173`). Omit or leave empty to deny cross-origin browser access; the native iOS app does not rely on CORS.
+- `SENTRY_DSN` — optional; enables API error tracking when set
+- `SENTRY_RELEASE` — optional; attaches release version to Sentry events
 
 ## Local run
 

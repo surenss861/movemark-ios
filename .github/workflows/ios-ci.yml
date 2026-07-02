@@ -1,0 +1,40 @@
+name: iOS CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "movemork/**"
+      - "movemork.xcodeproj/**"
+      - "MoveMarkApp.xcconfig"
+      - "Config/**"
+      - ".github/workflows/ios-ci.yml"
+  pull_request:
+    paths:
+      - "movemork/**"
+      - "movemork.xcodeproj/**"
+      - "MoveMarkApp.xcconfig"
+      - "Config/**"
+      - ".github/workflows/ios-ci.yml"
+
+jobs:
+  ios:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare Secrets.xcconfig for compile
+        run: |
+          cp Config/Secrets.xcconfig.example Config/Secrets.xcconfig
+          sed -i '' 's/YOUR_PROJECT/example/g' Config/Secrets.xcconfig
+          sed -i '' 's/YOUR_SUPABASE_ANON_KEY/ci_placeholder_anon_key/g' Config/Secrets.xcconfig
+
+      - name: Build (simulator, no signing)
+        run: |
+          xcodebuild build \
+            -project movemork.xcodeproj \
+            -scheme movemork \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO

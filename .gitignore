@@ -13,3 +13,6 @@ build.log
 *.log
 movemark-api/node_modules/
 movemark-api/dist/
+
+.sentryclirc
+movemark-api/tmp/
