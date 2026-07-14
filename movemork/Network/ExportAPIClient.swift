@@ -334,6 +334,39 @@ final class ExportAPIClient {
             throw APIClientError.decodingFailed
         }
     }
+
+    /// Permanently deletes the authenticated account and owned cloud data.
+    func deleteAccount(accessToken: String) async throws {
+        guard !accessToken.isEmpty else {
+            throw APIClientError.missingAuthToken
+        }
+
+        var url = baseURL
+        for component in ["api", "account"] {
+            url = url.appendingPathComponent(component)
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIClientError.invalidResponse
+        }
+
+        guard httpResponse.statusCode == 204 || (200..<300 ~= httpResponse.statusCode) else {
+            if let body = try? JSONDecoder().decode([String: String].self, from: data),
+               let message = body["error"],
+               !message.isEmpty {
+                throw APIClientError.serverError(message)
+            }
+            let fallback = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw APIClientError.serverError(
+                (fallback?.isEmpty == false ? fallback! : "Couldn’t delete your account. Try again.")
+            )
+        }
+    }
 }
 
 /// Same HTTP client as ``ExportAPIClient``; use for all MoveMark Railway API calls.

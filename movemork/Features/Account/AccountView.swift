@@ -17,6 +17,7 @@ struct AccountView: View {
 
     @State private var showEditName = false
     @State private var showPaywall = false
+    @State private var showDeleteAccount = false
     @State private var resetMessage: String? = nil
     @State private var resetError: String? = nil
     @State private var isSendingReset = false
@@ -84,6 +85,14 @@ struct AccountView: View {
                     try sessionManager.updateProfileFullName(newName)
                 }
             )
+        }
+        .sheet(isPresented: $showDeleteAccount) {
+            NavigationStack {
+                DeleteAccountView()
+            }
+            .environment(sessionManager)
+            .environment(propertyStore)
+            .environment(subscriptionManager)
         }
     }
 
@@ -219,10 +228,10 @@ struct AccountView: View {
                     url: supportURL ?? supportEmailURL
                 )
                 MMSettingsDivider()
-                settingsLinkRow(
+                MMSettingsRow(
                     title: "Account & Data Deletion",
-                    subtitle: "Request account removal",
-                    url: accountDeletionURL
+                    subtitle: "Permanently delete your account and data",
+                    action: { showDeleteAccount = true }
                 )
             }
         }
@@ -329,10 +338,6 @@ struct AccountView: View {
 
     private var supportURL: URL? {
         legalURL(forInfoKey: "LegalSupportURL")
-    }
-
-    private var accountDeletionURL: URL? {
-        legalURL(forInfoKey: "LegalAccountDeletionURL")
     }
 
     private var supportEmail: String {

@@ -5,6 +5,7 @@
 - `GET /` — service identity JSON
 - `GET /api/health` — process liveness (uptime)
 - `GET /api/ready` — database + export storage readiness (**503** when dependencies fail)
+- `DELETE /api/account` — requires `Authorization: Bearer <Supabase access token>`; permanently deletes the authenticated user, owned rows, and storage objects; returns **204**
 - `GET /api/exports` — requires `Authorization: Bearer <Supabase access token>`
 - `POST /api/exports/move-in` — same auth; body `{ "propertyId": "<uuid>", "format": "pdf" }`
 - `GET /api/exports/:id/download` — same auth; signed URL when export is `completed`

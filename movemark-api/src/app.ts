@@ -5,6 +5,7 @@ import { requestIdMiddleware } from "./lib/middleware/requestId.js";
 import { rateLimitHealthByIp } from "./lib/middleware/rateLimit.js";
 import type { AppVariables } from "./lib/middleware/types.js";
 import { checkReadiness } from "./lib/readiness.js";
+import { accountRouter } from "./routes/account.js";
 import { propertyCapabilitiesRouter } from "./routes/capabilities.js";
 import { disputesRouter } from "./routes/disputes.js";
 import { exportsRouter } from "./routes/exports.js";
@@ -27,7 +28,7 @@ app.use(
       return allowedOrigins.includes(origin) ? origin : null;
     },
     allowHeaders: ["Authorization", "Content-Type", "X-Request-Id"],
-    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
     exposeHeaders: ["X-Request-Id"],
   })
 );
@@ -55,6 +56,7 @@ app.route("/api/exports", exportsRouter);
 app.route("/api/vaults", vaultsRouter);
 app.route("/api/disputes", disputesRouter);
 app.route("/api/properties", propertyCapabilitiesRouter);
+app.route("/api/account", accountRouter);
 app.route("/api/webhooks", webhooksRouter);
 
 export default app;
