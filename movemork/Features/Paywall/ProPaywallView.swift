@@ -51,6 +51,7 @@ struct ProPaywallView: View {
             }
             .task {
                 initialOfferingsFetchCompleted = false
+                MoveMarkMetaAppEvents.logViewContent()
                 await subscriptionManager.refresh()
                 initialOfferingsFetchCompleted = true
             }
@@ -693,6 +694,7 @@ struct ProPaywallView: View {
 
         localErrorMessage = nil
         restoreOutcomeMessage = nil
+        MoveMarkMetaAppEvents.logInitiateCheckout()
 
         Task { @MainActor in
             let activated = await subscriptionManager.purchase(package: package)

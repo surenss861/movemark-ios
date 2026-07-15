@@ -293,6 +293,7 @@ final class SessionManager {
             firstName = ""
             authPhase = .needsOnboarding
             hasResolvedInitialAuthState = true
+            MoveMarkMetaAppEvents.logCompleteRegistration()
         } catch {
             authPhase = .signedOut
             throw error
@@ -384,6 +385,7 @@ final class SessionManager {
 
         self.firstName = trimmed
         authPhase = .signedIn
+        MoveMarkMetaAppEvents.logCompleteTutorial()
     }
 
     /// Updates local name immediately; Supabase upsert runs in a fire-and-forget task (not awaited by callers).

@@ -249,6 +249,9 @@ extension PropertyStore {
         activePropertyId = created.id
         UserDefaults.standard.set(created.id.uuidString, forKey: Self.persistedActivePropertyIdKey(userId: userId))
         await fetchAll(userId: userId)
+        if properties.count == 1 {
+            MoveMarkMetaAppEvents.logCreateProofVaultIfNeeded()
+        }
     }
 
     /// Updates the property in DB and refreshes store (properties list + active property).

@@ -1,3 +1,7 @@
 // App target base config. Supabase (and optional overrides) live in Config/Secrets.xcconfig (gitignored).
 // If you define SUPABASE_URL there, avoid a raw `https://` (xcconfig treats `//` as end-of-line comment); see Secrets.xcconfig.example.
 #include? "Config/Secrets.xcconfig"
+
+// Meta App Events — override in Secrets.xcconfig when running ads.
+FACEBOOK_APP_ID =
+FACEBOOK_CLIENT_TOKEN =

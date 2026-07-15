@@ -10,6 +10,8 @@ import SwiftUI
 
 @main
 struct movemorkApp: App {
+    @UIApplicationDelegateAdaptor(MoveMarkFacebookAppDelegate.self) private var facebookAppDelegate
+
     init() {
         SentrySDK.start { options in
             options.dsn = "https://b1bf88391a6e0a03d52c1006cd029d19@o4510691451666432.ingest.us.sentry.io/4511664827596800"

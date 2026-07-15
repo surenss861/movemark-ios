@@ -560,6 +560,13 @@ final class SubscriptionManager {
         do {
             let result = try await Purchases.shared.purchase(package: package)
             hasPro = Self.hasActiveProEntitlement(result.customerInfo)
+            if hasPro {
+                let product = package.storeProduct
+                MoveMarkMetaAppEvents.logPurchase(
+                    amount: product.price,
+                    currency: product.currencyCode ?? "USD"
+                )
+            }
             offeringsLoadErrorMessage = nil
             Task { @MainActor in
                 await self.refresh(showLoading: false)

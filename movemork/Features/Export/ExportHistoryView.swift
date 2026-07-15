@@ -1207,7 +1207,7 @@ struct ExportHistoryView: View {
                 let accessToken = try await currentAccessToken()
                 let client = try makeAPIClient()
                 _ = try await client.fetchDownloadURL(exportId: row.id.uuidString, accessToken: accessToken)
-                verificationStatus[row.id] = .ready
+                markReportReady(row)
                 MMHaptics.success()
             } catch let api as APIClientError {
                 if case .exportNotReady = api {
@@ -1302,6 +1302,7 @@ struct ExportHistoryView: View {
                         nextVerification[item.id] = .missingPath
                     } else {
                         nextVerification[item.id] = .ready
+                        MoveMarkMetaAppEvents.logGenerateReport(exportID: item.id)
                     }
                 }
             }
@@ -1370,7 +1371,7 @@ struct ExportHistoryView: View {
                     title: ReportFileDownloader.displayTitle(for: row.exportType),
                     exportType: row.exportType
                 )
-                verificationStatus[row.id] = .ready
+                markReportReady(row)
                 presentProofToast(
                     MMProofToastMessage(
                         kind: .success,
@@ -1415,7 +1416,7 @@ struct ExportHistoryView: View {
                 let item = try ReportFileDownloader.makeShareItem(for: localURL, exportType: row.exportType)
                 shareItems = [item]
                 showShareSheet = true
-                verificationStatus[row.id] = .ready
+                markReportReady(row)
                 successBanner = nil
                 presentProofToast(
                     MMProofToastMessage(
@@ -1540,6 +1541,11 @@ struct ExportHistoryView: View {
     private func currentAccessToken() async throws -> String {
         let session = try await supabase.auth.session
         return session.accessToken
+    }
+
+    private func markReportReady(_ row: ExportRow) {
+        verificationStatus[row.id] = .ready
+        MoveMarkMetaAppEvents.logGenerateReport(exportID: row.id)
     }
 }
 

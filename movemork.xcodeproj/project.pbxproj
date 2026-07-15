@@ -16,6 +16,7 @@
 		2152E0FE2F62213C00EDA905 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 2152E0FD2F62213C00EDA905 /* Supabase */; };
 		2159151B2F6DD38800B50C14 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 2152E1072F62240000EDA905 /* RevenueCat */; };
 		21ED60012FF6700000FC0D58 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 21ED60022FF6700000FC0D58 /* Sentry */; };
+		21FB00012FF6800000FC0D58 /* FacebookCore in Frameworks */ = {isa = PBXBuildFile; productRef = 21FB00022FF6800000FC0D58 /* FacebookCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -81,6 +82,7 @@
 			files = (
 				2159151B2F6DD38800B50C14 /* RevenueCat in Frameworks */,
 				21ED60012FF6700000FC0D58 /* Sentry in Frameworks */,
+				21FB00012FF6800000FC0D58 /* FacebookCore in Frameworks */,
 				211FDC712F66461000B6FD43 /* NukeUI in Frameworks */,
 				2152E0F82F62213C00EDA905 /* PostgREST in Frameworks */,
 				2152E0F62F62213C00EDA905 /* Functions in Frameworks */,
@@ -159,6 +161,7 @@
 				2152E1052F62230000EDA905 /* NukeUI */,
 				2152E1072F62240000EDA905 /* RevenueCat */,
 				21ED60022FF6700000FC0D58 /* Sentry */,
+				21FB00022FF6800000FC0D58 /* FacebookCore */,
 			);
 			productName = movemork;
 			productReference = 2152E07D2F621A5100EDA905 /* MoveMark.app */;
@@ -247,6 +250,7 @@
 				2152E1042F62230000EDA905 /* XCRemoteSwiftPackageReference "Nuke" */,
 				2152E1062F62240000EDA905 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
 				21ED60002FF6700000FC0D58 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
+				21FB00002FF6800000FC0D58 /* XCRemoteSwiftPackageReference "facebook-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2152E07E2F621A5100EDA905 /* Products */;
@@ -679,6 +683,14 @@
 				minimumVersion = 8.0.0;
 			};
 		};
+		21FB00002FF6800000FC0D58 /* XCRemoteSwiftPackageReference "facebook-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/facebook/facebook-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 18.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -726,6 +738,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 21ED60002FF6700000FC0D58 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
 			productName = Sentry;
+		};
+		21FB00022FF6800000FC0D58 /* FacebookCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 21FB00002FF6800000FC0D58 /* XCRemoteSwiftPackageReference "facebook-ios-sdk" */;
+			productName = FacebookCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
