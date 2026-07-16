@@ -7,7 +7,7 @@ export type ExportReportType = "move_in_report" | "move_out_report" | "dispute_p
 
 export type ExportResponseBody = {
   exportId: string;
-  status: "completed";
+  status: "queued" | "processing" | "completed" | "failed";
   type: ExportReportType;
   requestedAt: string;
 };
@@ -15,8 +15,11 @@ export type ExportResponseBody = {
 export type ExportErrorCode =
   | "not_enough_move_out_proof"
   | "export_already_processing"
+  | "export_already_active"
   | "export_failed"
-  | "export_generation_failed";
+  | "export_generation_failed"
+  | "pro_required"
+  | "quota_exhausted";
 
 export type ExportJobStatus = "queued" | "processing" | "completed" | "failed";
 

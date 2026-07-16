@@ -10,11 +10,7 @@ import type { AppVariables } from "../lib/middleware/types.js";
 import { isUnauthorizedError, safeJsonError } from "../lib/middleware/safeError.js";
 import { requireOwnedExport } from "../lib/requireOwnedExport.js";
 import { env } from "../lib/env.js";
-import { buildDisputeEvidenceCatalog } from "../lib/disputeEvidenceCatalog.js";
-import {
-  buildDisputePacketChecklist,
-  hasEnoughDisputeProof,
-} from "../lib/disputePacketBuilder.js";
+import { assertCanEnqueueExport } from "../lib/entitlements.js";
 import {
   computeMoveInProofStats,
   computeMoveOutProofStats,
@@ -24,42 +20,81 @@ import {
   MOVE_IN_REPORT_TYPE,
   MOVE_OUT_REPORT_TYPE,
 } from "../lib/exportGuards.js";
-import {
-  generateDisputePacketPdfBuffer,
-  generateMoveInPdfBuffer,
-  generateMoveOutPdfBuffer,
-} from "../lib/pdf.js";
-import { loadInspectionEvidencePhotos } from "../lib/pdfEvidence.js";
-import { uploadExportToSupabaseStorage } from "../lib/storage.js";
+import { hasEnoughDisputeProof } from "../lib/disputePacketBuilder.js";
 import { supabaseAdmin } from "../lib/supabase.js";
 import type {
   ExportDownloadResponseBody,
   ExportListItem,
+  ExportReportType,
   ExportRequestBody,
   ExportResponseBody,
 } from "../types/exports.js";
-
-async function markExportFailed(exportId: string, reason: string): Promise<void> {
-  try {
-    const { error } = await supabaseAdmin
-      .from("exports")
-      .update({ status: "failed" })
-      .eq("id", exportId);
-    if (error) {
-      console.error(`[movemark-api:exports] markExportFailed update error id=${exportId}`, error);
-    } else {
-      console.log(`[movemark-api:exports] export status=failed id=${exportId} reason=${reason}`);
-    }
-  } catch (e) {
-    console.error(`[movemark-api:exports] markExportFailed exception id=${exportId}`, e);
-  }
-}
 
 function handleExportsError(c: Context<{ Variables: AppVariables }>, error: unknown, logLabel: string) {
   if (isUnauthorizedError(error)) {
     return safeJsonError(c, 401, "Unauthorized", logLabel);
   }
   return safeJsonError(c, 500, "Unexpected server error", logLabel, error);
+}
+
+function isUniqueViolation(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  if (error.code === "23505") return true;
+  return (error.message ?? "").toLowerCase().includes("duplicate");
+}
+
+async function enqueueExport(input: {
+  userId: string;
+  propertyId: string;
+  exportType: ExportReportType;
+}): Promise<
+  | { ok: true; exportId: string; requestedAt: string }
+  | { ok: false; status: 409 | 500; code?: string; message: string }
+> {
+  const requestedAt = new Date().toISOString();
+  const { data: exportRow, error: exportInsertError } = await supabaseAdmin
+    .from("exports")
+    .insert({
+      user_id: input.userId,
+      property_id: input.propertyId,
+      export_type: input.exportType,
+      status: "queued",
+      requested_at: requestedAt,
+      updated_at: requestedAt,
+    })
+    .select("id,requested_at,created_at")
+    .single();
+
+  if (isUniqueViolation(exportInsertError)) {
+    return {
+      ok: false,
+      status: 409,
+      code: "export_already_active",
+      message: "An export is already being prepared for this property.",
+    };
+  }
+
+  if (exportInsertError || !exportRow) {
+    console.error("[movemark-api:exports] enqueue insert failed", exportInsertError);
+    return { ok: false, status: 500, message: "Failed to create export row" };
+  }
+
+  return {
+    ok: true,
+    exportId: exportRow.id as string,
+    requestedAt:
+      (exportRow.requested_at as string | undefined) ??
+      (exportRow.created_at as string | undefined) ??
+      requestedAt,
+  };
+}
+
+function queuedResponse(
+  exportId: string,
+  type: ExportReportType,
+  requestedAt: string
+): ExportResponseBody {
+  return { exportId, status: "queued", type, requestedAt };
 }
 
 export const exportsRouter = new Hono<{ Variables: AppVariables }>();
@@ -183,7 +218,6 @@ exportsRouter.get("/:id/download", rateLimitExportDownloadByUser(), async (c) =>
       console.log(
         `[movemark-api:exports] GET /:id/download timing authMs=${authMs} rowMs=${rowMs} totalMs=${Math.round(performance.now() - t0)} status=400 reason=failed`
       );
-      // 400 (not 409) so clients don’t treat this as “still processing” like a queued export.
       return c.json({ error: "Export failed", code: "export_failed" }, 400);
     }
     if (row.status !== "completed") {
@@ -243,9 +277,16 @@ exportsRouter.post("/move-in", async (c) => {
     if (!body.propertyId || body.format !== "pdf") {
       return c.json({ error: "Invalid request body" }, 400);
     }
-
     if (!isUuidString(body.propertyId)) {
       return c.json({ error: "Invalid propertyId" }, 400);
+    }
+
+    const entitlement = await assertCanEnqueueExport(userId, MOVE_IN_REPORT_TYPE);
+    if (!entitlement.ok) {
+      return c.json(
+        { error: entitlement.message, code: entitlement.code },
+        entitlement.status
+      );
     }
 
     const createLimit = await checkExportCreateRateLimit(userId, body.propertyId, "move_in");
@@ -256,168 +297,50 @@ exportsRouter.post("/move-in", async (c) => {
 
     const { data: property, error: propertyError } = await supabaseAdmin
       .from("properties")
-      .select("*")
+      .select("id")
       .eq("id", body.propertyId)
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
 
     if (propertyError || !property) {
       return c.json({ error: "Property not found" }, 404);
     }
 
-    const { data: rooms } = await supabaseAdmin
-      .from("rooms")
-      .select("*")
-      .eq("property_id", body.propertyId)
-      .order("created_at", { ascending: true });
-
-    const { data: inspection } = await supabaseAdmin
-      .from("inspections")
-      .select("*")
-      .eq("property_id", body.propertyId)
-      .eq("user_id", userId)
-      .eq("inspection_type", "move_in")
-      .maybeSingle();
-
-    let inspectionItems: Array<Record<string, unknown>> = [];
-    if (inspection?.id) {
-      const { data } = await supabaseAdmin
-        .from("inspection_items")
-        .select("*")
-        .eq("inspection_id", inspection.id)
-        .order("created_at", { ascending: true });
-
-      inspectionItems = data ?? [];
-    }
-
-    const itemIds = inspectionItems
-      .map((row) => row["id"] as string | undefined)
-      .filter((id): id is string => Boolean(id));
-
-    const photoCountByItem = new Map<string, number>();
-    const tagNamesByItem = new Map<string, string[]>();
-
-    if (itemIds.length > 0) {
-      const { data: evidenceRows } = await supabaseAdmin
-        .from("evidence_files")
-        .select("inspection_item_id")
-        .eq("property_id", body.propertyId)
-        .in("inspection_item_id", itemIds);
-
-      for (const er of evidenceRows ?? []) {
-        const iid = er.inspection_item_id as string | undefined;
-        if (!iid) continue;
-        photoCountByItem.set(iid, (photoCountByItem.get(iid) ?? 0) + 1);
-      }
-
-      const { data: tagLinks } = await supabaseAdmin
-        .from("inspection_item_tags")
-        .select("inspection_item_id, issue_tags(name)")
-        .in("inspection_item_id", itemIds);
-
-      for (const link of tagLinks ?? []) {
-        const iid = link.inspection_item_id as string | undefined;
-        if (!iid) continue;
-        const rel = link.issue_tags as { name?: string } | null;
-        const name = rel?.name?.trim();
-        if (!name) continue;
-        const list = tagNamesByItem.get(iid) ?? [];
-        list.push(name);
-        tagNamesByItem.set(iid, list);
-      }
-    }
-
-    const inspectionItemsForPdf = inspectionItems.map((row) => {
-      const id = row["id"] as string | undefined;
-      if (!id) return row;
-      return {
-        ...row,
-        pdf_photo_count: photoCountByItem.get(id) ?? 0,
-        pdf_issue_tag_names: tagNamesByItem.get(id) ?? [],
-      };
-    });
-
-    const { data: propertyDocuments } = await supabaseAdmin
-      .from("property_documents")
-      .select("*")
-      .eq("property_id", body.propertyId)
-      .eq("user_id", userId)
-      .order("uploaded_at", { ascending: true });
-
-    const evidencePhotos = await loadInspectionEvidencePhotos(
-      body.propertyId,
-      inspectionItems,
-      tagNamesByItem
-    );
-
-    const requestedAt = new Date().toISOString();
-
-    const { data: exportRow, error: exportInsertError } = await supabaseAdmin
+    const { data: existingExports } = await supabaseAdmin
       .from("exports")
-      .insert({
-        user_id: userId,
-        property_id: body.propertyId,
-        export_type: MOVE_IN_REPORT_TYPE,
-        status: "queued",
-        requested_at: requestedAt,
-      })
-      .select("*")
-      .single();
+      .select("id,status,file_path")
+      .eq("user_id", userId)
+      .eq("property_id", body.propertyId)
+      .eq("export_type", MOVE_IN_REPORT_TYPE)
+      .order("created_at", { ascending: false })
+      .limit(5);
 
-    if (exportInsertError || !exportRow) {
-      return c.json({ error: "Failed to create export row" }, 500);
-    }
-
-    try {
-      const pdfBuffer = await generateMoveInPdfBuffer({
-        property,
-        rooms: rooms ?? [],
-        inspection: inspection ?? null,
-        inspectionItems: inspectionItemsForPdf,
-        propertyDocuments: propertyDocuments ?? [],
-        evidencePhotos,
-      });
-
-      const upload = await uploadExportToSupabaseStorage({
-        userId,
-        exportId: exportRow.id,
-        fileBuffer: pdfBuffer,
-      });
-
-      const { error: updateError } = await supabaseAdmin
-        .from("exports")
-        .update({
-          status: "completed",
-          file_path: upload.path,
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", exportRow.id);
-
-      if (updateError) {
-        console.error("[movemark-api:exports] move-in finalize", updateError);
-        throw new Error(`finalize: ${updateError.message}`);
-      }
-
-      const response: ExportResponseBody = {
-        exportId: exportRow.id,
-        status: "completed",
-        type: MOVE_IN_REPORT_TYPE,
-        requestedAt:
-          (exportRow.requested_at as string | undefined) ??
-          (exportRow.created_at as string | undefined) ??
-          requestedAt,
-      };
-
-      return c.json(response, 200);
-    } catch (pipelineError) {
-      const msg = pipelineError instanceof Error ? pipelineError.message : String(pipelineError);
-      console.error("[movemark-api:exports] POST /move-in pipeline failed", pipelineError);
-      await markExportFailed(exportRow.id, msg);
+    const active = (existingExports ?? []).find((row) =>
+      isActiveExportJob({ status: row.status as string, file_path: row.file_path as string | null })
+    );
+    if (active) {
       return c.json(
-        { error: "Export generation failed", code: "export_generation_failed" },
-        500
+        {
+          error: "A move-in report is already being prepared.",
+          code: "export_already_active",
+        },
+        409
       );
     }
+
+    const enqueued = await enqueueExport({
+      userId,
+      propertyId: body.propertyId,
+      exportType: MOVE_IN_REPORT_TYPE,
+    });
+    if (!enqueued.ok) {
+      return c.json(
+        { error: enqueued.message, code: enqueued.code },
+        enqueued.status
+      );
+    }
+
+    return c.json(queuedResponse(enqueued.exportId, MOVE_IN_REPORT_TYPE, enqueued.requestedAt), 202);
   } catch (error) {
     return handleExportsError(c, error, "POST /move-in");
   }
@@ -431,9 +354,16 @@ exportsRouter.post("/move-out", async (c) => {
     if (!body.propertyId || body.format !== "pdf") {
       return c.json({ error: "Invalid request body" }, 400);
     }
-
     if (!isUuidString(body.propertyId)) {
       return c.json({ error: "Invalid propertyId" }, 400);
+    }
+
+    const entitlement = await assertCanEnqueueExport(userId, MOVE_OUT_REPORT_TYPE);
+    if (!entitlement.ok) {
+      return c.json(
+        { error: entitlement.message, code: entitlement.code },
+        entitlement.status
+      );
     }
 
     const createLimit = await checkExportCreateRateLimit(userId, body.propertyId, "move_out");
@@ -444,10 +374,10 @@ exportsRouter.post("/move-out", async (c) => {
 
     const { data: property, error: propertyError } = await supabaseAdmin
       .from("properties")
-      .select("*")
+      .select("id")
       .eq("id", body.propertyId)
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
 
     if (propertyError || !property) {
       return c.json({ error: "Property not found" }, 404);
@@ -467,20 +397,17 @@ exportsRouter.post("/move-out", async (c) => {
     );
     if (activeMoveOut) {
       return c.json(
-        { error: "A move-out report is already being built.", code: "export_already_processing" },
+        {
+          error: "A move-out report is already being built.",
+          code: "export_already_active",
+        },
         409
       );
     }
 
-    const { data: rooms } = await supabaseAdmin
-      .from("rooms")
-      .select("*")
-      .eq("property_id", body.propertyId)
-      .order("created_at", { ascending: true });
-
     const { data: inspection } = await supabaseAdmin
       .from("inspections")
-      .select("*")
+      .select("id")
       .eq("property_id", body.propertyId)
       .eq("user_id", userId)
       .eq("inspection_type", "move_out")
@@ -490,47 +417,25 @@ exportsRouter.post("/move-out", async (c) => {
     if (inspection?.id) {
       const { data } = await supabaseAdmin
         .from("inspection_items")
-        .select("*")
-        .eq("inspection_id", inspection.id)
-        .order("created_at", { ascending: true });
-
+        .select("id,room_id")
+        .eq("inspection_id", inspection.id);
       inspectionItems = data ?? [];
     }
 
     const itemIds = inspectionItems
       .map((row) => row["id"] as string | undefined)
       .filter((id): id is string => Boolean(id));
-
     const photoCountByItem = new Map<string, number>();
-    const tagNamesByItem = new Map<string, string[]>();
-
     if (itemIds.length > 0) {
       const { data: evidenceRows } = await supabaseAdmin
         .from("evidence_files")
         .select("inspection_item_id")
         .eq("property_id", body.propertyId)
         .in("inspection_item_id", itemIds);
-
       for (const er of evidenceRows ?? []) {
         const iid = er.inspection_item_id as string | undefined;
         if (!iid) continue;
         photoCountByItem.set(iid, (photoCountByItem.get(iid) ?? 0) + 1);
-      }
-
-      const { data: tagLinks } = await supabaseAdmin
-        .from("inspection_item_tags")
-        .select("inspection_item_id, issue_tags(name)")
-        .in("inspection_item_id", itemIds);
-
-      for (const link of tagLinks ?? []) {
-        const iid = link.inspection_item_id as string | undefined;
-        if (!iid) continue;
-        const rel = link.issue_tags as { name?: string } | null;
-        const name = rel?.name?.trim();
-        if (!name) continue;
-        const list = tagNamesByItem.get(iid) ?? [];
-        list.push(name);
-        tagNamesByItem.set(iid, list);
       }
     }
 
@@ -545,89 +450,19 @@ exportsRouter.post("/move-out", async (c) => {
       );
     }
 
-    const inspectionItemsForPdf = inspectionItems.map((row) => {
-      const id = row["id"] as string | undefined;
-      if (!id) return row;
-      return {
-        ...row,
-        pdf_photo_count: photoCountByItem.get(id) ?? 0,
-        pdf_issue_tag_names: tagNamesByItem.get(id) ?? [],
-      };
+    const enqueued = await enqueueExport({
+      userId,
+      propertyId: body.propertyId,
+      exportType: MOVE_OUT_REPORT_TYPE,
     });
-
-    const evidencePhotos = await loadInspectionEvidencePhotos(
-      body.propertyId,
-      inspectionItems,
-      tagNamesByItem
-    );
-
-    const requestedAt = new Date().toISOString();
-
-    const { data: exportRow, error: exportInsertError } = await supabaseAdmin
-      .from("exports")
-      .insert({
-        user_id: userId,
-        property_id: body.propertyId,
-        export_type: MOVE_OUT_REPORT_TYPE,
-        status: "queued",
-        requested_at: requestedAt,
-      })
-      .select("*")
-      .single();
-
-    if (exportInsertError || !exportRow) {
-      return c.json({ error: "Failed to create export row" }, 500);
-    }
-
-    try {
-      const pdfBuffer = await generateMoveOutPdfBuffer({
-        property,
-        rooms: rooms ?? [],
-        inspection: inspection ?? null,
-        inspectionItems: inspectionItemsForPdf,
-        evidencePhotos,
-      });
-
-      const upload = await uploadExportToSupabaseStorage({
-        userId,
-        exportId: exportRow.id,
-        fileBuffer: pdfBuffer,
-      });
-
-      const { error: updateError } = await supabaseAdmin
-        .from("exports")
-        .update({
-          status: "completed",
-          file_path: upload.path,
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", exportRow.id);
-
-      if (updateError) {
-        console.error("[movemark-api:exports] move-out finalize", updateError);
-        throw new Error(`finalize: ${updateError.message}`);
-      }
-
-      const response: ExportResponseBody = {
-        exportId: exportRow.id,
-        status: "completed",
-        type: MOVE_OUT_REPORT_TYPE,
-        requestedAt:
-          (exportRow.requested_at as string | undefined) ??
-          (exportRow.created_at as string | undefined) ??
-          requestedAt,
-      };
-
-      return c.json(response, 200);
-    } catch (pipelineError) {
-      const msg = pipelineError instanceof Error ? pipelineError.message : String(pipelineError);
-      console.error("[movemark-api:exports] POST /move-out pipeline failed", pipelineError);
-      await markExportFailed(exportRow.id, msg);
+    if (!enqueued.ok) {
       return c.json(
-        { error: "Move-out report generation failed", code: "export_generation_failed" },
-        500
+        { error: enqueued.message, code: enqueued.code },
+        enqueued.status
       );
     }
+
+    return c.json(queuedResponse(enqueued.exportId, MOVE_OUT_REPORT_TYPE, enqueued.requestedAt), 202);
   } catch (error) {
     return handleExportsError(c, error, "POST /move-out");
   }
@@ -641,9 +476,16 @@ exportsRouter.post("/dispute-packet", async (c) => {
     if (!body.propertyId || body.format !== "pdf") {
       return c.json({ error: "Invalid request body" }, 400);
     }
-
     if (!isUuidString(body.propertyId)) {
       return c.json({ error: "Invalid propertyId" }, 400);
+    }
+
+    const entitlement = await assertCanEnqueueExport(userId, DISPUTE_PACKET_TYPE);
+    if (!entitlement.ok) {
+      return c.json(
+        { error: entitlement.message, code: entitlement.code },
+        entitlement.status
+      );
     }
 
     const createLimit = await checkExportCreateRateLimit(
@@ -658,10 +500,10 @@ exportsRouter.post("/dispute-packet", async (c) => {
 
     const { data: property, error: propertyError } = await supabaseAdmin
       .from("properties")
-      .select("*")
+      .select("id")
       .eq("id", body.propertyId)
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
 
     if (propertyError || !property) {
       return c.json({ error: "Property not found" }, 404);
@@ -687,7 +529,10 @@ exportsRouter.post("/dispute-packet", async (c) => {
       );
     if (activeDispute) {
       return c.json(
-        { error: "A dispute packet is already being built.", code: "export_already_processing" },
+        {
+          error: "A dispute packet is already being built.",
+          code: "export_already_active",
+        },
         409
       );
     }
@@ -754,84 +599,19 @@ exportsRouter.post("/dispute-packet", async (c) => {
       );
     }
 
-    const catalog = await buildDisputeEvidenceCatalog(userId, body.propertyId);
-    const checklist = buildDisputePacketChecklist(
-      catalog,
-      exportRows as Array<{
-        export_type: string;
-        status: string;
-        file_path?: string | null;
-        completed_at?: string | null;
-        requested_at?: string | null;
-        created_at?: string | null;
-      }>,
-      moveInStats.documentedRooms
-    );
-
-    const requestedAt = new Date().toISOString();
-
-    const { data: exportRow, error: exportInsertError } = await supabaseAdmin
-      .from("exports")
-      .insert({
-        user_id: userId,
-        property_id: body.propertyId,
-        export_type: DISPUTE_PACKET_TYPE,
-        status: "queued",
-        requested_at: requestedAt,
-      })
-      .select("*")
-      .single();
-
-    if (exportInsertError || !exportRow) {
-      return c.json({ error: "Failed to create export row" }, 500);
-    }
-
-    try {
-      const pdfBuffer = await generateDisputePacketPdfBuffer({
-        property,
-        checklist,
-      });
-
-      const upload = await uploadExportToSupabaseStorage({
-        userId,
-        exportId: exportRow.id,
-        fileBuffer: pdfBuffer,
-      });
-
-      const { error: updateError } = await supabaseAdmin
-        .from("exports")
-        .update({
-          status: "completed",
-          file_path: upload.path,
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", exportRow.id);
-
-      if (updateError) {
-        console.error("[movemark-api:exports] dispute-packet finalize", updateError);
-        throw new Error(`finalize: ${updateError.message}`);
-      }
-
-      const response: ExportResponseBody = {
-        exportId: exportRow.id,
-        status: "completed",
-        type: DISPUTE_PACKET_TYPE,
-        requestedAt:
-          (exportRow.requested_at as string | undefined) ??
-          (exportRow.created_at as string | undefined) ??
-          requestedAt,
-      };
-
-      return c.json(response, 200);
-    } catch (pipelineError) {
-      const msg = pipelineError instanceof Error ? pipelineError.message : String(pipelineError);
-      console.error("[movemark-api:exports] POST /dispute-packet pipeline failed", pipelineError);
-      await markExportFailed(exportRow.id, msg);
+    const enqueued = await enqueueExport({
+      userId,
+      propertyId: body.propertyId,
+      exportType: DISPUTE_PACKET_TYPE,
+    });
+    if (!enqueued.ok) {
       return c.json(
-        { error: "Dispute packet generation failed", code: "export_failed" },
-        500
+        { error: enqueued.message, code: enqueued.code },
+        enqueued.status
       );
     }
+
+    return c.json(queuedResponse(enqueued.exportId, DISPUTE_PACKET_TYPE, enqueued.requestedAt), 202);
   } catch (error) {
     return handleExportsError(c, error, "POST /dispute-packet");
   }

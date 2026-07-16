@@ -1,6 +1,8 @@
+import { mapWithConcurrency } from "./concurrency.js";
 import { supabaseAdmin } from "./supabase.js";
 
 const EVIDENCE_BUCKET = process.env.EVIDENCE_BUCKET_NAME ?? "inspection-media";
+const DOWNLOAD_CONCURRENCY = Number(process.env.PDF_EVIDENCE_DOWNLOAD_CONCURRENCY ?? 8);
 
 export type PdfEvidencePhotoInput = {
   inspectionItemId: string;
@@ -50,15 +52,23 @@ export async function buildPdfEvidencePhotos(
     itemTags: (inspectionItemId: string) => string[];
     maxTotal?: number;
     maxPerRoom?: number;
+    downloadConcurrency?: number;
   }
 ): Promise<PdfEvidencePhotoInput[]> {
   const maxTotal = options.maxTotal ?? 48;
   const maxPerRoom = options.maxPerRoom ?? 8;
+  const downloadConcurrency = options.downloadConcurrency ?? DOWNLOAD_CONCURRENCY;
   const perRoomCount = new Map<string, number>();
-  const results: PdfEvidencePhotoInput[] = [];
+  const selected: Array<{
+    itemId: string;
+    roomId: string | null;
+    filePath: string;
+    capturedAt: string | null;
+    createdAt: string | null;
+  }> = [];
 
   for (const row of rows) {
-    if (results.length >= maxTotal) break;
+    if (selected.length >= maxTotal) break;
 
     const itemId = row.inspection_item_id?.trim();
     const filePath = row.file_path?.trim();
@@ -70,23 +80,30 @@ export async function buildPdfEvidencePhotos(
     const roomCount = perRoomCount.get(roomKey) ?? 0;
     if (roomCount >= maxPerRoom) continue;
 
-    const imageBytes = await downloadStorageObject(filePath);
     perRoomCount.set(roomKey, roomCount + 1);
-
-    results.push({
-      inspectionItemId: itemId,
+    selected.push({
+      itemId,
       roomId,
       filePath,
       capturedAt: row.captured_at ?? null,
       createdAt: row.created_at ?? null,
-      notes: options.itemNotes(itemId) ?? null,
-      conditionRating: options.itemRating(itemId) ?? null,
-      tags: options.itemTags(itemId),
-      imageBytes,
     });
   }
 
-  return results;
+  return mapWithConcurrency(selected, downloadConcurrency, async (item) => {
+    const imageBytes = await downloadStorageObject(item.filePath);
+    return {
+      inspectionItemId: item.itemId,
+      roomId: item.roomId,
+      filePath: item.filePath,
+      capturedAt: item.capturedAt,
+      createdAt: item.createdAt,
+      notes: options.itemNotes(item.itemId) ?? null,
+      conditionRating: options.itemRating(item.itemId) ?? null,
+      tags: options.itemTags(item.itemId),
+      imageBytes,
+    };
+  });
 }
 
 export async function loadInspectionEvidencePhotos(

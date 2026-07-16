@@ -9,6 +9,8 @@ enum ExportFormat: String, Codable {
 
 enum ExportType: String, Codable {
     case moveInReport = "move_in_report"
+    case moveOutReport = "move_out_report"
+    case disputePacket = "dispute_packet"
 }
 
 enum ExportJobStatus: String, Codable {

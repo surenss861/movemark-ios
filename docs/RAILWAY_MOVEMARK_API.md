@@ -7,41 +7,61 @@
 - `GET /api/ready` — database + export storage readiness (**503** when dependencies fail)
 - `DELETE /api/account` — requires `Authorization: Bearer <Supabase access token>`; permanently deletes the authenticated user, owned rows, and storage objects; returns **204**
 - `GET /api/exports` — requires `Authorization: Bearer <Supabase access token>`
-- `POST /api/exports/move-in` — same auth; body `{ "propertyId": "<uuid>", "format": "pdf" }`
-- `GET /api/exports/:id/download` — same auth; signed URL when export is `completed`
-- `POST /api/webhooks/revenuecat`
+- `POST /api/exports/move-in` — auth; body `{ "propertyId": "<uuid>", "format": "pdf" }`; **202** `{ status: "queued" }` (worker builds PDF)
+- `POST /api/exports/move-out` — same; Pro required (**402** if unpaid)
+- `POST /api/exports/dispute-packet` — same; Pro required
+- `GET /api/exports/:id/download` — signed URL when export is `completed`
+- `POST /api/webhooks/revenuecat` — upserts `user_entitlements`
+
+## Services (same image)
+
+| Service | Start command |
+|---------|----------------|
+| Web API | `node dist/index.js` (Dockerfile default) |
+| Export worker | `node dist/worker.js` |
+
+Deploy a **second Railway service** from the same repo/image with start command `npm run start:worker` (or `node dist/worker.js`).
 
 ## Required Railway variables
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `EXPORT_BUCKET_NAME` (use `exports` if using Supabase Storage bucket `exports`)
-- `REVENUECAT_WEBHOOK_SECRET` (optional but recommended)
+- `REVENUECAT_WEBHOOK_SECRET` (required in production)
 - `APP_ENV=production`
-- `CORS_ALLOWED_ORIGINS` — comma-separated browser origins (e.g. `https://admin.example.com,http://localhost:5173`). Omit or leave empty to deny cross-origin browser access; the native iOS app does not rely on CORS.
-- `SENTRY_DSN` — optional; enables API error tracking when set
-- `SENTRY_RELEASE` — optional; attaches release version to Sentry events
+- `CORS_ALLOWED_ORIGINS` — comma-separated browser origins. Omit to deny browser CORS; native iOS does not rely on CORS.
+- `SENTRY_DSN` / `SENTRY_RELEASE` — optional
+- `SUPABASE_JWT_SECRET` — optional but recommended; enables local JWT verify (no Auth round-trip)
+- `REDIS_URL` — optional; shared rate limits across replicas (falls back to in-memory with eviction)
+
+## Export queue contract
+
+1. API validates auth, ownership, proof gates, **Pro entitlement**, rate limits
+2. Inserts `exports` row with `status = queued` and returns **202**
+3. Worker claims via `claim_next_export_job()` (`FOR UPDATE SKIP LOCKED`)
+4. Worker builds PDF, uploads storage, sets `completed` or `failed` (+ `error_message`)
+5. Client polls `GET /api/exports` while status is `queued` / `processing`
+
+Partial unique index `one_active_job_per_property_type` blocks double-tap races.
+
+## Pro gating
+
+- RevenueCat webhook writes `public.user_entitlements`
+- iOS must call `Purchases.shared.logIn(supabaseUserId)` (already wired in `SubscriptionManager.syncAuth`)
+- Move-out + dispute require active Pro; free tier gets **1** completed move-in export
 
 ## Local run
 
 ```bash
 cd movemark-api
 npm install
-npm run dev
+npm run dev          # API
+npm run dev:worker   # worker (separate terminal)
 ```
+
+Apply migration `20260716000001_export_queue_and_entitlements.sql` before deploying worker/API that expects the new columns/RPCs.
 
 ## Notes
 
-- `POST /api/exports/move-in` runs **synchronously**: insert row (`queued` in DB briefly), generate PDF, upload to Storage, then finalize the row to `completed`.
-- Successful JSON response uses **`status: "completed"`** (matches DB and client contract).
-- Rows still use internal statuses (`queued`, `completed`, etc.) for list/download; download returns **404** if the export belongs to another user.
-
-## Troubleshooting `GET /api/exports` → 500 `Failed to load exports`
-
-The route uses the **service role** (bypasses RLS). A **500** means PostgREST returned an error (not auth). Check **Railway runtime logs** for:
-
-`[movemark-api:exports] list query failed` with `message`, `code`, `details`, `hint`.
-
-Typical causes: **`exports` table or column missing** in the linked Supabase project (migrate schema), wrong **`SUPABASE_URL`**, or invalid **`SUPABASE_SERVICE_ROLE_KEY`**.
-
-Run Supabase migration **`20260328000001_exports_requested_completed_at.sql`** (adds **`requested_at`** / **`completed_at`** on **`exports`**) **before** deploying an API build that selects those columns. Until then, list used **`created_at`** only; current API expects the new columns after migration.
+- Evidence photo downloads in the worker use capped concurrency (default 8).
+- Legacy Edge Function `generate-dispute-packet` is deprecated; Railway PDF path is canonical.
