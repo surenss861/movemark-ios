@@ -1,23 +1,64 @@
+import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { Context } from "hono";
+import { env } from "./env.js";
 import { supabaseAdmin } from "./supabase.js";
 
-export async function requireUserIdFromBearer(c: Context): Promise<string> {
-  const authHeader = c.req.header("Authorization");
+let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
+let jwksUrl: string | null = null;
 
+function getJwks() {
+  const url = `${env.SUPABASE_URL.replace(/\/$/, "")}/auth/v1/.well-known/jwks.json`;
+  if (!jwks || jwksUrl !== url) {
+    jwks = createRemoteJWKSet(new URL(url));
+    jwksUrl = url;
+  }
+  return jwks;
+}
+
+function bearerToken(c: Context): string {
+  const authHeader = c.req.header("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     throw new Error("Unauthorized");
   }
-
   const token = authHeader.replace("Bearer ", "").trim();
-  if (!token) {
-    throw new Error("Unauthorized");
+  if (!token) throw new Error("Unauthorized");
+  return token;
+}
+
+/**
+ * Prefer local JWT verification (HS256 secret or JWKS). Falls back to
+ * supabaseAdmin.auth.getUser when local verify is unavailable or fails.
+ */
+export async function requireUserIdFromBearer(c: Context): Promise<string> {
+  const token = bearerToken(c);
+
+  if (env.SUPABASE_JWT_SECRET) {
+    try {
+      const { payload } = await jwtVerify(token, new TextEncoder().encode(env.SUPABASE_JWT_SECRET), {
+        algorithms: ["HS256"],
+      });
+      const sub = typeof payload.sub === "string" ? payload.sub : null;
+      if (sub) return sub;
+    } catch {
+      // Fall through to JWKS / Auth API.
+    }
+  }
+
+  if (env.SUPABASE_URL) {
+    try {
+      const { payload } = await jwtVerify(token, getJwks(), {
+        algorithms: ["ES256", "RS256", "HS256"],
+      });
+      const sub = typeof payload.sub === "string" ? payload.sub : null;
+      if (sub) return sub;
+    } catch {
+      // Fall through to Auth API.
+    }
   }
 
   const { data, error } = await supabaseAdmin.auth.getUser(token);
-
   if (error || !data.user) {
     throw new Error("Unauthorized");
   }
-
   return data.user.id;
 }

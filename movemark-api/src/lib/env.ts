@@ -10,9 +10,13 @@ export function corsAllowedOrigins(): string[] {
 export const env = {
   SUPABASE_URL: process.env.SUPABASE_URL ?? "",
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+  /** Optional HS256 JWT secret for local token verify (Project Settings → API → JWT Secret). */
+  SUPABASE_JWT_SECRET: process.env.SUPABASE_JWT_SECRET ?? "",
   EXPORT_BUCKET_NAME: process.env.EXPORT_BUCKET_NAME ?? "exports",
   EVIDENCE_BUCKET_NAME: process.env.EVIDENCE_BUCKET_NAME ?? "inspection-media",
   REVENUECAT_WEBHOOK_SECRET: process.env.REVENUECAT_WEBHOOK_SECRET ?? "",
+  /** Optional Redis/Upstash URL for shared rate limits across replicas. */
+  REDIS_URL: process.env.REDIS_URL ?? "",
   APP_ENV: process.env.APP_ENV ?? "development",
 };
 

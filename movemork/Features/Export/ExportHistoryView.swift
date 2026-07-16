@@ -211,9 +211,67 @@ struct ExportHistoryView: View {
         }
         .task(id: resolvedExportPropertyId) {
             await loadExports()
+            await pollActiveExportsWhileNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: .moveMarkExportsShouldRefresh)) { _ in
-            Task { await loadExports() }
+            Task {
+                await loadExports()
+                await pollActiveExportsWhileNeeded()
+            }
+        }
+    }
+
+    /// Fallback when Realtime is unavailable: poll while any export is queued/processing.
+    private func pollActiveExportsWhileNeeded() async {
+        for _ in 0..<40 {
+            let hasActive = verificationStatus.values.contains { status in
+                switch status {
+                case .queued, .processing, .verifying:
+                    return true
+                default:
+                    return false
+                }
+            }
+            guard hasActive else { return }
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            await loadExportsQuietly()
+        }
+    }
+
+    private func loadExportsQuietly() async {
+        guard let apiClient = try? makeAPIClient() else { return }
+        guard let currentPropertyId = resolvedExportPropertyId else { return }
+        do {
+            let token = try await currentAccessToken()
+            let items = try await apiClient.fetchExports(accessToken: token, propertyId: currentPropertyId)
+            var nextVerification: [UUID: ExportVerificationStatus] = [:]
+            for item in items {
+                switch item.status {
+                case .queued:
+                    nextVerification[item.id] = .queued
+                case .processing:
+                    nextVerification[item.id] = .processing
+                case .failed:
+                    nextVerification[item.id] = .serverFailed
+                case .completed:
+                    let fp = (item.filePath ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                    nextVerification[item.id] = fp.isEmpty ? .missingPath : .ready
+                }
+            }
+            exports = items.map { item in
+                ExportRow(
+                    id: item.id,
+                    disputeId: nil,
+                    propertyId: item.propertyId,
+                    userId: item.userId,
+                    exportType: item.type,
+                    filePath: item.filePath,
+                    createdAt: item.requestedAt ?? item.createdAt
+                )
+            }
+            verificationStatus = nextVerification
+        } catch {
+            // Quiet poll — keep existing list; user can pull to refresh.
         }
     }
 
@@ -1521,6 +1579,7 @@ struct ExportHistoryView: View {
                 )
                 NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
                 await loadExports()
+                await pollActiveExportsWhileNeeded()
             } catch {
                 errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(
                     error,

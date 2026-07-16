@@ -1,22 +1,28 @@
 import type { PropertyCapabilitiesResponse } from "../types/capabilities.js";
+import {
+  countCompletedMoveInExports,
+  isUserPro,
+} from "./entitlements.js";
 import { supabaseAdmin } from "./supabase.js";
 
+const FREE_MOVE_IN_QUOTA = 1;
+
 /**
- * Server-side capability hints. Replace `isPro` with your entitlement source
- * (e.g. RevenueCat customer lookup or synced `profiles` column) when ready.
+ * Server-side capability hints backed by user_entitlements + completed export counts.
  */
 export async function buildPropertyCapabilities(
   userId: string,
   propertyId: string
 ): Promise<PropertyCapabilitiesResponse> {
-  const [propertiesRes, inspectionsRes] = await Promise.all([
+  const [propertiesRes, inspectionsRes, isPro, completedMoveIns] = await Promise.all([
     supabaseAdmin.from("properties").select("id").eq("user_id", userId),
-
     supabaseAdmin
       .from("inspections")
       .select("id,inspection_type")
       .eq("property_id", propertyId)
       .eq("user_id", userId),
+    isUserPro(userId),
+    countCompletedMoveInExports(userId),
   ]);
 
   if (propertiesRes.error) throw new Error(propertiesRes.error.message);
@@ -53,8 +59,9 @@ export async function buildPropertyCapabilities(
     moveOutInspectionIds.has(row.inspection_id)
   );
 
-  const isPro = false;
-  const freeMoveInExportsRemaining = 1;
+  const freeMoveInExportsRemaining = isPro
+    ? FREE_MOVE_IN_QUOTA
+    : Math.max(0, FREE_MOVE_IN_QUOTA - completedMoveIns);
 
   const propertyCount = propertiesRes.data?.length ?? 0;
 
