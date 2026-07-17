@@ -8,9 +8,16 @@ object Routes {
 
     fun auth(mode: String) = "auth/$mode"
     const val Main = "main"
+    const val Onboarding = "onboarding"
     const val CreateProperty = "create_property"
     const val FirstRunRoomPicker = "first_run_room_picker"
     const val AddProperty = "add_property"
+
+    const val MaintenanceLog = "maintenance_log"
+    const val MaintenanceIssueArg = "issueId"
+    const val MaintenanceIssueDetail = "maintenance_issue/{issueId}"
+
+    fun maintenanceIssueDetail(issueId: String) = "maintenance_issue/$issueId"
 
     const val ProofPhaseArg = "proofPhase"
     const val RoomProofArg = "roomId"

@@ -47,6 +47,9 @@ class SessionManager @Inject constructor(
     private val _userFullName = MutableStateFlow<String?>(null)
     val userFullName: StateFlow<String?> = _userFullName.asStateFlow()
 
+    private val _hasFetchedProfile = MutableStateFlow(false)
+    val hasFetchedProfile: StateFlow<Boolean> = _hasFetchedProfile.asStateFlow()
+
     init {
         scope.launch {
             client.auth.sessionStatus.collect { status ->
@@ -97,6 +100,7 @@ class SessionManager @Inject constructor(
     suspend fun refreshProfile() {
         val uid = _userId.value ?: return
         _userFullName.value = profileRepository.fetchFullName(uid)
+        _hasFetchedProfile.value = true
     }
 
     suspend fun updateProfileFullName(fullName: String) {
@@ -136,6 +140,7 @@ class SessionManager @Inject constructor(
         _userId.value = null
         _userEmail.value = null
         _userFullName.value = null
+        _hasFetchedProfile.value = false
         _authState.value = AuthState.SignedOut
     }
 }

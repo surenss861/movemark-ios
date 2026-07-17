@@ -40,6 +40,18 @@ class WelcomeViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    val needsOnboarding: StateFlow<Boolean?> = combine(
+        sessionManager.authState,
+        sessionManager.hasFetchedProfile,
+        sessionManager.userFullName,
+    ) { auth, fetchedProfile, fullName ->
+        when {
+            auth != AuthState.SignedIn -> null
+            !fetchedProfile -> null
+            else -> fullName.isNullOrBlank()
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     init {
         viewModelScope.launch {
             sessionManager.authState.collect { state ->

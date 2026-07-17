@@ -8,6 +8,7 @@ import android.util.Log
 import com.surensureshkumar.movemark.core.util.MMUserMessages
 import com.surensureshkumar.movemark.data.models.CreatePropertyInput
 import com.surensureshkumar.movemark.data.models.EvidenceRecord
+import com.surensureshkumar.movemark.data.models.MaintenanceRecord
 import com.surensureshkumar.movemark.data.models.PropertyRecord
 import com.surensureshkumar.movemark.data.models.PropertyRow
 import com.surensureshkumar.movemark.domain.ProofPhase
@@ -31,6 +32,7 @@ data class SaveEvidenceResult(
 class PropertyStore @Inject constructor(
     private val propertyRepository: PropertyRepository,
     private val inspectionRepository: InspectionRepository,
+    private val maintenanceRepository: MaintenanceRepository,
     private val hydrator: PropertyHydrator,
     private val dataStore: DataStore<Preferences>,
 ) {
@@ -52,6 +54,9 @@ class PropertyStore @Inject constructor(
     private val _hasCompletedInitialFetch = MutableStateFlow(false)
     val hasCompletedInitialFetch: StateFlow<Boolean> = _hasCompletedInitialFetch.asStateFlow()
 
+    private val _maintenanceLog = MutableStateFlow<List<MaintenanceRecord>>(emptyList())
+    val maintenanceLog: StateFlow<List<MaintenanceRecord>> = _maintenanceLog.asStateFlow()
+
     private fun activeKey(userId: UUID) = stringPreferencesKey("active_property_${userId}")
 
     fun clear() {
@@ -60,6 +65,7 @@ class PropertyStore @Inject constructor(
         _activePropertyId.value = null
         _errorMessage.value = null
         _hasCompletedInitialFetch.value = false
+        _maintenanceLog.value = emptyList()
     }
 
     suspend fun fetchAll(userId: UUID) {
@@ -82,6 +88,7 @@ class PropertyStore @Inject constructor(
             val row = fetched.first { it.id == targetId.toString() }
             _currentProperty.value = hydrator.hydrate(row)
             _errorMessage.value = null
+            refreshMaintenance(targetId)
         } catch (e: Exception) {
             Log.e("PropertyStore", "fetchAll failed", e)
             _errorMessage.value = MMUserMessages.loadRentals(e)
@@ -126,6 +133,28 @@ class PropertyStore @Inject constructor(
             _currentProperty.value = hydrator.hydrate(row)
             true
         } catch (_: Exception) {
+            false
+        }
+    }
+
+    suspend fun refreshMaintenance(propertyId: UUID): Boolean {
+        return try {
+            val rows = maintenanceRepository.fetchIssues(propertyId)
+            _maintenanceLog.value = rows.map { row ->
+                MaintenanceRecord(
+                    id = UUID.fromString(row.id),
+                    title = row.title,
+                    category = row.category ?: "General",
+                    details = row.description ?: "",
+                    status = row.status,
+                    landlordResponse = row.landlordResponse,
+                    photoCount = 0,
+                    createdAt = row.createdAt,
+                )
+            }
+            true
+        } catch (e: Exception) {
+            Log.e("PropertyStore", "refreshMaintenance failed", e)
             false
         }
     }

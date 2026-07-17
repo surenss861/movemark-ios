@@ -84,7 +84,7 @@ class RoomProofViewModel @Inject constructor(
     }
 
     fun consumeCameraCaptures() {
-        cameraResultHolder.consume(roomId)?.let { addUris(it) }
+        roomId?.let { id -> cameraResultHolder.consume(id)?.let { addUris(it) } }
     }
 
     fun addUris(uris: List<Uri>) {

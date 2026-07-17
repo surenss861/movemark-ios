@@ -47,6 +47,7 @@ fun VaultScreen(
     onAddProperty: () -> Unit,
     onShowPaywall: (PaywallReason) -> Unit,
     onOpenReports: () -> Unit = {},
+    onOpenMaintenance: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: VaultViewModel = hiltViewModel(),
 ) {
@@ -161,7 +162,7 @@ fun VaultScreen(
                                     (next ?: p.rooms.firstOrNull())?.let { onOpenRoom(it.id) }
                                 is LifecycleNudge.AddLeaseAndDepositDocs -> Unit
                                 is LifecycleNudge.MakeMoveInReport -> onOpenReports()
-                                is LifecycleNudge.MidLeaseMaintenance -> Unit
+                                is LifecycleNudge.MidLeaseMaintenance -> onOpenMaintenance()
                                 is LifecycleNudge.MoveOutProofReminder ->
                                     if (hasPro) onOpenMoveOutProof()
                                     else onShowPaywall(PaywallReason.MoveOutProof)
@@ -179,6 +180,15 @@ fun VaultScreen(
                     onClick = { /* future: lease docs */ },
                     showChevron = true,
                     modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "leaseCard"),
+                )
+
+                Spacer(Modifier.height(10.dp))
+                MMProofTaskCard(
+                    title = "Maintenance log",
+                    reason = "Track repairs and landlord follow-up.",
+                    onClick = onOpenMaintenance,
+                    showChevron = true,
+                    modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "maintenanceCard"),
                 )
 
                 Spacer(Modifier.height(10.dp))

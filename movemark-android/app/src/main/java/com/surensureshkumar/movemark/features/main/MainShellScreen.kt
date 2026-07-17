@@ -31,6 +31,7 @@ fun MainShellScreen(
     onOpenMoveOutProof: () -> Unit,
     onSignOut: () -> Unit,
     onAddProperty: () -> Unit,
+    onOpenMaintenance: () -> Unit,
     viewModel: MainShellViewModel = hiltViewModel(),
 ) {
     var tab by rememberSaveable { mutableStateOf(MainTab.Vault) }
@@ -58,6 +59,7 @@ fun MainShellScreen(
                         onAddProperty = onAddProperty,
                         onShowPaywall = { paywallReason = it },
                         onOpenReports = { tab = MainTab.Reports },
+                        onOpenMaintenance = onOpenMaintenance,
                     )
                     MainTab.Rooms -> RoomsScreen(
                         modifier = Modifier.padding(padding),

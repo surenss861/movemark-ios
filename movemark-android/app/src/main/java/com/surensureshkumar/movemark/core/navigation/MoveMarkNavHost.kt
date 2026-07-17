@@ -19,8 +19,11 @@ import com.surensureshkumar.movemark.features.auth.AuthMode
 import com.surensureshkumar.movemark.features.auth.AuthScreen
 import com.surensureshkumar.movemark.features.firstrun.CreatePropertyScreen
 import com.surensureshkumar.movemark.features.firstrun.FirstRunRoomPickerScreen
+import com.surensureshkumar.movemark.features.maintenance.MaintenanceIssueDetailScreen
+import com.surensureshkumar.movemark.features.maintenance.MaintenanceLogScreen
 import com.surensureshkumar.movemark.features.main.MainShellScreen
 import com.surensureshkumar.movemark.features.moveout.MoveOutRoomsScreen
+import com.surensureshkumar.movemark.features.onboarding.OnboardingNameScreen
 import com.surensureshkumar.movemark.features.proof.RoomProofScreen
 import com.surensureshkumar.movemark.features.proof.SavedProofReceiptScreen
 import com.surensureshkumar.movemark.features.proof.camera.CameraCaptureScreen
@@ -47,8 +50,9 @@ fun MoveMarkNavHost() {
     val authState by welcomeVm.authState.collectAsState()
     val hasProperty by welcomeVm.hasProperty.collectAsState()
     val firstRunComplete by welcomeVm.firstRunComplete.collectAsState()
+    val needsOnboarding by welcomeVm.needsOnboarding.collectAsState()
 
-    LaunchedEffect(authState, hasProperty, firstRunComplete) {
+    LaunchedEffect(authState, hasProperty, firstRunComplete, needsOnboarding) {
         when (authState) {
             AuthState.Loading -> Unit
             AuthState.SignedOut -> {
@@ -60,6 +64,8 @@ fun MoveMarkNavHost() {
             }
             AuthState.SignedIn -> {
                 val dest = when {
+                    needsOnboarding == null -> return@LaunchedEffect
+                    needsOnboarding == true -> Routes.Onboarding
                     hasProperty == false -> Routes.CreateProperty
                     hasProperty == true && firstRunComplete == false -> Routes.FirstRunRoomPicker
                     hasProperty == true -> Routes.Main
@@ -95,6 +101,9 @@ fun MoveMarkNavHost() {
                 onDismiss = { navController.popBackStack() },
             )
         }
+        composable(Routes.Onboarding) {
+            OnboardingNameScreen(onContinue = {})
+        }
         composable(Routes.CreateProperty) {
             CreatePropertyScreen(
                 onCreated = { welcomeVm.refreshFirstRunState() },
@@ -122,7 +131,28 @@ fun MoveMarkNavHost() {
                     }
                 },
                 onAddProperty = { navController.navigate(Routes.AddProperty) },
+                onOpenMaintenance = { navController.navigate(Routes.MaintenanceLog) },
             )
+        }
+        composable(Routes.MaintenanceLog) {
+            MaintenanceLogScreen(
+                onBack = { navController.popBackStack() },
+                onOpenIssue = { issueId ->
+                    navController.navigate(Routes.maintenanceIssueDetail(issueId.toString()))
+                },
+            )
+        }
+        composable(
+            route = Routes.MaintenanceIssueDetail,
+            arguments = listOf(navArgument(Routes.MaintenanceIssueArg) { type = NavType.StringType }),
+        ) { entry ->
+            val issueId = entry.arguments?.getString(Routes.MaintenanceIssueArg)?.let { UUID.fromString(it) }
+            if (issueId != null) {
+                MaintenanceIssueDetailScreen(
+                    issueId = issueId,
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
         composable(Routes.AddProperty) {
             CreatePropertyScreen(

@@ -7,6 +7,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.surensureshkumar.movemark.BuildConfig
 import com.surensureshkumar.movemark.data.auth.ProfileRepository
 import com.surensureshkumar.movemark.data.property.InspectionRepository
+import com.surensureshkumar.movemark.data.property.MaintenanceRepository
 import com.surensureshkumar.movemark.data.property.PropertyRepository
 import com.surensureshkumar.movemark.data.remote.ExportApiClient
 import dagger.Module
@@ -63,6 +64,11 @@ object AppModule {
     @Singleton
     fun provideProfileRepository(client: SupabaseClient): ProfileRepository =
         ProfileRepository(client)
+
+    @Provides
+    @Singleton
+    fun provideMaintenanceRepository(client: SupabaseClient): MaintenanceRepository =
+        MaintenanceRepository(client)
 
     @Provides
     @Singleton

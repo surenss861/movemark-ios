@@ -96,6 +96,33 @@ data class PropertyRecord(
     val rooms: List<RoomRecord>,
 )
 
+@Serializable
+data class MaintenanceIssueRow(
+    val id: String,
+    @SerialName("property_id") val propertyId: String,
+    @SerialName("user_id") val userId: String,
+    var title: String,
+    var category: String? = null,
+    var description: String? = null,
+    var status: String = "open",
+    @SerialName("landlord_response") var landlordResponse: String? = null,
+    @SerialName("date_discovered") var dateDiscovered: String? = null,
+    @SerialName("date_reported") var dateReported: String? = null,
+    @SerialName("follow_up_date") var followUpDate: String? = null,
+    @SerialName("created_at") var createdAt: String? = null,
+)
+
+data class MaintenanceRecord(
+    val id: UUID,
+    val title: String,
+    val category: String,
+    val details: String,
+    val status: String,
+    val landlordResponse: String?,
+    val photoCount: Int,
+    val createdAt: String?,
+)
+
 data class CreatePropertyInput(
     val title: String,
     val addressLine1: String,
