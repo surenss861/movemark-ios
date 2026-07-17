@@ -18,7 +18,6 @@ final class PropertyStore {
     /// Currently selected property id. When set, hydrate that property into currentProperty. Persisted per user.
     var activePropertyId: UUID?
     var maintenanceLog: [MaintenanceRecord] = []
-    var disputeDraft = DisputeDraft()
     var isLoading = false
     var errorMessage: String? = nil
     /// True after first fetchAll completes (success or no property). Reset on clear() so we don't flash empty state on relaunch.
@@ -45,5 +44,4 @@ final class PropertyStore {
     let maintenanceRepo = MaintenanceRepository()
     let documentRepo = DocumentRepository()
     let checklistRepo = ChecklistRepository()
-    let disputeRepo = DisputeRepository()
 }

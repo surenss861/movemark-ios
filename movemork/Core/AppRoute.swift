@@ -15,7 +15,6 @@ enum AppRoute: Hashable {
     case maintenanceIssueDetail(issueID: UUID)
     case moveOut
     case moveOutRoomDetail(roomID: UUID)
-    case disputeBuilder
     case exports
     case account
 }

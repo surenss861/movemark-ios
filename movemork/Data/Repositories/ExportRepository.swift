@@ -9,6 +9,26 @@
 import Foundation
 import Supabase
 
+struct ExportRow: Codable, Identifiable {
+    let id: UUID
+    let disputeId: UUID?
+    let propertyId: UUID
+    let userId: UUID
+    var exportType: String
+    var filePath: String?
+    var createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case disputeId = "dispute_id"
+        case propertyId = "property_id"
+        case userId = "user_id"
+        case exportType = "export_type"
+        case filePath = "file_path"
+        case createdAt = "created_at"
+    }
+}
+
 struct ExportRepository {
 
     func fetchExports(propertyId: UUID) async throws -> [ExportRow] {

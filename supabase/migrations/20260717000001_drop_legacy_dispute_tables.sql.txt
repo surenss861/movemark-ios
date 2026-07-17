@@ -1,0 +1,20 @@
+-- NOT YET APPLIED — follow-up migration, renamed with a .txt suffix so it is not
+-- picked up by `supabase migration up` / `db push` until someone reviews and
+-- renames it back to .sql.
+--
+-- Context: the `disputes` and `dispute_evidence_links` tables backed the legacy
+-- DisputeBuilderView (iOS) + generate-dispute-packet Edge Function path, both
+-- removed 2026-07-17. The canonical dispute-packet flow is now
+-- `POST /api/exports/dispute-packet` (movemark-api), which reads directly from
+-- inspections/evidence_files and writes to the `exports` table — it never reads
+-- `disputes` or `dispute_evidence_links`.
+--
+-- Before applying, confirm:
+--   1. No client build still calls `supabase.functions.invoke("generate-dispute-packet")`
+--      or writes to `disputes` / `dispute_evidence_links` (grep confirmed clean as of
+--      this migration's authoring commit).
+--   2. Any historical data in these tables you want to keep has been exported —
+--      this drop is irreversible.
+
+drop table if exists public.dispute_evidence_links;
+drop table if exists public.disputes;

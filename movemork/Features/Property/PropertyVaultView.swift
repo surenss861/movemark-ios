@@ -245,7 +245,7 @@ struct PropertyVaultView: View {
                         onMoveOut: { path.append(.moveOut) },
                         onDisputeBuilder: {
                             if subscriptionManager.canUseCaseBuilder() {
-                                path.append(.disputeBuilder)
+                                path.append(.exports)
                             } else {
                                 activePaywallReason = .disputePacket
                                 showPaywall = true

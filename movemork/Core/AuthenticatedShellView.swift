@@ -30,8 +30,6 @@ struct AuthenticatedShellView: View {
                         MoveOutFoundationView(path: $path)
                     case .moveOutRoomDetail(let roomID):
                         MoveOutRoomDetailDestinationView(roomID: roomID)
-                    case .disputeBuilder:
-                        DisputeBuilderView()
                     case .exports:
                         ExportHistoryView()
                     case .account:

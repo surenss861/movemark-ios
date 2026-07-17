@@ -72,15 +72,6 @@ extension PropertyStore {
         } ?? 0
     }
 
-    func updateDisputeDraft(type: DisputeDraft.DisputeType? = nil, summary: String? = nil) {
-        var draft = disputeDraft
-        if let type { draft.type = type }
-        if let summary { draft.summary = summary }
-        draft.selectedEvidenceCount = totalEvidenceCount
-        draft.selectedDocumentCount = currentProperty?.vaultDocuments.count ?? 0
-        disputeDraft = draft
-    }
-
     var readinessLabel: String {
         guard let property = currentProperty else { return "No property" }
         let roomCount = property.rooms.count

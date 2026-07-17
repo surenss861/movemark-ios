@@ -52,7 +52,6 @@ extension PropertyStore {
         properties = []
         activePropertyId = nil
         maintenanceLog = []
-        disputeDraft = DisputeDraft()
         errorMessage = nil
         hasCompletedInitialFetch = false
         #if DEBUG
