@@ -7,10 +7,15 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 object ReportFileDownloader {
 
-    private val httpClient = OkHttpClient()
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .build()
 
     fun fileNameFor(exportType: String): String = when (exportType) {
         ReportReadinessMapper.MOVE_IN_REPORT_TYPE -> "MoveMark_Move-In_Report.pdf"

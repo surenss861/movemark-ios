@@ -95,7 +95,7 @@ class PropertyStore @Inject constructor(
     suspend fun createProperty(input: CreatePropertyInput, userId: UUID) {
         val created = propertyRepository.createProperty(input, userId)
         propertyRepository.insertDefaultRooms(UUID.fromString(created.id))
-        _activePropertyId.value = UUID.fromString(created.id)
+        // Persist selection before fetchAll so it resolves the new property as active.
         dataStore.edit { it[activeKey(userId)] = created.id }
         fetchAll(userId)
     }

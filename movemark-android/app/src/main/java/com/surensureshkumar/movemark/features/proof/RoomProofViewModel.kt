@@ -45,7 +45,9 @@ class RoomProofViewModel @Inject constructor(
     private val cameraResultHolder: CameraCaptureResultHolder,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
-    val roomId: UUID = UUID.fromString(checkNotNull(savedStateHandle.get<String>(Routes.RoomProofArg)))
+    val roomId: UUID? = runCatching {
+        UUID.fromString(checkNotNull(savedStateHandle.get<String>(Routes.RoomProofArg)))
+    }.getOrNull()
     val proofPhase: ProofPhase = ProofPhase.fromKey(savedStateHandle.get<String>(Routes.ProofPhaseArg))
 
     val room: StateFlow<RoomRecord?> = propertyStore.currentProperty
@@ -74,6 +76,12 @@ class RoomProofViewModel @Inject constructor(
 
     private var uploadContext: EvidenceUploadContext? = null
     private var pendingReceipt: SavedProofReceiptPayload? = null
+
+    init {
+        if (roomId == null) {
+            _message.value = "Invalid room. Please go back and try again."
+        }
+    }
 
     fun consumeCameraCaptures() {
         cameraResultHolder.consume(roomId)?.let { addUris(it) }

@@ -20,9 +20,7 @@ webhooksRouter.post("/revenuecat", rateLimitWebhookByIp, async (c) => {
     const expected = env.REVENUECAT_WEBHOOK_SECRET;
 
     if (!expected) {
-      if (env.APP_ENV === "production") {
-        return safeJsonError(c, 401, "Webhook not configured", "webhook_secret_missing");
-      }
+      return safeJsonError(c, 401, "Webhook not configured", "webhook_secret_missing");
     } else {
       const token = authHeader.replace("Bearer ", "").trim();
       if (!token || !constantTimeTokenEquals(token, expected)) {

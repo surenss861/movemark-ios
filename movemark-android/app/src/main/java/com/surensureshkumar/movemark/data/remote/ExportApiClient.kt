@@ -9,6 +9,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import com.surensureshkumar.movemark.core.util.MMUserMessages
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -62,9 +63,9 @@ private data class ApiErrorBody(val error: String? = null, val code: String? = n
 @Singleton
 class ExportApiClient @Inject constructor(
     baseUrl: String,
+    private val client: OkHttpClient,
 ) {
     private val base = baseUrl.trimEnd('/')
-    private val client = OkHttpClient()
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun listExports(accessToken: String, propertyId: UUID): List<ExportListItem> = try {

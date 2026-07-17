@@ -16,7 +16,12 @@ type StorageListItem = {
   name: string;
 };
 
-async function listObjectPaths(bucket: string, prefix: string): Promise<string[]> {
+async function listObjectPaths(bucket: string, prefix: string, depth = 0): Promise<string[]> {
+  if (depth > 5) {
+    console.warn(`[movemark-api:deleteAccount] storage path depth exceeded bucket=${bucket} prefix=${prefix}`);
+    return [];
+  }
+
   const { data, error } = await supabaseAdmin.storage.from(bucket).list(prefix, {
     limit: 1000,
   });
@@ -33,7 +38,7 @@ async function listObjectPaths(bucket: string, prefix: string): Promise<string[]
       paths.push(fullPath);
       continue;
     }
-    const nested = await listObjectPaths(bucket, fullPath);
+    const nested = await listObjectPaths(bucket, fullPath, depth + 1);
     paths.push(...nested);
   }
   return paths;

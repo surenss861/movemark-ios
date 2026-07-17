@@ -6,6 +6,9 @@
 //
 
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 enum MoveMarkTheme {
     enum Colors {
@@ -23,27 +26,41 @@ enum MoveMarkTheme {
         static let subtleStroke = Color.white.opacity(0.06)
         static let tabBarFill = Color(red: 0.031, green: 0.075, blue: 0.059).opacity(0.94) // #08130F
 
-        // Legacy aliases
+        // Legacy aliases — use canonical names above for new code.
+        @available(*, deprecated, renamed: "appBackground")
         static let background = appBackground
+        @available(*, deprecated, renamed: "appBackgroundRaised")
         static let backgroundAlt = appBackgroundRaised
+        @available(*, deprecated, renamed: "surface")
         static let backgroundDeep = surface
+        @available(*, deprecated, renamed: "card")
         static let deepCard = card
+        @available(*, deprecated, renamed: "cardRaised")
         static let deepCardAlt = cardRaised
+        @available(*, deprecated, renamed: "surface")
         static let darkSurface = surface
         static let forestGreen = Color(red: 0.039, green: 0.125, blue: 0.082)
+        @available(*, deprecated, renamed: "card")
         static let panel = card
+        @available(*, deprecated, renamed: "cardRaised")
         static let panelAlt = cardRaised
+        @available(*, deprecated, renamed: "cardStroke")
         static let panelStroke = cardStroke
+        @available(*, deprecated, renamed: "subtleStroke")
         static let softBorder = subtleStroke
+        @available(*, deprecated, renamed: "cardRaised")
         static let mint = cardRaised
+        @available(*, deprecated, renamed: "cardRaised")
         static let mintSurface = cardRaised
 
         // Brand — calm green, lime only for tiny success accents
         static let primary = Color(red: 0.129, green: 0.722, blue: 0.400)               // #21B866
         static let primaryPressed = Color(red: 0.094, green: 0.588, blue: 0.310)       // #18A957-ish pressed
+        @available(*, deprecated, renamed: "primaryPressed")
         static let primaryGreenDark = primaryPressed
         static let limeAccent = Color(red: 0.608, green: 0.788, blue: 0.604)           // muted sage accent
         static let proofMint = Color(red: 0.545, green: 0.722, blue: 0.600)
+        @available(*, deprecated, renamed: "primary")
         static let accent = primary
 
         // Text (dark UI)
@@ -51,7 +68,9 @@ enum MoveMarkTheme {
         static let textSecondary = Color(red: 0.659, green: 0.722, blue: 0.678)
         static let textMuted = Color(red: 0.435, green: 0.514, blue: 0.463)
         static let textOnPrimary = Color.white
+        @available(*, deprecated, renamed: "textPrimary")
         static let textOnDark = textPrimary
+        @available(*, deprecated, renamed: "textSecondary")
         static let textOnDarkMuted = textSecondary
         static let textOnLight = Color(red: 0.12, green: 0.18, blue: 0.14)
         static let textDarkGreen = proofMint
@@ -59,7 +78,9 @@ enum MoveMarkTheme {
 
         /// Report / lease preview only — warm paper, never main card fill.
         static let paperSurface = Color(red: 0.910, green: 0.937, blue: 0.898)          // #E8EFE5
+        @available(*, deprecated, renamed: "paperSurface")
         static let creamSurface = paperSurface
+        @available(*, deprecated, renamed: "paperSurface")
         static let whiteSurface = paperSurface
 
         /// Muted warm sage for thumbnails on dark cards.
@@ -67,6 +88,7 @@ enum MoveMarkTheme {
 
         static let divider = subtleStroke.opacity(0.75)
         static let fieldFill = Color(red: 0.055, green: 0.118, blue: 0.090)
+        @available(*, deprecated, renamed: "fieldFill")
         static let surfaceInset = fieldFill
 
         // Semantic
@@ -107,21 +129,43 @@ enum MoveMarkTheme {
     }
 
     enum Typography {
-        static let hero = Font.system(size: 36, weight: .bold, design: .default)
-        static let heroLarge = Font.system(size: 38, weight: .bold, design: .default)
-        static let screenTitle = Font.system(size: 34, weight: .bold, design: .default)
-        static let screenSubtitle = Font.system(size: 18, weight: .regular, design: .default)
-        static let cardTitle = Font.system(size: 22, weight: .semibold, design: .default)
-        static let cardValue = Font.system(size: 28, weight: .bold, design: .default)
-        static let sectionTitle = Font.system(size: 18, weight: .semibold, design: .default)
+        #if os(iOS)
+        // UIFontMetrics scales each size relative to the user's preferred text size,
+        // respecting the Accessibility > Display & Text Size setting.
+        private static func scaled(_ size: CGFloat, for style: UIFont.TextStyle) -> CGFloat {
+            UIFontMetrics(forTextStyle: style).scaledValue(for: size)
+        }
 
-        static let body = Font.system(size: 17, weight: .regular, design: .default)
-        static let bodyMedium = Font.system(size: 17, weight: .medium, design: .default)
-        static let subheadline = Font.system(size: 15, weight: .regular, design: .default)
-        static let subheadlineMedium = Font.system(size: 15, weight: .semibold, design: .default)
-        static let button = Font.system(size: 17, weight: .semibold, design: .default)
-        static let footnote = Font.system(size: 13, weight: .medium, design: .default)
-        static let caption = Font.system(size: 12, weight: .medium, design: .default)
+        static var hero: Font { .system(size: scaled(36, for: .largeTitle), weight: .bold) }
+        static var heroLarge: Font { .system(size: scaled(38, for: .largeTitle), weight: .bold) }
+        static var screenTitle: Font { .system(size: scaled(34, for: .largeTitle), weight: .bold) }
+        static var screenSubtitle: Font { .system(size: scaled(18, for: .title2), weight: .regular) }
+        static var cardTitle: Font { .system(size: scaled(22, for: .title2), weight: .semibold) }
+        static var cardValue: Font { .system(size: scaled(28, for: .title1), weight: .bold) }
+        static var sectionTitle: Font { .system(size: scaled(18, for: .headline), weight: .semibold) }
+        static var body: Font { .system(size: scaled(17, for: .body), weight: .regular) }
+        static var bodyMedium: Font { .system(size: scaled(17, for: .body), weight: .medium) }
+        static var subheadline: Font { .system(size: scaled(15, for: .subheadline), weight: .regular) }
+        static var subheadlineMedium: Font { .system(size: scaled(15, for: .subheadline), weight: .semibold) }
+        static var button: Font { .system(size: scaled(17, for: .callout), weight: .semibold) }
+        static var footnote: Font { .system(size: scaled(13, for: .footnote), weight: .medium) }
+        static var caption: Font { .system(size: scaled(12, for: .caption1), weight: .medium) }
+        #else
+        static let hero: Font = .system(size: 36, weight: .bold)
+        static let heroLarge: Font = .system(size: 38, weight: .bold)
+        static let screenTitle: Font = .system(size: 34, weight: .bold)
+        static let screenSubtitle: Font = .system(size: 18, weight: .regular)
+        static let cardTitle: Font = .system(size: 22, weight: .semibold)
+        static let cardValue: Font = .system(size: 28, weight: .bold)
+        static let sectionTitle: Font = .system(size: 18, weight: .semibold)
+        static let body: Font = .system(size: 17, weight: .regular)
+        static let bodyMedium: Font = .system(size: 17, weight: .medium)
+        static let subheadline: Font = .system(size: 15, weight: .regular)
+        static let subheadlineMedium: Font = .system(size: 15, weight: .semibold)
+        static let button: Font = .system(size: 17, weight: .semibold)
+        static let footnote: Font = .system(size: 13, weight: .medium)
+        static let caption: Font = .system(size: 12, weight: .medium)
+        #endif
     }
 }
 
@@ -217,7 +261,9 @@ struct MMEmeraldBackground: View {
 
     private var grainLayer: some View {
         Canvas { context, size in
-            let step: CGFloat = 4
+            // Larger step (fewer pixels) + Path(rect) instead of ellipseIn avoids
+            // bezier-curve overhead for 1pt dots that are invisible at 0.03 opacity.
+            let step: CGFloat = 6
             var y: CGFloat = 0
             while y < size.height {
                 var x: CGFloat = 0
@@ -225,7 +271,7 @@ struct MMEmeraldBackground: View {
                     if Int((x + y) / step) % 9 == 0 {
                         let rect = CGRect(x: x, y: y, width: 1, height: 1)
                         context.fill(
-                            Path(ellipseIn: rect),
+                            Path(rect),
                             with: .color(Color.white.opacity(0.025))
                         )
                     }

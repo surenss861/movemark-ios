@@ -19,6 +19,8 @@ import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.storage.Storage
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore("movemark_prefs")
@@ -64,6 +66,15 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideExportApiClient(): ExportApiClient =
-        ExportApiClient(BuildConfig.MOVE_MARK_API_BASE_URL)
+    fun provideOkHttpClient(): OkHttpClient =
+        OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(90, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build()
+
+    @Provides
+    @Singleton
+    fun provideExportApiClient(client: OkHttpClient): ExportApiClient =
+        ExportApiClient(BuildConfig.MOVE_MARK_API_BASE_URL, client)
 }

@@ -128,8 +128,11 @@ export function clientIp(c: {
 }): string {
   const forwarded = c.req.header("x-forwarded-for");
   if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
+    // Use the rightmost IP — set by the last trusted proxy (Railway infra).
+    // The leftmost value can be spoofed by the client.
+    const ips = forwarded.split(",").map((s) => s.trim()).filter(Boolean);
+    const last = ips[ips.length - 1];
+    if (last) return last;
   }
   const realIp = c.req.header("x-real-ip")?.trim();
   if (realIp) return realIp;

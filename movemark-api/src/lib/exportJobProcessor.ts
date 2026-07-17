@@ -377,7 +377,11 @@ export async function processExportJob(job: ExportJobRow): Promise<void> {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error(`[movemark-api:exportJob] failed id=${job.id}`, error);
-    await markFailed(job.id, msg);
+    try {
+      await markFailed(job.id, msg);
+    } catch (markErr) {
+      console.error(`[movemark-api:exportJob] markFailed id=${job.id}`, markErr);
+    }
   }
 }
 

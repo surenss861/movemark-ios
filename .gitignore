@@ -1,8 +1,12 @@
 **/xcuserdata/
 **/xcuserdatad/
 
-# Supabase anon key + URL (copy from Config/Secrets.xcconfig.example)
+# Credentials — never commit these
 Config/Secrets.xcconfig
+.sentryclirc
+movemark-api/.env
+movemark-api/.env.local
+movemark-api/.env.*.local
 
 node_modules/
 dist/
@@ -13,6 +17,4 @@ build.log
 *.log
 movemark-api/node_modules/
 movemark-api/dist/
-
-.sentryclirc
 movemark-api/tmp/
