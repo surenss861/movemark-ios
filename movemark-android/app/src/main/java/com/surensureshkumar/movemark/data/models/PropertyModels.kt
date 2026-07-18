@@ -59,6 +59,7 @@ data class EvidenceFileRow(
     val id: String,
     @SerialName("property_id") val propertyId: String,
     @SerialName("inspection_item_id") var inspectionItemId: String? = null,
+    @SerialName("maintenance_issue_id") var maintenanceIssueId: String? = null,
     @SerialName("file_path") var filePath: String,
     @SerialName("file_type") var fileType: String,
     @SerialName("captured_at") var capturedAt: String? = null,

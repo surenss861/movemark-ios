@@ -126,6 +126,44 @@ class InspectionRepository @Inject constructor(
         return UUID.fromString(inserted.id)
     }
 
+    suspend fun fetchEvidenceFilesByMaintenanceIssue(issueId: UUID): List<EvidenceFileRow> =
+        client.from("evidence_files")
+            .select {
+                filter { eq("maintenance_issue_id", issueId.toString()) }
+            }
+            .decodeList()
+
+    suspend fun fetchEvidenceFileCountsByMaintenanceIssue(issueIds: List<UUID>): Map<UUID, Int> {
+        if (issueIds.isEmpty()) return emptyMap()
+        val files = client.from("evidence_files")
+            .select {
+                filter { isIn("maintenance_issue_id", issueIds.map { it.toString() }) }
+            }
+            .decodeList<EvidenceFileRow>()
+        return files
+            .mapNotNull { it.maintenanceIssueId }
+            .groupingBy { UUID.fromString(it) }
+            .eachCount()
+    }
+
+    suspend fun insertMaintenanceEvidenceFile(
+        propertyId: UUID,
+        maintenanceIssueId: UUID,
+        filePath: String,
+    ): UUID {
+        val id = UUID.randomUUID()
+        val row = EvidenceFileRow(
+            id = id.toString(),
+            propertyId = propertyId.toString(),
+            maintenanceIssueId = maintenanceIssueId.toString(),
+            filePath = filePath,
+            fileType = "image",
+            capturedAt = Instant.now().toString(),
+        )
+        val inserted = client.from("evidence_files").insert(row) { select() }.decodeSingle<EvidenceFileRow>()
+        return UUID.fromString(inserted.id)
+    }
+
     suspend fun uploadPhoto(data: ByteArray, path: String) {
         client.storage.from(EVIDENCE_BUCKET).upload(path, data) {
             upsert = false

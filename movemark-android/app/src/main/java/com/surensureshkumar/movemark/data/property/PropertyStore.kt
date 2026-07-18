@@ -159,15 +159,18 @@ class PropertyStore @Inject constructor(
     suspend fun refreshMaintenance(propertyId: UUID): Boolean {
         return try {
             val rows = maintenanceRepository.fetchIssues(propertyId)
+            val issueIds = rows.map { UUID.fromString(it.id) }
+            val photoCounts = inspectionRepository.fetchEvidenceFileCountsByMaintenanceIssue(issueIds)
             _maintenanceLog.value = rows.map { row ->
+                val id = UUID.fromString(row.id)
                 MaintenanceRecord(
-                    id = UUID.fromString(row.id),
+                    id = id,
                     title = row.title,
                     category = row.category ?: "General",
                     details = row.description ?: "",
                     status = row.status,
                     landlordResponse = row.landlordResponse,
-                    photoCount = 0,
+                    photoCount = photoCounts[id] ?: 0,
                     createdAt = row.createdAt,
                 )
             }

@@ -1,14 +1,13 @@
 package com.surensureshkumar.movemark.features.proof
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.surensureshkumar.movemark.core.util.MMUserMessages
+import com.surensureshkumar.movemark.core.util.toJpegBytes
 import com.surensureshkumar.movemark.data.auth.SessionManager
 import com.surensureshkumar.movemark.data.models.RoomRecord
 import com.surensureshkumar.movemark.data.property.EvidenceUploadContext
@@ -30,7 +29,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
 import java.util.UUID
 import javax.inject.Inject
 
@@ -277,28 +275,4 @@ class RoomProofViewModel @Inject constructor(
         )
     }
 
-    private fun Uri.toJpegBytes(context: Context): ByteArray? =
-        runCatching {
-            context.contentResolver.openInputStream(this)?.use { stream ->
-                val bitmap = BitmapFactory.decodeStream(stream) ?: return@runCatching null
-                val scaled = bitmap.scaleMax(1920)
-                ByteArrayOutputStream().apply {
-                    scaled.compress(Bitmap.CompressFormat.JPEG, 82, this)
-                    if (scaled !== bitmap) scaled.recycle()
-                    bitmap.recycle()
-                }.toByteArray()
-            }
-        }.getOrNull()
-
-    private fun Bitmap.scaleMax(maxSide: Int): Bitmap {
-        val max = maxOf(width, height)
-        if (max <= maxSide) return this
-        val scale = maxSide.toFloat() / max
-        return Bitmap.createScaledBitmap(
-            this,
-            (width * scale).toInt().coerceAtLeast(1),
-            (height * scale).toInt().coerceAtLeast(1),
-            true,
-        )
-    }
 }

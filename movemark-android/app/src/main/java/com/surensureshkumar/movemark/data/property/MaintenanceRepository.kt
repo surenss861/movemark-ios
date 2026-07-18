@@ -8,6 +8,7 @@ import io.github.jan.supabase.storage.storage
 import io.ktor.http.ContentType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlin.time.Duration.Companion.seconds
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -99,4 +100,7 @@ class MaintenanceRepository @Inject constructor(
             client.storage.from(MAINTENANCE_BUCKET).delete(path)
         }
     }
+
+    suspend fun signedUrl(path: String, expiresSeconds: Int = 3600): String =
+        client.storage.from(MAINTENANCE_BUCKET).createSignedUrl(path, expiresSeconds.seconds)
 }
