@@ -11,6 +11,8 @@ import Foundation
 struct PropertyMutationOutcome: Sendable {
     /// When true, the write likely succeeded but reloading the property snapshot failed; local optimistic state is kept.
     var hydrationRefreshFailed: Bool
+    /// When true, the evidence/photos saved but tag insertion failed (RLS/network); tags may be missing.
+    var tagInsertFailed: Bool = false
 }
 
 /// After creating a maintenance issue and refreshing the list.
@@ -66,6 +68,8 @@ enum MoveMarkFlowMessage {
     static let noPropertyOrAuth = "No property or not authenticated."
 
     static let proofHydrationHint = " If the list looks stale, leave and reopen this room."
+
+    static let tagInsertFailedHint = " Tags couldn’t be saved — you can re-add them from this entry."
 
     static let proofPreviewTapRetry = "Couldn’t load preview. Tap to retry."
 

@@ -105,6 +105,9 @@ extension EvidenceCaptureView {
                 if outcome.hydrationRefreshFailed {
                     msg += MoveMarkFlowMessage.proofHydrationHint
                 }
+                if outcome.tagInsertFailed {
+                    msg += MoveMarkFlowMessage.tagInsertFailedHint
+                }
                 successMessage = msg
 
                 MMProofToastPresenter.show(

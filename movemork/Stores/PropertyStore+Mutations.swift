@@ -326,10 +326,12 @@ extension PropertyStore {
         await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
 
         // Tags are optional metadata; RLS/network failure here must not surface as “save failed” after item+photos persisted.
+        var tagInsertFailed = false
         if !evidence.issueTags.isEmpty {
             do {
                 try await inspectionRepo.insertItemTags(inspectionItemId: itemId, tagNames: evidence.issueTags)
             } catch {
+                tagInsertFailed = true
                 #if DEBUG
                 print("MoveMark: insertItemTags failed after move-in save (evidence already stored):", error)
                 #endif
@@ -357,7 +359,7 @@ extension PropertyStore {
             print("MoveMark: addEvidence partially succeeded — some photos failed, but proof was saved.")
         }
         #endif
-        return PropertyMutationOutcome(hydrationRefreshFailed: !ok)
+        return PropertyMutationOutcome(hydrationRefreshFailed: !ok, tagInsertFailed: tagInsertFailed)
     }
 
     func addMoveOutEvidence(to roomID: UUID, evidence: EvidenceRecord, photos: [Data], propertyId: UUID, userId: UUID) async throws -> PropertyMutationOutcome {
@@ -404,10 +406,12 @@ extension PropertyStore {
 
         await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
 
+        var tagInsertFailed = false
         if !evidence.issueTags.isEmpty {
             do {
                 try await inspectionRepo.insertItemTags(inspectionItemId: itemId, tagNames: evidence.issueTags)
             } catch {
+                tagInsertFailed = true
                 #if DEBUG
                 print("MoveMark: insertItemTags failed after move-out save (evidence already stored):", error)
                 #endif
@@ -435,7 +439,7 @@ extension PropertyStore {
             print("MoveMark: addMoveOutEvidence partially succeeded — some photos failed, but proof was saved.")
         }
         #endif
-        return PropertyMutationOutcome(hydrationRefreshFailed: !ok)
+        return PropertyMutationOutcome(hydrationRefreshFailed: !ok, tagInsertFailed: tagInsertFailed)
     }
 
     func deleteEvidence(entryId: UUID, propertyId: UUID, userId: UUID) async throws -> PropertyMutationOutcome {
