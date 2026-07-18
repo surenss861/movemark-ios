@@ -27,7 +27,7 @@ class CameraCaptureViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     propertyStore: PropertyStore,
     private val resultHolder: CameraCaptureResultHolder,
-    savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     val roomId: UUID = UUID.fromString(
         checkNotNull(savedStateHandle.get<String>(com.surensureshkumar.movemark.core.navigation.Routes.RoomProofArg)),
@@ -37,8 +37,15 @@ class CameraCaptureViewModel @Inject constructor(
         .map { prop -> prop?.rooms?.firstOrNull { it.id == roomId }?.name ?: "Room proof" }
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000), "Room proof")
 
-    private val _capturedUris = MutableStateFlow<List<Uri>>(emptyList())
+    // Backed by SavedStateHandle (not a plain field) so in-progress captures survive process
+    // death while this screen is backgrounded, not just configuration changes.
+    private val _capturedUris = MutableStateFlow(restoreCapturedUris(savedStateHandle))
     val capturedUris: StateFlow<List<Uri>> = _capturedUris.asStateFlow()
+
+    private fun setCapturedUris(uris: List<Uri>) {
+        _capturedUris.value = uris
+        savedStateHandle[CAPTURED_URIS_KEY] = uris.map { it.toString() }
+    }
 
     val capturedCount: StateFlow<Int> = _capturedUris
         .map { it.size }
@@ -73,9 +80,8 @@ class CameraCaptureViewModel @Inject constructor(
                         },
                     )
                 }.let { uri ->
-                    val normalized = uri
-                    if (_capturedUris.value.none { it.toString() == normalized.toString() }) {
-                        _capturedUris.value = _capturedUris.value + normalized
+                    if (_capturedUris.value.none { it.toString() == uri.toString() }) {
+                        setCapturedUris(_capturedUris.value + uri)
                     }
                 }
             } catch (_: Exception) {
@@ -90,20 +96,33 @@ class CameraCaptureViewModel @Inject constructor(
         if (uris.isEmpty()) return
         val existing = _capturedUris.value.map { it.toString() }.toSet()
         val merged = _capturedUris.value + uris.filter { it.toString() !in existing }
-        _capturedUris.value = merged
+        setCapturedUris(merged)
         _errorMessage.value = null
     }
 
-    fun finishAndDeliver(): Boolean {
+    /** Delivers captured URIs to [resultHolder] and invokes [onResult] with whether there was anything to deliver. */
+    fun finishAndDeliver(onResult: (Boolean) -> Unit) {
         val uris = _capturedUris.value
-        if (uris.isEmpty()) return false
-        resultHolder.deliver(roomId, uris)
-        return true
+        if (uris.isEmpty()) {
+            onResult(false)
+            return
+        }
+        viewModelScope.launch {
+            resultHolder.deliver(roomId, uris)
+            onResult(true)
+        }
     }
 
     fun discardPending() {
-        _capturedUris.value = emptyList()
+        setCapturedUris(emptyList())
     }
 
     fun hasCaptures(): Boolean = _capturedUris.value.isNotEmpty()
+
+    private companion object {
+        const val CAPTURED_URIS_KEY = "captured_uris"
+
+        fun restoreCapturedUris(savedStateHandle: SavedStateHandle): List<Uri> =
+            savedStateHandle.get<List<String>>(CAPTURED_URIS_KEY)?.map(Uri::parse) ?: emptyList()
+    }
 }

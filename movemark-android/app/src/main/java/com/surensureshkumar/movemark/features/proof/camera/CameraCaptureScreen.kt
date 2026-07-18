@@ -132,7 +132,7 @@ fun CameraCaptureScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showExitDialog = false
-                    if (viewModel.finishAndDeliver()) onDone() else onClose()
+                    viewModel.finishAndDeliver { delivered -> if (delivered) onDone() else onClose() }
                 }) { Text("Keep photos", color = MMColors.Primary) }
             },
             dismissButton = {
@@ -255,7 +255,7 @@ fun CameraCaptureScreen(
                 if (capturedCount > 0) {
                     TextButton(
                         onClick = {
-                            if (viewModel.finishAndDeliver()) onDone()
+                            viewModel.finishAndDeliver { delivered -> if (delivered) onDone() }
                         },
                         enabled = !isCapturing,
                     ) {
