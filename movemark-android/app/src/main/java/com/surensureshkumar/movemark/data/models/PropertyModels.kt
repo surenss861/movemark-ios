@@ -76,6 +76,8 @@ data class EvidenceRecord(
     val notes: String,
     val photoCount: Int,
     val photos: List<EvidencePhoto> = emptyList(),
+    /** 1 (poor) .. 5 (excellent); matches InspectionItemRow.conditionRating. Null if never set. */
+    val conditionRating: Int? = null,
 )
 
 data class RoomRecord(

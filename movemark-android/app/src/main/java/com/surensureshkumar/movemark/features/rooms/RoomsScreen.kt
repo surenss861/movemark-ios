@@ -1,14 +1,18 @@
 package com.surensureshkumar.movemark.features.rooms
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -39,11 +43,58 @@ fun RoomsScreen(
 ) {
     val property by viewModel.property.collectAsState()
     val loading by viewModel.loading.collectAsState()
+    val isAddingRoom by viewModel.isAddingRoom.collectAsState()
+    val addRoomError by viewModel.addRoomError.collectAsState()
     val reduceMotion = MMMotion.rememberReduceMotion()
     var hasAnimatedIn by remember { mutableStateOf(reduceMotion) }
+    var showAddRoomDialog by remember { mutableStateOf(false) }
+    var newRoomName by remember { mutableStateOf("") }
 
     LaunchedEffect(reduceMotion) {
         if (!reduceMotion) hasAnimatedIn = true
+    }
+
+    if (showAddRoomDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showAddRoomDialog = false
+                newRoomName = ""
+                viewModel.clearAddRoomError()
+            },
+            title = { Text("Add a room") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = newRoomName,
+                        onValueChange = { newRoomName = it },
+                        label = { Text("Room name") },
+                        singleLine = true,
+                    )
+                    addRoomError?.let { msg ->
+                        Spacer(Modifier.height(8.dp))
+                        Text(msg, color = MMColors.SemanticDanger, fontSize = 13.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.addRoom(newRoomName) {
+                            showAddRoomDialog = false
+                            newRoomName = ""
+                        }
+                    },
+                    enabled = newRoomName.isNotBlank() && !isAddingRoom,
+                ) { Text(if (isAddingRoom) "Adding…" else "Add", color = MMColors.Primary) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showAddRoomDialog = false
+                    newRoomName = ""
+                    viewModel.clearAddRoomError()
+                }) { Text("Cancel", color = MMColors.TextSecondary) }
+            },
+        )
     }
 
     Column(
@@ -98,14 +149,20 @@ fun RoomsScreen(
                 )
 
                 Spacer(Modifier.height(20.dp))
-                Text(
-                    "Rooms",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MMColors.TextSecondary,
-                    modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "roomsLabel"),
-                )
-                Spacer(Modifier.height(12.dp))
+                Row(modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "roomsLabel")) {
+                    Text(
+                        "Rooms",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MMColors.TextSecondary,
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = { showAddRoomDialog = true }) {
+                        Text("+ Add room", color = MMColors.Primary, fontSize = 13.sp)
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
 
                 val nextId = next?.id
                 p.rooms.forEachIndexed { index, room ->

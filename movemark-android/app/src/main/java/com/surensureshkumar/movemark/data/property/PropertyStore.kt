@@ -107,6 +107,25 @@ class PropertyStore @Inject constructor(
         fetchAll(userId)
     }
 
+    class DuplicateRoomNameException : Exception("A room with that name already exists.")
+    class InvalidRoomNameException : Exception("Enter a room name.")
+
+    /** Adds a custom room to the active property and re-hydrates so it appears in Vault/Rooms. */
+    suspend fun addRoom(propertyId: UUID, userId: UUID, name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) throw InvalidRoomNameException()
+
+        val currentRooms = _currentProperty.value?.takeIf { it.id == propertyId }?.rooms
+        val existingNames = currentRooms?.map { it.name } ?: propertyRepository.fetchRooms(propertyId).map { it.name }
+        if (existingNames.any { it.trim().equals(trimmed, ignoreCase = true) }) {
+            throw DuplicateRoomNameException()
+        }
+
+        val nextSortOrder = (propertyRepository.fetchRooms(propertyId).maxOfOrNull { it.sortOrder } ?: -1) + 1
+        propertyRepository.insertRoom(propertyId, trimmed, nextSortOrder)
+        refreshActive(userId)
+    }
+
     suspend fun activateProperty(propertyId: UUID, userId: UUID) {
         val row = _properties.value.firstOrNull { it.id == propertyId.toString() } ?: return
         _activePropertyId.value = propertyId

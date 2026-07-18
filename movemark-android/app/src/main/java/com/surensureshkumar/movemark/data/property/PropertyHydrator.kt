@@ -98,6 +98,7 @@ class PropertyHydrator @Inject constructor(
                     notes = notes,
                     photoCount = photos.size,
                     photos = photos,
+                    conditionRating = item.conditionRating,
                 )
             }
     }
