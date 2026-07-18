@@ -301,7 +301,7 @@ class ReportsViewModel @Inject constructor(
                 val signedUrl = withContext(Dispatchers.IO) {
                     exportRepository.downloadUrl(row.id)
                 }
-                val file = ReportFileDownloader.download(appContext, signedUrl, row.type)
+                val file = ReportFileDownloader.download(appContext, signedUrl, row.type, row.id.toString())
                 _reportPdf.emit(
                     ReportLocalPdf(
                         file = file,

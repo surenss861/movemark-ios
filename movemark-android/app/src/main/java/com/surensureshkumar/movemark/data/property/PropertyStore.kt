@@ -275,19 +275,19 @@ class PropertyStore @Inject constructor(
                 ProofPhase.MoveIn -> room.moveInEvidence
                 ProofPhase.MoveOut -> room.moveOutEvidence
             }
-            val existing = existingList.firstOrNull()
-            val updatedEvidence = if (existing != null) {
+            // Each save creates a brand-new inspection_item row (see createEvidenceUploadContext),
+            // so itemId is never an existing record's id except on a retry of the same context.
+            // Append a new entry rather than merging counts into an unrelated pre-existing one.
+            val updatedEvidence = if (existingList.any { it.id == itemId }) {
                 existingList.map { e ->
-                    if (e.id == existing.id) e.copy(photoCount = e.photoCount + photoCount) else e
+                    if (e.id == itemId) e.copy(photoCount = e.photoCount + photoCount) else e
                 }
             } else {
-                listOf(
-                    EvidenceRecord(
-                        id = itemId,
-                        title = title,
-                        notes = "",
-                        photoCount = photoCount,
-                    ),
+                existingList + EvidenceRecord(
+                    id = itemId,
+                    title = title,
+                    notes = "",
+                    photoCount = photoCount,
                 )
             }
             when (phase) {

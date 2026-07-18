@@ -27,32 +27,44 @@ class InspectionRepository @Inject constructor(
         else -> raw
     }
 
-    suspend fun upsertInspection(propertyId: UUID, userId: UUID, type: String): UUID {
-        val normalized = normalizeInspectionType(type)
-        val existing = client.from("inspections")
+    private suspend fun findInspection(propertyId: UUID, userId: UUID, normalizedType: String): InspectionRow? =
+        client.from("inspections")
             .select {
                 filter {
                     eq("property_id", propertyId.toString())
                     eq("user_id", userId.toString())
-                    eq("inspection_type", normalized)
+                    eq("inspection_type", normalizedType)
                 }
                 limit(1)
             }
             .decodeList<InspectionRow>()
-        existing.firstOrNull()?.let { return UUID.fromString(it.id) }
+            .firstOrNull()
+
+    suspend fun upsertInspection(propertyId: UUID, userId: UUID, type: String): UUID {
+        val normalized = normalizeInspectionType(type)
+        findInspection(propertyId, userId, normalized)?.let { return UUID.fromString(it.id) }
 
         val newId = UUID.randomUUID()
-        val inserted = client.from("inspections")
-            .insert(
-                InspectionInsertRow(
-                    id = newId.toString(),
-                    propertyId = propertyId.toString(),
-                    userId = userId.toString(),
-                    inspectionType = normalized,
-                ),
-            ) { select() }
-            .decodeSingle<InspectionRow>()
-        return UUID.fromString(inserted.id)
+        return try {
+            val inserted = client.from("inspections")
+                .insert(
+                    InspectionInsertRow(
+                        id = newId.toString(),
+                        propertyId = propertyId.toString(),
+                        userId = userId.toString(),
+                        inspectionType = normalized,
+                    ),
+                ) { select() }
+                .decodeSingle<InspectionRow>()
+            UUID.fromString(inserted.id)
+        } catch (e: Exception) {
+            // A concurrent call (second device, retried request) may have inserted the same
+            // (property_id, user_id, inspection_type) row between our select and insert; the DB's
+            // unique index rejects ours. Re-select the winner instead of surfacing a spurious
+            // error or (worse) creating a duplicate inspections row.
+            findInspection(propertyId, userId, normalized)?.let { return UUID.fromString(it.id) }
+            throw e
+        }
     }
 
     suspend fun fetchInspections(propertyId: UUID): List<InspectionRow> =
