@@ -59,17 +59,31 @@ async function deletePrefix(bucket: string, userId: string): Promise<void> {
   }
 }
 
-/** Deletes user storage objects, owned Postgres rows, then the Auth user. */
+/**
+ * Deletes owned Postgres rows, then storage objects, then the Auth user.
+ *
+ * Order matters: there is no cross-step transaction here, so we do the
+ * irreversible, hard-to-recover-from step (storage removal) only after the
+ * DB rows that reference those files are already gone. If this throws
+ * partway through, the worst state a retry can find is "DB rows gone,
+ * some storage files still present, auth user still present" — safe to
+ * re-run (the RPC is a no-op on rows that no longer exist, storage cleanup
+ * finishes removing now-orphaned files, and the auth user isn't deleted
+ * until everything else succeeded). The old order (storage first) could
+ * instead delete files then fail the RPC, leaving DB rows dangling on
+ * file_paths that no longer resolve to anything, with no way to reconstruct
+ * them.
+ */
 export async function deleteAccountForUser(userId: string): Promise<void> {
-  for (const bucket of USER_STORAGE_BUCKETS) {
-    await deletePrefix(bucket, userId);
-  }
-
   const { error: rpcError } = await supabaseAdmin.rpc("delete_user_owned_data", {
     target_user_id: userId,
   });
   if (rpcError) {
     throw new Error(`delete_user_owned_data_failed:${rpcError.message}`);
+  }
+
+  for (const bucket of USER_STORAGE_BUCKETS) {
+    await deletePrefix(bucket, userId);
   }
 
   const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);

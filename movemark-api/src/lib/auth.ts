@@ -39,8 +39,11 @@ export async function requireUserIdFromBearer(c: Context): Promise<string> {
       });
       const sub = typeof payload.sub === "string" ? payload.sub : null;
       if (sub) return sub;
-    } catch {
-      // Fall through to JWKS / Auth API.
+    } catch (error) {
+      // Expected for non-HS256 tokens; logged so an unexpectedly 100%-failing
+      // secret (misconfig) is visible in logs instead of silently degrading
+      // every request to the slower JWKS/Auth-API fallbacks.
+      console.warn("[movemark-api:auth] HS256 verify failed, falling back to JWKS", error);
     }
   }
 
@@ -51,13 +54,14 @@ export async function requireUserIdFromBearer(c: Context): Promise<string> {
       });
       const sub = typeof payload.sub === "string" ? payload.sub : null;
       if (sub) return sub;
-    } catch {
-      // Fall through to Auth API.
+    } catch (error) {
+      console.warn("[movemark-api:auth] JWKS verify failed, falling back to Auth API", error);
     }
   }
 
   const { data, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !data.user) {
+    console.error("[movemark-api:auth] Auth API fallback failed; rejecting request", error);
     throw new Error("Unauthorized");
   }
   return data.user.id;
