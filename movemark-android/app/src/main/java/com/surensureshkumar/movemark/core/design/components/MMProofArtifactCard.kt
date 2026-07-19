@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMMotion
+import com.surensureshkumar.movemark.core.util.rememberSignedImageRequest
 
 data class MMProofArtifactModel(
     val phaseEyebrow: String = "Room Proof",
@@ -68,6 +69,7 @@ fun MMProofArtifactCard(
     drawableResId: Int? = null,
     imageBitmap: ImageBitmap? = null,
     imageUrl: String? = null,
+    imagePath: String? = null,
     showReportPeek: Boolean = false,
     tagsVisible: Boolean = true,
     reduceMotion: Boolean = false,
@@ -88,6 +90,7 @@ fun MMProofArtifactCard(
             drawableResId = drawableResId,
             imageBitmap = imageBitmap,
             imageUrl = imageUrl,
+            imagePath = imagePath,
             tagsVisible = tagsVisible,
             reduceMotion = reduceMotion,
             modifier = Modifier
@@ -129,6 +132,7 @@ private fun MMProofArtifactSurface(
     drawableResId: Int?,
     imageBitmap: ImageBitmap?,
     imageUrl: String?,
+    imagePath: String?,
     tagsVisible: Boolean,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
@@ -163,7 +167,7 @@ private fun MMProofArtifactSurface(
                             modifier = Modifier.fillMaxSize(),
                         )
                         !imageUrl.isNullOrBlank() -> AsyncImage(
-                            model = imageUrl,
+                            model = rememberSignedImageRequest(imageUrl, imagePath),
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),

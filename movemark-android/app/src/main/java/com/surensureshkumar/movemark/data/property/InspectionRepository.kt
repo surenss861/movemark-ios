@@ -5,6 +5,7 @@ import com.surensureshkumar.movemark.data.models.InspectionItemRow
 import com.surensureshkumar.movemark.data.models.InspectionRow
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.storage.storage
 import io.ktor.http.ContentType
 import kotlin.time.Duration.Companion.seconds
@@ -19,6 +20,7 @@ class InspectionRepository @Inject constructor(
 ) {
     companion object {
         const val EVIDENCE_BUCKET = "inspection-media"
+        private const val MAX_EVIDENCE_FILES_PER_MAINTENANCE_ISSUE = 200L
     }
 
     private fun normalizeInspectionType(raw: String): String = when (raw.lowercase()) {
@@ -112,6 +114,7 @@ class InspectionRepository @Inject constructor(
         propertyId: UUID,
         inspectionItemId: UUID,
         filePath: String,
+        thumbnailPath: String? = null,
     ): UUID {
         val id = UUID.randomUUID()
         val row = EvidenceFileRow(
@@ -121,6 +124,7 @@ class InspectionRepository @Inject constructor(
             filePath = filePath,
             fileType = "image",
             capturedAt = Instant.now().toString(),
+            thumbnailPath = thumbnailPath,
         )
         val inserted = client.from("evidence_files").insert(row) { select() }.decodeSingle<EvidenceFileRow>()
         return UUID.fromString(inserted.id)
@@ -130,6 +134,10 @@ class InspectionRepository @Inject constructor(
         client.from("evidence_files")
             .select {
                 filter { eq("maintenance_issue_id", issueId.toString()) }
+                order("captured_at", Order.ASCENDING)
+                // A single issue shouldn't realistically accumulate more than this many attachments;
+                // caps the LazyRow rather than letting it fetch/render an unbounded list.
+                limit(MAX_EVIDENCE_FILES_PER_MAINTENANCE_ISSUE)
             }
             .decodeList()
 
@@ -150,6 +158,7 @@ class InspectionRepository @Inject constructor(
         propertyId: UUID,
         maintenanceIssueId: UUID,
         filePath: String,
+        thumbnailPath: String? = null,
     ): UUID {
         val id = UUID.randomUUID()
         val row = EvidenceFileRow(
@@ -159,6 +168,7 @@ class InspectionRepository @Inject constructor(
             filePath = filePath,
             fileType = "image",
             capturedAt = Instant.now().toString(),
+            thumbnailPath = thumbnailPath,
         )
         val inserted = client.from("evidence_files").insert(row) { select() }.decodeSingle<EvidenceFileRow>()
         return UUID.fromString(inserted.id)
@@ -170,6 +180,14 @@ class InspectionRepository @Inject constructor(
             contentType = ContentType.Image.JPEG
         }
     }
+
+    /** Best-effort thumbnail upload alongside a full-size capture; failures are non-fatal to the caller. */
+    suspend fun uploadThumbnail(data: ByteArray, path: String): Boolean = runCatching {
+        client.storage.from(EVIDENCE_BUCKET).upload(path, data) {
+            upsert = false
+            contentType = ContentType.Image.JPEG
+        }
+    }.isSuccess
 
     suspend fun signedUrl(path: String, expiresSeconds: Int = 3600): String {
         val trimmed = path.trim()

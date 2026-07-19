@@ -35,6 +35,7 @@ struct ProofIssueTag: Identifiable {
 struct ProofPhotoPane: View {
     var size: ProofPhotoPaneSize = .thumbnail
     var imageName: String? = nil
+    var imagePath: String? = nil
     var imageURL: URL? = nil
     var roomName: String? = nil
     var phaseLabel: String? = nil
@@ -62,11 +63,11 @@ struct ProofPhotoPane: View {
     private var thumbnailBody: some View {
         Group {
             if let imageURL {
-                AsyncImage(url: imageURL) { phase in
+                MMCachedAsyncImage(path: imagePath, signedURL: imageURL) { phase in
                     switch phase {
                     case .success(let image):
                         image.resizable().scaledToFill()
-                    default:
+                    case .empty, .failure:
                         thumbnailPlaceholder
                     }
                 }

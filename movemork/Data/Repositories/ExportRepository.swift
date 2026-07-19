@@ -31,12 +31,15 @@ struct ExportRow: Codable, Identifiable {
 
 struct ExportRepository {
 
+    /// Capped so a long-tenured account can't grow this into an unbounded fetch; ordered so the cap keeps the most recent exports.
+    /// (Not currently called — `ExportHistoryView` reads exports via `ExportAPIClient`/movemark-api instead — but capped for whenever this direct path is used.)
     func fetchExports(propertyId: UUID) async throws -> [ExportRow] {
         try await supabase
             .from("exports")
             .select()
             .eq("property_id", value: propertyId)
             .order("created_at", ascending: false)
+            .limit(300)
             .execute()
             .value
     }

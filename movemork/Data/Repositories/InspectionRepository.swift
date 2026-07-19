@@ -10,6 +10,7 @@
 import Foundation
 import os
 import Supabase
+import UIKit
 
 private let inspectionRepoPhotoLog = Logger(
     subsystem: Bundle.main.bundleIdentifier ?? "movemork",
@@ -78,6 +79,8 @@ struct EvidenceFileRow: Codable, Identifiable {
     var inspectionItemId: UUID?
     var maintenanceIssueId: UUID?
     var filePath: String
+    /// Small (~320px) JPEG uploaded alongside `filePath` at capture time; `nil` for rows captured before this existed (fall back to `filePath`).
+    var thumbnailPath: String? = nil
     var fileType: String
     var capturedAt: String?
     var createdAt: String?
@@ -88,6 +91,7 @@ struct EvidenceFileRow: Codable, Identifiable {
         case inspectionItemId = "inspection_item_id"
         case maintenanceIssueId = "maintenance_issue_id"
         case filePath = "file_path"
+        case thumbnailPath = "thumbnail_path"
         case fileType = "file_type"
         case capturedAt = "captured_at"
         case createdAt = "created_at"
@@ -193,13 +197,14 @@ struct InspectionRepository {
     }
 
     @discardableResult
-    func insertEvidenceFile(propertyId: UUID, inspectionItemId: UUID?, maintenanceIssueId: UUID?, filePath: String, fileType: String, capturedAt: Date) async throws -> UUID {
+    func insertEvidenceFile(propertyId: UUID, inspectionItemId: UUID?, maintenanceIssueId: UUID?, filePath: String, thumbnailPath: String? = nil, fileType: String, capturedAt: Date) async throws -> UUID {
         let row = EvidenceFileRow(
             id: UUID(),
             propertyId: propertyId,
             inspectionItemId: inspectionItemId,
             maintenanceIssueId: maintenanceIssueId,
             filePath: filePath,
+            thumbnailPath: thumbnailPath,
             fileType: fileType,
             capturedAt: ISO8601DateFormatter().string(from: capturedAt)
         )
@@ -221,6 +226,19 @@ struct InspectionRepository {
             .eq("property_id", value: propertyId)
             .execute()
             .value
+    }
+
+    /// Single most-recent evidence file for a property (e.g. vault card hero preview) — avoids fetching every evidence row just to use `.first`.
+    func fetchFirstEvidenceFile(propertyId: UUID) async throws -> EvidenceFileRow? {
+        let rows: [EvidenceFileRow] = try await supabase
+            .from("evidence_files")
+            .select()
+            .eq("property_id", value: propertyId)
+            .order("created_at", ascending: false)
+            .limit(1)
+            .execute()
+            .value
+        return rows.first
     }
 
     func insertItemTags(inspectionItemId: UUID, tagNames: [String]) async throws {
@@ -415,16 +433,33 @@ struct InspectionRepository {
                 )
                 throw error
             }
+
+            // Thumbnail upload is best-effort: the full-size photo above already saved, so a failure here
+            // just means this photo falls back to `filePath` in grids (same as pre-existing rows).
+            var thumbnailPath: String?
+            if let thumbData = MMImageThumbnail.make(from: photoData) {
+                let thumbPath = MMImageThumbnail.thumbnailPath(for: path)
+                do {
+                    _ = try await uploadPhoto(data: thumbData, path: thumbPath)
+                    thumbnailPath = thumbPath
+                } catch {
+                    inspectionRepoPhotoLog.error(
+                        "append thumbnail uploadPhoto FAILED path=\(thumbPath, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                    )
+                }
+            }
+
             do {
                 let fileId = try await insertEvidenceFile(
                     propertyId: propertyId,
                     inspectionItemId: inspectionItemId,
                     maintenanceIssueId: nil,
                     filePath: path,
+                    thumbnailPath: thumbnailPath,
                     fileType: "image",
                     capturedAt: Date()
                 )
-                added.append(EvidencePhoto(id: fileId, filePath: path))
+                added.append(EvidencePhoto(id: fileId, filePath: path, thumbnailPath: thumbnailPath))
                 inspectionRepoPhotoLog.debug("append insertEvidenceFile OK fileId=\(fileId.uuidString, privacy: .public)")
             } catch {
                 await removeOrphanInspectionUpload(path: path)

@@ -109,7 +109,7 @@ class SessionManager @Inject constructor(
         _userFullName.value = fullName.trim()
     }
 
-    suspend fun signOut(onCleared: () -> Unit) {
+    suspend fun signOut(onCleared: suspend () -> Unit) {
         subscriptionRepository.logOut()
         client.auth.signOut()
         clearUser()

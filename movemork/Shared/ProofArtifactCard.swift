@@ -25,6 +25,7 @@ struct ProofArtifactCard: View {
     var photoHeight: CGFloat = 168
     var cornerRadius: CGFloat = 20
     var imageName: String?
+    var imagePath: String? = nil
     var imageURL: URL?
     var showReportPeek: Bool = false
     var tagsVisible: Bool = true
@@ -115,7 +116,7 @@ struct ProofArtifactCard: View {
                             .resizable()
                             .scaledToFill()
                     } else if let imageURL {
-                        AsyncImage(url: imageURL) { phase in
+                        MMCachedAsyncImage(path: imagePath, signedURL: imageURL) { phase in
                             if case .success(let image) = phase {
                                 image.resizable().scaledToFill()
                             } else {

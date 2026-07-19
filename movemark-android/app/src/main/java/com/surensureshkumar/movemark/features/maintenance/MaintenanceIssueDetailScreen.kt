@@ -49,6 +49,7 @@ import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
+import com.surensureshkumar.movemark.core.util.rememberSignedImageRequest
 import com.surensureshkumar.movemark.core.util.toJpegBytes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -253,7 +254,7 @@ fun MaintenanceIssueDetailScreen(
                                 ) {
                                     photo.signedUrl?.let { url ->
                                         AsyncImage(
-                                            model = url,
+                                            model = rememberSignedImageRequest(url, photo.displayPath),
                                             contentDescription = null,
                                             modifier = Modifier.fillMaxSize(),
                                         )

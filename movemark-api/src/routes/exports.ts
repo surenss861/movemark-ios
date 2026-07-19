@@ -30,6 +30,9 @@ import type {
   ExportResponseBody,
 } from "../types/exports.js";
 
+/** A property's export history is a bounded proof/receipt list, not a growth metric — recent history is what the UI shows. */
+const EXPORTS_LIST_LIMIT = 100;
+
 function handleExportsError(c: Context<{ Variables: AppVariables }>, error: unknown, logLabel: string) {
   if (isUnauthorizedError(error)) {
     return safeJsonError(c, 401, "Unauthorized", logLabel);
@@ -145,7 +148,9 @@ exportsRouter.get("/", rateLimitExportsListByUser(), async (c) => {
     }
 
     const tDb = performance.now();
-    const { data, error } = await query.order("created_at", { ascending: false });
+    const { data, error } = await query
+      .order("created_at", { ascending: false })
+      .limit(EXPORTS_LIST_LIMIT);
     const dbMs = Math.round(performance.now() - tDb);
     const totalMs = Math.round(performance.now() - t0);
 

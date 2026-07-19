@@ -17,7 +17,7 @@ struct VaultRootView: View {
     @State private var showAddProperty = false
     @State private var showPaywall = false
     @State private var activePaywallReason: PaywallReason = .extraProperty
-    @State private var previewURLByPropertyId: [UUID: URL] = [:]
+    @State private var previewByPropertyId: [UUID: (path: String, url: URL)] = [:]
     @State private var hasAnimatedIn = false
     @State private var otherRentalSummaries: [UUID: (documented: Int, total: Int)] = [:]
 
@@ -70,13 +70,13 @@ struct VaultRootView: View {
     }
 
     private func loadPreviewURLs() async {
-        var urls: [UUID: URL] = [:]
+        var previews: [UUID: (path: String, url: URL)] = [:]
         for row in propertyStore.properties {
-            if let url = await propertyStore.previewImageURL(for: row.id) {
-                urls[row.id] = url
+            if let preview = await propertyStore.previewImage(for: row.id) {
+                previews[row.id] = preview
             }
         }
-        previewURLByPropertyId = urls
+        previewByPropertyId = previews
     }
 
     /// Preload the featured property so its expansion tray has data; keeps chevron + expand behavior consistent.
@@ -179,7 +179,8 @@ struct VaultRootView: View {
             progressLine: vaultProofProgressHeadline,
             nextLine: vaultHeroNextLine,
             progress: vaultProofProgressValue,
-            previewURL: previewURLByPropertyId[row.id],
+            previewPath: previewByPropertyId[row.id]?.path,
+            previewURL: previewByPropertyId[row.id]?.url,
             primaryTitle: featuredContinueProofTitle,
             onPrimary: { openFeaturedVaultOrContinue() }
         )

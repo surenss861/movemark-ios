@@ -64,6 +64,47 @@ data class EvidenceFileRow(
     @SerialName("file_type") var fileType: String,
     @SerialName("captured_at") var capturedAt: String? = null,
     @SerialName("created_at") var createdAt: String? = null,
+    /** ~320px longest-side JPEG uploaded alongside the full-size capture; null for rows captured before thumbnails existed. */
+    @SerialName("thumbnail_path") var thumbnailPath: String? = null,
+)
+
+/** Flattened `inspection_item_tags` + `issue_tags` join, as returned by the `get_property_snapshot` RPC's `item_tags` array. */
+@Serializable
+data class ItemTagRow(
+    @SerialName("inspection_item_id") val inspectionItemId: String,
+    val name: String,
+)
+
+/** Mirrors `property_documents` columns (see iOS `DocumentRepository.PropertyDocumentRow` for the same schema). */
+@Serializable
+data class PropertyDocumentRow(
+    val id: String,
+    @SerialName("property_id") val propertyId: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("document_type") var documentType: String,
+    @SerialName("file_path") var filePath: String,
+    @SerialName("file_name") var fileName: String,
+    @SerialName("uploaded_at") var uploadedAt: String? = null,
+    var metadata: Map<String, String>? = null,
+    @SerialName("thumbnail_path") var thumbnailPath: String? = null,
+)
+
+/**
+ * Decoded shape of `public.get_property_snapshot(p_property_id)` — see
+ * supabase/migrations/20260719000001_property_snapshot_thumbnails_realtime.sql.
+ * `property` is null only when the caller isn't the property's owner (RLS), matching the
+ * empty-results behavior of the direct per-table `.select()` calls this collapses.
+ */
+@Serializable
+data class PropertySnapshot(
+    val property: PropertyRow? = null,
+    val rooms: List<RoomRow> = emptyList(),
+    val inspections: List<InspectionRow> = emptyList(),
+    @SerialName("inspection_items") val inspectionItems: List<InspectionItemRow> = emptyList(),
+    @SerialName("evidence_files") val evidenceFiles: List<EvidenceFileRow> = emptyList(),
+    @SerialName("item_tags") val itemTags: List<ItemTagRow> = emptyList(),
+    val documents: List<PropertyDocumentRow> = emptyList(),
+    @SerialName("maintenance_issues") val maintenanceIssues: List<MaintenanceIssueRow> = emptyList(),
 )
 
 data class EvidencePhoto(

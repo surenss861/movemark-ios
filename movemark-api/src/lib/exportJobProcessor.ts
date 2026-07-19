@@ -19,6 +19,13 @@ import { loadInspectionEvidencePhotos } from "./pdfEvidence.js";
 import { uploadExportToSupabaseStorage } from "./storage.js";
 import { supabaseAdmin } from "./supabase.js";
 
+/** Only the fields drawMoveInCoverAndSummary/generateMoveOutPdfBuffer/formatLocation actually read (see pdf.ts). */
+const PROPERTY_PDF_COLUMNS = "id,title,address_line_1,address_line_2,city,province_state,postal_code";
+const ROOM_PDF_COLUMNS = "id,name";
+const INSPECTION_PDF_COLUMNS = "id";
+const INSPECTION_ITEM_PDF_COLUMNS = "id,room_id,condition_rating,created_at,notes";
+const PROPERTY_DOCUMENT_PDF_COLUMNS = "id,document_type,file_name,uploaded_at";
+
 export type ExportJobRow = {
   id: string;
   user_id: string;
@@ -84,7 +91,7 @@ async function loadTagNamesByItem(itemIds: string[]): Promise<Map<string, string
 async function processMoveIn(job: ExportJobRow): Promise<void> {
   const { data: property, error: propertyError } = await supabaseAdmin
     .from("properties")
-    .select("*")
+    .select(PROPERTY_PDF_COLUMNS)
     .eq("id", job.property_id)
     .eq("user_id", job.user_id)
     .single();
@@ -92,13 +99,13 @@ async function processMoveIn(job: ExportJobRow): Promise<void> {
 
   const { data: rooms } = await supabaseAdmin
     .from("rooms")
-    .select("*")
+    .select(ROOM_PDF_COLUMNS)
     .eq("property_id", job.property_id)
     .order("created_at", { ascending: true });
 
   const { data: inspection } = await supabaseAdmin
     .from("inspections")
-    .select("*")
+    .select(INSPECTION_PDF_COLUMNS)
     .eq("property_id", job.property_id)
     .eq("user_id", job.user_id)
     .eq("inspection_type", "move_in")
@@ -108,7 +115,7 @@ async function processMoveIn(job: ExportJobRow): Promise<void> {
   if (inspection?.id) {
     const { data } = await supabaseAdmin
       .from("inspection_items")
-      .select("*")
+      .select(INSPECTION_ITEM_PDF_COLUMNS)
       .eq("inspection_id", inspection.id)
       .order("created_at", { ascending: true });
     inspectionItems = data ?? [];
@@ -145,7 +152,7 @@ async function processMoveIn(job: ExportJobRow): Promise<void> {
 
   const { data: propertyDocuments } = await supabaseAdmin
     .from("property_documents")
-    .select("*")
+    .select(PROPERTY_DOCUMENT_PDF_COLUMNS)
     .eq("property_id", job.property_id)
     .eq("user_id", job.user_id)
     .order("uploaded_at", { ascending: true });
@@ -176,7 +183,7 @@ async function processMoveIn(job: ExportJobRow): Promise<void> {
 async function processMoveOut(job: ExportJobRow): Promise<void> {
   const { data: property, error: propertyError } = await supabaseAdmin
     .from("properties")
-    .select("*")
+    .select(PROPERTY_PDF_COLUMNS)
     .eq("id", job.property_id)
     .eq("user_id", job.user_id)
     .single();
@@ -184,13 +191,13 @@ async function processMoveOut(job: ExportJobRow): Promise<void> {
 
   const { data: rooms } = await supabaseAdmin
     .from("rooms")
-    .select("*")
+    .select(ROOM_PDF_COLUMNS)
     .eq("property_id", job.property_id)
     .order("created_at", { ascending: true });
 
   const { data: inspection } = await supabaseAdmin
     .from("inspections")
-    .select("*")
+    .select(INSPECTION_PDF_COLUMNS)
     .eq("property_id", job.property_id)
     .eq("user_id", job.user_id)
     .eq("inspection_type", "move_out")
@@ -200,7 +207,7 @@ async function processMoveOut(job: ExportJobRow): Promise<void> {
   if (inspection?.id) {
     const { data } = await supabaseAdmin
       .from("inspection_items")
-      .select("*")
+      .select(INSPECTION_ITEM_PDF_COLUMNS)
       .eq("inspection_id", inspection.id)
       .order("created_at", { ascending: true });
     inspectionItems = data ?? [];
@@ -260,7 +267,7 @@ async function processMoveOut(job: ExportJobRow): Promise<void> {
 async function processDisputePacket(job: ExportJobRow): Promise<void> {
   const { data: property, error: propertyError } = await supabaseAdmin
     .from("properties")
-    .select("*")
+    .select(PROPERTY_PDF_COLUMNS)
     .eq("id", job.property_id)
     .eq("user_id", job.user_id)
     .single();

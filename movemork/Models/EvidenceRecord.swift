@@ -11,6 +11,8 @@ import Foundation
 struct EvidencePhoto: Identifiable, Codable, Hashable {
     let id: UUID
     let filePath: String
+    /// Small (~320px) JPEG path for grid/list thumbnails; `nil` until re-captured (fall back to `filePath`).
+    var thumbnailPath: String? = nil
 }
 
 struct EvidenceRecord: Identifiable, Codable, Hashable {

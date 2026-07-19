@@ -46,6 +46,10 @@ struct ExportHistoryView: View {
     @State private var activePaywallReason: PaywallReason = .unlimitedExports
     @State private var reportsContentAppeared = false
 
+    // MARK: - Realtime export status (falls back to polling below when unavailable)
+    @State private var exportsChannel: RealtimeChannelV2?
+    @State private var exportsRealtimeTask: Task<Void, Never>?
+
     private var apiBaseURL: String? {
         guard
             let value = Bundle.main.object(forInfoDictionaryKey: "MoveMarkAPIBaseURL") as? String,
@@ -211,6 +215,7 @@ struct ExportHistoryView: View {
         }
         .task(id: resolvedExportPropertyId) {
             await loadExports()
+            await subscribeExportsRealtime()
             await pollActiveExportsWhileNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: .moveMarkExportsShouldRefresh)) { _ in
@@ -219,10 +224,60 @@ struct ExportHistoryView: View {
                 await pollActiveExportsWhileNeeded()
             }
         }
+        .onDisappear {
+            teardownExportsRealtime()
+        }
     }
 
-    /// Fallback when Realtime is unavailable: poll while any export is queued/processing.
+    /// Subscribes to `postgres_changes` on `public.exports` for the active property so completed/failed
+    /// exports update immediately instead of waiting on the poll loop below. RLS (`exports_select_own`)
+    /// still scopes what this can see — the added `supabase_realtime` publication membership only changes
+    /// how the client is notified, not who can read which rows.
+    private func subscribeExportsRealtime() async {
+        teardownExportsRealtime()
+        guard let propertyId = resolvedExportPropertyId else { return }
+
+        let channel = supabase.channel("exports-property-\(propertyId.uuidString)")
+        let changes = channel.postgresChange(
+            AnyAction.self,
+            schema: "public",
+            table: "exports",
+            filter: .eq("property_id", value: propertyId)
+        )
+
+        do {
+            try await channel.subscribeWithError()
+        } catch {
+            // Realtime unavailable (e.g. offline, socket blocked) — `pollActiveExportsWhileNeeded` below
+            // is the fallback and will run at its normal cadence since `exportsChannel` stays nil.
+            return
+        }
+
+        exportsChannel = channel
+        exportsRealtimeTask = Task {
+            for await _ in changes {
+                if Task.isCancelled { return }
+                await loadExportsQuietly()
+            }
+        }
+    }
+
+    private func teardownExportsRealtime() {
+        exportsRealtimeTask?.cancel()
+        exportsRealtimeTask = nil
+        if let exportsChannel {
+            Task { await supabase.removeChannel(exportsChannel) }
+            self.exportsChannel = nil
+        }
+    }
+
+    /// Fallback when Realtime is unavailable (or as a safety net against a silently-dropped connection):
+    /// poll while any export is queued/processing. Once Realtime is connected, the interval is stretched
+    /// out significantly since Realtime — not this loop — is doing the real-time work.
     private func pollActiveExportsWhileNeeded() async {
+        let quickIntervalNanos: UInt64 = 2_500_000_000
+        let realtimeBackstopIntervalNanos: UInt64 = 15_000_000_000
+
         for _ in 0..<40 {
             let hasActive = verificationStatus.values.contains { status in
                 switch status {
@@ -233,7 +288,8 @@ struct ExportHistoryView: View {
                 }
             }
             guard hasActive else { return }
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            let interval = exportsChannel != nil ? realtimeBackstopIntervalNanos : quickIntervalNanos
+            try? await Task.sleep(nanoseconds: interval)
             await loadExportsQuietly()
         }
     }

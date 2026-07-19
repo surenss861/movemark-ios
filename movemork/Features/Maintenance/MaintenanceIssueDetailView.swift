@@ -7,7 +7,6 @@
 
 import SwiftUI
 import PhotosUI
-import NukeUI
 
 struct MaintenanceIssueDetailView: View {
     @Environment(PropertyStore.self) private var propertyStore
@@ -17,7 +16,7 @@ struct MaintenanceIssueDetailView: View {
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var isSavingFollowUp = false
     @State private var isUploadingPhotos = false
-    @State private var evidenceURLs: [URL] = []
+    @State private var evidencePreviews: [MaintenanceEvidencePreview] = []
     @State private var evidenceFileCount = 0
     @State private var isLoadingEvidence = false
     @State private var errorMessage: String? = nil
@@ -146,7 +145,7 @@ struct MaintenanceIssueDetailView: View {
                     ProgressView()
                         .tint(MoveMarkTheme.Colors.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                } else if evidenceURLs.isEmpty {
+                } else if evidencePreviews.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Couldn’t load photo previews. Your files may still be saved.")
                             .font(MoveMarkTheme.Typography.subheadline)
@@ -164,8 +163,8 @@ struct MaintenanceIssueDetailView: View {
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 10) {
-                            ForEach(evidenceURLs, id: \.absoluteString) { url in
-                                MaintenanceEvidenceThumbnail(url: url, propertyId: issue.propertyId) {
+                            ForEach(evidencePreviews) { preview in
+                                MaintenanceEvidenceThumbnail(preview: preview, propertyId: issue.propertyId) {
                                     Task { await loadEvidence() }
                                 }
                             }
@@ -276,29 +275,42 @@ struct MaintenanceIssueDetailView: View {
             let files = try await inspectionRepo.fetchEvidenceFilesByMaintenanceIssue(issueId: issue.id)
             evidenceFileCount = files.count
             guard !files.isEmpty else {
-                evidenceURLs = []
+                evidencePreviews = []
                 return
             }
-            evidenceURLs = try await fetchEvidencePreviewURLs(files: files)
+            evidencePreviews = try await fetchEvidencePreviewURLs(files: files)
         } catch {
             errorMessage = MoveMarkFlowMessage.maintenanceEvidenceLoadFailed(error)
             retryAction = { Task { await loadEvidence() } }
         }
     }
 
-    private func fetchEvidencePreviewURLs(files: [EvidenceFileRow]) async throws -> [URL] {
-        var urls: [URL] = []
+    /// Resolves both the full-size and (when present) thumbnail signed URLs for each file, so the grid can
+    /// prefer the small thumbnail while still keeping the full-size path/URL around for anyone re-using it.
+    private func fetchEvidencePreviewURLs(files: [EvidenceFileRow]) async throws -> [MaintenanceEvidencePreview] {
+        var previews: [MaintenanceEvidencePreview] = []
         var lastError: Error?
         for file in files {
             do {
-                let u = try await inspectionRepo.signedURL(bucket: "maintenance-media", path: file.filePath)
-                urls.append(u)
+                let fullURL = try await inspectionRepo.signedURL(bucket: "maintenance-media", path: file.filePath)
+                var thumbURL = fullURL
+                if let thumbPath = file.thumbnailPath, thumbPath != file.filePath,
+                   let resolvedThumbURL = try? await inspectionRepo.signedURL(bucket: "maintenance-media", path: thumbPath) {
+                    thumbURL = resolvedThumbURL
+                }
+                previews.append(MaintenanceEvidencePreview(
+                    id: file.id,
+                    filePath: file.filePath,
+                    thumbnailPath: file.thumbnailPath,
+                    url: fullURL,
+                    thumbURL: thumbURL
+                ))
             } catch {
                 lastError = error
             }
         }
-        if urls.isEmpty, let lastError { throw lastError }
-        return urls
+        if previews.isEmpty, let lastError { throw lastError }
+        return previews
     }
 
     /// Reload previews after upload; returns `false` if the list couldn’t be refreshed (photos may still be saved).
@@ -307,10 +319,10 @@ struct MaintenanceIssueDetailView: View {
             let files = try await inspectionRepo.fetchEvidenceFilesByMaintenanceIssue(issueId: issue.id)
             evidenceFileCount = files.count
             guard !files.isEmpty else {
-                evidenceURLs = []
+                evidencePreviews = []
                 return true
             }
-            evidenceURLs = try await fetchEvidencePreviewURLs(files: files)
+            evidencePreviews = try await fetchEvidencePreviewURLs(files: files)
             return true
         } catch {
             return false
@@ -338,12 +350,21 @@ struct MaintenanceIssueDetailView: View {
                     retryAction = { uploadPhotos(items) }
                     return
                 }
+
+                // Thumbnail upload is best-effort; a failure here just means this photo falls back to `filePath` in the grid.
+                var thumbnailPath: String?
+                if let thumbData = MMImageThumbnail.make(from: data) {
+                    let thumbPath = MMImageThumbnail.thumbnailPath(for: path)
+                    thumbnailPath = (try? await maintenanceRepo.uploadAttachment(data: thumbData, path: thumbPath)) != nil ? thumbPath : nil
+                }
+
                 do {
                     try await inspectionRepo.insertEvidenceFile(
                         propertyId: issue.propertyId,
                         inspectionItemId: nil,
                         maintenanceIssueId: issue.id,
                         filePath: path,
+                        thumbnailPath: thumbnailPath,
                         fileType: "image",
                         capturedAt: Date()
                     )
@@ -412,23 +433,43 @@ struct MaintenanceIssueDetailView: View {
     }
 }
 
-// MARK: - Maintenance evidence thumbnail (signed URL / Nuke retry)
+/// One maintenance evidence file's resolved preview URLs (full-size and thumbnail).
+struct MaintenanceEvidencePreview: Identifiable {
+    let id: UUID
+    let filePath: String
+    let thumbnailPath: String?
+    /// Full-size signed URL — not displayed in the grid, kept for parity with other evidence previews.
+    let url: URL
+    /// Signed URL for `thumbnailPath` when present, else the same as `url`.
+    let thumbURL: URL
+}
+
+// MARK: - Maintenance evidence thumbnail (path-keyed disk cache; falls back to full re-fetch on failure)
 
 private struct MaintenanceEvidenceThumbnail: View {
-    let url: URL
+    let preview: MaintenanceEvidencePreview
     let propertyId: UUID
     let onSignedURLExpired: () -> Void
 
     var body: some View {
-        LazyImage(url: url, resizingMode: .aspectFill)
-            .onFailure { _ in
-                Task {
-                    await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
-                    await MainActor.run { onSignedURLExpired() }
-                }
+        MMCachedAsyncImage(path: preview.thumbnailPath ?? preview.filePath, signedURL: preview.thumbURL) { phase in
+            switch phase {
+            case .success(let image):
+                image.resizable().aspectRatio(contentMode: .fill)
+            case .failure:
+                Color.clear
+                    .onAppear {
+                        Task {
+                            await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
+                            await MainActor.run { onSignedURLExpired() }
+                        }
+                    }
+            case .empty:
+                MoveMarkTheme.Colors.mint.opacity(0.5)
             }
-            .frame(width: 120, height: 120)
-            .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .frame(width: 120, height: 120)
+        .clipped()
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }

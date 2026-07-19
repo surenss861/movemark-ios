@@ -42,6 +42,8 @@ struct PropertyDocumentRow: Codable, Identifiable {
     let userId: UUID
     var documentType: String
     var filePath: String
+    /// Small (~320px) JPEG uploaded alongside `filePath` for image document types (e.g. listing screenshot); `nil` otherwise or for rows captured before this existed.
+    var thumbnailPath: String? = nil
     var fileName: String
     var uploadedAt: String?
     var metadata: [String: String]?
@@ -52,6 +54,7 @@ struct PropertyDocumentRow: Codable, Identifiable {
         case userId = "user_id"
         case documentType = "document_type"
         case filePath = "file_path"
+        case thumbnailPath = "thumbnail_path"
         case fileName = "file_name"
         case uploadedAt = "uploaded_at"
         case metadata
@@ -125,12 +128,14 @@ struct DocumentRepository {
             .remove(paths: [path])
     }
 
+    /// Capped so a long-tenured account can't grow this into an unbounded fetch; ordered so the cap keeps the most recent documents.
     func fetchDocuments(propertyId: UUID) async throws -> [PropertyDocumentRow] {
         try await supabase
             .from("property_documents")
             .select()
             .eq("property_id", value: propertyId)
             .order("uploaded_at", ascending: false)
+            .limit(300)
             .execute()
             .value
     }
@@ -151,6 +156,7 @@ struct DocumentRepository {
         }
         return try await query
             .order("uploaded_at", ascending: false)
+            .limit(300)
             .execute()
             .value
     }

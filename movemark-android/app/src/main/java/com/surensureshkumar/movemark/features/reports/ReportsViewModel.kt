@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.surensureshkumar.movemark.data.export.DisputePacketReadiness
 import com.surensureshkumar.movemark.data.export.DisputePacketReadinessMapper
+import com.surensureshkumar.movemark.data.export.ExportRealtimeWatcher
 import com.surensureshkumar.movemark.data.export.ExportRepository
 import com.surensureshkumar.movemark.data.export.ExportRow
 import com.surensureshkumar.movemark.data.export.MoveOutReportReadiness
@@ -24,6 +25,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import java.io.File
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -31,6 +34,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -59,6 +63,9 @@ data class ReportsUiState(
     val disputePacketStatus: String = "Add room proof first.",
 )
 
+/** Fallback poll cadence while an export is in flight, as a backstop for a dropped realtime socket. */
+private const val EXPORT_FALLBACK_POLL_INTERVAL_MS = 15_000L
+
 enum class ReportPdfAction {
     View,
     Share,
@@ -75,6 +82,7 @@ class ReportsViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val propertyStore: PropertyStore,
     private val exportRepository: ExportRepository,
+    private val exportRealtimeWatcher: ExportRealtimeWatcher,
     subscriptionRepository: SubscriptionRepository,
 ) : ViewModel() {
 
@@ -92,6 +100,8 @@ class ReportsViewModel @Inject constructor(
 
     private val _reportPdf = MutableSharedFlow<ReportLocalPdf>(extraBufferCapacity = 1)
     val reportPdf: SharedFlow<ReportLocalPdf> = _reportPdf.asSharedFlow()
+
+    private var exportWatchJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -126,13 +136,40 @@ class ReportsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             propertyStore.currentProperty.collect { property ->
-                if (property != null) {
-                    refreshExports()
-                } else {
+                exportWatchJob?.cancel()
+                if (property == null) {
                     _exports.value = emptyList()
+                    return@collect
+                }
+                refreshExports()
+                // Realtime (task #14) replaces the old poll-driven refresh -- postgres_changes on
+                // `exports`, RLS-scoped the same as a direct .select() (exports_select_own), pushes
+                // an update the moment a status flips. The periodic fallback below is a backstop in
+                // case the socket never connects or silently drops; it only runs while something is
+                // actually in flight, so it isn't a constant battery-draining loop like the old
+                // pattern would be.
+                exportWatchJob = viewModelScope.launch {
+                    launch {
+                        runCatching {
+                            exportRealtimeWatcher.watchExportChanges(property.id) { refreshExports() }
+                        }
+                    }
+                    launch {
+                        while (isActive) {
+                            delay(EXPORT_FALLBACK_POLL_INTERVAL_MS)
+                            if (hasActiveExportJob()) refreshExports()
+                        }
+                    }
                 }
             }
         }
+    }
+
+    private fun hasActiveExportJob(): Boolean {
+        val exports = _exports.value
+        return ReportReadinessMapper.hasActiveMoveInJob(exports) ||
+            MoveOutReportReadinessMapper.hasActiveMoveOutJob(exports) ||
+            DisputePacketReadinessMapper.hasActiveDisputeJob(exports)
     }
 
     fun refreshExports() {

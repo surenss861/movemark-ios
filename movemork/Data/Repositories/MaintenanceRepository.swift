@@ -55,14 +55,28 @@ struct MaintenanceIssueRow: Codable, Identifiable {
 
 struct MaintenanceRepository {
 
+    /// Capped so a long-tenured account (years of logged issues) can't grow this into an unbounded fetch; ordered so the cap keeps the most recent issues.
     func fetchIssues(propertyId: UUID) async throws -> [MaintenanceIssueRow] {
         try await supabase
             .from("maintenance_issues")
             .select()
             .eq("property_id", value: propertyId)
             .order("date_reported", ascending: false)
+            .limit(200)
             .execute()
             .value
+    }
+
+    /// Single-row lookup by id (e.g. deep link / path-based navigation) — avoids fetching the whole issue list just to find one.
+    func fetchIssue(id: UUID) async throws -> MaintenanceIssueRow? {
+        let rows: [MaintenanceIssueRow] = try await supabase
+            .from("maintenance_issues")
+            .select()
+            .eq("id", value: id)
+            .limit(1)
+            .execute()
+            .value
+        return rows.first
     }
 
     func insertIssue(_ row: MaintenanceIssueRow) async throws -> MaintenanceIssueRow {

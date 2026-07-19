@@ -6,6 +6,44 @@
 //
 
 import Foundation
+import Supabase
+
+/// Decoded shape of `public.get_property_snapshot(p_property_id)` — one round trip replacing the
+/// ~11 sequential/parallel `.select()` calls `hydrateProperty` used to make. Every array element reuses
+/// the same Codable row structs the old per-table fetches decoded, since the RPC returns `to_jsonb(row)`
+/// for each table with identical snake_case columns.
+struct PropertySnapshot: Decodable {
+    /// Row for the entity flattening `inspection_item_tags` joined to `issue_tags`, matching the RPC's `item_tags` array.
+    struct ItemTagEntry: Decodable {
+        let inspectionItemId: UUID
+        let name: String
+
+        enum CodingKeys: String, CodingKey {
+            case inspectionItemId = "inspection_item_id"
+            case name
+        }
+    }
+
+    let property: PropertyRow?
+    let rooms: [RoomRow]
+    let inspections: [InspectionRow]
+    let inspectionItems: [InspectionItemRow]
+    let evidenceFiles: [EvidenceFileRow]
+    let itemTags: [ItemTagEntry]
+    let documents: [PropertyDocumentRow]
+    let maintenanceIssues: [MaintenanceIssueRow]
+
+    enum CodingKeys: String, CodingKey {
+        case property
+        case rooms
+        case inspections
+        case inspectionItems = "inspection_items"
+        case evidenceFiles = "evidence_files"
+        case itemTags = "item_tags"
+        case documents
+        case maintenanceIssues = "maintenance_issues"
+    }
+}
 
 extension PropertyStore {
 
@@ -18,17 +56,24 @@ extension PropertyStore {
         return f
     }()
 
-    /// Loads rooms, docs, inspections, maintenance for one property and returns (PropertyRecord, maintenance log).
-    func hydrateProperty(_ row: PropertyRow, userId: UUID) async throws -> (PropertyRecord, [MaintenanceRecord]) {
-        async let roomsTask = propertyRepo.fetchRooms(propertyId: row.id)
-        async let inspectionsTask = inspectionRepo.fetchInspections(propertyId: row.id)
-        async let docRowsTask = documentRepo.fetchDocuments(propertyId: row.id)
-        async let issuesTask = maintenanceRepo.fetchIssues(propertyId: row.id)
-        async let propertyEvidenceFilesTask = inspectionRepo.fetchEvidenceFiles(propertyId: row.id)
+    /// Fetches the full property snapshot (rooms, inspections, items, evidence, tags, documents, maintenance) in one round trip via `get_property_snapshot`.
+    func fetchPropertySnapshot(propertyId: UUID) async throws -> PropertySnapshot {
+        try await supabase
+            .rpc("get_property_snapshot", params: ["p_property_id": propertyId])
+            .execute()
+            .value
+    }
 
-        let (rooms, inspections, docRows, issues, propertyEvidenceFiles) = try await (
-            roomsTask, inspectionsTask, docRowsTask, issuesTask, propertyEvidenceFilesTask
-        )
+    /// Loads rooms, docs, inspections, maintenance for one property and returns (PropertyRecord, maintenance log).
+    /// Single round trip via `get_property_snapshot`; all grouping/parsing below is unchanged from the old per-table fetch path.
+    func hydrateProperty(_ row: PropertyRow, userId: UUID) async throws -> (PropertyRecord, [MaintenanceRecord]) {
+        let snapshot = try await fetchPropertySnapshot(propertyId: row.id)
+
+        let rooms = snapshot.rooms
+        let inspections = snapshot.inspections
+        let docRows = snapshot.documents
+        let issues = snapshot.maintenanceIssues
+        let propertyEvidenceFiles = snapshot.evidenceFiles
 
         var maintenancePhotoCountByIssue: [UUID: Int] = [:]
         for file in propertyEvidenceFiles {
@@ -38,26 +83,36 @@ extension PropertyStore {
         }
 
         // Support both legacy kebab-case and current snake_case values.
-        let moveInIds = inspections.filter {
+        let moveInIds = Set(inspections.filter {
             let normalized = $0.inspectionType.lowercased()
             return normalized == "move_in" || normalized == "move-in" || normalized == "movein"
-        }.map(\.id)
-        let moveOutIds = inspections.filter {
+        }.map(\.id))
+        let moveOutIds = Set(inspections.filter {
             let normalized = $0.inspectionType.lowercased()
             return normalized == "move_out" || normalized == "move-out" || normalized == "moveout"
-        }.map(\.id)
+        }.map(\.id))
 
-        async let moveInItemsTask = inspectionRepo.fetchAllInspectionItems(inspectionIds: moveInIds)
-        async let moveOutItemsTask = inspectionRepo.fetchAllInspectionItems(inspectionIds: moveOutIds)
-        let (moveInItems, moveOutItems) = try await (moveInItemsTask, moveOutItemsTask)
+        let moveInItems = snapshot.inspectionItems.filter { moveInIds.contains($0.inspectionId) }
+        let moveOutItems = snapshot.inspectionItems.filter { moveOutIds.contains($0.inspectionId) }
 
-        async let moveInFilesTask = inspectionRepo.fetchEvidenceFilesByItems(itemIds: moveInItems.map(\.id))
-        async let moveOutFilesTask = inspectionRepo.fetchEvidenceFilesByItems(itemIds: moveOutItems.map(\.id))
-        async let moveInTagNamesTask = inspectionRepo.fetchItemTagNames(inspectionItemIds: moveInItems.map(\.id))
-        async let moveOutTagNamesTask = inspectionRepo.fetchItemTagNames(inspectionItemIds: moveOutItems.map(\.id))
-        let (moveInFiles, moveOutFiles, moveInTagNames, moveOutTagNames) = try await (
-            moveInFilesTask, moveOutFilesTask, moveInTagNamesTask, moveOutTagNamesTask
-        )
+        let moveInItemIds = Set(moveInItems.map(\.id))
+        let moveOutItemIds = Set(moveOutItems.map(\.id))
+
+        let moveInFiles = snapshot.evidenceFiles.filter { file in
+            guard let itemId = file.inspectionItemId else { return false }
+            return moveInItemIds.contains(itemId)
+        }
+        let moveOutFiles = snapshot.evidenceFiles.filter { file in
+            guard let itemId = file.inspectionItemId else { return false }
+            return moveOutItemIds.contains(itemId)
+        }
+
+        // Tags are flattened across the whole property; indexing by move-in/move-out item ids below
+        // naturally scopes each side since item id sets don't overlap.
+        var tagNamesByItem: [UUID: [String]] = [:]
+        for entry in snapshot.itemTags {
+            tagNamesByItem[entry.inspectionItemId, default: []].append(entry.name)
+        }
 
         let moveInFilesSorted = moveInFiles.sorted {
             ($0.createdAt ?? $0.capturedAt ?? "") < ($1.createdAt ?? $1.capturedAt ?? "")
@@ -69,12 +124,12 @@ extension PropertyStore {
         var moveInPhotosByItem: [UUID: [EvidencePhoto]] = [:]
         for file in moveInFilesSorted {
             guard let itemId = file.inspectionItemId else { continue }
-            moveInPhotosByItem[itemId, default: []].append(EvidencePhoto(id: file.id, filePath: file.filePath))
+            moveInPhotosByItem[itemId, default: []].append(EvidencePhoto(id: file.id, filePath: file.filePath, thumbnailPath: file.thumbnailPath))
         }
         var moveOutPhotosByItem: [UUID: [EvidencePhoto]] = [:]
         for file in moveOutFilesSorted {
             guard let itemId = file.inspectionItemId else { continue }
-            moveOutPhotosByItem[itemId, default: []].append(EvidencePhoto(id: file.id, filePath: file.filePath))
+            moveOutPhotosByItem[itemId, default: []].append(EvidencePhoto(id: file.id, filePath: file.filePath, thumbnailPath: file.thumbnailPath))
         }
 
         let isoDate = ISO8601DateFormatter()
@@ -90,7 +145,7 @@ extension PropertyStore {
                         id: item.id,
                         title: title,
                         notes: notes,
-                        issueTags: moveInTagNames[item.id] ?? [],
+                        issueTags: tagNamesByItem[item.id] ?? [],
                         condition: Self.conditionFromInt(item.conditionRating),
                         createdAt: isoDate.date(from: item.createdAt ?? "") ?? Date(),
                         photoCount: photos.count,
@@ -109,7 +164,7 @@ extension PropertyStore {
                         id: item.id,
                         title: title,
                         notes: notes,
-                        issueTags: moveOutTagNames[item.id] ?? [],
+                        issueTags: tagNamesByItem[item.id] ?? [],
                         condition: Self.conditionFromInt(item.conditionRating),
                         createdAt: isoDate.date(from: item.createdAt ?? "") ?? Date(),
                         photoCount: photos.count,

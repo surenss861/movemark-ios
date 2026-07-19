@@ -1078,12 +1078,20 @@ struct PropertyVaultView: View {
                 return
             }
 
+            // Thumbnail upload is best-effort; a failure here just means this document falls back to `filePath` for previews.
+            var thumbnailPath: String?
+            if let thumbData = MMImageThumbnail.make(from: compressed) {
+                let thumbPath = MMImageThumbnail.thumbnailPath(for: path)
+                thumbnailPath = (try? await documentRepo.uploadDocument(data: thumbData, bucket: targetBucket, path: thumbPath)) != nil ? thumbPath : nil
+            }
+
             let row = PropertyDocumentRow(
                 id: UUID(),
                 propertyId: property.id,
                 userId: userId,
                 documentType: canonicalType,
                 filePath: path,
+                thumbnailPath: thumbnailPath,
                 fileName: fileName,
                 uploadedAt: nil,
                 metadata: nil

@@ -7,6 +7,7 @@
 
 import Foundation
 import os
+import UIKit
 
 /// Unified Logging for room proof uploads (visible in Console.app / `log stream` for TestFlight builds).
 private let inspectionPhotoPipelineLog = Logger(
@@ -78,16 +79,33 @@ extension PropertyStore {
                 #endif
                 continue
             }
+
+            // Thumbnail upload is best-effort: the full-size photo above already saved, so a thumbnail
+            // failure just means this photo falls back to `filePath` in grids (same as pre-existing rows).
+            var thumbnailPath: String?
+            if let thumbData = MMImageThumbnail.make(from: photoData) {
+                let thumbPath = MMImageThumbnail.thumbnailPath(for: path)
+                do {
+                    _ = try await inspectionRepo.uploadPhoto(data: thumbData, path: thumbPath)
+                    thumbnailPath = thumbPath
+                } catch {
+                    inspectionPhotoPipelineLog.error(
+                        "thumbnail uploadPhoto FAILED path=\(thumbPath, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                    )
+                }
+            }
+
             do {
                 let fileId = try await inspectionRepo.insertEvidenceFile(
                     propertyId: propertyId,
                     inspectionItemId: inspectionItemId,
                     maintenanceIssueId: nil,
                     filePath: path,
+                    thumbnailPath: thumbnailPath,
                     fileType: "image",
                     capturedAt: Date()
                 )
-                savedPhotos.append(EvidencePhoto(id: fileId, filePath: path))
+                savedPhotos.append(EvidencePhoto(id: fileId, filePath: path, thumbnailPath: thumbnailPath))
                 inspectionPhotoPipelineLog.debug(
                     "insertEvidenceFile OK fileId=\(fileId.uuidString, privacy: .public) path=\(path, privacy: .public)"
                 )
@@ -145,16 +163,32 @@ extension PropertyStore {
                 #endif
                 continue
             }
+
+            // Thumbnail upload is best-effort; a failure here just means this photo falls back to `filePath` in grids.
+            var thumbnailPath: String?
+            if let thumbData = MMImageThumbnail.make(from: photoData) {
+                let thumbPath = MMImageThumbnail.thumbnailPath(for: path)
+                do {
+                    _ = try await maintenanceRepo.uploadAttachment(data: thumbData, path: thumbPath)
+                    thumbnailPath = thumbPath
+                } catch {
+                    maintenancePhotoPipelineLog.error(
+                        "thumbnail uploadAttachment FAILED path=\(thumbPath, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                    )
+                }
+            }
+
             do {
                 let fileId = try await inspectionRepo.insertEvidenceFile(
                     propertyId: propertyId,
                     inspectionItemId: nil,
                     maintenanceIssueId: issueId,
                     filePath: path,
+                    thumbnailPath: thumbnailPath,
                     fileType: "image",
                     capturedAt: Date()
                 )
-                savedPhotos.append(EvidencePhoto(id: fileId, filePath: path))
+                savedPhotos.append(EvidencePhoto(id: fileId, filePath: path, thumbnailPath: thumbnailPath))
                 maintenancePhotoPipelineLog.debug(
                     "insertEvidenceFile OK fileId=\(fileId.uuidString, privacy: .public) path=\(path, privacy: .public)"
                 )

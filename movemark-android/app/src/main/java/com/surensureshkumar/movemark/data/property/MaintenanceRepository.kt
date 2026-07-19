@@ -41,6 +41,7 @@ class MaintenanceRepository @Inject constructor(
 ) {
     companion object {
         const val MAINTENANCE_BUCKET = "maintenance-media"
+        private const val MAX_ISSUES = 200L
     }
 
     suspend fun fetchIssues(propertyId: UUID): List<MaintenanceIssueRow> =
@@ -48,6 +49,9 @@ class MaintenanceRepository @Inject constructor(
             .select {
                 filter { eq("property_id", propertyId.toString()) }
                 order("created_at", Order.DESCENDING)
+                // Truncate to the most recent N rather than letting a long-term tenant's issue
+                // log grow unbounded; ordering keeps this "most recent first", not an arbitrary cut.
+                limit(MAX_ISSUES)
             }
             .decodeList()
 

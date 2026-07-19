@@ -136,6 +136,8 @@ private struct SavedProofPhotoThumbnails: View {
     let inspectionRepo: InspectionRepository
 
     @State private var previewURLs: [UUID: URL] = [:]
+    /// Signed URL for the grid thumbnail (prefers `thumbnailPath`, falls back to `filePath`'s signed URL).
+    @State private var thumbURLs: [UUID: URL] = [:]
     @State private var signedURLFailedIds: Set<UUID> = []
     @State private var imageRenderFailedIds: Set<UUID> = []
     @State private var renderNonce: [UUID: Int] = [:]
@@ -180,6 +182,7 @@ private struct SavedProofPhotoThumbnails: View {
             imageRenderFailedIds = []
             renderNonce = [:]
             previewURLs = [:]
+            thumbURLs = [:]
             await loadThumbs()
         }
         .onChange(of: evidence.photos.count) { _, _ in
@@ -187,6 +190,7 @@ private struct SavedProofPhotoThumbnails: View {
             imageRenderFailedIds = []
             renderNonce = [:]
             previewURLs = [:]
+            thumbURLs = [:]
             Task { await loadThumbs() }
         }
         .fullScreenCover(item: $previewItem) { item in
@@ -216,21 +220,32 @@ private struct SavedProofPhotoThumbnails: View {
             } else if let url = previewURLs[photo.id] {
                 let nonce = renderNonce[photo.id, default: 0]
                 Button {
+                    // Full-screen preview always uses the full-size `filePath` (via `url`, its signed URL) — never the thumbnail.
                     previewItem = PhotoPreviewItem(id: photo.id, url: url, filePath: photo.filePath)
                 } label: {
-                    LazyImage(url: url, resizingMode: .aspectFill)
-                        .onFailure { _ in
-                            Task { @MainActor in
-                                imageRenderFailedIds.insert(photo.id)
-                            }
+                    MMCachedAsyncImage(
+                        path: photo.thumbnailPath ?? photo.filePath,
+                        signedURL: thumbURLs[photo.id] ?? url
+                    ) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .onAppear {
+                                    Task { @MainActor in imageRenderFailedIds.remove(photo.id) }
+                                }
+                        case .failure:
+                            Color.clear
+                                .onAppear {
+                                    Task { @MainActor in imageRenderFailedIds.insert(photo.id) }
+                                }
+                        case .empty:
+                            MoveMarkTheme.Colors.mint.opacity(0.5)
                         }
-                        .onSuccess { _ in
-                            Task { @MainActor in
-                                imageRenderFailedIds.remove(photo.id)
-                            }
-                        }
-                        .frame(width: 76, height: 76)
-                        .clipped()
+                    }
+                    .frame(width: 76, height: 76)
+                    .clipped()
                 }
                 .buttonStyle(.plain)
                 .id("\(photo.id.uuidString)-\(nonce)")
@@ -276,20 +291,32 @@ private struct SavedProofPhotoThumbnails: View {
     private func resolveSignedURL(for photo: EvidencePhoto) async {
         do {
             let url = try await inspectionRepo.signedURL(bucket: "inspection-media", path: photo.filePath)
+            // Grid thumbnail prefers the small `thumbnailPath`; falls back to the full-size URL when absent
+            // (pre-existing rows) or if signing the thumbnail path itself fails.
+            var gridURL = url
+            if let thumbPath = photo.thumbnailPath, thumbPath != photo.filePath,
+               let thumbURL = try? await inspectionRepo.signedURL(bucket: "inspection-media", path: thumbPath) {
+                gridURL = thumbURL
+            }
             await MainActor.run {
                 previewURLs[photo.id] = url
+                thumbURLs[photo.id] = gridURL
                 signedURLFailedIds.remove(photo.id)
             }
         } catch {
             await MainActor.run {
                 signedURLFailedIds.insert(photo.id)
                 previewURLs.removeValue(forKey: photo.id)
+                thumbURLs.removeValue(forKey: photo.id)
             }
         }
     }
 
     private func retrySignedURL(for photo: EvidencePhoto) async {
         await MoveMarkSignedURLCache.shared.invalidate(bucket: "inspection-media", path: photo.filePath)
+        if let thumbPath = photo.thumbnailPath {
+            await MoveMarkSignedURLCache.shared.invalidate(bucket: "inspection-media", path: thumbPath)
+        }
         await MainActor.run {
             signedURLFailedIds.remove(photo.id)
             imageRenderFailedIds.remove(photo.id)
@@ -300,6 +327,9 @@ private struct SavedProofPhotoThumbnails: View {
     private func retryImageRender(for photo: EvidencePhoto, url: URL) async {
         _ = url
         await MoveMarkSignedURLCache.shared.invalidate(bucket: "inspection-media", path: photo.filePath)
+        if let thumbPath = photo.thumbnailPath {
+            await MoveMarkSignedURLCache.shared.invalidate(bucket: "inspection-media", path: thumbPath)
+        }
         await MainActor.run {
             imageRenderFailedIds.remove(photo.id)
             renderNonce[photo.id, default: 0] += 1

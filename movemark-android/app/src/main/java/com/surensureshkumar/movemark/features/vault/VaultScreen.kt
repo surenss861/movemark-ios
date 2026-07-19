@@ -58,6 +58,7 @@ fun VaultScreen(
     val hasPro by viewModel.hasPro.collectAsState()
     val propertyCount by viewModel.propertyCount.collectAsState()
     val previewImageUrl by viewModel.previewImageUrl.collectAsState()
+    val previewImagePath by viewModel.previewImagePath.collectAsState()
     val reduceMotion = MMMotion.rememberReduceMotion()
     var hasAnimatedIn by remember { mutableStateOf(reduceMotion) }
 
@@ -144,6 +145,7 @@ fun VaultScreen(
                     },
                     reduceMotion = reduceMotion,
                     previewImageUrl = previewImageUrl,
+                    previewImagePath = previewImagePath,
                     modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "vaultHero"),
                 )
 

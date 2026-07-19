@@ -39,6 +39,11 @@ class VaultViewModel @Inject constructor(
     private val _previewImageUrl = MutableStateFlow<String?>(null)
     val previewImageUrl: StateFlow<String?> = _previewImageUrl.asStateFlow()
 
+    // Stable storage path backing previewImageUrl -- used only to cache-key the AsyncImage request
+    // (see rememberSignedImageRequest) so a re-mint of the signed URL doesn't force a re-download.
+    private val _previewImagePath = MutableStateFlow<String?>(null)
+    val previewImagePath: StateFlow<String?> = _previewImagePath.asStateFlow()
+
     init {
         viewModelScope.launch {
             property.collect { record ->
@@ -56,12 +61,14 @@ class VaultViewModel @Inject constructor(
 
     private suspend fun refreshPreviewUrl(property: PropertyRecord?) {
         _previewImageUrl.value = null
+        _previewImagePath.value = null
         if (property == null || RoomProofMetrics.documentedCount(property) <= 0) return
         val path = RoomProofMetrics.firstPreviewPhotoPath(property) ?: return
         runCatching {
             inspectionRepository.signedUrl(path)
         }.onSuccess { url ->
             _previewImageUrl.value = url
+            _previewImagePath.value = path
         }
     }
 }

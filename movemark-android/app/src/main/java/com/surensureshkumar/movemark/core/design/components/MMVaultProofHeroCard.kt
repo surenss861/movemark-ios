@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMMotion
+import com.surensureshkumar.movemark.core.util.rememberSignedImageRequest
 
 private val ProofThumbnailBrightness = ColorMatrix(
     floatArrayOf(
@@ -57,6 +58,7 @@ fun MMVaultProofHeroCard(
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
     previewImageUrl: String? = null,
+    previewImagePath: String? = null,
 ) {
     val clamped = progress.coerceIn(0f, 1f)
     val progressWidth by animateFloatAsState(
@@ -77,7 +79,7 @@ fun MMVaultProofHeroCard(
             ) {
                 if (!previewImageUrl.isNullOrBlank()) {
                     AsyncImage(
-                        model = previewImageUrl,
+                        model = rememberSignedImageRequest(previewImageUrl, previewImagePath),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         colorFilter = ColorFilter.colorMatrix(ProofThumbnailBrightness),

@@ -4,8 +4,11 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.room.Room
 import com.surensureshkumar.movemark.BuildConfig
 import com.surensureshkumar.movemark.data.auth.ProfileRepository
+import com.surensureshkumar.movemark.data.cache.MoveMarkDatabase
+import com.surensureshkumar.movemark.data.cache.PropertySnapshotDao
 import com.surensureshkumar.movemark.data.property.InspectionRepository
 import com.surensureshkumar.movemark.data.property.MaintenanceRepository
 import com.surensureshkumar.movemark.data.property.PropertyRepository
@@ -19,6 +22,7 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.storage.Storage
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -47,8 +51,23 @@ object AppModule {
             install(Auth)
             install(Postgrest)
             install(Storage)
+            install(Realtime)
         }
     }
+
+    @Provides
+    @Singleton
+    fun provideMoveMarkDatabase(@ApplicationContext context: Context): MoveMarkDatabase =
+        Room.databaseBuilder(context, MoveMarkDatabase::class.java, "movemark_cache.db")
+            // This is a best-effort local cache of server data (not a source of truth), so wiping
+            // it on a schema bump is fine -- it just repopulates on the next successful hydrate.
+            .fallbackToDestructiveMigration()
+            .build()
+
+    @Provides
+    @Singleton
+    fun providePropertySnapshotDao(database: MoveMarkDatabase): PropertySnapshotDao =
+        database.propertySnapshotDao()
 
     @Provides
     @Singleton

@@ -49,8 +49,9 @@ struct MaintenanceIssueDetailContainerView: View {
             return
         }
         do {
-            let issues = try await repo.fetchIssues(propertyId: property.id)
-            issue = issues.first(where: { $0.id == issueID })
+            let found = try await repo.fetchIssue(id: issueID)
+            // Guard against a stale link to a different property's issue.
+            issue = found?.propertyId == property.id ? found : nil
             if issue == nil { loadError = MoveMarkFlowMessage.maintenanceIssueNotFound }
         } catch {
             loadError = MoveMarkFlowMessage.maintenanceIssueLookupFailed(error)

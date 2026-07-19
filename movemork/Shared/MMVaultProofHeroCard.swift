@@ -13,6 +13,7 @@ struct MMVaultProofHeroCard: View {
     let progressLine: String
     let nextLine: String
     let progress: Double
+    var previewPath: String? = nil
     var previewURL: URL? = nil
     let primaryTitle: String
     let onPrimary: () -> Void
@@ -73,7 +74,7 @@ struct MMVaultProofHeroCard: View {
     private var proofThumbnail: some View {
         Group {
             if let previewURL {
-                AsyncImage(url: previewURL) { phase in
+                MMCachedAsyncImage(path: previewPath, signedURL: previewURL) { phase in
                     switch phase {
                     case .success(let image):
                         image
@@ -82,7 +83,7 @@ struct MMVaultProofHeroCard: View {
                             .scaleEffect(1.14)
                             .brightness(0.06)
                             .contrast(1.06)
-                    default:
+                    case .empty, .failure:
                         thumbnailPlaceholder
                     }
                 }

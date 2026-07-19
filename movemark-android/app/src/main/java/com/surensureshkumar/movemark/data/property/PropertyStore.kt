@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import android.util.Log
 import com.surensureshkumar.movemark.core.util.MMUserMessages
+import com.surensureshkumar.movemark.core.util.thumbnailPathFor
+import com.surensureshkumar.movemark.core.util.toThumbnailJpeg
 import com.surensureshkumar.movemark.data.models.CreatePropertyInput
 import com.surensureshkumar.movemark.data.models.EvidenceRecord
 import com.surensureshkumar.movemark.data.models.MaintenanceRecord
@@ -59,13 +61,15 @@ class PropertyStore @Inject constructor(
 
     private fun activeKey(userId: UUID) = stringPreferencesKey("active_property_${userId}")
 
-    fun clear() {
+    /** Call on sign-out to prevent stale data — including the offline snapshot cache — from showing for a different user. */
+    suspend fun clear() {
         _currentProperty.value = null
         _properties.value = emptyList()
         _activePropertyId.value = null
         _errorMessage.value = null
         _hasCompletedInitialFetch.value = false
         _maintenanceLog.value = emptyList()
+        hydrator.clearCache()
     }
 
     suspend fun fetchAll(userId: UUID) {
@@ -86,8 +90,20 @@ class PropertyStore @Inject constructor(
             _activePropertyId.value = targetId
             dataStore.edit { it[activeKey(userId)] = targetId.toString() }
             val row = fetched.first { it.id == targetId.toString() }
-            _currentProperty.value = hydrator.hydrate(row)
-            _errorMessage.value = null
+
+            // Instant local read so the UI isn't blank while the network hydrate below is in
+            // flight -- see PropertySnapshotCache. No-op (returns null) if nothing's cached yet.
+            hydrator.hydrateFromCache(row)?.let { cached -> _currentProperty.value = cached }
+
+            try {
+                _currentProperty.value = hydrator.hydrate(row)
+                _errorMessage.value = null
+            } catch (e: Exception) {
+                Log.e("PropertyStore", "fetchAll hydrate failed", e)
+                _errorMessage.value = MMUserMessages.loadRentals(e)
+                // Keep showing the cached/previous property rather than blanking the screen over
+                // a failed refresh -- only a listing failure (outer catch) clears it.
+            }
             refreshMaintenance(targetId)
         } catch (e: Exception) {
             Log.e("PropertyStore", "fetchAll failed", e)
@@ -133,10 +149,14 @@ class PropertyStore @Inject constructor(
         _errorMessage.value = null
         try {
             dataStore.edit { it[activeKey(userId)] = propertyId.toString() }
+            // Instant local read first (see fetchAll's comment), then refresh from network.
+            hydrator.hydrateFromCache(row)?.let { cached -> _currentProperty.value = cached }
             _currentProperty.value = hydrator.hydrate(row)
         } catch (e: Exception) {
             Log.e("PropertyStore", "activateProperty failed", e)
             _errorMessage.value = MMUserMessages.activateRental(e)
+            // Keep whatever's currently shown (cached snapshot or the previously-active property)
+            // instead of blanking the screen over a failed refresh.
         } finally {
             _isLoading.value = false
         }
@@ -220,10 +240,16 @@ class PropertyStore @Inject constructor(
             "${context.userId}/${context.propertyId}/${context.proofPhase.storageFolder}/${context.roomId}/${UUID.randomUUID()}.jpg"
         return try {
             inspectionRepository.uploadPhoto(photo, path)
+            // Thumbnail is a best-effort enhancement (grid loading only) -- its failure shouldn't
+            // fail the evidence save, which is why it's uploaded after the full-size photo lands.
+            val thumbPath = thumbnailPathFor(path)
+            val thumbBytes = photo.toThumbnailJpeg()
+            val thumbUploaded = thumbBytes != null && inspectionRepository.uploadThumbnail(thumbBytes, thumbPath)
             inspectionRepository.insertEvidenceFile(
                 context.propertyId,
                 context.inspectionItemId,
                 path,
+                thumbnailPath = if (thumbUploaded) thumbPath else null,
             )
             true
         } catch (e: Exception) {
