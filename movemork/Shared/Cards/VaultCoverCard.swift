@@ -126,7 +126,7 @@ struct VaultCoverCard: View {
             }
         } label: {
             Image(systemName: "chevron.down")
-                .font(.system(size: 9, weight: .medium))
+                .font(MoveMarkTheme.Typography.microLabel)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 .animation(MMMotion.expand, value: isExpanded)

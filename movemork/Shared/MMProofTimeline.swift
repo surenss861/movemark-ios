@@ -118,13 +118,13 @@ struct MMProofTimeline: View {
 
                     if let timestamp = row.timestamp, !timestamp.isEmpty {
                         Text(timestamp)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(MoveMarkTheme.Typography.tinyMedium)
                             .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.75))
                     }
                 }
 
                 Text(row.message)
-                    .font(.system(size: 13, weight: .regular))
+                    .font(MoveMarkTheme.Typography.footnoteRegular)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

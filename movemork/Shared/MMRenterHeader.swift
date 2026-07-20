@@ -18,7 +18,7 @@ struct MMRenterHeader: View {
             VStack(alignment: .leading, spacing: 6) {
                 if let eyebrow, !eyebrow.isEmpty {
                     Text(eyebrow.uppercased())
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.tinyEmphasis)
                         .tracking(0.8)
                         .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                 }
@@ -40,7 +40,7 @@ struct MMRenterHeader: View {
             if let onAdd {
                 Button(action: onAdd) {
                     Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.bodySmallEmphasis)
                         .foregroundStyle(MoveMarkTheme.Colors.textOnPrimary)
                         .frame(width: 36, height: 36)
                         .background(MoveMarkTheme.Colors.primary.opacity(0.92))

@@ -38,14 +38,14 @@ struct VaultCoverBottomBand: View {
 
             if !city.isEmpty {
                 Text(city)
-                    .font(.system(size: isEmphasized ? 11.5 : 11, weight: .regular))
+                    .font(MoveMarkTheme.Typography.tiny)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     .lineLimit(1)
             }
 
             if let headline = workflowHeadline, !headline.isEmpty {
                 Text(headline)
-                    .font(.system(size: isEmphasized ? 14 : 12, weight: .semibold))
+                    .font(isEmphasized ? MoveMarkTheme.Typography.detailEmphasis : MoveMarkTheme.Typography.captionEmphasis)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                     .lineLimit(2)
@@ -54,7 +54,7 @@ struct VaultCoverBottomBand: View {
 
             if let metrics = proofMetricsLine, !metrics.isEmpty {
                 Text(metrics)
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(MoveMarkTheme.Typography.tinyMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textDarkGreen)
                     .lineLimit(2)
             }
@@ -89,7 +89,7 @@ struct VaultCoverBottomBand: View {
                     .padding(.top, 5)
 
                 Text(line)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.footnoteEmphasis)
                     .foregroundStyle(MoveMarkTheme.Colors.textDarkGreen)
                     .fixedSize(horizontal: false, vertical: true)
                     .lineLimit(2)
@@ -105,7 +105,7 @@ struct VaultCoverBottomBand: View {
     @ViewBuilder
     private var ctaView: some View {
         Text(ctaTitle ?? "Open")
-            .font(.system(size: isEmphasized ? 12.5 : 11, weight: .semibold))
+            .font(isEmphasized ? MoveMarkTheme.Typography.footnoteEmphasis : MoveMarkTheme.Typography.tinyEmphasis)
             .foregroundStyle(isEmphasized ? MoveMarkTheme.Colors.textOnPrimary : MoveMarkTheme.Colors.textDarkGreen)
             .padding(.horizontal, isEmphasized ? 14 : 10)
             .padding(.vertical, isEmphasized ? 7 : 5)

@@ -40,7 +40,7 @@ struct EvidenceCaptureBottomSaveBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(statusLine)
-                .font(.system(size: 13, weight: .semibold))
+                .font(MoveMarkTheme.Typography.footnoteEmphasis)
                 .foregroundStyle(statusColor)
                 .animation(MMMotion.fastFade, value: didJustSave)
                 .animation(MMMotion.fastFade, value: isUploading)

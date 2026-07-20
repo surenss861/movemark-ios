@@ -23,7 +23,7 @@ struct MMRoomProgressCard: View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Room proof")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.captionEmphasis)
                     .foregroundStyle(MoveMarkTheme.Colors.textMuted)
 
                 Text(headline)

@@ -29,7 +29,7 @@ struct MMVaultProofHeroCard: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(propertyName)
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.subtitleLarge)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                         .lineLimit(2)
 
@@ -41,7 +41,7 @@ struct MMVaultProofHeroCard: View {
                     }
 
                     Text(progressLine)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(MoveMarkTheme.Typography.subheadlineMedium)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         .padding(.top, 2)
 
@@ -109,7 +109,7 @@ struct MMVaultProofHeroCard: View {
             MoveMarkTheme.Colors.artifactPaper.opacity(0.22)
             MoveMarkTheme.Colors.fieldFill.opacity(0.88)
             Image(systemName: "camera.fill")
-                .font(.system(size: 24, weight: .medium))
+                .font(MoveMarkTheme.Typography.cardTitle)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.82))
         }
     }

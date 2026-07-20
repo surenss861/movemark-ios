@@ -81,7 +81,7 @@ struct PropertyVaultSecondaryTools: View {
                             .frame(width: 36, height: 36)
 
                         Image(systemName: systemImage)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(MoveMarkTheme.Typography.detailEmphasis)
                             .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.88))
                     }
 
@@ -101,7 +101,7 @@ struct PropertyVaultSecondaryTools: View {
                         .lineLimit(1)
 
                     Text(subtitle)
-                        .font(.system(size: 12.5, weight: .regular))
+                        .font(MoveMarkTheme.Typography.caption)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.8))
                         .lineLimit(2)
                         .frame(minHeight: 30, alignment: .topLeading)

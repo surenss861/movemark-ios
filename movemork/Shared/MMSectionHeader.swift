@@ -14,7 +14,7 @@ struct MMSectionHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 22, weight: .bold))
+                .font(MoveMarkTheme.Typography.cardTitle)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
             if let subtitle {

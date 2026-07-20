@@ -69,7 +69,7 @@ struct MMTabBar: View {
                     )
 
                 Text(title)
-                    .font(.system(size: 10.5, weight: isSelected ? .semibold : .medium))
+                    .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
                     .foregroundStyle(
                         isSelected
                             ? MoveMarkTheme.Colors.textOnPrimary

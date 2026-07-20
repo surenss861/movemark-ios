@@ -18,7 +18,7 @@ struct VaultCoverExpandedTray: View {
             progressBar
             if let next = content.nextRoomLine, !next.isEmpty {
                 Text(next)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MoveMarkTheme.Typography.tinyMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
             }
             primaryAction
@@ -40,7 +40,7 @@ struct VaultCoverExpandedTray: View {
                 Text(last)
             }
         }
-        .font(.system(size: 9, weight: .medium))
+        .font(MoveMarkTheme.Typography.microLabel)
         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
         .lineLimit(1)
     }
@@ -63,7 +63,7 @@ struct VaultCoverExpandedTray: View {
     private var primaryAction: some View {
         Button(action: content.onPrimaryAction) {
             Text(content.primaryActionTitle)
-                .font(.system(size: 13, weight: .semibold))
+                .font(MoveMarkTheme.Typography.footnoteEmphasis)
                 .foregroundStyle(MoveMarkTheme.Colors.textOnPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)

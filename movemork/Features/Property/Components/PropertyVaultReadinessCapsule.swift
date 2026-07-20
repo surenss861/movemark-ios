@@ -15,7 +15,7 @@ struct PropertyVaultReadinessCapsule: View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Dispute readiness")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.tinyEmphasis)
                     .tracking(0.8)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     .textCase(.uppercase)
@@ -26,7 +26,7 @@ struct PropertyVaultReadinessCapsule: View {
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
                     Text(readinessBand)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.footnoteEmphasis)
                         .foregroundStyle(
                             readinessScore >= 70
                                 ? MoveMarkTheme.Colors.primary

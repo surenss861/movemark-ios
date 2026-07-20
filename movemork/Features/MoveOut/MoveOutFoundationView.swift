@@ -249,7 +249,7 @@ struct MoveOutFoundationView: View {
                 if !conditionDeltaText.isEmpty {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.left.arrow.right")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(MoveMarkTheme.Typography.tinyMedium)
                         Text(conditionDeltaText)
                             .font(MoveMarkTheme.Typography.footnote)
                             .foregroundStyle(MoveMarkTheme.Colors.textSecondary)

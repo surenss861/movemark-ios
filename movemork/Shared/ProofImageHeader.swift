@@ -91,7 +91,7 @@ struct ProofPhotoPane: View {
         ZStack {
             MoveMarkTheme.Colors.fieldFill.opacity(0.95)
             Image(systemName: "camera.fill")
-                .font(.system(size: 22, weight: .medium))
+                .font(MoveMarkTheme.Typography.cardTitle)
                 .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.7))
         }
     }
@@ -142,20 +142,20 @@ struct ProofPhotoPane: View {
                                             .frame(width: 8, height: 8)
                                             .overlay(Circle().stroke(Color.white.opacity(0.4), lineWidth: 0.5))
                                         Text(roomName)
-                                            .font(.system(size: 15, weight: .bold))
+                                            .font(MoveMarkTheme.Typography.subheadlineMedium)
                                             .foregroundStyle(Color.white)
                                     }
                                 }
                                 if let phaseLabel {
                                     Text(phaseLabel)
-                                        .font(.system(size: 11, weight: .semibold))
+                                        .font(MoveMarkTheme.Typography.tinyEmphasis)
                                         .foregroundStyle(Color.white.opacity(0.88))
                                 }
                             }
                             Spacer(minLength: 8)
                             if let phaseBadge {
                                 Text(phaseBadge)
-                                    .font(.system(size: 10, weight: .semibold))
+                                    .font(MoveMarkTheme.Typography.microLabel)
                                     .foregroundStyle(Color.white.opacity(0.95))
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 5)

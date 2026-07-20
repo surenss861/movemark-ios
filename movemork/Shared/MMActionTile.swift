@@ -74,7 +74,7 @@ struct MMActionTile: View {
                         .frame(width: isPrimary ? 30 : 26, height: isPrimary ? 30 : 26)
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.tinyEmphasis)
                         .foregroundStyle(isPrimary ? tint : MoveMarkTheme.Colors.textSecondary.opacity(0.62))
                 }
             }

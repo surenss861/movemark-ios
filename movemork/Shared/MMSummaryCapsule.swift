@@ -14,7 +14,7 @@ struct MMSummaryCapsule: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(value)
-                .font(.system(size: 13, weight: .semibold))
+                .font(MoveMarkTheme.Typography.footnoteEmphasis)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
             Text(label)

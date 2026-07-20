@@ -20,7 +20,7 @@ struct DocumentStatusRow: View {
                     .frame(width: 42, height: 42)
 
                 Image(systemName: isPresent ? "doc.fill" : "doc")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.bodySmallEmphasis)
                     .foregroundStyle(isPresent ? MoveMarkTheme.Colors.primary : MoveMarkTheme.Colors.textSecondary)
             }
 

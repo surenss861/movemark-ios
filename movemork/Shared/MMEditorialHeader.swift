@@ -34,7 +34,7 @@ struct MMEditorialHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(eyebrow)
-                .font(.system(size: 11, weight: .bold))
+                .font(MoveMarkTheme.Typography.tinyEmphasis)
                 .tracking(1.2)
                 .foregroundStyle(eyebrowColor)
 

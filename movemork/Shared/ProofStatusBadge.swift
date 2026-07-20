@@ -18,7 +18,7 @@ struct ProofStatusBadge: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11, weight: .semibold))
+            .font(MoveMarkTheme.Typography.tinyEmphasis)
             .foregroundStyle(foreground)
             .padding(.horizontal, 9)
             .padding(.vertical, 5)

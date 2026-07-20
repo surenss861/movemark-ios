@@ -14,7 +14,7 @@ struct MMSettingsSectionHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(MoveMarkTheme.Typography.footnoteEmphasis)
                 .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                 .textCase(.uppercase)
                 .padding(.leading, 2)
@@ -82,13 +82,13 @@ struct MMSettingsRow: View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: subtitle == nil ? 0 : 2) {
                 Text(title)
-                    .font(.system(size: 16, weight: .regular))
+                    .font(MoveMarkTheme.Typography.bodySmallEmphasis)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .lineLimit(1)
 
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.system(size: 13, weight: .regular))
+                        .font(MoveMarkTheme.Typography.footnoteRegular)
                         .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
@@ -111,11 +111,11 @@ struct MMSettingsRow: View {
             EmptyView()
         case .chevron:
             Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
+                .font(MoveMarkTheme.Typography.captionEmphasis)
                 .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.7))
         case .external:
             Image(systemName: "arrow.up.right")
-                .font(.system(size: 11, weight: .semibold))
+                .font(MoveMarkTheme.Typography.tinyEmphasis)
                 .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.7))
         case .value(let text):
             Text(text)

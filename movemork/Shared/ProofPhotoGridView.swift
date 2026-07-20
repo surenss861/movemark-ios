@@ -39,11 +39,11 @@ struct ProofPhotoGridView: View {
     private var emptyState: some View {
         VStack(spacing: 10) {
             Image(systemName: "camera")
-                .font(.system(size: 24, weight: .medium))
+                .font(MoveMarkTheme.Typography.cardTitle)
                 .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.72))
 
             Text("Add photos to create proof for this room.")
-                .font(.system(size: 14, weight: .medium))
+                .font(MoveMarkTheme.Typography.detailMedium)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 .multilineTextAlignment(.center)
         }

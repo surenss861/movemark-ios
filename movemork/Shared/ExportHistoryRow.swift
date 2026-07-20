@@ -28,7 +28,7 @@ struct ExportHistoryRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(MoveMarkTheme.Typography.detailMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .lineLimit(1)
 

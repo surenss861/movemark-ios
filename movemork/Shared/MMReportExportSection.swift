@@ -25,13 +25,13 @@ struct MMReportExportSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(sectionTitle)
-                .font(.system(size: 13, weight: .semibold))
+                .font(MoveMarkTheme.Typography.footnoteEmphasis)
                 .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                 .padding(.leading, 2)
 
             if let sectionSubtitle, !sectionSubtitle.isEmpty {
                 Text(sectionSubtitle)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(MoveMarkTheme.Typography.detailMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
             }
 

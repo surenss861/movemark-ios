@@ -38,7 +38,7 @@ struct PropertyVaultHeroStage: View {
 
             if let line = contextLine, !line.isEmpty {
                 Text(line)
-                    .font(.system(size: 13, weight: .regular))
+                    .font(MoveMarkTheme.Typography.footnoteRegular)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.75))
                     .lineLimit(1)
             }
@@ -50,7 +50,7 @@ struct PropertyVaultHeroStage: View {
             if let next = nextRoomName, !next.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                totalRooms > 0, documentedRooms < totalRooms {
                 Text("Next: \(next)")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(MoveMarkTheme.Typography.detailMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.92))
             }
 
@@ -60,7 +60,7 @@ struct PropertyVaultHeroStage: View {
                         ? "Add your lease or deposit receipt when you can."
                         : "A few supporting records are still missing."
                 )
-                .font(.system(size: 13, weight: .regular))
+                .font(MoveMarkTheme.Typography.footnoteRegular)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.85))
             }
         }
@@ -93,7 +93,7 @@ struct PropertyVaultHeroStage: View {
     @ViewBuilder
     private func titleView(namespace: Namespace.ID?) -> some View {
         let baseTitle = Text(displayTitle)
-            .font(.system(size: 22, weight: .bold))
+            .font(MoveMarkTheme.Typography.cardTitle)
             .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
             .lineLimit(2)
             .minimumScaleFactor(0.88)

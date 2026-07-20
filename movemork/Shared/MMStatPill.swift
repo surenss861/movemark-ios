@@ -14,11 +14,11 @@ struct MMStatPill: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value)
-                .font(.system(size: 16, weight: .semibold))
+                .font(MoveMarkTheme.Typography.bodySmallEmphasis)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
             Text(label)
-                .font(.system(size: 11, weight: .bold))
+                .font(MoveMarkTheme.Typography.tinyEmphasis)
                 .tracking(0.8)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 .textCase(.uppercase)

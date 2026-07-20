@@ -180,7 +180,7 @@ struct MMProofToast: View {
 
                 if let subtitle = message.message, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.system(size: 13, weight: .regular))
+                        .font(MoveMarkTheme.Typography.footnoteRegular)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

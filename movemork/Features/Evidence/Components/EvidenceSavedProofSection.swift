@@ -115,7 +115,7 @@ struct EvidenceSavedProofSection: View {
                     Button("Delete") {
                         onDelete(evidence)
                     }
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.footnoteEmphasis)
                     .foregroundStyle(MoveMarkTheme.Colors.semanticDanger)
                 }
             }
@@ -163,7 +163,7 @@ private struct SavedProofPhotoThumbnails: View {
                         }
                         if evidence.photos.count > 4 {
                             Text("+\(evidence.photos.count - 4)")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(MoveMarkTheme.Typography.captionEmphasis)
                                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.88))
                                 .frame(width: 48, height: 76)
                                 .background(MoveMarkTheme.Colors.fieldFill.opacity(0.88))
@@ -269,10 +269,10 @@ private struct SavedProofPhotoThumbnails: View {
             .overlay {
                 VStack(spacing: 4) {
                     Image(systemName: systemName)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.bodySmallEmphasis)
                         .foregroundStyle(MoveMarkTheme.Colors.primary)
                     Text(caption)
-                        .font(.system(size: 9, weight: .medium))
+                        .font(MoveMarkTheme.Typography.microLabel)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         .multilineTextAlignment(.center)
                         .lineLimit(3)

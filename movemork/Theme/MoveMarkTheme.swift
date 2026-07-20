@@ -110,7 +110,19 @@ enum MoveMarkTheme {
         static var subheadlineMedium: Font { .system(size: scaled(15, for: .subheadline), weight: .semibold) }
         static var button: Font { .system(size: scaled(17, for: .callout), weight: .semibold) }
         static var footnote: Font { .system(size: scaled(13, for: .footnote), weight: .medium) }
+        static var footnoteRegular: Font { .system(size: scaled(13, for: .footnote), weight: .regular) }
+        static var footnoteEmphasis: Font { .system(size: scaled(13, for: .footnote), weight: .semibold) }
         static var caption: Font { .system(size: scaled(12, for: .caption1), weight: .medium) }
+        static var captionEmphasis: Font { .system(size: scaled(12, for: .caption1), weight: .semibold) }
+        static var subtitleLarge: Font { .system(size: scaled(20, for: .title3), weight: .semibold) }
+        static var bodySmallEmphasis: Font { .system(size: scaled(16, for: .callout), weight: .semibold) }
+        static var detail: Font { .system(size: scaled(14, for: .footnote), weight: .regular) }
+        static var detailMedium: Font { .system(size: scaled(14, for: .footnote), weight: .medium) }
+        static var detailEmphasis: Font { .system(size: scaled(14, for: .footnote), weight: .semibold) }
+        static var tiny: Font { .system(size: scaled(11, for: .caption2), weight: .regular) }
+        static var tinyMedium: Font { .system(size: scaled(11, for: .caption2), weight: .medium) }
+        static var tinyEmphasis: Font { .system(size: scaled(11, for: .caption2), weight: .semibold) }
+        static var microLabel: Font { .system(size: scaled(10, for: .caption2), weight: .semibold) }
         #else
         static let hero: Font = .system(size: 36, weight: .bold)
         static let heroLarge: Font = .system(size: 38, weight: .bold)
@@ -125,7 +137,19 @@ enum MoveMarkTheme {
         static let subheadlineMedium: Font = .system(size: 15, weight: .semibold)
         static let button: Font = .system(size: 17, weight: .semibold)
         static let footnote: Font = .system(size: 13, weight: .medium)
+        static let footnoteRegular: Font = .system(size: 13, weight: .regular)
+        static let footnoteEmphasis: Font = .system(size: 13, weight: .semibold)
         static let caption: Font = .system(size: 12, weight: .medium)
+        static let captionEmphasis: Font = .system(size: 12, weight: .semibold)
+        static let subtitleLarge: Font = .system(size: 20, weight: .semibold)
+        static let bodySmallEmphasis: Font = .system(size: 16, weight: .semibold)
+        static let detail: Font = .system(size: 14, weight: .regular)
+        static let detailMedium: Font = .system(size: 14, weight: .medium)
+        static let detailEmphasis: Font = .system(size: 14, weight: .semibold)
+        static let tiny: Font = .system(size: 11, weight: .regular)
+        static let tinyMedium: Font = .system(size: 11, weight: .medium)
+        static let tinyEmphasis: Font = .system(size: 11, weight: .semibold)
+        static let microLabel: Font = .system(size: 10, weight: .semibold)
         #endif
     }
 }

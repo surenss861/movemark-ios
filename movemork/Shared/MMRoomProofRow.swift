@@ -105,7 +105,7 @@ struct MMRoomProofRow: View {
                 .frame(width: 34, height: 34)
 
             Text("\(index)")
-                .font(.system(size: 13, weight: .semibold))
+                .font(MoveMarkTheme.Typography.footnoteEmphasis)
                 .foregroundStyle(
                     isNext
                         ? MoveMarkTheme.Colors.primary

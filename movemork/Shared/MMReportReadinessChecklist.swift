@@ -14,7 +14,7 @@ struct MMReportReadinessChecklist: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Proof checklist")
-                .font(.system(size: 13, weight: .semibold))
+                .font(MoveMarkTheme.Typography.footnoteEmphasis)
                 .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                 .padding(.leading, 2)
 
@@ -39,7 +39,7 @@ struct MMReportReadinessChecklist: View {
     private func checklistRow(_ item: MMProofChecklistItem) -> some View {
         HStack(alignment: .center, spacing: 10) {
             Image(systemName: iconName(for: item.state))
-                .font(.system(size: 13, weight: .semibold))
+                .font(MoveMarkTheme.Typography.footnoteEmphasis)
                 .foregroundStyle(iconColor(for: item.state))
                 .frame(width: 18, height: 18)
                 .contentTransition(.symbolEffect(.replace))
@@ -47,7 +47,7 @@ struct MMReportReadinessChecklist: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(MoveMarkTheme.Typography.detailMedium)
                     .foregroundStyle(
                         item.state == .locked
                             ? MoveMarkTheme.Colors.textMuted
@@ -55,7 +55,7 @@ struct MMReportReadinessChecklist: View {
                     )
 
                 Text(item.detail)
-                    .font(.system(size: 12, weight: .regular))
+                    .font(MoveMarkTheme.Typography.caption)
                     .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                     .lineLimit(2)
             }

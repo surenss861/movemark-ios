@@ -21,18 +21,18 @@ struct PropertyVaultRoomQueue: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Rooms")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(MoveMarkTheme.Typography.captionEmphasis)
                         .tracking(0.8)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         .textCase(.uppercase)
 
                     Text("\(completedRooms) of \(totalRooms) documented")
-                        .font(.system(size: 14, weight: .regular))
+                        .font(MoveMarkTheme.Typography.detail)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
 
                     if completedRooms < totalRooms {
                         Text("Tap a room to add proof")
-                            .font(.system(size: 11.5, weight: .medium))
+                            .font(MoveMarkTheme.Typography.tinyMedium)
                             .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.62))
                     }
                 }
@@ -40,7 +40,7 @@ struct PropertyVaultRoomQueue: View {
                 Spacer()
 
                 Button("See all", action: onSeeAll)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.detailEmphasis)
                     .foregroundStyle(MoveMarkTheme.Colors.primary)
             }
 

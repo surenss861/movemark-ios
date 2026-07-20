@@ -84,7 +84,7 @@ struct ProofArtifactCard: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 8) {
                 Text("\(model.phaseEyebrow.uppercased()) · \(model.phaseLabel.uppercased())")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.microLabel)
                     .tracking(0.7)
                     .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                     .lineLimit(1)
@@ -127,7 +127,7 @@ struct ProofArtifactCard: View {
                         MoveMarkTheme.Colors.fieldFill
                             .overlay {
                                 Image(systemName: "camera.fill")
-                                    .font(.system(size: 28, weight: .medium))
+                                    .font(MoveMarkTheme.Typography.cardValue)
                                     .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.65))
                             }
                     }
@@ -152,7 +152,7 @@ struct ProofArtifactCard: View {
                 HStack(spacing: 6) {
                     ForEach(Array(model.issueTags.prefix(2).enumerated()), id: \.offset) { index, tag in
                         Text(tag)
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(MoveMarkTheme.Typography.microLabel)
                             .foregroundStyle(Color.white.opacity(0.95))
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
@@ -182,11 +182,11 @@ struct ProofArtifactCard: View {
                 .padding(.top, 12)
             HStack(alignment: .center, spacing: 8) {
                 Text("\(model.photoCount) photos · \(model.issueCount) issues")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(MoveMarkTheme.Typography.detailMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 Spacer(minLength: 8)
                 Text(model.savedLabel)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.footnoteEmphasis)
                     .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.98))
             }
             .padding(.top, 10)

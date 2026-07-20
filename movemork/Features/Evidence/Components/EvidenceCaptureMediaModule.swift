@@ -47,7 +47,7 @@ struct EvidenceCaptureMediaModule: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("Selected photos")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.footnoteEmphasis)
                     .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                     .padding(.leading, 2)
 

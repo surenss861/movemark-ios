@@ -37,18 +37,18 @@ struct AuthProofVaultStrip: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("Proof vault ready")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.detailEmphasis)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .lineLimit(1)
 
                 Text("Pick up where your room proof left off.")
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(MoveMarkTheme.Typography.caption)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text("Move-in proof · Reports when needed")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MoveMarkTheme.Typography.tinyMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                     .lineLimit(1)
                     .padding(.top, 1)
@@ -77,11 +77,11 @@ struct AuthProofVaultStrip: View {
     private func trustRow(_ label: String) -> some View {
         HStack(alignment: .center, spacing: 8) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(MoveMarkTheme.Typography.footnoteEmphasis)
                 .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.88))
 
             Text(label)
-                .font(.system(size: 12.5, weight: .medium))
+                .font(MoveMarkTheme.Typography.caption)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)

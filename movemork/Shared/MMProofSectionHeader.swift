@@ -57,7 +57,7 @@ struct MMProofHeaderAddButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "plus")
-                .font(.system(size: 16, weight: .medium))
+                .font(MoveMarkTheme.Typography.bodySmallEmphasis)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
                 .frame(width: 38, height: 38)
                 .background(

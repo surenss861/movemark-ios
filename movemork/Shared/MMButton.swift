@@ -131,7 +131,7 @@ struct MMButton: View {
             if showsTrailingArrow {
                 Spacer(minLength: 0)
                 Image(systemName: "arrow.right")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(MoveMarkTheme.Typography.subheadlineMedium)
                     .foregroundStyle(foregroundColor.opacity(0.95))
             }
         }

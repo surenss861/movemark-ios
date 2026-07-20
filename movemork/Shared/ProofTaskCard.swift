@@ -36,7 +36,7 @@ struct ProofTaskCard: View {
                 }
                 if showChevron {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.footnoteEmphasis)
                         .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                 }
             }

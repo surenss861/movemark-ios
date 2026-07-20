@@ -340,7 +340,7 @@ private struct EditEvidenceSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Issue tags")
-                    .font(.system(size: 13.5, weight: .medium))
+                    .font(MoveMarkTheme.Typography.footnote)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.92))
 
                 Text(
@@ -406,11 +406,11 @@ private struct EditEvidenceSheet: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(editPrimaryChromeLine)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.footnoteEmphasis)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
                 Text("Updates this saved proof entry.")
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(MoveMarkTheme.Typography.tinyMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.78))
             }
 
@@ -420,7 +420,7 @@ private struct EditEvidenceSheet: View {
                 Task { await commitSave() }
             } label: {
                 Text(isSaving ? "Saving…" : "Save changes")
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.footnoteEmphasis)
                 .foregroundStyle(MoveMarkTheme.Colors.textOnPrimary)
                 .padding(.horizontal, 16)
                 .frame(height: 40)
@@ -516,7 +516,7 @@ private struct AppendPhotosSheet: View {
                             PhotosPicker(selection: $selectedItems, maxSelectionCount: 20, matching: .images) {
                                 HStack(spacing: 10) {
                                     Image(systemName: "photo.on.rectangle.angled")
-                                        .font(.system(size: 16, weight: .semibold))
+                                        .font(MoveMarkTheme.Typography.bodySmallEmphasis)
                                     Text(loadedImages.isEmpty ? "Choose photos from library" : "\(loadedImages.count) new photo\(loadedImages.count == 1 ? "" : "s") selected")
                                         .font(MoveMarkTheme.Typography.subheadlineMedium)
                                 }
@@ -598,11 +598,11 @@ private struct AppendPhotosSheet: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(bottomPrimaryLine)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.footnoteEmphasis)
                     .foregroundStyle(bottomPrimaryColor)
 
                 Text("Appends to this entry’s gallery.")
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(MoveMarkTheme.Typography.tinyMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.78))
             }
 
@@ -612,7 +612,7 @@ private struct AppendPhotosSheet: View {
                 Task { await commitAppend() }
             } label: {
                 Text(isUploading ? "Adding…" : "Add to entry")
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.footnoteEmphasis)
                     .foregroundStyle(loadedImages.isEmpty ? MoveMarkTheme.Colors.textSecondary : MoveMarkTheme.Colors.textOnPrimary)
                     .padding(.horizontal, 14)
                     .frame(height: 40)

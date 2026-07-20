@@ -57,15 +57,15 @@ struct ProofReceiptStrip<Leading: View>: View {
             }
             HStack(alignment: .center, spacing: 8) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.bodySmallEmphasis)
                     .foregroundStyle(MoveMarkTheme.Colors.primary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(model.savedTitle)
-                        .font(.system(size: 15, weight: .bold))
+                        .font(MoveMarkTheme.Typography.subheadlineMedium)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     if let timestamp = model.timestampLabel {
                         Text(timestamp)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(MoveMarkTheme.Typography.tinyMedium)
                             .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                     }
                 }
@@ -86,7 +86,7 @@ struct ProofReceiptStrip<Leading: View>: View {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(MoveMarkTheme.Colors.primary)
                 Text(model.savedTitle)
-                    .font(.system(size: 15, weight: .bold))
+                    .font(MoveMarkTheme.Typography.subheadlineMedium)
                 Spacer(minLength: 4)
                 if let badge = model.statusBadge {
                     ProofStatusBadge(text: badge, tone: model.statusTone)
@@ -95,7 +95,7 @@ struct ProofReceiptStrip<Leading: View>: View {
             .padding(.top, 10)
             if let timestamp = model.timestampLabel {
                 Text(timestamp)
-                    .font(.system(size: 10.5, weight: .medium))
+                    .font(MoveMarkTheme.Typography.microLabel)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.78))
                     .padding(.top, 5)
             }
@@ -115,7 +115,7 @@ struct ProofReceiptStrip<Leading: View>: View {
                 }
                 if let meta = model.cardMeta {
                     Text(meta)
-                        .font(.system(size: 12.5, weight: .medium))
+                        .font(MoveMarkTheme.Typography.caption)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.8))
                 }
             }

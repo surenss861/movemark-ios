@@ -29,7 +29,7 @@ struct CompactProofRow: View {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.bodySmallEmphasis)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                         .lineLimit(1)
 
@@ -50,7 +50,7 @@ struct CompactProofRow: View {
                 Spacer(minLength: 8)
 
                 Image(systemName: trailingSystemName)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.footnoteEmphasis)
                     .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.85))
             }
             .padding(.horizontal, 16)

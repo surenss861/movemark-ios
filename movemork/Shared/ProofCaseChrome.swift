@@ -26,7 +26,7 @@ struct ProofCaseMetadataRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             Text(eyebrow.uppercased())
-                .font(.system(size: 10, weight: .semibold))
+                .font(MoveMarkTheme.Typography.microLabel)
                 .tracking(0.8)
                 .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                 .lineLimit(1)
@@ -38,7 +38,7 @@ struct ProofCaseMetadataRow: View {
                     ProofStatusBadge(text: statusLabel, tone: statusTone)
                 } else {
                     Text(statusLabel.uppercased())
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.microLabel)
                         .tracking(0.6)
                         .foregroundStyle(statusColor)
                         .lineLimit(1)
@@ -102,11 +102,11 @@ struct ProofCaseReceiptRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(savedTitle)
-                    .font(.system(size: 15, weight: .bold))
+                    .font(MoveMarkTheme.Typography.subheadlineMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 if let timestampLabel {
                     Text(timestampLabel)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MoveMarkTheme.Typography.tinyMedium)
                         .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                 }
             }

@@ -135,12 +135,12 @@ struct RoomStatusCard: View {
                     .frame(width: 26, height: 26)
 
                 Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(MoveMarkTheme.Typography.tinyEmphasis)
                     .foregroundStyle(MoveMarkTheme.Colors.primary)
             }
         } else if isNext {
             Text("NEXT")
-                .font(.system(size: 10, weight: .bold))
+                .font(MoveMarkTheme.Typography.microLabel)
                 .tracking(1.0)
                 .foregroundStyle(MoveMarkTheme.Colors.textOnPrimary)
                 .padding(.horizontal, 8)
@@ -155,7 +155,7 @@ struct RoomStatusCard: View {
         if isDone {
             HStack(spacing: 8) {
                 Text(stateLabel)
-                    .font(.system(size: 14, weight: .regular))
+                    .font(MoveMarkTheme.Typography.detail)
                     .foregroundStyle(
                         needsMoreProof
                             ? MoveMarkTheme.Colors.semanticWarning.opacity(0.92)
@@ -163,12 +163,12 @@ struct RoomStatusCard: View {
                     )
 
                 Text("\(photoCount) photos")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.detailEmphasis)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.82))
 
                 if issueCount > 0 {
                     Text("\(issueCount) issues")
-                        .font(.system(size: 14, weight: .regular))
+                        .font(MoveMarkTheme.Typography.detail)
                         .foregroundStyle(MoveMarkTheme.Colors.semanticWarning.opacity(0.92))
                 }
             }
@@ -178,7 +178,7 @@ struct RoomStatusCard: View {
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
         } else {
             Text(stateLabel)
-                .font(.system(size: 14, weight: .regular))
+                .font(MoveMarkTheme.Typography.detail)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.72))
         }
     }

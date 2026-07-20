@@ -32,7 +32,7 @@ struct FloatingAddButton: View {
                     .frame(width: 52, height: 52)
 
                 Image(systemName: "plus")
-                    .font(.system(size: 20, weight: .medium))
+                    .font(MoveMarkTheme.Typography.subtitleLarge)
                     .foregroundStyle(MoveMarkTheme.Colors.primary)
                     .rotationEffect(.degrees(isPressed ? 45 : 0))
             }

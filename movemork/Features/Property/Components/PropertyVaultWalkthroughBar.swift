@@ -44,7 +44,7 @@ struct PropertyVaultWalkthroughBar: View {
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
                     Text(subtitle)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(MoveMarkTheme.Typography.detailMedium)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         .lineLimit(1)
 
@@ -62,7 +62,7 @@ struct PropertyVaultWalkthroughBar: View {
                         .frame(width: 34, height: 34)
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.tinyEmphasis)
                         .foregroundStyle(MoveMarkTheme.Colors.textDarkGreen)
                 }
             }

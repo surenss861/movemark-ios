@@ -31,13 +31,13 @@ struct SupportingRecordRow: View {
 
             VStack(alignment: .leading, spacing: subtitle == nil ? 0 : 3) {
                 Text(title)
-                    .font(.system(size: 15.5, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.subheadlineMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .lineLimit(1)
 
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.system(size: 13, weight: .regular))
+                        .font(MoveMarkTheme.Typography.footnoteRegular)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.78))
                         .lineLimit(1)
                 }
@@ -76,14 +76,14 @@ struct SupportingRecordRow: View {
                 .frame(width: 38, height: 38)
 
             Image(systemName: isPresent ? "doc.fill" : "doc")
-                .font(.system(size: 14, weight: .semibold))
+                .font(MoveMarkTheme.Typography.detailEmphasis)
                 .foregroundStyle(isPresent ? MoveMarkTheme.Colors.primary : MoveMarkTheme.Colors.textSecondary.opacity(0.82))
         }
     }
 
     private var statusPill: some View {
         Text(isPresent ? "Uploaded" : "Missing")
-            .font(.system(size: 10, weight: .semibold))
+            .font(MoveMarkTheme.Typography.microLabel)
             .foregroundStyle(
                 isPresent
                     ? MoveMarkTheme.Colors.semanticSuccess.opacity(0.95)

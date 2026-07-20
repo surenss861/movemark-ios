@@ -21,7 +21,7 @@ struct MMPill: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 12, weight: .bold))
+            .font(MoveMarkTheme.Typography.captionEmphasis)
             .tracking(0.3)
             .foregroundStyle(foregroundColor)
             .padding(.horizontal, 11)

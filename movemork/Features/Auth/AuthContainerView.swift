@@ -368,7 +368,7 @@ struct AuthContainerView: View {
 
     private var legalFinePrint: some View {
         Text(legalAttributedLine)
-            .font(.system(size: 11))
+            .font(MoveMarkTheme.Typography.tiny)
             .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.88))
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)

@@ -19,7 +19,7 @@ struct VaultStatusChip: View {
                     .frame(width: 3, height: 3)
             }
             Text(text)
-                .font(.system(size: 9, weight: .semibold))
+                .font(MoveMarkTheme.Typography.microLabel)
         }
         .foregroundStyle(MoveMarkTheme.Colors.textDarkGreen)
         .padding(.horizontal, 6)

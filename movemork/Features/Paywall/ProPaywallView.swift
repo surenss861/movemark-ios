@@ -93,7 +93,7 @@ struct ProPaywallView: View {
 
             VStack(spacing: 12) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 44, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.heroLarge)
                     .foregroundStyle(MoveMarkTheme.Colors.primary)
 
                 Text("Pro unlocked")

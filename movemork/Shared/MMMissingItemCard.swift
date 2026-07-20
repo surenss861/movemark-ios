@@ -40,7 +40,7 @@ struct MMMissingItemCard: View {
                 Spacer(minLength: 0)
 
                 Text(actionTitle)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.captionEmphasis)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .padding(.horizontal, 11)
                     .padding(.vertical, 7)

@@ -115,7 +115,7 @@ struct EvidenceCaptureForm: View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Issue tags")
-                    .font(.system(size: 13.5, weight: .medium))
+                    .font(MoveMarkTheme.Typography.footnote)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.92))
 
                 Text(

@@ -285,7 +285,7 @@ private struct AddRoomSheetView: View {
                 Spacer(minLength: 12)
 
                 Button("Cancel", action: onDismiss)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(MoveMarkTheme.Typography.subheadlineMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.primary)
             }
 

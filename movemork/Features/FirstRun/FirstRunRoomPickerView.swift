@@ -109,11 +109,11 @@ struct FirstRunRoomPickerView: View {
         } label: {
             HStack {
                 Text(option.title)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.bodySmallEmphasis)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 Spacer()
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.subtitleLarge)
                     .foregroundStyle(
                         isSelected
                             ? MoveMarkTheme.Colors.primary

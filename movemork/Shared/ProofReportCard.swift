@@ -35,7 +35,7 @@ struct ProofReportCard: View {
 
         VStack(alignment: .leading, spacing: 0) {
             Text(model.reportTitle.uppercased())
-                .font(.system(size: 10, weight: .semibold))
+                .font(MoveMarkTheme.Typography.microLabel)
                 .tracking(0.7)
                 .foregroundStyle(MoveMarkTheme.Colors.textMuted)
 
@@ -68,7 +68,7 @@ struct ProofReportCard: View {
                 FlowLayout(spacing: 8) {
                     ForEach(proofChips, id: \.self) { chip in
                         Text(chip)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(MoveMarkTheme.Typography.tinyMedium)
                             .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)

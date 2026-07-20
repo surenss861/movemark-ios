@@ -420,20 +420,20 @@ struct PropertyVaultView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Receipts & lease docs")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(MoveMarkTheme.Typography.captionEmphasis)
                         .tracking(0.8)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         .textCase(.uppercase)
 
                     Text("Lease, deposit receipt, and other papers.")
-                        .font(.system(size: 14, weight: .regular))
+                        .font(MoveMarkTheme.Typography.detail)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.86))
                 }
 
                 Spacer()
 
                 Text("\(propertyStore.uploadedSupportingRecordCount(for: property)) of \(Self.documentTypeOrder.count) uploaded")
-                    .font(.system(size: 11, weight: .regular))
+                    .font(MoveMarkTheme.Typography.tiny)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.56))
             }
 
@@ -553,7 +553,7 @@ struct PropertyVaultView: View {
 
     private func recordActionButton(title: String, isBusy: Bool = false) -> some View {
         Text(isBusy ? "Saving…" : title)
-            .font(.system(size: 13, weight: .semibold))
+            .font(MoveMarkTheme.Typography.footnoteEmphasis)
             .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
             .padding(.horizontal, 10)
             .frame(height: 30)
@@ -641,7 +641,7 @@ struct PropertyVaultView: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("Property details")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.captionEmphasis)
                     .tracking(0.8)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     .textCase(.uppercase)
@@ -651,7 +651,7 @@ struct PropertyVaultView: View {
                 Button("Edit") {
                     showEditProperty = true
                 }
-                .font(.system(size: 14, weight: .semibold))
+                .font(MoveMarkTheme.Typography.detailEmphasis)
                 .foregroundStyle(MoveMarkTheme.Colors.primary)
             }
 
@@ -665,7 +665,7 @@ struct PropertyVaultView: View {
                         .font(MoveMarkTheme.Typography.subheadlineMedium)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     Image(systemName: showPropertyDetails ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.captionEmphasis)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 }
             }
@@ -674,7 +674,7 @@ struct PropertyVaultView: View {
             if showPropertyDetails {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Tenancy")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.footnoteEmphasis)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
 
                     VStack(spacing: 10) {
@@ -701,7 +701,7 @@ struct PropertyVaultView: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Contact")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.footnoteEmphasis)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
 
                     VStack(spacing: 10) {
@@ -724,13 +724,13 @@ struct PropertyVaultView: View {
     private func detailRow(_ title: String, _ value: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(title)
-                .font(.system(size: 14, weight: .regular))
+                .font(MoveMarkTheme.Typography.detail)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.82))
 
             Spacer(minLength: 12)
 
             Text(value)
-                .font(.system(size: 15, weight: .medium))
+                .font(MoveMarkTheme.Typography.subheadlineMedium)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.96))
                 .multilineTextAlignment(.trailing)
         }

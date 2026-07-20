@@ -32,7 +32,7 @@ struct MMEmptyState: View {
         MMCard(tone: .artifact, padding: 22, spacing: 16) {
             VStack(alignment: .leading, spacing: 14) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 28, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.cardValue)
                     .foregroundStyle(MoveMarkTheme.Colors.primary)
                     .symbolRenderingMode(.hierarchical)
 

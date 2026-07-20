@@ -109,7 +109,7 @@ struct VaultCoverFallback: View {
 
     private func capsule(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 9, weight: .semibold))
+            .font(MoveMarkTheme.Typography.microLabel)
             .tracking(0.7)
             .foregroundStyle(MoveMarkTheme.Colors.textDarkGreen.opacity(0.75))
             .padding(.horizontal, 8)

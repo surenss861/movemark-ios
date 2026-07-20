@@ -35,12 +35,12 @@ struct WelcomeClaimProofStack: View {
     private var claimSection: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text("DAMAGE CLAIM")
-                .font(.system(size: 10, weight: .semibold))
+                .font(MoveMarkTheme.Typography.microLabel)
                 .foregroundStyle(MoveMarkTheme.Colors.semanticWarning.opacity(0.82))
                 .tracking(0.6)
 
             Text("Kitchen cabinet damage")
-                .font(.system(size: 15.5, weight: .semibold))
+                .font(MoveMarkTheme.Typography.subheadlineMedium)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 .lineLimit(2)
 
@@ -69,11 +69,11 @@ struct WelcomeClaimProofStack: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 5) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.detailEmphasis)
                         .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.9))
 
                     Text("Already documented")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.detailEmphasis)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                         .lineLimit(1)
                 }
@@ -84,7 +84,7 @@ struct WelcomeClaimProofStack: View {
                     .lineLimit(1)
 
                 Text("12 photos attached")
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(MoveMarkTheme.Typography.tinyMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                     .lineLimit(1)
             }
@@ -101,17 +101,17 @@ struct WelcomeClaimProofStack: View {
     private var reportSection: some View {
         HStack(alignment: .center, spacing: 10) {
             Image(systemName: "doc.text")
-                .font(.system(size: 15, weight: .medium))
+                .font(MoveMarkTheme.Typography.subheadlineMedium)
                 .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.9))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Move-in report ready")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.footnoteEmphasis)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .lineLimit(1)
 
                 Text("Export organized proof when you need it.")
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(MoveMarkTheme.Typography.tinyMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                     .lineLimit(1)
             }

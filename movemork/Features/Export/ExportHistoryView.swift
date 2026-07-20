@@ -361,21 +361,21 @@ struct ExportHistoryView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text("Rental proof")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.tinyEmphasis)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
                     Text("·")
                         .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.6))
                     Text("Current vault")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.captionEmphasis)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     Text("·")
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.45))
                     Text(activeVaultDisplayTitle ?? "Selected vault")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.captionEmphasis)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 }
                 Text(exportContextLine)
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(MoveMarkTheme.Typography.tinyMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -679,7 +679,7 @@ struct ExportHistoryView: View {
     private var exportHistoryEmptyState: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Export history")
-                .font(.system(size: 13, weight: .semibold))
+                .font(MoveMarkTheme.Typography.footnoteEmphasis)
                 .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                 .padding(.leading, 2)
 
@@ -742,7 +742,7 @@ struct ExportHistoryView: View {
     private var exportHistorySections: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Export history")
-                .font(.system(size: 13, weight: .semibold))
+                .font(MoveMarkTheme.Typography.footnoteEmphasis)
                 .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                 .padding(.leading, 2)
 
@@ -1027,14 +1027,14 @@ struct ExportHistoryView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text("Report preview")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(MoveMarkTheme.Typography.tinyEmphasis)
                         .tracking(0.4)
                         .foregroundStyle(MoveMarkTheme.Colors.primaryPressed)
 
                     Spacer()
 
                     Image(systemName: "doc.richtext")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.detailEmphasis)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 }
 
@@ -1068,7 +1068,7 @@ struct ExportHistoryView: View {
 
     private func statusPill(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 11.5, weight: .semibold))
+            .font(MoveMarkTheme.Typography.tinyEmphasis)
             .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
             .padding(.horizontal, 10)
             .frame(height: 26)
@@ -1217,7 +1217,7 @@ struct ExportHistoryView: View {
                 Spacer()
 
                 Image(systemName: icon(for: row.exportType))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.detailEmphasis)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
             }
             .padding(10)
@@ -1244,7 +1244,7 @@ struct ExportHistoryView: View {
         case .ready:
             HStack(spacing: 4) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 11))
+                    .font(MoveMarkTheme.Typography.tiny)
                     .foregroundStyle(MoveMarkTheme.Colors.semanticSuccess)
 
                 Text(status.displayLabel)
@@ -1255,7 +1255,7 @@ struct ExportHistoryView: View {
         case .verifying:
             HStack(spacing: 4) {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 11))
+                    .font(MoveMarkTheme.Typography.tiny)
                     .foregroundStyle(MoveMarkTheme.Colors.semanticWarning)
 
                 Text(status.displayLabel)
@@ -1271,7 +1271,7 @@ struct ExportHistoryView: View {
         case .queued:
             HStack(spacing: 4) {
                 Image(systemName: "tray.fill")
-                    .font(.system(size: 11))
+                    .font(MoveMarkTheme.Typography.tiny)
                     .foregroundStyle(MoveMarkTheme.Colors.semanticWarning)
 
                 Text(status.displayLabel)
@@ -1282,7 +1282,7 @@ struct ExportHistoryView: View {
         case .processing:
             HStack(spacing: 4) {
                 Image(systemName: "clock.fill")
-                    .font(.system(size: 11))
+                    .font(MoveMarkTheme.Typography.tiny)
                     .foregroundStyle(MoveMarkTheme.Colors.semanticWarning)
 
                 Text(status.displayLabel)
@@ -1293,7 +1293,7 @@ struct ExportHistoryView: View {
         case .missingPath, .invalidURL, .verificationFailed:
             HStack(spacing: 4) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 11))
+                    .font(MoveMarkTheme.Typography.tiny)
                     .foregroundStyle(MoveMarkTheme.Colors.semanticWarning)
 
                 Text(status.displayLabel)
@@ -1304,7 +1304,7 @@ struct ExportHistoryView: View {
         case .serverFailed:
             HStack(spacing: 4) {
                 Image(systemName: "xmark.octagon.fill")
-                    .font(.system(size: 11))
+                    .font(MoveMarkTheme.Typography.tiny)
                     .foregroundStyle(MoveMarkTheme.Colors.semanticDanger)
 
                 Text(status.displayLabel)

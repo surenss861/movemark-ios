@@ -95,10 +95,10 @@ struct EditPropertyView: View {
                     MMCard {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Edit property")
-                                .font(.system(size: 20, weight: .semibold))
+                                .font(MoveMarkTheme.Typography.subtitleLarge)
                                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                             Text("Changes are saved to this property. Rooms and evidence are unchanged.")
-                                .font(.system(size: 14, weight: .regular))
+                                .font(MoveMarkTheme.Typography.detail)
                                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         }
                     }
@@ -106,7 +106,7 @@ struct EditPropertyView: View {
                     MMCard {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Property")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(MoveMarkTheme.Typography.captionEmphasis)
                                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                             MMTextField(
                                 title: "Nickname or label",
@@ -119,7 +119,7 @@ struct EditPropertyView: View {
                     MMCard {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Address")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(MoveMarkTheme.Typography.captionEmphasis)
                                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                             MMTextField(title: "Address line 1", placeholder: "123 Main St", text: $addressLine1)
                             MMTextField(title: "Unit / apartment", placeholder: "Optional", text: $unit)
@@ -132,7 +132,7 @@ struct EditPropertyView: View {
                     MMCard {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Move-in & lease")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(MoveMarkTheme.Typography.captionEmphasis)
                                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                             DatePicker("Move-in date", selection: $moveInDate, displayedComponents: .date)
                                 .colorScheme(.light)
@@ -149,7 +149,7 @@ struct EditPropertyView: View {
                     MMCard {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Landlord")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(MoveMarkTheme.Typography.captionEmphasis)
                                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                             MMTextField(title: "Name", placeholder: "Property manager or landlord", text: $landlordName)
                             MMTextField(title: "Email", placeholder: "Optional", text: $landlordEmail, keyboardType: .emailAddress)
@@ -160,7 +160,7 @@ struct EditPropertyView: View {
                     MMCard {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Financials")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(MoveMarkTheme.Typography.captionEmphasis)
                                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                             MMTextField(title: "Deposit amount", placeholder: "e.g. 1500", text: $depositAmount, keyboardType: .decimalPad)
                             MMTextField(title: "Rent amount (optional)", placeholder: "e.g. 2200", text: $rentAmount, keyboardType: .decimalPad)
@@ -170,7 +170,7 @@ struct EditPropertyView: View {
                     MMCard {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Location")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(MoveMarkTheme.Typography.captionEmphasis)
                                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                             Picker("Country", selection: $selectedCountryOption) {
                                 ForEach(supportedCountries + ["Other"], id: \.self) { option in

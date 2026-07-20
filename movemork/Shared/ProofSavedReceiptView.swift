@@ -119,15 +119,15 @@ struct ProofSavedReceiptView: View {
     private var receiptHeader: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 28, weight: .semibold))
+                .font(MoveMarkTheme.Typography.cardValue)
                 .foregroundStyle(MoveMarkTheme.Colors.primary)
                 .scaleEffect(checkScale)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Saved to your vault")
-                    .font(.system(size: 24, weight: .bold))
+                    .font(MoveMarkTheme.Typography.cardTitle)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 Text(model.headerSubtitle)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(MoveMarkTheme.Typography.detailMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 if !model.documentedLabel.isEmpty {
                     Text(model.documentedLabel)

@@ -15,7 +15,7 @@ struct MMCompactCallout: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: systemImage)
-                .font(.system(size: 20, weight: .semibold))
+                .font(MoveMarkTheme.Typography.subtitleLarge)
                 .foregroundStyle(MoveMarkTheme.Colors.primary)
                 .frame(width: 28, alignment: .center)
 

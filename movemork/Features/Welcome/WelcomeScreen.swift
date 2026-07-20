@@ -156,7 +156,7 @@ struct WelcomeScreen: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             Text("MoveMark")
-                .font(.system(size: 20.5, weight: .semibold))
+                .font(MoveMarkTheme.Typography.subtitleLarge)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
             Spacer(minLength: 0)
@@ -170,7 +170,7 @@ struct WelcomeScreen: View {
     private var primaryCopyBlock: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Prove what was already there.")
-                .font(.system(size: 32, weight: .bold))
+                .font(MoveMarkTheme.Typography.cardValue)
                 .tracking(-0.7)
                 .lineSpacing(2)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
