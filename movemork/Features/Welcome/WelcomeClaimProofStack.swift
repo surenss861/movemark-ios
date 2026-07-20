@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct WelcomeClaimProofStack: View {
-    var thumbnailImageName: String = "welcome-kitchen-main"
+    var thumbnailImageName: String = "welcome-proof-hero"
     var proofVisible: Bool = true
 
     private let stackRadius: CGFloat = 28

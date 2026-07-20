@@ -11,7 +11,7 @@ struct MMProofReceiptCard: View {
     let statusLabel: String
     let title: String
     let metaLine: String
-    var thumbnailImageName: String? = "welcome-kitchen-main"
+    var thumbnailImageName: String? = "welcome-proof-hero"
     var thumbnailURL: URL? = nil
     var photoCount: Int = 1
     var issueCount: Int = 0
