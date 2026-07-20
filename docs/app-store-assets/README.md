@@ -1,26 +1,32 @@
 # MoveMark app icon & logo
 
-**Source:** `mmasest.png` at repo root (`/Volumes/sss/movemark/mmasest.png`).
-
-Assets are **cropped to remove the outer white canvas**, squared, and scaled to **1024×1024** so the home-screen icon fills the slot with no extra white border.
+**Source:** `source/movemark-mark.svg` — a single flat document+checkmark mark
+(the checkmark is a true transparency cutout via an SVG mask, not a
+solid-color fake-cutout). Replaces the old six-idea icon (M letterform +
+checkmark + house + key + document/shield + window, bevels, drop shadows)
+that was generated from `mmasest.png` via `scripts/process-movemark-logo.py`.
+That script and source file are obsolete — do not run it, it will regress
+the icon back to the old design.
 
 ## Files
 
 | File | Use |
 |------|-----|
-| `AppIcon-1024.png` | App Store Connect upload |
-| `MoveMarkLogo-transparent.png` | M mark only (transparent) |
-| `MoveMarkLogo-light-white.png` | Full icon (same as App Store) |
+| `AppIcon-1024.png` | App Store Connect upload — full color mark (`#21B866`) on app background (`#07120E`), opaque |
+| `MoveMarkLogo-transparent.png` | Mark only, primary green, transparent background |
+| `MoveMarkLogo-light-white.png` | Mark only, white, transparent background — for dark/colored surfaces |
+| `MoveMarkLogo-light-mint.png` | Mark only, muted mint accent, transparent background — for light/paper surfaces |
 
-Xcode: `AppIcon.appiconset/AppIcon.png`, `MoveMarkLogo.imageset/`.
+Xcode: `AppIcon.appiconset/` (`AppIcon.png` default, `AppIcon-Dark.png`,
+`AppIcon-Tinted.png` — a real grayscale variant per Apple's tinted-icon
+guidance, not a copy of the color asset), `MoveMarkLogo.imageset/`.
 
 ## Regenerate
 
-```bash
-/Volumes/sss/movemark/.venv-logo/bin/python3 movemork/scripts/process-movemark-logo.py
-```
-
-Optional: `MOVEMARK_LOGO_SOURCE=/path/to/icon.png`
+Edit `source/movemark-mark.svg` (or the fill colors within it), then
+rasterize with `qlmanage -t -s <size> -o . movemark-mark.svg` and flatten
+alpha for the opaque App Store icon with a JPEG round-trip via `sips`
+(App Store icons must have no alpha channel; the logo variants keep theirs).
 
 ## App Store Connect
 
