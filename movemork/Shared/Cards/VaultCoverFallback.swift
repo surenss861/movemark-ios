@@ -64,11 +64,11 @@ struct VaultCoverFallback: View {
     private var featuredBaseGradient: [Color] {
         switch style {
         case .empty:
-            return [MoveMarkTheme.Colors.mint, MoveMarkTheme.Colors.panelAlt, MoveMarkTheme.Colors.backgroundAlt]
+            return [MoveMarkTheme.Colors.cardRaised, MoveMarkTheme.Colors.cardRaised, MoveMarkTheme.Colors.appBackgroundRaised]
         case .started:
-            return [MoveMarkTheme.Colors.panelAlt, MoveMarkTheme.Colors.mint.opacity(0.8), MoveMarkTheme.Colors.primary.opacity(0.08)]
+            return [MoveMarkTheme.Colors.cardRaised, MoveMarkTheme.Colors.cardRaised.opacity(0.8), MoveMarkTheme.Colors.primary.opacity(0.08)]
         case .ready:
-            return [MoveMarkTheme.Colors.mint, MoveMarkTheme.Colors.primary.opacity(0.12), MoveMarkTheme.Colors.panelAlt]
+            return [MoveMarkTheme.Colors.cardRaised, MoveMarkTheme.Colors.primary.opacity(0.12), MoveMarkTheme.Colors.cardRaised]
         }
     }
 
@@ -99,11 +99,11 @@ struct VaultCoverFallback: View {
     private var gradientColors: [Color] {
         switch style {
         case .empty:
-            return [MoveMarkTheme.Colors.backgroundAlt, MoveMarkTheme.Colors.mint.opacity(0.5)]
+            return [MoveMarkTheme.Colors.appBackgroundRaised, MoveMarkTheme.Colors.cardRaised.opacity(0.5)]
         case .started:
-            return [MoveMarkTheme.Colors.mint.opacity(0.7), MoveMarkTheme.Colors.panelAlt]
+            return [MoveMarkTheme.Colors.cardRaised.opacity(0.7), MoveMarkTheme.Colors.cardRaised]
         case .ready:
-            return [MoveMarkTheme.Colors.panelAlt, MoveMarkTheme.Colors.primary.opacity(0.14)]
+            return [MoveMarkTheme.Colors.cardRaised, MoveMarkTheme.Colors.primary.opacity(0.14)]
         }
     }
 
@@ -114,18 +114,18 @@ struct VaultCoverFallback: View {
             .foregroundStyle(MoveMarkTheme.Colors.textDarkGreen.opacity(0.75))
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(MoveMarkTheme.Colors.panel.opacity(0.85))
+            .background(MoveMarkTheme.Colors.card.opacity(0.85))
             .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 0.6)
+                    .stroke(MoveMarkTheme.Colors.cardStroke, lineWidth: 0.6)
             )
     }
 
     private func meter(width: CGFloat) -> some View {
         GeometryReader { proxy in
             Capsule()
-                .fill(MoveMarkTheme.Colors.panelStroke.opacity(0.8))
+                .fill(MoveMarkTheme.Colors.cardStroke.opacity(0.8))
                 .overlay(alignment: .leading) {
                     Capsule()
                         .fill(MoveMarkTheme.Colors.primary.opacity(0.55))

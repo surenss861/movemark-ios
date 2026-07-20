@@ -64,7 +64,7 @@ struct ProofSavedReceiptView: View {
 
             if let partialMessage = model.partialMessage {
                 Text("\(partialMessage). You can retry the rest or continue with saved proof.")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MoveMarkTheme.Typography.footnote)
                     .foregroundStyle(MoveMarkTheme.Colors.semanticWarning)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
@@ -131,7 +131,7 @@ struct ProofSavedReceiptView: View {
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 if !model.documentedLabel.isEmpty {
                     Text(model.documentedLabel)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(MoveMarkTheme.Typography.footnote)
                         .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                 }
             }

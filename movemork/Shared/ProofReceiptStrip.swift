@@ -110,7 +110,7 @@ struct ProofReceiptStrip<Leading: View>: View {
             VStack(alignment: .leading, spacing: 8) {
                 if let title = model.cardTitle {
                     Text(title)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.button)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 }
                 if let meta = model.cardMeta {

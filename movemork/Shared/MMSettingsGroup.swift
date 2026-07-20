@@ -119,7 +119,7 @@ struct MMSettingsRow: View {
                 .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.7))
         case .value(let text):
             Text(text)
-                .font(.system(size: 15, weight: .regular))
+                .font(MoveMarkTheme.Typography.subheadline)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 .lineLimit(1)
         case .pill(let text, let tone):

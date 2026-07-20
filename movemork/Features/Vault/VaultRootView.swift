@@ -137,7 +137,7 @@ struct VaultRootView: View {
 
                 if !otherProperties.isEmpty {
                     Text("Other rentals")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.subheadlineMedium)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         .padding(.top, 4)
 

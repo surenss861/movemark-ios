@@ -72,7 +72,7 @@ struct ProPaywallView: View {
                                 .frame(width: 42, height: 42)
 
                             Image(systemName: "xmark")
-                                .font(.system(size: 15, weight: .semibold))
+                                .font(MoveMarkTheme.Typography.subheadlineMedium)
                                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         }
                     }
@@ -98,7 +98,7 @@ struct ProPaywallView: View {
 
                 Text("Pro unlocked")
                     .font(MoveMarkTheme.Typography.cardTitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
             }
             .padding(.horizontal, 28)
             .padding(.vertical, 24)
@@ -119,8 +119,8 @@ struct ProPaywallView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(reason.headline)
-                .font(.system(size: 28, weight: .bold))
-                .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
+                .font(MoveMarkTheme.Typography.cardValue)
+                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(sharedValueLine)
@@ -145,7 +145,7 @@ struct ProPaywallView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text(benefitsTitle)
                     .font(MoveMarkTheme.Typography.cardTitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
                 VStack(alignment: .leading, spacing: 14) {
                     ForEach(Array(benefits.enumerated()), id: \.offset) { _, item in
@@ -167,7 +167,7 @@ struct ProPaywallView: View {
 
                 Text(reason == .moveOutExport ? "Choose your protection plan" : "Choose your plan")
                     .font(MoveMarkTheme.Typography.cardTitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
             }
             .padding(.bottom, 4)
 
@@ -182,7 +182,7 @@ struct ProPaywallView: View {
                     "MoveMark Pro is an auto-renewing subscription (monthly or annual). Prices below come from the App Store. Apple processes payment and renewal."
                 )
                 .font(MoveMarkTheme.Typography.caption)
-                .foregroundStyle(MoveMarkTheme.Colors.textOnDarkMuted)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 10)
             }
@@ -220,7 +220,7 @@ struct ProPaywallView: View {
 
             Text("Auto-renews until cancelled. Manage or cancel in Settings › Apple ID › Subscriptions.")
                 .font(MoveMarkTheme.Typography.caption)
-                .foregroundStyle(MoveMarkTheme.Colors.textOnDarkMuted)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 18)
@@ -253,14 +253,14 @@ struct ProPaywallView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Already subscribed on this Apple ID? Restore before purchasing again.")
                 .font(MoveMarkTheme.Typography.footnote)
-                .foregroundStyle(MoveMarkTheme.Colors.textOnDarkMuted)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Button {
                 restorePurchases()
             } label: {
                 Text(subscriptionManager.isStoreKitBusy ? "Restoring purchases…" : "Restore purchases")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.subheadlineMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.95))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -315,7 +315,7 @@ struct ProPaywallView: View {
                             openURL(u)
                         } label: {
                             Text("Terms of Use")
-                                .font(.system(size: 15, weight: .semibold))
+                                .font(MoveMarkTheme.Typography.subheadlineMedium)
                                 .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.92))
                         }
                         .buttonStyle(.plain)
@@ -325,7 +325,7 @@ struct ProPaywallView: View {
                             openURL(p)
                         } label: {
                             Text("Privacy Policy")
-                                .font(.system(size: 15, weight: .semibold))
+                                .font(MoveMarkTheme.Typography.subheadlineMedium)
                                 .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.92))
                         }
                         .buttonStyle(.plain)
@@ -340,7 +340,7 @@ struct ProPaywallView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Plans didn’t load")
                 .font(MoveMarkTheme.Typography.cardTitle)
-                .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
+                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
             Text("Try again in a minute. You can keep using Free for now.")
                 .font(MoveMarkTheme.Typography.subheadline)
@@ -350,7 +350,7 @@ struct ProPaywallView: View {
             #if DEBUG
             Text(plansUnavailableTechnicalDetail)
                 .font(MoveMarkTheme.Typography.caption)
-                .foregroundStyle(MoveMarkTheme.Colors.textOnDarkMuted.opacity(0.78))
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.78))
                 .fixedSize(horizontal: false, vertical: true)
             #endif
 
@@ -527,7 +527,7 @@ struct ProPaywallView: View {
                     HStack(spacing: 8) {
                         Text(planDisplayTitle(for: package))
                             .font(MoveMarkTheme.Typography.subheadlineMedium)
-                            .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
+                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
                         if isYearly {
                             Text("Best value")
@@ -560,7 +560,7 @@ struct ProPaywallView: View {
 
                 Circle()
                     .stroke(
-                        isSelected ? MoveMarkTheme.Colors.primary : MoveMarkTheme.Colors.panelStroke,
+                        isSelected ? MoveMarkTheme.Colors.primary : MoveMarkTheme.Colors.cardStroke,
                         lineWidth: 1.2
                     )
                     .background(
@@ -578,7 +578,7 @@ struct ProPaywallView: View {
                     .stroke(
                         isSelected
                             ? MoveMarkTheme.Colors.primary.opacity(isYearly ? 0.95 : 0.75)
-                            : MoveMarkTheme.Colors.panelStroke,
+                            : MoveMarkTheme.Colors.cardStroke,
                         lineWidth: strokeWidth
                     )
             )
@@ -610,7 +610,7 @@ struct ProPaywallView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(MoveMarkTheme.Typography.subheadlineMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.textOnDark)
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
                 Text(subtitle)
                     .font(MoveMarkTheme.Typography.footnote)

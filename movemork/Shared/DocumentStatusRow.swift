@@ -21,7 +21,7 @@ struct DocumentStatusRow: View {
 
                 Image(systemName: isPresent ? "doc.fill" : "doc")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(isPresent ? MoveMarkTheme.Colors.accent : MoveMarkTheme.Colors.textSecondary)
+                    .foregroundStyle(isPresent ? MoveMarkTheme.Colors.primary : MoveMarkTheme.Colors.textSecondary)
             }
 
             VStack(alignment: .leading, spacing: 3) {

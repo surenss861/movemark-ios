@@ -74,11 +74,11 @@ struct ProofCaseDetailSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.system(size: 17, weight: .semibold))
+                .font(MoveMarkTheme.Typography.button)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MoveMarkTheme.Typography.footnote)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.85))
             }
         }
@@ -97,7 +97,7 @@ struct ProofCaseReceiptRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 18, weight: .semibold))
+                .font(MoveMarkTheme.Typography.sectionTitle)
                 .foregroundStyle(MoveMarkTheme.Colors.primary)
 
             VStack(alignment: .leading, spacing: 2) {

@@ -20,11 +20,11 @@ struct MMEditorialHeader: View {
     var surface: Surface = .darkShell
 
     private var titleColor: Color {
-        surface == .darkShell ? MoveMarkTheme.Colors.textOnDark : MoveMarkTheme.Colors.textOnLight
+        surface == .darkShell ? MoveMarkTheme.Colors.textPrimary : MoveMarkTheme.Colors.textOnLight
     }
 
     private var subtitleColor: Color {
-        surface == .darkShell ? MoveMarkTheme.Colors.textOnDarkMuted : MoveMarkTheme.Colors.textSecondary
+        surface == .darkShell ? MoveMarkTheme.Colors.textSecondary : MoveMarkTheme.Colors.textSecondary
     }
 
     private var eyebrowColor: Color {

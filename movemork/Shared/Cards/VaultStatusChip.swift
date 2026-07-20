@@ -24,10 +24,10 @@ struct VaultStatusChip: View {
         .foregroundStyle(MoveMarkTheme.Colors.textDarkGreen)
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
-        .background(MoveMarkTheme.Colors.panel.opacity(0.92), in: Capsule())
+        .background(MoveMarkTheme.Colors.card.opacity(0.92), in: Capsule())
         .overlay(
             Capsule()
-                .stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 0.6)
+                .stroke(MoveMarkTheme.Colors.cardStroke, lineWidth: 0.6)
         )
     }
 }

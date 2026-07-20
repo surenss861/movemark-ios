@@ -33,7 +33,7 @@ struct MaintenanceIssueDetailView: View {
 
     var body: some View {
         ZStack {
-            MoveMarkTheme.Colors.background.ignoresSafeArea()
+            MoveMarkTheme.Colors.appBackground.ignoresSafeArea()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
@@ -93,7 +93,7 @@ struct MaintenanceIssueDetailView: View {
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
             Rectangle()
-                .fill(MoveMarkTheme.Colors.accent)
+                .fill(MoveMarkTheme.Colors.primary)
                 .frame(width: 38, height: 3)
                 .clipShape(Capsule())
         }
@@ -202,7 +202,7 @@ struct MaintenanceIssueDetailView: View {
                     .background(MoveMarkTheme.Colors.fieldFill)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 1)
+                            .stroke(MoveMarkTheme.Colors.cardStroke, lineWidth: 1)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
@@ -465,7 +465,7 @@ private struct MaintenanceEvidenceThumbnail: View {
                         }
                     }
             case .empty:
-                MoveMarkTheme.Colors.mint.opacity(0.5)
+                MoveMarkTheme.Colors.cardRaised.opacity(0.5)
             }
         }
         .frame(width: 120, height: 120)

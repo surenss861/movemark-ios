@@ -34,13 +34,13 @@ struct PropertyVaultWalkthroughBar: View {
                         .frame(width: 50, height: 50)
 
                     Image(systemName: "camera.fill")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.sectionTitle)
                         .foregroundStyle(MoveMarkTheme.Colors.primary)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Room proof")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.sectionTitle)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
                     Text(subtitle)
@@ -49,7 +49,7 @@ struct PropertyVaultWalkthroughBar: View {
                         .lineLimit(1)
 
                     Text(progressText)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MoveMarkTheme.Typography.caption)
                         .foregroundStyle(MoveMarkTheme.Colors.textDarkGreen)
                         .lineLimit(1)
                 }
@@ -58,7 +58,7 @@ struct PropertyVaultWalkthroughBar: View {
 
                 ZStack {
                     Circle()
-                        .fill(MoveMarkTheme.Colors.mint.opacity(0.65))
+                        .fill(MoveMarkTheme.Colors.cardRaised.opacity(0.65))
                         .frame(width: 34, height: 34)
 
                     Image(systemName: "chevron.right")
@@ -69,7 +69,7 @@ struct PropertyVaultWalkthroughBar: View {
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.panel)
+                    .fill(MoveMarkTheme.Colors.card)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)

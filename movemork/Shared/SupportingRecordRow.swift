@@ -71,7 +71,7 @@ struct SupportingRecordRow: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.45), lineWidth: 0.8)
+                        .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.45), lineWidth: 0.8)
                 )
                 .frame(width: 38, height: 38)
 

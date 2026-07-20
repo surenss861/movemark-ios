@@ -36,7 +36,7 @@ struct EvidenceCaptureHero: View {
             EmptyView()
         } else {
             Text("Move-in: \(moveInPhotos) photos · Move-out: \(moveOutPhotos) photos")
-                .font(.system(size: 12, weight: .medium))
+                .font(MoveMarkTheme.Typography.caption)
                 .foregroundStyle(MoveMarkTheme.Colors.textMuted)
         }
     }

@@ -17,7 +17,7 @@ struct MMMissingItemCard: View {
         Button(action: onAction) {
             HStack(alignment: .center, spacing: 12) {
                 Image(systemName: "doc.badge.plus")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.sectionTitle)
                     .foregroundStyle(MoveMarkTheme.Colors.semanticWarning)
                     .frame(width: 40, height: 40)
                     .background(

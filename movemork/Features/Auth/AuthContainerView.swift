@@ -149,7 +149,7 @@ struct AuthContainerView: View {
         HStack(alignment: .center, spacing: 0) {
             Button(action: onDismiss) {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.button)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .frame(width: 40, height: 40)
                     .background(MoveMarkTheme.Colors.card.opacity(0.9))
@@ -173,7 +173,7 @@ struct AuthContainerView: View {
                     .accessibilityHidden(true)
 
                 Text("MoveMark")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.button)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
             }
 
@@ -188,14 +188,14 @@ struct AuthContainerView: View {
     private var titleBlock: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(headerTitle)
-                .font(.system(size: 28, weight: .bold))
+                .font(MoveMarkTheme.Typography.cardValue)
                 .tracking(-0.4)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
                 .id("auth-title-\(mode == .signIn ? "in" : "up")")
 
             Text(headerSubtitle)
-                .font(.system(size: 15, weight: .regular))
+                .font(MoveMarkTheme.Typography.subheadline)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.94))
                 .fixedSize(horizontal: false, vertical: true)
                 .id("auth-subtitle-\(mode == .signIn ? "in" : "up")")

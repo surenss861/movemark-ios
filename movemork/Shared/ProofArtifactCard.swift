@@ -94,7 +94,7 @@ struct ProofArtifactCard: View {
                 }
             }
             Text(model.roomName)
-                .font(.system(size: 18, weight: .semibold))
+                .font(MoveMarkTheme.Typography.sectionTitle)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 .lineLimit(1)
                 .fixedSize(horizontal: false, vertical: true)
@@ -191,7 +191,7 @@ struct ProofArtifactCard: View {
             }
             .padding(.top, 10)
             Text(model.verifiedLabel)
-                .font(.system(size: 12, weight: .medium))
+                .font(MoveMarkTheme.Typography.caption)
                 .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                 .padding(.top, 4)
         }

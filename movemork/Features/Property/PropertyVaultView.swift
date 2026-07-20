@@ -524,11 +524,11 @@ struct PropertyVaultView: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(MoveMarkTheme.Colors.surfaceInset.opacity(0.94))
+        .background(MoveMarkTheme.Colors.fieldFill.opacity(0.94))
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.52), lineWidth: 0.5)
+                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.52), lineWidth: 0.5)
         )
     }
 
@@ -557,10 +557,10 @@ struct PropertyVaultView: View {
             .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
             .padding(.horizontal, 10)
             .frame(height: 30)
-            .background(MoveMarkTheme.Colors.mint.opacity(0.55))
+            .background(MoveMarkTheme.Colors.cardRaised.opacity(0.55))
             .overlay(
                 Capsule()
-                    .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.55), lineWidth: 0.8)
+                    .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.55), lineWidth: 0.8)
             )
             .clipShape(Capsule())
     }
@@ -713,11 +713,11 @@ struct PropertyVaultView: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(MoveMarkTheme.Colors.panel.opacity(0.80))
+        .background(MoveMarkTheme.Colors.card.opacity(0.80))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.48), lineWidth: 0.5)
+                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.48), lineWidth: 0.5)
         )
     }
 

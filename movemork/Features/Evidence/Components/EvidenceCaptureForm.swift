@@ -67,11 +67,11 @@ struct EvidenceCaptureForm: View {
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(MoveMarkTheme.Colors.surfaceInset.opacity(0.55))
+                        .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.55))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.38), lineWidth: 0.8)
+                        .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.38), lineWidth: 0.8)
                 )
 
                 if let errorMessage {
@@ -85,7 +85,7 @@ struct EvidenceCaptureForm: View {
                 if let successMessage {
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(MoveMarkTheme.Typography.sectionTitle)
                             .foregroundStyle(MoveMarkTheme.Colors.semanticSuccess)
                         Text(successMessage)
                             .font(MoveMarkTheme.Typography.subheadline)
@@ -123,7 +123,7 @@ struct EvidenceCaptureForm: View {
                         ? "Optional damage markers"
                         : "\(selectedTags.count) selected"
                 )
-                .font(.system(size: 12, weight: .medium))
+                .font(MoveMarkTheme.Typography.caption)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.68))
             }
 
@@ -147,7 +147,7 @@ struct EvidenceCaptureForm: View {
             }
         } label: {
             Text(tag)
-                .font(.system(size: 13, weight: .medium))
+                .font(MoveMarkTheme.Typography.footnote)
                 .foregroundStyle(
                     isSelected
                         ? MoveMarkTheme.Colors.textPrimary
@@ -160,7 +160,7 @@ struct EvidenceCaptureForm: View {
                         .fill(
                             isSelected
                                 ? MoveMarkTheme.Colors.primary.opacity(0.18)
-                                : MoveMarkTheme.Colors.mint.opacity(0.5)
+                                : MoveMarkTheme.Colors.cardRaised.opacity(0.5)
                         )
                 )
                 .overlay(
@@ -168,7 +168,7 @@ struct EvidenceCaptureForm: View {
                         .stroke(
                             isSelected
                                 ? MoveMarkTheme.Colors.primary.opacity(0.22)
-                                : MoveMarkTheme.Colors.panelStroke.opacity(0.38),
+                                : MoveMarkTheme.Colors.cardStroke.opacity(0.38),
                             lineWidth: 0.8
                         )
                 )

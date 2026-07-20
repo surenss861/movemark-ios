@@ -18,7 +18,7 @@ struct MMSummaryCapsule: View {
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
             Text(label)
-                .font(.system(size: 13, weight: .medium))
+                .font(MoveMarkTheme.Typography.footnote)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
         }
         .padding(.horizontal, 12)
@@ -27,7 +27,7 @@ struct MMSummaryCapsule: View {
         .clipShape(Capsule())
         .overlay(
             Capsule()
-                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.7), lineWidth: 1)
+                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.7), lineWidth: 1)
         )
     }
 }

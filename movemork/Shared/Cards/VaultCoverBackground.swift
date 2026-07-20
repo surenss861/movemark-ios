@@ -44,12 +44,12 @@ struct VaultCoverBackground: View {
                 ? [
                     .init(color: .clear, location: 0),
                     .init(color: .clear, location: 0.45),
-                    .init(color: MoveMarkTheme.Colors.panel.opacity(0.55), location: 0.72),
-                    .init(color: MoveMarkTheme.Colors.panel.opacity(0.92), location: 1)
+                    .init(color: MoveMarkTheme.Colors.card.opacity(0.55), location: 0.72),
+                    .init(color: MoveMarkTheme.Colors.card.opacity(0.92), location: 1)
                 ]
                 : [
                     .init(color: .clear, location: 0),
-                    .init(color: MoveMarkTheme.Colors.panel.opacity(0.35), location: 1)
+                    .init(color: MoveMarkTheme.Colors.card.opacity(0.35), location: 1)
                 ],
             startPoint: .top,
             endPoint: .bottom

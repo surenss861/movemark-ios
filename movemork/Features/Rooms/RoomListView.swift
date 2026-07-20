@@ -344,7 +344,7 @@ private struct AddRoomSheetView: View {
             roomName = name
         } label: {
             Text(name)
-                .font(.system(size: 13, weight: .medium))
+                .font(MoveMarkTheme.Typography.footnote)
                 .foregroundStyle(
                     isSelected
                         ? MoveMarkTheme.Colors.textPrimary

@@ -49,7 +49,7 @@ struct VaultCoverExpandedTray: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 1)
-                    .fill(MoveMarkTheme.Colors.panelStroke)
+                    .fill(MoveMarkTheme.Colors.cardStroke)
                     .frame(height: 3)
                 RoundedRectangle(cornerRadius: 1)
                     .fill(MoveMarkTheme.Colors.primary)
@@ -74,10 +74,10 @@ struct VaultCoverExpandedTray: View {
     }
 
     private var trayBackground: some View {
-        MoveMarkTheme.Colors.panelAlt
+        MoveMarkTheme.Colors.cardRaised
             .overlay(alignment: .top) {
                 Rectangle()
-                    .fill(MoveMarkTheme.Colors.panelStroke)
+                    .fill(MoveMarkTheme.Colors.cardStroke)
                     .frame(height: 0.5)
             }
     }

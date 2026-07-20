@@ -263,11 +263,11 @@ private struct EditEvidenceSheet: View {
 
                                     PhotoStripView(placeholderCount: evidence.photoCount)
                                         .padding(12)
-                                        .background(MoveMarkTheme.Colors.surfaceInset.opacity(0.65))
+                                        .background(MoveMarkTheme.Colors.fieldFill.opacity(0.65))
                                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.42), lineWidth: 0.8)
+                                                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.42), lineWidth: 0.8)
                                         )
                                 }
                             }
@@ -295,11 +295,11 @@ private struct EditEvidenceSheet: View {
                                 .padding(12)
                                 .background(
                                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .fill(MoveMarkTheme.Colors.surfaceInset.opacity(0.55))
+                                        .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.55))
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.38), lineWidth: 0.8)
+                                        .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.38), lineWidth: 0.8)
                                 )
                             }
                             .disabled(isSaving)
@@ -348,7 +348,7 @@ private struct EditEvidenceSheet: View {
                         ? "Optional damage markers"
                         : "\(selectedTags.count) selected"
                 )
-                .font(.system(size: 12, weight: .medium))
+                .font(MoveMarkTheme.Typography.caption)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.68))
             }
 
@@ -373,7 +373,7 @@ private struct EditEvidenceSheet: View {
             }
         } label: {
             Text(tag)
-                .font(.system(size: 13, weight: .medium))
+                .font(MoveMarkTheme.Typography.footnote)
                 .foregroundStyle(
                     isSelected
                         ? MoveMarkTheme.Colors.textPrimary
@@ -386,7 +386,7 @@ private struct EditEvidenceSheet: View {
                         .fill(
                             isSelected
                                 ? MoveMarkTheme.Colors.primary.opacity(0.18)
-                                : MoveMarkTheme.Colors.mint.opacity(0.5)
+                                : MoveMarkTheme.Colors.cardRaised.opacity(0.5)
                         )
                 )
                 .overlay(
@@ -394,7 +394,7 @@ private struct EditEvidenceSheet: View {
                         .stroke(
                             isSelected
                                 ? MoveMarkTheme.Colors.primary.opacity(0.45)
-                                : MoveMarkTheme.Colors.panelStroke,
+                                : MoveMarkTheme.Colors.cardStroke,
                             lineWidth: 0.8
                         )
                 )
@@ -434,10 +434,10 @@ private struct EditEvidenceSheet: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
-        .background(MoveMarkTheme.Colors.panel)
+        .background(MoveMarkTheme.Colors.card)
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(MoveMarkTheme.Colors.panelStroke)
+                .fill(MoveMarkTheme.Colors.cardStroke)
                 .frame(height: 0.5)
         }
         .shadow(color: MoveMarkTheme.Colors.textPrimary.opacity(0.06), radius: 8, y: -2)
@@ -504,11 +504,11 @@ private struct AppendPhotosSheet: View {
 
                                     PhotoStripView(placeholderCount: entry.photoCount)
                                         .padding(12)
-                                        .background(MoveMarkTheme.Colors.surfaceInset.opacity(0.55))
+                                        .background(MoveMarkTheme.Colors.fieldFill.opacity(0.55))
                                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.38), lineWidth: 0.8)
+                                                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.38), lineWidth: 0.8)
                                         )
                                 }
                             }
@@ -526,7 +526,7 @@ private struct AppendPhotosSheet: View {
                                 .background(MoveMarkTheme.Colors.fieldFill.opacity(0.88))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.65), lineWidth: 0.9)
+                                        .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.65), lineWidth: 0.9)
                                 )
                                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                             }
@@ -555,11 +555,11 @@ private struct AppendPhotosSheet: View {
 
                                     PhotoStripView(images: loadedImages)
                                         .padding(12)
-                                        .background(MoveMarkTheme.Colors.surfaceInset.opacity(0.65))
+                                        .background(MoveMarkTheme.Colors.fieldFill.opacity(0.65))
                                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.4), lineWidth: 0.8)
+                                                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.4), lineWidth: 0.8)
                                         )
                                 }
                             }
@@ -620,7 +620,7 @@ private struct AppendPhotosSheet: View {
                         Capsule()
                             .fill(
                                 loadedImages.isEmpty
-                                    ? MoveMarkTheme.Colors.mint.opacity(0.6)
+                                    ? MoveMarkTheme.Colors.cardRaised.opacity(0.6)
                                     : MoveMarkTheme.Colors.primary.opacity(isUploading ? 0.72 : 1.0)
                             )
                     )
@@ -630,10 +630,10 @@ private struct AppendPhotosSheet: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
-        .background(MoveMarkTheme.Colors.panel)
+        .background(MoveMarkTheme.Colors.card)
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(MoveMarkTheme.Colors.panelStroke)
+                .fill(MoveMarkTheme.Colors.cardStroke)
                 .frame(height: 0.5)
         }
         .shadow(color: MoveMarkTheme.Colors.textPrimary.opacity(0.06), radius: 8, y: -2)

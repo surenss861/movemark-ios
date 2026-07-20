@@ -14,7 +14,7 @@ struct AppRouter: View {
 
     var body: some View {
         ZStack {
-            MoveMarkTheme.Colors.background.ignoresSafeArea()
+            MoveMarkTheme.Colors.appBackground.ignoresSafeArea()
 
             switch sessionManager.authPhase {
             case .loading:

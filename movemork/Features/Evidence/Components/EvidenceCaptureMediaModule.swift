@@ -29,7 +29,7 @@ struct EvidenceCaptureMediaModule: View {
             PhotosPicker(selection: $selectedItems, maxSelectionCount: 20, matching: .images) {
                 HStack(spacing: 8) {
                     Image(systemName: "photo.on.rectangle.angled")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.subheadlineMedium)
                     Text("Choose from gallery")
                         .font(MoveMarkTheme.Typography.subheadlineMedium)
                 }
@@ -39,7 +39,7 @@ struct EvidenceCaptureMediaModule: View {
                 .background(MoveMarkTheme.Colors.fieldFill.opacity(0.82))
                 .overlay(
                     RoundedRectangle(cornerRadius: MoveMarkTheme.Spacing.cornerRadius, style: .continuous)
-                        .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.72), lineWidth: 0.9)
+                        .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.72), lineWidth: 0.9)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: MoveMarkTheme.Spacing.cornerRadius, style: .continuous))
             }

@@ -36,11 +36,11 @@ struct MMCompactCallout: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(MoveMarkTheme.Colors.mint.opacity(0.5))
+                .fill(MoveMarkTheme.Colors.cardRaised.opacity(0.5))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 0.8)
+                .stroke(MoveMarkTheme.Colors.cardStroke, lineWidth: 0.8)
         )
     }
 }

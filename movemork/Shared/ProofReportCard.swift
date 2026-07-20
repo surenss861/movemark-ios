@@ -41,7 +41,7 @@ struct ProofReportCard: View {
 
             if let metricsLine = model.metricsLine, !metricsLine.isEmpty {
                 Text(metricsLine)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MoveMarkTheme.Typography.footnote)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     .padding(.top, 4)
             }
@@ -56,7 +56,7 @@ struct ProofReportCard: View {
                     ProofStatusBadge(text: model.statusLabel, tone: model.statusTone)
                     if let footnote = model.footnote, !footnote.isEmpty {
                         Text(footnote)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(MoveMarkTheme.Typography.caption)
                             .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                     }
                 }
@@ -83,7 +83,7 @@ struct ProofReportCard: View {
 
             if let legalNote, !legalNote.isEmpty {
                 Text(legalNote)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MoveMarkTheme.Typography.caption)
                     .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                     .padding(.top, 10)
             }

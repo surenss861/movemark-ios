@@ -37,7 +37,7 @@ struct MMActionTile: View {
                         .overlay(
                             RoundedRectangle(cornerRadius: isPrimary ? 18 : 14, style: .continuous)
                                 .stroke(
-                                    isPrimary ? tint.opacity(0.18) : MoveMarkTheme.Colors.panelStroke.opacity(0.5),
+                                    isPrimary ? tint.opacity(0.18) : MoveMarkTheme.Colors.cardStroke.opacity(0.5),
                                     lineWidth: 1
                                 )
                         )
@@ -70,7 +70,7 @@ struct MMActionTile: View {
 
                 ZStack {
                     Circle()
-                        .fill(isPrimary ? tint.opacity(0.12) : MoveMarkTheme.Colors.mint.opacity(0.5))
+                        .fill(isPrimary ? tint.opacity(0.12) : MoveMarkTheme.Colors.cardRaised.opacity(0.5))
                         .frame(width: isPrimary ? 30 : 26, height: isPrimary ? 30 : 26)
 
                     Image(systemName: "chevron.right")
@@ -88,7 +88,7 @@ struct MMActionTile: View {
                     .stroke(
                         isPrimary
                             ? tint.opacity(0.26)
-                            : MoveMarkTheme.Colors.panelStroke.opacity(0.55),
+                            : MoveMarkTheme.Colors.cardStroke.opacity(0.55),
                         lineWidth: isPrimary ? 1.2 : 0.75
                     )
             )
@@ -102,12 +102,12 @@ struct MMActionTile: View {
                 LinearGradient(
                     colors: isPrimary
                         ? [
-                            MoveMarkTheme.Colors.panel.opacity(1.0),
-                            MoveMarkTheme.Colors.panel.opacity(0.96)
+                            MoveMarkTheme.Colors.card.opacity(1.0),
+                            MoveMarkTheme.Colors.card.opacity(0.96)
                         ]
                         : [
-                            MoveMarkTheme.Colors.panel.opacity(0.94),
-                            MoveMarkTheme.Colors.panel.opacity(0.90)
+                            MoveMarkTheme.Colors.card.opacity(0.94),
+                            MoveMarkTheme.Colors.card.opacity(0.90)
                         ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing

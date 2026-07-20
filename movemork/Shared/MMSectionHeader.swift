@@ -19,7 +19,7 @@ struct MMSectionHeader: View {
 
             if let subtitle {
                 Text(subtitle)
-                    .font(.system(size: 15))
+                    .font(MoveMarkTheme.Typography.subheadline)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
             }
         }

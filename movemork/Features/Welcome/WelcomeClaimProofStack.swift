@@ -45,7 +45,7 @@ struct WelcomeClaimProofStack: View {
                 .lineLimit(2)
 
             Text("Potential charge · $450")
-                .font(.system(size: 13, weight: .medium))
+                .font(MoveMarkTheme.Typography.footnote)
                 .foregroundStyle(MoveMarkTheme.Colors.semanticWarning.opacity(0.88))
                 .lineLimit(1)
         }
@@ -79,7 +79,7 @@ struct WelcomeClaimProofStack: View {
                 }
 
                 Text("Kitchen · Apr 14 · 5:42 PM")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MoveMarkTheme.Typography.caption)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     .lineLimit(1)
 

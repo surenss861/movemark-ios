@@ -33,7 +33,7 @@ struct ExportHistoryRow: View {
                     .lineLimit(1)
 
                 Text(dateLine)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MoveMarkTheme.Typography.caption)
                     .foregroundStyle(MoveMarkTheme.Colors.textMuted)
 
                 ProofStatusBadge(text: statusLabel, tone: statusTone)

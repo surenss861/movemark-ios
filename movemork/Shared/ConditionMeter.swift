@@ -20,7 +20,7 @@ struct ConditionMeter: View {
             HStack(spacing: 5) {
                 ForEach(1...5, id: \.self) { idx in
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(idx <= rating ? MoveMarkTheme.Colors.semanticWarning : MoveMarkTheme.Colors.panelStroke)
+                        .fill(idx <= rating ? MoveMarkTheme.Colors.semanticWarning : MoveMarkTheme.Colors.cardStroke)
                         .frame(width: 24, height: 4)
                 }
             }

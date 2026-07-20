@@ -26,70 +26,31 @@ enum MoveMarkTheme {
         static let subtleStroke = Color.white.opacity(0.06)
         static let tabBarFill = Color(red: 0.031, green: 0.075, blue: 0.059).opacity(0.94) // #08130F
 
-        // Legacy aliases — use canonical names above for new code.
-        @available(*, deprecated, renamed: "appBackground")
-        static let background = appBackground
-        @available(*, deprecated, renamed: "appBackgroundRaised")
-        static let backgroundAlt = appBackgroundRaised
-        @available(*, deprecated, renamed: "surface")
-        static let backgroundDeep = surface
-        @available(*, deprecated, renamed: "card")
-        static let deepCard = card
-        @available(*, deprecated, renamed: "cardRaised")
-        static let deepCardAlt = cardRaised
-        @available(*, deprecated, renamed: "surface")
-        static let darkSurface = surface
         static let forestGreen = Color(red: 0.039, green: 0.125, blue: 0.082)
-        @available(*, deprecated, renamed: "card")
-        static let panel = card
-        @available(*, deprecated, renamed: "cardRaised")
-        static let panelAlt = cardRaised
-        @available(*, deprecated, renamed: "cardStroke")
-        static let panelStroke = cardStroke
-        @available(*, deprecated, renamed: "subtleStroke")
-        static let softBorder = subtleStroke
-        @available(*, deprecated, renamed: "cardRaised")
-        static let mint = cardRaised
-        @available(*, deprecated, renamed: "cardRaised")
-        static let mintSurface = cardRaised
 
         // Brand — calm green, lime only for tiny success accents
         static let primary = Color(red: 0.129, green: 0.722, blue: 0.400)               // #21B866
         static let primaryPressed = Color(red: 0.094, green: 0.588, blue: 0.310)       // #18A957-ish pressed
-        @available(*, deprecated, renamed: "primaryPressed")
-        static let primaryGreenDark = primaryPressed
         static let limeAccent = Color(red: 0.608, green: 0.788, blue: 0.604)           // muted sage accent
         static let proofMint = Color(red: 0.545, green: 0.722, blue: 0.600)
-        @available(*, deprecated, renamed: "primary")
-        static let accent = primary
 
         // Text (dark UI)
         static let textPrimary = Color(red: 0.949, green: 0.973, blue: 0.945)
         static let textSecondary = Color(red: 0.659, green: 0.722, blue: 0.678)
         static let textMuted = Color(red: 0.435, green: 0.514, blue: 0.463)
         static let textOnPrimary = Color.white
-        @available(*, deprecated, renamed: "textPrimary")
-        static let textOnDark = textPrimary
-        @available(*, deprecated, renamed: "textSecondary")
-        static let textOnDarkMuted = textSecondary
         static let textOnLight = Color(red: 0.12, green: 0.18, blue: 0.14)
         static let textDarkGreen = proofMint
         static let textDeepGreen = proofMint
 
         /// Report / lease preview only — warm paper, never main card fill.
         static let paperSurface = Color(red: 0.910, green: 0.937, blue: 0.898)          // #E8EFE5
-        @available(*, deprecated, renamed: "paperSurface")
-        static let creamSurface = paperSurface
-        @available(*, deprecated, renamed: "paperSurface")
-        static let whiteSurface = paperSurface
 
         /// Muted warm sage for thumbnails on dark cards.
         static let artifactPaper = Color(red: 0.867, green: 0.910, blue: 0.855)         // #DDE8DA
 
         static let divider = subtleStroke.opacity(0.75)
         static let fieldFill = Color(red: 0.055, green: 0.118, blue: 0.090)
-        @available(*, deprecated, renamed: "fieldFill")
-        static let surfaceInset = fieldFill
 
         // Semantic
         static let semanticSuccess = primary

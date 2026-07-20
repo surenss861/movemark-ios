@@ -21,7 +21,7 @@ struct OnboardingNameScreen: View {
                 Spacer()
 
                 Rectangle()
-                    .fill(MoveMarkTheme.Colors.accent)
+                    .fill(MoveMarkTheme.Colors.primary)
                     .frame(width: 38, height: 3)
                     .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
 
@@ -74,7 +74,7 @@ struct OnboardingNameScreen: View {
 
     private var backgroundAtmosphere: some View {
         ZStack {
-            MoveMarkTheme.Colors.background.ignoresSafeArea()
+            MoveMarkTheme.Colors.appBackground.ignoresSafeArea()
 
             RadialGradient(
                 colors: [
@@ -88,7 +88,7 @@ struct OnboardingNameScreen: View {
 
             RadialGradient(
                 colors: [
-                    MoveMarkTheme.Colors.accent.opacity(0.035),
+                    MoveMarkTheme.Colors.primary.opacity(0.035),
                     .clear
                 ],
                 center: .topLeading,

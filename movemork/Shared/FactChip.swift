@@ -10,7 +10,7 @@ import SwiftUI
 struct FactChip: View {
     let title: String
     let value: String
-    var accent: Color = MoveMarkTheme.Colors.accent
+    var accent: Color = MoveMarkTheme.Colors.primary
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -29,7 +29,7 @@ struct FactChip: View {
         .background(MoveMarkTheme.Colors.fieldFill)
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 1)
+                .stroke(MoveMarkTheme.Colors.cardStroke, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }

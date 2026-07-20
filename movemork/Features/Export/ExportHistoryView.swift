@@ -1044,15 +1044,15 @@ struct ExportHistoryView: View {
                         .frame(width: 118, height: 8)
 
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(MoveMarkTheme.Colors.panelStroke)
+                        .fill(MoveMarkTheme.Colors.cardStroke)
                         .frame(width: 160, height: 6)
 
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(MoveMarkTheme.Colors.panelStroke.opacity(0.7))
+                        .fill(MoveMarkTheme.Colors.cardStroke.opacity(0.7))
                         .frame(height: 6)
 
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(MoveMarkTheme.Colors.panelStroke.opacity(0.7))
+                        .fill(MoveMarkTheme.Colors.cardStroke.opacity(0.7))
                         .frame(height: 6)
                 }
 
@@ -1072,7 +1072,7 @@ struct ExportHistoryView: View {
             .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
             .padding(.horizontal, 10)
             .frame(height: 26)
-            .background(MoveMarkTheme.Colors.mint.opacity(0.5))
+            .background(MoveMarkTheme.Colors.cardRaised.opacity(0.5))
             .clipShape(Capsule())
     }
 
@@ -1188,8 +1188,8 @@ struct ExportHistoryView: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            MoveMarkTheme.Colors.mint,
-                            MoveMarkTheme.Colors.panelAlt
+                            MoveMarkTheme.Colors.cardRaised,
+                            MoveMarkTheme.Colors.cardRaised
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -1198,7 +1198,7 @@ struct ExportHistoryView: View {
                 .frame(width: 58, height: 72)
 
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.6), lineWidth: 0.8)
+                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.6), lineWidth: 0.8)
                 .frame(width: 58, height: 72)
 
             VStack(alignment: .leading, spacing: 5) {
@@ -1207,11 +1207,11 @@ struct ExportHistoryView: View {
                     .frame(width: 22, height: 4)
 
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.panelStroke)
+                    .fill(MoveMarkTheme.Colors.cardStroke)
                     .frame(width: 30, height: 3)
 
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.panelStroke.opacity(0.7))
+                    .fill(MoveMarkTheme.Colors.cardStroke.opacity(0.7))
                     .frame(width: 26, height: 3)
 
                 Spacer()

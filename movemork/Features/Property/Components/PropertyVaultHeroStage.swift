@@ -31,7 +31,7 @@ struct PropertyVaultHeroStage: View {
     private func header(namespace: Namespace.ID?) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Move-in proof")
-                .font(.system(size: 13, weight: .medium))
+                .font(MoveMarkTheme.Typography.footnote)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
 
             titleView(namespace: namespace)
@@ -44,7 +44,7 @@ struct PropertyVaultHeroStage: View {
             }
 
             Text(roomsProgressLine)
-                .font(.system(size: 15, weight: .semibold))
+                .font(MoveMarkTheme.Typography.subheadlineMedium)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.95))
 
             if let next = nextRoomName, !next.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,

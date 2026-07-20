@@ -56,7 +56,7 @@ struct VaultCoverCard: View {
                     .stroke(
                         model.isEmphasized
                             ? MoveMarkTheme.Colors.primary.opacity(0.28)
-                            : MoveMarkTheme.Colors.panelStroke,
+                            : MoveMarkTheme.Colors.cardStroke,
                         lineWidth: model.isEmphasized ? 1.0 : 0.8
                     )
             )
@@ -134,10 +134,10 @@ struct VaultCoverCard: View {
                 .frame(height: chevronStripHeight)
         }
         .buttonStyle(.plain)
-        .background(MoveMarkTheme.Colors.panelAlt)
+        .background(MoveMarkTheme.Colors.cardRaised)
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(MoveMarkTheme.Colors.panelStroke)
+                .fill(MoveMarkTheme.Colors.cardStroke)
                 .frame(height: 0.5)
         }
     }

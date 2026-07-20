@@ -30,7 +30,7 @@ struct MMStatPill: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 1)
+                .stroke(MoveMarkTheme.Colors.cardStroke, lineWidth: 1)
         )
     }
 }

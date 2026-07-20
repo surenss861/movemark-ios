@@ -99,8 +99,8 @@ struct MMRoomProofRow: View {
             Circle()
                 .fill(
                     isNext
-                        ? MoveMarkTheme.Colors.accent.opacity(0.16)
-                        : MoveMarkTheme.Colors.mint.opacity(0.55)
+                        ? MoveMarkTheme.Colors.primary.opacity(0.16)
+                        : MoveMarkTheme.Colors.cardRaised.opacity(0.55)
                 )
                 .frame(width: 34, height: 34)
 
@@ -108,7 +108,7 @@ struct MMRoomProofRow: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(
                     isNext
-                        ? MoveMarkTheme.Colors.accent
+                        ? MoveMarkTheme.Colors.primary
                         : MoveMarkTheme.Colors.textSecondary
                 )
         }

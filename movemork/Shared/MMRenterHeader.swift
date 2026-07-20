@@ -24,7 +24,7 @@ struct MMRenterHeader: View {
                 }
 
                 Text(title)
-                    .font(.system(size: 28, weight: .bold))
+                    .font(MoveMarkTheme.Typography.cardValue)
                     .tracking(-0.5)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)

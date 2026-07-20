@@ -166,11 +166,11 @@ private struct SavedProofPhotoThumbnails: View {
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.88))
                                 .frame(width: 48, height: 76)
-                                .background(MoveMarkTheme.Colors.surfaceInset.opacity(0.88))
+                                .background(MoveMarkTheme.Colors.fieldFill.opacity(0.88))
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.5), lineWidth: 0.9)
+                                        .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.5), lineWidth: 0.9)
                                 )
                         }
                     }
@@ -241,7 +241,7 @@ private struct SavedProofPhotoThumbnails: View {
                                     Task { @MainActor in imageRenderFailedIds.insert(photo.id) }
                                 }
                         case .empty:
-                            MoveMarkTheme.Colors.mint.opacity(0.5)
+                            MoveMarkTheme.Colors.cardRaised.opacity(0.5)
                         }
                     }
                     .frame(width: 76, height: 76)
@@ -251,7 +251,7 @@ private struct SavedProofPhotoThumbnails: View {
                 .id("\(photo.id.uuidString)-\(nonce)")
             } else {
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(MoveMarkTheme.Colors.mint.opacity(0.5))
+                    .fill(MoveMarkTheme.Colors.cardRaised.opacity(0.5))
                     .overlay { ProgressView().tint(MoveMarkTheme.Colors.primary) }
             }
         }
@@ -259,13 +259,13 @@ private struct SavedProofPhotoThumbnails: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.48), lineWidth: 0.9)
+                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.48), lineWidth: 0.9)
         )
     }
 
     private func thumbPlaceholder(systemName: String, caption: String) -> some View {
         RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill(MoveMarkTheme.Colors.surfaceInset.opacity(0.75))
+            .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.75))
             .overlay {
                 VStack(spacing: 4) {
                     Image(systemName: systemName)
@@ -376,7 +376,7 @@ private struct PhotoPreviewFullScreen: View {
                         Task { await manualRetry() }
                     } label: {
                         Text("Try again")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(MoveMarkTheme.Typography.subheadlineMedium)
                             .foregroundStyle(MoveMarkTheme.Colors.primary)
                     }
                     .padding(.top, 4)

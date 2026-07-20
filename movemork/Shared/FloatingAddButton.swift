@@ -24,10 +24,10 @@ struct FloatingAddButton: View {
                     .blur(radius: 12)
 
                 Circle()
-                    .fill(MoveMarkTheme.Colors.background.opacity(0.98))
+                    .fill(MoveMarkTheme.Colors.appBackground.opacity(0.98))
                     .overlay(
                         Circle()
-                            .strokeBorder(MoveMarkTheme.Colors.panelStroke, lineWidth: 0.5)
+                            .strokeBorder(MoveMarkTheme.Colors.cardStroke, lineWidth: 0.5)
                     )
                     .frame(width: 52, height: 52)
 

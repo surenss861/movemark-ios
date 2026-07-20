@@ -14,7 +14,7 @@ struct SectionLabel: View {
         Text(text)
             .font(MoveMarkTheme.Typography.caption)
             .tracking(1.1)
-            .foregroundStyle(MoveMarkTheme.Colors.accent)
+            .foregroundStyle(MoveMarkTheme.Colors.primary)
             .textCase(.uppercase)
     }
 }

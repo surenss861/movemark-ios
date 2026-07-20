@@ -47,8 +47,8 @@ struct MMActionPill<Option: Hashable>: View {
             }
         }
         .padding(4)
-        .background(MoveMarkTheme.Colors.mint.opacity(0.5))
+        .background(MoveMarkTheme.Colors.cardRaised.opacity(0.5))
         .clipShape(Capsule())
-        .overlay(Capsule().stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 1))
+        .overlay(Capsule().stroke(MoveMarkTheme.Colors.cardStroke, lineWidth: 1))
     }
 }

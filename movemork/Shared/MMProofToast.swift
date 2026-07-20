@@ -43,16 +43,16 @@ struct MMProofToastMessage: Equatable, Identifiable {
             case .success: return MoveMarkTheme.Colors.primary.opacity(0.35)
             case .warning: return MoveMarkTheme.Colors.semanticWarning.opacity(0.45)
             case .danger: return MoveMarkTheme.Colors.semanticDanger.opacity(0.4)
-            case .info: return MoveMarkTheme.Colors.panelStroke
+            case .info: return MoveMarkTheme.Colors.cardStroke
             }
         }
 
         var backgroundTint: Color {
             switch self {
-            case .success: return MoveMarkTheme.Colors.mint.opacity(0.75)
+            case .success: return MoveMarkTheme.Colors.cardRaised.opacity(0.75)
             case .warning: return MoveMarkTheme.Colors.semanticWarning.opacity(0.14)
             case .danger: return MoveMarkTheme.Colors.semanticDanger.opacity(0.1)
-            case .info: return MoveMarkTheme.Colors.panel
+            case .info: return MoveMarkTheme.Colors.card
             }
         }
 
@@ -170,12 +170,12 @@ struct MMProofToast: View {
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: message.kind.iconName)
-                .font(.system(size: 18, weight: .semibold))
+                .font(MoveMarkTheme.Typography.sectionTitle)
                 .foregroundStyle(message.kind.iconColor)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(message.title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.subheadlineMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
                 if let subtitle = message.message, !subtitle.isEmpty {

@@ -35,23 +35,23 @@ struct PhotoStripView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.55), lineWidth: 0.9)
+                                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.55), lineWidth: 0.9)
                         )
                 }
 
                 if images.count > 4 {
                     ZStack {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(MoveMarkTheme.Colors.surfaceInset.opacity(0.9))
+                            .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.9))
                             .frame(width: 64, height: 64)
 
                         Text("+\(images.count - 4)")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(MoveMarkTheme.Typography.subheadlineMedium)
                             .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.92))
                     }
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.5), lineWidth: 0.9)
+                            .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.5), lineWidth: 0.9)
                     )
                 }
             }
@@ -64,17 +64,17 @@ struct PhotoStripView: View {
         HStack(spacing: 10) {
             ForEach(0..<min(max(count, 1), 4), id: \.self) { idx in
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.mint.opacity(idx == 0 ? 0.85 : 0.45))
+                    .fill(MoveMarkTheme.Colors.cardRaised.opacity(idx == 0 ? 0.85 : 0.45))
                     .frame(width: 64, height: 64)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(idx == 0 ? MoveMarkTheme.Colors.accent.opacity(0.75) : MoveMarkTheme.Colors.panelStroke.opacity(0.55), lineWidth: 1)
+                            .stroke(idx == 0 ? MoveMarkTheme.Colors.primary.opacity(0.75) : MoveMarkTheme.Colors.cardStroke.opacity(0.55), lineWidth: 1)
                     )
             }
 
             if count > 4 {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.surfaceInset.opacity(0.88))
+                    .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.88))
                     .frame(width: 64, height: 64)
                     .overlay(
                         Text("+\(count - 4)")
@@ -83,7 +83,7 @@ struct PhotoStripView: View {
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.5), lineWidth: 0.9)
+                            .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.5), lineWidth: 0.9)
                     )
             }
         }

@@ -41,7 +41,7 @@ struct CompactProofRow: View {
 
                     if let meta, !meta.isEmpty {
                         Text(meta)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(MoveMarkTheme.Typography.caption)
                             .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                             .lineLimit(1)
                     }

@@ -16,7 +16,7 @@ struct MMErrorBanner: View {
         MMCard {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 18))
+                    .font(MoveMarkTheme.Typography.screenSubtitle)
                     .foregroundStyle(.orange.opacity(0.9))
 
                 VStack(alignment: .leading, spacing: 8) {

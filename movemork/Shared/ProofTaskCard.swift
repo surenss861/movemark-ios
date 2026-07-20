@@ -20,11 +20,11 @@ struct ProofTaskCard: View {
             HStack(alignment: .center, spacing: 8) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.subheadlineMedium)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                         .lineLimit(1)
                     Text(reason)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(MoveMarkTheme.Typography.footnote)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)

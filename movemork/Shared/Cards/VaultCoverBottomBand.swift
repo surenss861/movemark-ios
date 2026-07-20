@@ -96,7 +96,7 @@ struct VaultCoverBottomBand: View {
             }
         } else {
             Text(fallbackPrimaryLine)
-                .font(.system(size: 12, weight: .medium))
+                .font(MoveMarkTheme.Typography.caption)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 .lineLimit(2)
         }
@@ -122,11 +122,11 @@ struct VaultCoverBottomBand: View {
 
     private var ctaFill: Color {
         if isEmphasized { return MoveMarkTheme.Colors.primary }
-        return MoveMarkTheme.Colors.mint.opacity(0.7)
+        return MoveMarkTheme.Colors.cardRaised.opacity(0.7)
     }
 
     private var ctaStroke: Color {
-        isEmphasized ? MoveMarkTheme.Colors.primary.opacity(0.2) : MoveMarkTheme.Colors.panelStroke
+        isEmphasized ? MoveMarkTheme.Colors.primary.opacity(0.2) : MoveMarkTheme.Colors.cardStroke
     }
 
     private var bandBackground: some View {

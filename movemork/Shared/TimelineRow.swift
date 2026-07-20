@@ -16,11 +16,11 @@ struct TimelineRow: View {
         HStack(alignment: .top, spacing: 12) {
             VStack(spacing: 0) {
                 Circle()
-                    .fill(isEmphasized ? MoveMarkTheme.Colors.primary : MoveMarkTheme.Colors.accent.opacity(0.9))
+                    .fill(isEmphasized ? MoveMarkTheme.Colors.primary : MoveMarkTheme.Colors.primary.opacity(0.9))
                     .frame(width: 8, height: 8)
 
                 Rectangle()
-                    .fill(MoveMarkTheme.Colors.panelStroke)
+                    .fill(MoveMarkTheme.Colors.cardStroke)
                     .frame(width: 1, height: 28)
                     .padding(.top, 4)
             }

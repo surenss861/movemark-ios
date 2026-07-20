@@ -77,7 +77,7 @@ struct PropertyVaultSecondaryTools: View {
                 HStack(alignment: .top) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(MoveMarkTheme.Colors.mint.opacity(0.55))
+                            .fill(MoveMarkTheme.Colors.cardRaised.opacity(0.55))
                             .frame(width: 36, height: 36)
 
                         Image(systemName: systemImage)
@@ -96,7 +96,7 @@ struct PropertyVaultSecondaryTools: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.subheadlineMedium)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                         .lineLimit(1)
 
@@ -111,14 +111,14 @@ struct PropertyVaultSecondaryTools: View {
             .frame(maxWidth: .infinity, minHeight: 104, maxHeight: 104, alignment: .topLeading)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.panel.opacity(0.84))
+                    .fill(MoveMarkTheme.Colors.card.opacity(0.84))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(
                         isPulsing
                             ? MoveMarkTheme.Colors.primary.opacity(0.20)
-                            : MoveMarkTheme.Colors.panelStroke.opacity(0.42),
+                            : MoveMarkTheme.Colors.cardStroke.opacity(0.42),
                         lineWidth: isPulsing ? 1.0 : 0.8
                     )
             )

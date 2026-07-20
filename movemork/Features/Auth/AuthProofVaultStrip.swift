@@ -31,7 +31,7 @@ struct AuthProofVaultStrip: View {
     private var signInStrip: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 15, weight: .semibold))
+                .font(MoveMarkTheme.Typography.subheadlineMedium)
                 .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.9))
                 .padding(.top, 1)
 

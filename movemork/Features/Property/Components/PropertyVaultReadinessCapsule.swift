@@ -22,7 +22,7 @@ struct PropertyVaultReadinessCapsule: View {
 
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("\(readinessScore)%")
-                        .font(.system(size: 28, weight: .bold))
+                        .font(MoveMarkTheme.Typography.cardValue)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
                     Text(readinessBand)
@@ -35,7 +35,7 @@ struct PropertyVaultReadinessCapsule: View {
                 }
 
                 Text(summaryLine)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MoveMarkTheme.Typography.footnote)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.86))
                     .lineLimit(2)
             }
@@ -53,11 +53,11 @@ struct PropertyVaultReadinessCapsule: View {
         .padding(.vertical, 14)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(MoveMarkTheme.Colors.panel.opacity(0.97))
+                .fill(MoveMarkTheme.Colors.card.opacity(0.97))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.panelStroke.opacity(0.52), lineWidth: 0.8)
+                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.52), lineWidth: 0.8)
         )
         .shadow(color: MoveMarkTheme.Colors.textPrimary.opacity(0.08), radius: 14, y: 7)
     }

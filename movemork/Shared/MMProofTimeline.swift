@@ -93,7 +93,7 @@ struct MMProofTimeline: View {
                                 .stroke(MoveMarkTheme.Colors.subtleStroke, lineWidth: 1)
                         )
                     Image(systemName: row.iconName)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.button)
                         .foregroundStyle(row.status.iconColor)
                 }
 
@@ -110,7 +110,7 @@ struct MMProofTimeline: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(row.title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(MoveMarkTheme.Typography.subheadlineMedium)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
 

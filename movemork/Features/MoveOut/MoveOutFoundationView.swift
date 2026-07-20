@@ -33,7 +33,7 @@ struct MoveOutFoundationView: View {
 
     var body: some View {
         ZStack {
-            MoveMarkTheme.Colors.background.ignoresSafeArea()
+            MoveMarkTheme.Colors.appBackground.ignoresSafeArea()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
@@ -91,7 +91,7 @@ struct MoveOutFoundationView: View {
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
             Rectangle()
-                .fill(MoveMarkTheme.Colors.accent)
+                .fill(MoveMarkTheme.Colors.primary)
                 .frame(width: 38, height: 3)
                 .clipShape(Capsule())
         }
@@ -219,7 +219,7 @@ struct MoveOutFoundationView: View {
                     Spacer()
                     if hasMoveOut {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 18))
+                            .font(MoveMarkTheme.Typography.screenSubtitle)
                             .foregroundStyle(MoveMarkTheme.Colors.semanticSuccess)
                     }
                 }
@@ -234,7 +234,7 @@ struct MoveOutFoundationView: View {
                         isEmpty: !hasMoveIn
                     )
                     Rectangle()
-                        .fill(MoveMarkTheme.Colors.panelStroke)
+                        .fill(MoveMarkTheme.Colors.cardStroke)
                         .frame(width: 1, height: 52)
                     beforeAfterBlock(
                         label: "Move-out",

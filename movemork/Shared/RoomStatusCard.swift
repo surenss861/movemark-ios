@@ -47,7 +47,7 @@ struct RoomStatusCard: View {
         } else if isDone {
             return [
                 MoveMarkTheme.Colors.primary.opacity(0.14),
-                MoveMarkTheme.Colors.mint.opacity(0.5)
+                MoveMarkTheme.Colors.cardRaised.opacity(0.5)
             ]
         } else {
             return [
@@ -99,8 +99,8 @@ struct RoomStatusCard: View {
                 RoundedRectangle(cornerRadius: 17, style: .continuous)
                     .fill(
                         isNext
-                            ? MoveMarkTheme.Colors.panel.opacity(1.0)
-                            : MoveMarkTheme.Colors.panel.opacity(isDone ? 0.88 : 0.93)
+                            ? MoveMarkTheme.Colors.card.opacity(1.0)
+                            : MoveMarkTheme.Colors.card.opacity(isDone ? 0.88 : 0.93)
                     )
             )
             .overlay(
@@ -108,7 +108,7 @@ struct RoomStatusCard: View {
                     .stroke(
                         isNext
                             ? MoveMarkTheme.Colors.primary.opacity(0.38)
-                            : MoveMarkTheme.Colors.panelStroke.opacity(isDone ? 0.42 : 0.62),
+                            : MoveMarkTheme.Colors.cardStroke.opacity(isDone ? 0.42 : 0.62),
                         lineWidth: isNext ? 1.2 : 0.8
                     )
             )

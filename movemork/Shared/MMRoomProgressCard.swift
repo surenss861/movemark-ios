@@ -27,7 +27,7 @@ struct MMRoomProgressCard: View {
                     .foregroundStyle(MoveMarkTheme.Colors.textMuted)
 
                 Text(headline)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(MoveMarkTheme.Typography.button)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                     .mmRowStatusTransition(value: headline)

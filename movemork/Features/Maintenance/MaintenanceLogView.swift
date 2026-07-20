@@ -38,7 +38,7 @@ struct MaintenanceLogView: View {
 
     var body: some View {
         ZStack {
-            MoveMarkTheme.Colors.background.ignoresSafeArea()
+            MoveMarkTheme.Colors.appBackground.ignoresSafeArea()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
@@ -116,7 +116,7 @@ struct MaintenanceLogView: View {
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
             Rectangle()
-                .fill(MoveMarkTheme.Colors.accent)
+                .fill(MoveMarkTheme.Colors.primary)
                 .frame(width: 38, height: 3)
                 .clipShape(Capsule())
         }
@@ -142,7 +142,7 @@ struct MaintenanceLogView: View {
                 ) {
                     HStack {
                         Image(systemName: "camera.fill")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(MoveMarkTheme.Typography.subheadlineMedium)
 
                         Text(loadedImages.isEmpty ? "Attach photos" : "\(loadedImages.count) photos selected")
                             .font(MoveMarkTheme.Typography.subheadlineMedium)
@@ -153,7 +153,7 @@ struct MaintenanceLogView: View {
                     .background(MoveMarkTheme.Colors.fieldFill)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(MoveMarkTheme.Colors.panelStroke, lineWidth: 1)
+                            .stroke(MoveMarkTheme.Colors.cardStroke, lineWidth: 1)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
