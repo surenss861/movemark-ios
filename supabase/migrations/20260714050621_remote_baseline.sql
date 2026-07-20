@@ -1,0 +1,1 @@
+-- Placeholder for pre-existing remote migration 20260714050621 (applied directly, not tracked locally at the time; reconciled to restore migration history integrity).

@@ -127,11 +127,7 @@ struct InspectionRepository {
         }
     }
 
-    /// Returns the stable `inspections.id` for `(property_id, user_id, inspection_type)`.
-    /// Select-then-insert avoids upserting a new random `id` onto an existing row, which violates `inspection_items_inspection_id_fkey`.
-    func upsertInspection(propertyId: UUID, userId: UUID, type: String) async throws -> UUID {
-        let normalizedType = normalizedInspectionType(type)
-
+    private func findInspection(propertyId: UUID, userId: UUID, normalizedType: String) async throws -> InspectionRow? {
         let existing: [InspectionRow] = try await supabase
             .from("inspections")
             .select()
@@ -141,8 +137,15 @@ struct InspectionRepository {
             .limit(1)
             .execute()
             .value
+        return existing.first
+    }
 
-        if let id = existing.first?.id {
+    /// Returns the stable `inspections.id` for `(property_id, user_id, inspection_type)`.
+    /// Select-then-insert avoids upserting a new random `id` onto an existing row, which violates `inspection_items_inspection_id_fkey`.
+    func upsertInspection(propertyId: UUID, userId: UUID, type: String) async throws -> UUID {
+        let normalizedType = normalizedInspectionType(type)
+
+        if let id = try await findInspection(propertyId: propertyId, userId: userId, normalizedType: normalizedType)?.id {
             #if DEBUG
             print("upsertInspection reuse existing id:", id)
             #endif
@@ -154,26 +157,40 @@ struct InspectionRepository {
         #endif
 
         let newId = UUID()
-        let inserted: InspectionRow = try await supabase
-            .from("inspections")
-            .insert(
-                InspectionInsertRow(
-                    id: newId,
-                    propertyId: propertyId,
-                    userId: userId,
-                    inspectionType: normalizedType
+        do {
+            let inserted: InspectionRow = try await supabase
+                .from("inspections")
+                .insert(
+                    InspectionInsertRow(
+                        id: newId,
+                        propertyId: propertyId,
+                        userId: userId,
+                        inspectionType: normalizedType
+                    )
                 )
-            )
-            .select()
-            .single()
-            .execute()
-            .value
+                .select()
+                .single()
+                .execute()
+                .value
 
-        #if DEBUG
-        print("upsertInspection inserted new id:", inserted.id)
-        #endif
+            #if DEBUG
+            print("upsertInspection inserted new id:", inserted.id)
+            #endif
 
-        return inserted.id
+            return inserted.id
+        } catch {
+            // A concurrent call (second device, retried request) may have inserted the same
+            // (property_id, user_id, inspection_type) row between our select and insert; the DB's
+            // unique index rejects ours. Re-select the winner instead of surfacing a spurious
+            // error or (worse) creating a duplicate inspections row.
+            if let winner = try await findInspection(propertyId: propertyId, userId: userId, normalizedType: normalizedType)?.id {
+                #if DEBUG
+                print("upsertInspection lost race, reusing winner id:", winner)
+                #endif
+                return winner
+            }
+            throw error
+        }
     }
 
     func insertInspectionItem(inspectionId: UUID, roomId: UUID, notes: String, conditionRating: Int) async throws -> UUID {
