@@ -64,11 +64,15 @@
 		};
 		2152E0912F621A5300EDA905 /* movemorkTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = movemorkTests;
 			sourceTree = "<group>";
 		};
 		2152E09B2F621A5300EDA905 /* movemorkUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = movemorkUITests;
 			sourceTree = "<group>";
 		};
@@ -140,6 +144,7 @@
 				2152E0792F621A5100EDA905 /* Sources */,
 				2152E07A2F621A5100EDA905 /* Frameworks */,
 				2152E07B2F621A5100EDA905 /* Resources */,
+				E054C5D07395144CEC9C20AA /* Copy Sentry dSYM */,
 			);
 			buildRules = (
 			);
@@ -181,8 +186,6 @@
 				2152E0912F621A5300EDA905 /* movemorkTests */,
 			);
 			name = movemorkTests;
-			packageProductDependencies = (
-			);
 			productName = movemorkTests;
 			productReference = 2152E08E2F621A5300EDA905 /* movemorkTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -204,8 +207,6 @@
 				2152E09B2F621A5300EDA905 /* movemorkUITests */,
 			);
 			name = movemorkUITests;
-			packageProductDependencies = (
-			);
 			productName = movemorkUITests;
 			productReference = 2152E0982F621A5300EDA905 /* movemorkUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -284,6 +285,31 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		E054C5D07395144CEC9C20AA /* Copy Sentry dSYM */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(FRAMEWORKS_FOLDER_PATH)/Sentry.framework/Sentry",
+			);
+			name = "Copy Sentry dSYM";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/copy-sentry-dsym.stamp",
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+			shellPath = /bin/bash;
+			shellScript = "#!/bin/bash\nset -e\n\n# Apple validates that every embedded framework's dSYM is present in the .xcarchive, but\n# Xcode's automatic embedding of Swift Package binary frameworks doesn't reliably copy\n# Sentry's bundled dSYM in. Sentry's SPM XCFrameworks ship a dSYM alongside every platform\n# slice of every variant (Sentry, Sentry-Dynamic, Sentry-Dynamic-WithARM64e,\n# Sentry-WithoutUIKitOrAppKit, ...); which exact variant/slice gets linked isn't reliably\n# predictable from a build script, and copying a dSYM whose UUID doesn't match the shipped\n# binary is a no-op as far as Apple's validator is concerned. So instead of trying to guess\n# or match one, copy every distinct iOS-relevant Sentry dSYM found in the SPM package cache\n# into the archive's dSYM folder under a unique name -- Apple's validator just needs *one* of\n# them to match the actually-shipped binary's UUID, and unrelated extras are ignored.\n# \"Run script only when installing\" (set on this phase) means this only runs for Archive\n# builds, not every Debug/Release build.\n\nCANDIDATE_ROOTS=(\n  \"${BUILD_DIR%/Build/*}/SourcePackages/artifacts/sentry-cocoa\"\n  \"${OBJROOT%/Build/*}/SourcePackages/artifacts/sentry-cocoa\"\n  \"$HOME/Library/Developer/Xcode/DerivedData\"/*/SourcePackages/artifacts/sentry-cocoa\n)\n\nmkdir -p \"${DWARF_DSYM_FOLDER_PATH}\"\nCOPIED=0\nSEEN_UUIDS=\"\"\n\nfor root in \"${CANDIDATE_ROOTS[@]}\"; do\n  [ -d \"$root\" ] || continue\n  while IFS= read -r dsym; do\n    # Only iOS device/simulator/catalyst slices are relevant to an iOS app archive.\n    case \"$dsym\" in\n      */ios-*) ;;\n      *) continue ;;\n    esac\n    dsym_uuid=$(dwarfdump --uuid \"$dsym/Contents/Resources/DWARF/Sentry\" 2>/dev/null | awk '{print $2}' | sort -u | tr '\n' '-')\n    [ -z \"$dsym_uuid\" ] && continue\n    case \" $SEEN_UUIDS \" in\n      *\" $dsym_uuid \"*) continue ;;\n    esac\n    SEEN_UUIDS=\"$SEEN_UUIDS $dsym_uuid\"\n    dest=\"${DWARF_DSYM_FOLDER_PATH}/Sentry-${dsym_uuid}.framework.dSYM\"\n    rm -rf \"$dest\"\n    cp -R \"$dsym\" \"$dest\"\n    COPIED=$((COPIED + 1))\n  done < <(find \"$root\" -name \"Sentry.framework.dSYM\" -type d 2>/dev/null)\ndone\n\nif [ \"$COPIED\" -eq 0 ]; then\n  echo \"warning: found no Sentry dSYMs in any candidate SourcePackages root -- Sentry.framework will be missing a dSYM in this archive.\"\nelse\n  echo \"Copied $COPIED distinct Sentry dSYM(s) into ${DWARF_DSYM_FOLDER_PATH}\"\nfi\n\ntouch \"${DERIVED_FILE_DIR}/copy-sentry-dsym.stamp\"\n";
+			showEnvVarsInLog = 1;
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		2152E0792F621A5100EDA905 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -330,7 +356,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = movemork/movemork.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = XR6D339C8V;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -345,7 +371,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				MoveMarkAPIBaseURL = "https://movemark-api-production.up.railway.app";
 				PRODUCT_BUNDLE_IDENTIFIER = movemark.movemork;
 				PRODUCT_NAME = MoveMark;
@@ -369,9 +395,10 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = movemork/movemork.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = XR6D339C8V;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = movemork/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MoveMark;
@@ -384,7 +411,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				MoveMarkAPIBaseURL = "https://movemark-api-production.up.railway.app";
 				PRODUCT_BUNDLE_IDENTIFIER = movemark.movemork;
 				PRODUCT_NAME = MoveMark;
@@ -530,7 +557,7 @@
 				DEVELOPMENT_TEAM = XR6D339C8V;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = movemark.movemorkTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -552,7 +579,7 @@
 				DEVELOPMENT_TEAM = XR6D339C8V;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = movemark.movemorkTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -572,7 +599,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = XR6D339C8V;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = movemark.movemorkUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -592,7 +619,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = XR6D339C8V;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = movemark.movemorkUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
