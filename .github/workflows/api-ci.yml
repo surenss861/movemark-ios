@@ -40,5 +40,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Docker build
-        run: docker build -t movemark-api:ci .
+        uses: docker/build-push-action@v6
+        with:
+          context: movemark-api
+          push: false
+          tags: movemark-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -24,6 +24,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Cache Swift Package Manager
+        uses: actions/cache@v4
+        with:
+          path: DerivedData/SourcePackages
+          key: ${{ runner.os }}-spm-${{ hashFiles('movemork.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
       - name: Prepare Secrets.xcconfig for compile
         run: |
           cp Config/Secrets.xcconfig.example Config/Secrets.xcconfig
@@ -35,6 +43,17 @@ jobs:
           xcodebuild build \
             -project movemork.xcodeproj \
             -scheme movemork \
+            -derivedDataPath DerivedData \
             -destination 'generic/platform=iOS Simulator' \
             -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Unit tests
+        run: |
+          xcodebuild test \
+            -project movemork.xcodeproj \
+            -scheme movemork \
+            -derivedDataPath DerivedData \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -only-testing:movemorkTests \
             CODE_SIGNING_ALLOWED=NO

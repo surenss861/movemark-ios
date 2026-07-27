@@ -1,0 +1,36 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "movemark-api/**"
+      - ".github/workflows/codeql.yml"
+  pull_request:
+    paths:
+      - "movemark-api/**"
+      - ".github/workflows/codeql.yml"
+  schedule:
+    - cron: "24 3 * * 1"
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          source-root: movemark-api
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3

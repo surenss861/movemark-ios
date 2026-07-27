@@ -27,6 +27,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -40,6 +41,12 @@ jobs:
           MOVE_MARK_API_BASE_URL=https://movemark-api-production.up.railway.app
           BILLING_MODE=mock
           EOF
+
+      - name: Lint
+        run: ./gradlew lintDebug --no-daemon
+
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest --no-daemon
 
       - name: Assemble debug
         run: ./gradlew assembleDebug --no-daemon
