@@ -11,6 +11,9 @@ struct MMVaultProofHeroCard: View {
     let propertyName: String
     var location: String? = nil
     let progressLine: String
+    var proofScoreLine: String? = nil
+    var statsLine: String? = nil
+    var reportStatusLine: String? = nil
     let nextLine: String
     let progress: Double
     var previewPath: String? = nil
@@ -40,10 +43,30 @@ struct MMVaultProofHeroCard: View {
                             .lineLimit(1)
                     }
 
+                    if let proofScoreLine {
+                        Text(proofScoreLine)
+                            .font(MoveMarkTheme.Typography.subheadlineMedium)
+                            .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.95))
+                            .padding(.top, 2)
+                    }
+
                     Text(progressLine)
                         .font(MoveMarkTheme.Typography.subheadlineMedium)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        .padding(.top, 2)
+                        .padding(.top, proofScoreLine == nil ? 2 : 0)
+
+                    if let statsLine, !statsLine.isEmpty {
+                        Text(statsLine)
+                            .font(MoveMarkTheme.Typography.footnote)
+                            .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                            .lineLimit(2)
+                    }
+
+                    if let reportStatusLine, !reportStatusLine.isEmpty {
+                        Text(reportStatusLine)
+                            .font(MoveMarkTheme.Typography.footnoteEmphasis)
+                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    }
 
                     Text(nextLine)
                         .font(MoveMarkTheme.Typography.footnote)

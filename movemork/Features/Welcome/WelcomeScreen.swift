@@ -65,6 +65,9 @@ struct WelcomeScreen: View {
                 }
             }
             .onAppear { playEntrance() }
+            .onAppear {
+                MoveMarkAnalytics.track(.onboardingStarted)
+            }
         }
     }
 
@@ -169,7 +172,7 @@ struct WelcomeScreen: View {
 
     private var primaryCopyBlock: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Prove what was already there.")
+            Text(MoveMarkGrowthCopy.welcomeHeadline)
                 .font(MoveMarkTheme.Typography.cardValue)
                 .tracking(-0.7)
                 .lineSpacing(2)
@@ -178,7 +181,7 @@ struct WelcomeScreen: View {
                 .minimumScaleFactor(0.92)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("Take room photos before you unpack. Turn them into a report when you need it.")
+            Text(MoveMarkGrowthCopy.welcomeBody)
                 .font(MoveMarkTheme.Typography.body)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.98))
                 .fixedSize(horizontal: false, vertical: true)
@@ -194,7 +197,7 @@ struct WelcomeScreen: View {
     private var bottomLaunchDock: some View {
         VStack(spacing: 0) {
             MMButton(
-                title: "Start move-in proof",
+                title: MoveMarkGrowthCopy.welcomeCTA,
                 action: { launchAuth(mode: .signUp) },
                 showsTrailingArrow: true
             )

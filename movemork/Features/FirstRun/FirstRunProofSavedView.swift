@@ -7,6 +7,7 @@ import SwiftUI
 
 struct FirstRunProofSavedView: View {
     let summary: FirstRunSavedSummary
+    var moment: RentalMoment = .justMovedIn
     let onContinueNextRoom: () -> Void
     let onViewProofVault: () -> Void
 
@@ -21,8 +22,12 @@ struct FirstRunProofSavedView: View {
         summary.photoCount == 1 ? "1 photo saved" : "\(summary.photoCount) photos saved"
     }
 
+    private var phaseLabel: String {
+        moment.receiptPhaseLabel
+    }
+
     private var headerSubtitle: String {
-        "\(summary.roomName) proof · \(photosSavedLine) · Move-in"
+        "\(summary.roomName) proof · \(photosSavedLine) · \(phaseLabel)"
     }
 
     var body: some View {
@@ -30,12 +35,12 @@ struct FirstRunProofSavedView: View {
             ProofSavedReceiptView(
                 model: ProofSavedReceiptModel(
                     roomName: summary.roomName,
-                    phaseLabel: "Move-in",
+                    phaseLabel: phaseLabel,
                     photoCount: summary.photoCount,
                     issueCount: summary.issueCount,
-                    timestampLabel: "Move-in · \(formattedTime)",
+                    timestampLabel: "\(phaseLabel) · \(formattedTime)",
                     headerSubtitle: headerSubtitle,
-                    documentedLabel: "Room now documented",
+                    documentedLabel: moment.receiptDocumentedLabel,
                     primaryActionLabel: "Continue next room",
                     imageURL: previewURL
                 ),

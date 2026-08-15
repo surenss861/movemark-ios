@@ -46,6 +46,18 @@ struct RoomListView: View {
 
                     progressCard
 
+                    if let property = propertyStore.currentProperty {
+                        ProofSprintChecklistCard(
+                            property: property,
+                            onSelectRoom: { room in
+                                path.append(.roomDetail(roomID: room.id))
+                            },
+                            onAddDocs: {
+                                path.append(.vaultDetail(propertyId: property.id))
+                            }
+                        )
+                    }
+
                     roomsSection
 
                     moveInReportCard
@@ -63,7 +75,7 @@ struct RoomListView: View {
                 roomsListAppeared = true
             }
         }
-        .navigationTitle("Room proof")
+        .navigationTitle("Proof Sprint")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -87,8 +99,8 @@ struct RoomListView: View {
 
     private var roomProofHeader: some View {
         MMRenterHeader(
-            title: "Room proof",
-            subtitle: "Mark old damage before move-in."
+            title: "Move-in Proof Sprint",
+            subtitle: "Document now. Prove it later — before boxes cover everything."
         )
     }
 
@@ -206,27 +218,38 @@ struct RoomListView: View {
     }
 
     private var moveInReportCard: some View {
-        MMCard(tone: .quiet, padding: 16, spacing: 8) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Move-in report")
-                    .font(MoveMarkTheme.Typography.sectionTitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+        Button {
+            path.append(.exports)
+        } label: {
+            MMCard(tone: .quiet, padding: 16, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Move-in report")
+                        .font(MoveMarkTheme.Typography.sectionTitle)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                Text(
-                    allRoomsDocumented
-                        ? "Open the Reports tab to make your move-in report."
-                        : "Unlocks after all rooms have photos."
-                )
-                .font(MoveMarkTheme.Typography.subheadline)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    Text(
+                        allRoomsDocumented
+                            ? "Ready to share — export a timestamped PDF."
+                            : "Keep documenting rooms, then export your proof."
+                    )
+                    .font(MoveMarkTheme.Typography.subheadline)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
-                if !rooms.isEmpty {
-                    Text("\(completedCount) of \(rooms.count) rooms documented")
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                    if !rooms.isEmpty {
+                        Text("\(completedCount) of \(rooms.count) rooms documented")
+                            .font(MoveMarkTheme.Typography.footnote)
+                            .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                    }
+
+                    Text(allRoomsDocumented ? "Export / Share report" : "View Reports")
+                        .font(MoveMarkTheme.Typography.footnoteEmphasis)
+                        .foregroundStyle(MoveMarkTheme.Colors.primary)
+                        .padding(.top, 2)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .buttonStyle(.plain)
     }
 
     private var moveOutLink: some View {

@@ -99,6 +99,23 @@ extension PropertyStore {
         room.evidence.contains { $0.photoCount > 0 }
     }
 
+    func totalNoteCount(for property: PropertyRecord) -> Int {
+        property.rooms.reduce(0) { partial, room in
+            partial + room.evidence.filter {
+                !$0.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }.count
+        }
+    }
+
+    /// Lease + deposit receipt only (protection steps called out on the vault home).
+    func leaseAndDepositReceiptCount(for property: PropertyRecord) -> Int {
+        let targets: [VaultDocumentType] = [.lease, .depositReceipt]
+        let uploaded = Set(property.vaultDocuments)
+        return targets.filter { type in
+            DocumentRepository.documentTypeQueryKeys(type.rawValue).contains { uploaded.contains($0) }
+        }.count
+    }
+
     func totalPhotoCount(for property: PropertyRecord) -> Int {
         property.rooms.reduce(0) { partial, room in
             partial + room.evidence.reduce(0) { $0 + $1.photoCount }

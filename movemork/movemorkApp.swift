@@ -34,6 +34,9 @@ struct movemorkApp: App {
                 .environment(propertyStore)
                 .environment(subscriptionManager)
                 .preferredColorScheme(.dark)
+                .onAppear {
+                    MoveMarkAnalytics.track(.appOpened)
+                }
         }
     }
 }

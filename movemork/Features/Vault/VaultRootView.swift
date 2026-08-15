@@ -102,7 +102,7 @@ struct VaultRootView: View {
             VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardStack) {
                 MMProofSectionHeader(
                     title: "Your proof",
-                    subtitle: "What rental needs proof next?"
+                    subtitle: "Document now. Prove it later."
                 ) {
                     MMProofHeaderAddButton(action: presentAddProperty)
                 }
@@ -162,6 +162,12 @@ struct VaultRootView: View {
         .task { await loadPreviewURLs() }
         .task(id: featuredPropertyId) { await ensureFeaturedPropertyLoaded() }
         .task(id: otherProperties.map(\.id)) { await loadOtherRentalSummaries() }
+        .onChange(of: propertyStore.currentProperty?.id) { _, _ in
+            trackFeaturedProofScoreIfNeeded()
+        }
+        .onAppear {
+            trackFeaturedProofScoreIfNeeded()
+        }
             .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await loadPreviewURLs() } }
             }
@@ -177,6 +183,9 @@ struct VaultRootView: View {
             propertyName: displayName(for: row),
             location: locationText(for: row).isEmpty ? nil : locationText(for: row),
             progressLine: vaultProofProgressHeadline,
+            proofScoreLine: vaultProofScoreLine,
+            statsLine: vaultProofStatsLine,
+            reportStatusLine: vaultReportStatusLine,
             nextLine: vaultHeroNextLine,
             progress: vaultProofProgressValue,
             previewPath: previewByPropertyId[row.id]?.path,
@@ -223,6 +232,14 @@ struct VaultRootView: View {
     private var vaultSecondaryTasks: some View {
         VStack(spacing: 10) {
             ProofTaskCard(
+                title: "Log maintenance issue",
+                reason: "Timestamp repairs and issues while you still live there.",
+                action: {
+                    path.append(.maintenance)
+                }
+            )
+
+            ProofTaskCard(
                 title: "Lease & deposit records",
                 reason: "Helps if your deposit is questioned later.",
                 action: {
@@ -231,6 +248,19 @@ struct VaultRootView: View {
                     }
                 }
             )
+
+            if let prop = propertyStore.currentProperty,
+               propertyStore.isExportReady(for: prop) || propertyStore.documentedRoomCount(for: prop) > 0 {
+                ProofTaskCard(
+                    title: "Move-in report",
+                    reason: propertyStore.isExportReady(for: prop)
+                        ? "Ready to share — export your proof."
+                        : "Build a shareable report from your rooms.",
+                    action: { path.append(.exports) },
+                    statusLabel: propertyStore.isExportReady(for: prop) ? "Ready" : nil,
+                    statusTone: .success
+                )
+            }
         }
     }
 
@@ -311,15 +341,37 @@ struct VaultRootView: View {
         if documented == 0 {
             return "Start with one room"
         }
-        return "\(documented) of \(total) rooms ready"
+        return "Rooms documented: \(documented)/\(total)"
+    }
+
+    private var vaultProofScoreLine: String? {
+        guard let prop = propertyStore.currentProperty else { return nil }
+        let score = propertyStore.readinessScore(for: prop)
+        return "Proof score: \(score)%"
+    }
+
+    private var vaultProofStatsLine: String? {
+        guard let prop = propertyStore.currentProperty else { return nil }
+        let photos = propertyStore.totalPhotoCount(for: prop)
+        let notes = propertyStore.totalNoteCount(for: prop)
+        let receipts = propertyStore.leaseAndDepositReceiptCount(for: prop)
+        return "\(photos) photos · \(notes) notes · Receipts \(receipts)/2"
+    }
+
+    private var vaultReportStatusLine: String? {
+        guard let prop = propertyStore.currentProperty else { return nil }
+        if propertyStore.isExportReady(for: prop) {
+            return "Report status: Ready to share"
+        }
+        if propertyStore.documentedRoomCount(for: prop) > 0 {
+            return "Report status: Building"
+        }
+        return "Report status: Not started"
     }
 
     private var vaultProofProgressValue: Double {
         guard let prop = propertyStore.currentProperty else { return 0 }
-        let total = propertyStore.totalRoomCount(for: prop)
-        guard total > 0 else { return 0 }
-        let done = propertyStore.documentedRoomCount(for: prop)
-        return Double(done) / Double(total)
+        return Double(propertyStore.readinessScore(for: prop)) / 100.0
     }
 
     private var featuredContinueProofTitle: String {
@@ -405,6 +457,14 @@ struct VaultRootView: View {
         }
     }
 
+    private func trackFeaturedProofScoreIfNeeded() {
+        guard let prop = propertyStore.currentProperty else { return }
+        MoveMarkAnalytics.trackProofScoreIfNeeded(
+            propertyStore.readinessScore(for: prop),
+            propertyId: prop.id
+        )
+    }
+
     // MARK: - Empty / Loading
 
     private var emptyState: some View {
@@ -412,7 +472,7 @@ struct VaultRootView: View {
             VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardStack) {
                 MMProofSectionHeader(
                     title: "Your proof",
-                    subtitle: "What rental needs proof next?"
+                    subtitle: "Document now. Prove it later."
                 ) {
                     MMProofHeaderAddButton(action: presentAddProperty)
                 }

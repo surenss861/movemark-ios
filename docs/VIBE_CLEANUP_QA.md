@@ -105,3 +105,5 @@ Fix **one** issue → **one commit** → re-run from the step before failure.
 - `docs/RELEASE_CHECKLIST.md` — ship gates
 - `docs/app-review.md` — App Store Connect paste-in
 - `docs/QA_TEST_RUN_ORDER.md` — full route order
+
+i 

@@ -41,6 +41,7 @@ enum FirstRunRoomOption: String, CaseIterable, Identifiable {
 
 struct FirstRunRoomPickerView: View {
     let propertyId: UUID
+    var moment: RentalMoment = .justMovedIn
     let onStartProof: (UUID, String) -> Void
 
     @Environment(PropertyStore.self) private var propertyStore
@@ -56,8 +57,8 @@ struct FirstRunRoomPickerView: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 24) {
                 MMRenterHeader(
-                    title: MoveMarkGrowthCopy.firstRunRoomTitle,
-                    subtitle: MoveMarkGrowthCopy.firstRunRoomSubtitle
+                    title: moment.roomTitle,
+                    subtitle: moment.roomSubtitle
                 )
 
                 VStack(spacing: 10) {

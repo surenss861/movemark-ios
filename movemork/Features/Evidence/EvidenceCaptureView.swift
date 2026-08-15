@@ -194,6 +194,13 @@ struct EvidenceCaptureView: View {
         .mmProofToast(message: proofToast, isVisible: proofToastVisible)
         .onAppear {
             wasDocumentedOnLoad = isRoomCurrentlyDocumented
+            MoveMarkAnalytics.track(
+                .roomStarted,
+                properties: [
+                    "room": roomName,
+                    "move_out": moveOutMode ? "1" : "0",
+                ]
+            )
         }
     }
 

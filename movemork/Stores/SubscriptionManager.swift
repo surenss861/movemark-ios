@@ -120,10 +120,58 @@ final class SubscriptionManager {
         UserDefaults.standard.set(next, forKey: key)
     }
 
+    /// One-time Report Pack product IDs — must match App Store / RevenueCat.
+    private static let reportPackProductIDs: Set<String> = [
+        "report_pack",
+        "movemark_report_pack",
+        "test_report_pack",
+    ]
+
+    /// One-time Report Pack credits purchased (each credit unlocks one additional move-in export).
+    private static func reportPackCreditKey(userId: UUID) -> String {
+        "MoveMark.reportPackCredits.\(userId.uuidString)"
+    }
+
+    func reportPackCredits(forUser userId: UUID?) -> Int {
+        guard let userId else { return 0 }
+        return max(0, UserDefaults.standard.integer(forKey: Self.reportPackCreditKey(userId: userId)))
+    }
+
+    func addReportPackCredit(forUser userId: UUID, amount: Int = 1) {
+        let key = Self.reportPackCreditKey(userId: userId)
+        let next = reportPackCredits(forUser: userId) + max(1, amount)
+        UserDefaults.standard.set(next, forKey: key)
+    }
+
+    /// Rehydrates local Report Pack credits from RevenueCat non-subscription purchases (restore / reinstall).
+    @discardableResult
+    func syncReportPackCredits(from customerInfo: CustomerInfo, userId: UUID?) -> Int {
+        guard let userId else { return 0 }
+        let remote = Self.reportPackPurchaseCount(in: customerInfo)
+        let local = reportPackCredits(forUser: userId)
+        let merged = max(local, remote)
+        UserDefaults.standard.set(merged, forKey: Self.reportPackCreditKey(userId: userId))
+        return merged
+    }
+
+    private static func reportPackPurchaseCount(in customerInfo: CustomerInfo) -> Int {
+        customerInfo.nonSubscriptions.filter { transaction in
+            reportPackProductIDs.contains(transaction.productIdentifier)
+                || transaction.productIdentifier.localizedCaseInsensitiveContains("report_pack")
+        }.count
+    }
+
+    /// Total move-in exports allowed on free tier (1 included) plus any Report Pack credits.
+    func moveInExportAllowance(forUser userId: UUID?) -> Int {
+        if hasPro { return .max }
+        guard let userId else { return 0 }
+        return 1 + reportPackCredits(forUser: userId)
+    }
+
     func canExportMoveIn(forUser userId: UUID?) -> Bool {
         if hasPro { return true }
         guard let userId else { return false }
-        return freeMoveInExportCount(forUser: userId) < 1
+        return freeMoveInExportCount(forUser: userId) < moveInExportAllowance(forUser: userId)
     }
 
     func remainingFreeMoveInExportsText(forUser userId: UUID?) -> String {
@@ -135,12 +183,16 @@ final class SubscriptionManager {
             return "Sign in to use your free move-in report"
         }
 
-        let count = freeMoveInExportCount(forUser: userId)
-        let remaining = max(0, 1 - count)
+        let used = freeMoveInExportCount(forUser: userId)
+        let allowance = moveInExportAllowance(forUser: userId)
+        let remaining = max(0, allowance - used)
         if remaining == 1 {
-            return "1 free move-in report left"
+            return "1 move-in report left"
         }
-        return "Free move-in report used"
+        if remaining > 1 {
+            return "\(remaining) move-in reports left"
+        }
+        return "Move-in report used — buy a Report Pack or start Pro"
     }
 
     /// Short copy for Paywall only — Account stays on Free/Pro summary when plans fail to load.
@@ -544,7 +596,9 @@ final class SubscriptionManager {
         }
     }
 
-    /// Completes purchase, updates `hasPro`, and refreshes offerings in the background. Returns whether Pro is active.
+    /// Completes purchase, updates `hasPro`, and refreshes offerings in the background.
+    /// Returns whether the StoreKit purchase finished successfully (not cancelled).
+    /// Callers that need Pro specifically should also check `hasPro`.
     @discardableResult
     func purchase(package: Package) async -> Bool {
         lastPurchaseErrorMessage = nil
@@ -559,12 +613,14 @@ final class SubscriptionManager {
 
         do {
             let result = try await Purchases.shared.purchase(package: package)
+            if result.userCancelled {
+                return false
+            }
             hasPro = Self.hasActiveProEntitlement(result.customerInfo)
-            offeringsLoadErrorMessage = nil
             Task { @MainActor in
                 await self.refresh(showLoading: false)
             }
-            return hasPro
+            return true
         } catch {
             if !Self.isPurchaseCancelled(error) {
                 lastPurchaseErrorMessage = Self.userFacingPurchaseError(error)
@@ -573,9 +629,10 @@ final class SubscriptionManager {
         }
     }
 
-    /// Restores purchases, updates `hasPro`, and refreshes offerings in the background.
+    /// Restores purchases, updates `hasPro`, rehydrates Report Pack credits, and refreshes offerings.
+    /// Returns true when Pro is active or at least one Report Pack credit is available after restore.
     @discardableResult
-    func restorePurchases() async -> Bool {
+    func restorePurchases(forUser userId: UUID? = nil) async -> Bool {
         lastRestoreErrorMessage = nil
 
         guard Purchases.isConfigured else {
@@ -590,11 +647,12 @@ final class SubscriptionManager {
         do {
             let customerInfo = try await Purchases.shared.restorePurchases()
             hasPro = Self.hasActiveProEntitlement(customerInfo)
+            let packCredits = syncReportPackCredits(from: customerInfo, userId: userId)
             offeringsLoadErrorMessage = nil
             Task { @MainActor in
                 await self.refresh(showLoading: false)
             }
-            return hasPro
+            return hasPro || packCredits > 0
         } catch {
             lastRestoreErrorMessage = Self.userFacingRestoreError(error)
             return false

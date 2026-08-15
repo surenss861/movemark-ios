@@ -2,7 +2,7 @@
 //  FirstRunProofFlowView.swift
 //  movemork
 //
-//  Move-in proof first run — vault setup → room pick → capture → saved receipt.
+//  Moment → vault setup → room pick → capture → saved receipt.
 //
 
 import SwiftUI
@@ -14,22 +14,36 @@ struct FirstRunProofFlowView: View {
     @Environment(SessionManager.self) private var sessionManager
 
     @State private var onboardingName = "Renter"
+    @State private var selectedMoment: RentalMoment = .justMovedIn
+    @State private var isPreparingVaults = true
 
     private enum Step: Equatable {
+        case moment
         case setup
         case pickRoom(UUID)
         case capture(propertyId: UUID, roomId: UUID, roomName: String)
         case saved(FirstRunSavedSummary)
     }
 
-    @State private var step: Step = .setup
+    @State private var step: Step = .moment
 
     var body: some View {
         Group {
             switch step {
+            case .moment:
+                FirstRunMomentPickerView(isPreparing: isPreparingVaults) { moment in
+                    selectedMoment = moment
+                    MoveMarkAnalytics.track(
+                        .rentalMomentSelected,
+                        properties: ["moment": moment.rawValue]
+                    )
+                    advanceAfterMomentSelected()
+                }
+
             case .setup:
                 FirstRunPropertySetupView(
                     requiresOnboarding: requiresOnboarding,
+                    moment: selectedMoment,
                     onCreated: { propertyId in
                         step = .pickRoom(propertyId)
                     },
@@ -37,7 +51,10 @@ struct FirstRunProofFlowView: View {
                 )
 
             case .pickRoom(let propertyId):
-                FirstRunRoomPickerView(propertyId: propertyId) { roomId, roomName in
+                FirstRunRoomPickerView(
+                    propertyId: propertyId,
+                    moment: selectedMoment
+                ) { roomId, roomName in
                     step = .capture(propertyId: propertyId, roomId: roomId, roomName: roomName)
                 }
 
@@ -46,7 +63,7 @@ struct FirstRunProofFlowView: View {
                     EvidenceCaptureView(
                         roomID: roomId,
                         roomName: roomName,
-                        moveOutMode: false,
+                        moveOutMode: selectedMoment.capturesMoveOutEvidence,
                         onFirstProofSaved: { summary in
                             propertyStore.firstRunAwaitingReceiptDismissal = true
                             let saved = FirstRunSavedSummary(
@@ -72,6 +89,7 @@ struct FirstRunProofFlowView: View {
             case .saved(let summary):
                 FirstRunProofSavedView(
                     summary: summary,
+                    moment: selectedMoment,
                     onContinueNextRoom: { finishFirstRun(exit: .continueNextRoom) },
                     onViewProofVault: { finishFirstRun(exit: .viewVault) }
                 )
@@ -79,7 +97,7 @@ struct FirstRunProofFlowView: View {
         }
         .task(id: sessionManager.userId) {
             await loadPropertiesIfNeeded()
-            applyInitialStepIfNeeded()
+            isPreparingVaults = false
         }
     }
 
@@ -90,11 +108,17 @@ struct FirstRunProofFlowView: View {
         }
     }
 
-    private func applyInitialStepIfNeeded() {
-        guard case .setup = step else { return }
-        guard !propertyStore.properties.isEmpty else { return }
-        let propertyId = propertyStore.activePropertyId ?? propertyStore.properties[0].id
-        step = .pickRoom(propertyId)
+    private func advanceAfterMomentSelected() {
+        if let propertyId = existingPropertyId {
+            step = .pickRoom(propertyId)
+        } else {
+            step = .setup
+        }
+    }
+
+    private var existingPropertyId: UUID? {
+        guard !propertyStore.properties.isEmpty else { return nil }
+        return propertyStore.activePropertyId ?? propertyStore.properties[0].id
     }
 
     private func finishFirstRun(exit: PropertyStore.FirstRunExitAction) {

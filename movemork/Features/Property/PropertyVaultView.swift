@@ -1073,6 +1073,11 @@ struct PropertyVaultView: View {
 
             do {
                 _ = try await documentRepo.uploadDocument(data: compressed, bucket: targetBucket, path: path)
+                if canonicalType == VaultDocumentType.lease.rawValue {
+                    MoveMarkAnalytics.track(.leaseAdded)
+                } else if canonicalType == VaultDocumentType.depositReceipt.rawValue {
+                    MoveMarkAnalytics.track(.receiptAdded)
+                }
             } catch {
                 uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
                 return
@@ -1173,6 +1178,11 @@ struct PropertyVaultView: View {
 
             do {
                 _ = try await documentRepo.uploadDocument(data: data, bucket: targetBucket, path: path)
+                if canonicalType == VaultDocumentType.lease.rawValue {
+                    MoveMarkAnalytics.track(.leaseAdded)
+                } else if canonicalType == VaultDocumentType.depositReceipt.rawValue {
+                    MoveMarkAnalytics.track(.receiptAdded)
+                }
             } catch {
                 uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
                 lastFailedFileDocType = docType

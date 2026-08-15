@@ -356,14 +356,16 @@ struct AccountView: View {
         subscriptionRestoreFeedback = nil
 
         Task { @MainActor in
-            let restored = await subscriptionManager.restorePurchases()
+            let restored = await subscriptionManager.restorePurchases(forUser: sessionManager.userId)
             if restored, subscriptionManager.hasPro {
                 subscriptionRestoreFeedback = "MoveMark Pro is active on this Apple ID."
+            } else if restored, subscriptionManager.reportPackCredits(forUser: sessionManager.userId) > 0 {
+                subscriptionRestoreFeedback = "Report Pack credit restored on this Apple ID."
             } else if let err = subscriptionManager.lastRestoreErrorMessage {
                 subscriptionRestoreFeedback = err
             } else {
                 subscriptionRestoreFeedback =
-                    "No active MoveMark subscription was found for this Apple ID."
+                    "No active MoveMark subscription or Report Pack was found for this Apple ID."
             }
         }
     }

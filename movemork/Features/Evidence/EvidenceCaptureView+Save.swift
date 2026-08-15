@@ -78,7 +78,24 @@ extension EvidenceCaptureView {
 
                 errorMessage = nil
 
-                if !moveOutMode, let onFirstProofSaved, let property = propertyStore.currentProperty {
+                MoveMarkAnalytics.track(
+                    .photoAdded,
+                    properties: [
+                        "count": "\(photoData.count)",
+                        "move_out": moveOutMode ? "1" : "0",
+                    ]
+                )
+                if !evidence.issueTags.isEmpty {
+                    MoveMarkAnalytics.track(
+                        .issueTagged,
+                        properties: ["count": "\(evidence.issueTags.count)"]
+                    )
+                }
+                if !evidence.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    MoveMarkAnalytics.track(.noteAdded)
+                }
+
+                if let onFirstProofSaved, let property = propertyStore.currentProperty {
                     let issueCount = evidence.issueTags.count
                     onFirstProofSaved(
                         FirstRunSavedSummary(

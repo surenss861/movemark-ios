@@ -22,10 +22,14 @@ struct ProPaywallView: View {
     @State private var proofToast: MMProofToastMessage? = nil
     @State private var proofToastVisible = false
     @State private var showPurchaseSuccess = false
+    @State private var purchaseSuccessWasReportPack = false
 
     /// Store product IDs — must match RevenueCat package products (App Store: monthly/yearly_subscription; Test Store mirror: testmonthly/testyearly).
     private static let monthlyProductIDs = ["monthly_subscription", "testmonthly"]
     private static let yearlyProductIDs = ["yearly_subscription", "testyearly"]
+    private static let reportPackProductIDs = ["report_pack", "movemark_report_pack", "test_report_pack"]
+
+    @Environment(SessionManager.self) private var sessionManager
 
     var body: some View {
         NavigationStack {
@@ -51,6 +55,10 @@ struct ProPaywallView: View {
             }
             .task {
                 initialOfferingsFetchCompleted = false
+                MoveMarkAnalytics.track(
+                    .paywallViewed,
+                    properties: ["reason": String(describing: reason)]
+                )
                 await subscriptionManager.refresh()
                 initialOfferingsFetchCompleted = true
             }
@@ -96,7 +104,7 @@ struct ProPaywallView: View {
                     .font(MoveMarkTheme.Typography.heroLarge)
                     .foregroundStyle(MoveMarkTheme.Colors.primary)
 
-                Text("Pro unlocked")
+                Text(purchaseSuccessWasReportPack ? "Report Pack unlocked" : "Pro unlocked")
                     .font(MoveMarkTheme.Typography.cardTitle)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
             }
@@ -113,7 +121,7 @@ struct ProPaywallView: View {
         }
         .transition(.opacity.combined(with: .scale(scale: 0.96)))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Pro unlocked")
+        .accessibilityLabel(purchaseSuccessWasReportPack ? "Report Pack unlocked" : "Pro unlocked")
     }
 
     private var header: some View {
@@ -165,11 +173,16 @@ struct ProPaywallView: View {
                     .foregroundStyle(MoveMarkTheme.Colors.limeAccent.opacity(0.95))
                     .textCase(.uppercase)
 
-                Text(reason == .moveOutExport ? "Choose your protection plan" : "Choose your plan")
+                Text(reason == .reportPack ? "Choose Report Pack or Pro" : (reason == .moveOutExport ? "Choose your protection plan" : "Choose your plan"))
                     .font(MoveMarkTheme.Typography.cardTitle)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
             }
             .padding(.bottom, 4)
+
+            if reason.prefersReportPackFirst {
+                reportPackSection
+                    .padding(.top, 10)
+            }
 
             paywallRestoreSection
                 .padding(.top, 10)
@@ -416,7 +429,9 @@ struct ProPaywallView: View {
     }
 
     private func primaryPurchaseButtonTitle(for package: Package) -> String {
-        if showPurchaseSuccess { return "Pro unlocked" }
+        if showPurchaseSuccess {
+            return purchaseSuccessWasReportPack ? "Report Pack unlocked" : "Pro unlocked"
+        }
         if subscriptionManager.isStoreKitBusy { return "Starting…" }
         return continuePurchaseTitle(for: package)
     }
@@ -457,7 +472,52 @@ struct ProPaywallView: View {
 
     private var displayPackages: [Package] {
         let raw = subscriptionManager.currentOffering?.availablePackages ?? []
-        return Self.sortedPackagesForDisplay(raw)
+        let proOnly = raw.filter { !Self.isReportPackProduct($0.storeProduct.productIdentifier) }
+        return Self.sortedPackagesForDisplay(proOnly)
+    }
+
+    private var reportPackPackages: [Package] {
+        let raw = subscriptionManager.currentOffering?.availablePackages ?? []
+        return raw.filter { Self.isReportPackProduct($0.storeProduct.productIdentifier) }
+    }
+
+    private static func isReportPackProduct(_ productID: String) -> Bool {
+        reportPackProductIDs.contains(productID)
+            || productID.localizedCaseInsensitiveContains("report_pack")
+    }
+
+    @ViewBuilder
+    private var reportPackSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Need one report only?")
+                .font(MoveMarkTheme.Typography.subheadlineMedium)
+                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+
+            Text("Report Pack unlocks one extra polished move-in PDF — ideal for a single rental moment. Move-out exports stay on Pro.")
+                .font(MoveMarkTheme.Typography.footnote)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let pack = reportPackPackages.first {
+                MMButton(
+                    title: "Buy Report Pack · \(pack.storeProduct.localizedPriceString)",
+                    action: { startPurchase(pack, isReportPack: true) },
+                    kind: .secondary,
+                    size: .standard,
+                    isDisabled: subscriptionManager.isStoreKitBusy || showPurchaseSuccess
+                )
+            } else {
+                Text("Add product IDs report_pack / movemark_report_pack in RevenueCat to enable one-time purchase here. Pro still unlocks unlimited reports.")
+                    .font(MoveMarkTheme.Typography.caption)
+                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(MoveMarkTheme.Colors.card.opacity(0.92))
+        )
     }
 
     private static func sortedPackagesForDisplay(_ packages: [Package]) -> [Package] {
@@ -688,22 +748,44 @@ struct ProPaywallView: View {
         }
     }
 
-    private func startPurchase(_ package: Package) {
+    private func startPurchase(_ package: Package, isReportPack: Bool = false) {
         guard !subscriptionManager.isStoreKitBusy, !showPurchaseSuccess else { return }
 
         localErrorMessage = nil
         restoreOutcomeMessage = nil
+        MoveMarkAnalytics.track(
+            .purchaseStarted,
+            properties: [
+                "product": package.storeProduct.productIdentifier,
+                "report_pack": isReportPack ? "1" : "0",
+            ]
+        )
 
         Task { @MainActor in
-            let activated = await subscriptionManager.purchase(package: package)
-            guard activated else {
+            let completed = await subscriptionManager.purchase(package: package)
+            guard completed else {
                 if let message = subscriptionManager.lastPurchaseErrorMessage {
                     localErrorMessage = paywallBannerMessage(message)
                 }
                 return
             }
 
-            await completePurchaseSuccess()
+            if isReportPack || Self.isReportPackProduct(package.storeProduct.productIdentifier) {
+                if let userId = sessionManager.userId {
+                    subscriptionManager.addReportPackCredit(forUser: userId)
+                }
+                MoveMarkAnalytics.track(.purchaseCompleted, properties: ["product": "report_pack"])
+                await completePurchaseSuccess(isReportPack: true)
+                return
+            }
+
+            guard subscriptionManager.hasPro else {
+                localErrorMessage = "Purchase finished, but Pro isn’t active yet. Try Restore purchases."
+                return
+            }
+
+            MoveMarkAnalytics.track(.purchaseCompleted, properties: ["product": "pro"])
+            await completePurchaseSuccess(isReportPack: false)
         }
     }
 
@@ -714,19 +796,22 @@ struct ProPaywallView: View {
         restoreOutcomeMessage = nil
 
         Task { @MainActor in
-            let restored = await subscriptionManager.restorePurchases()
+            let restored = await subscriptionManager.restorePurchases(forUser: sessionManager.userId)
             if restored, subscriptionManager.hasPro {
-                await completePurchaseSuccess()
+                await completePurchaseSuccess(isReportPack: false)
+            } else if restored, subscriptionManager.reportPackCredits(forUser: sessionManager.userId) > 0 {
+                await completePurchaseSuccess(isReportPack: true)
             } else if let err = subscriptionManager.lastRestoreErrorMessage {
                 restoreOutcomeMessage = err
             } else {
-                restoreOutcomeMessage = "No active subscription was found for this Apple ID."
+                restoreOutcomeMessage = "No active subscription or Report Pack was found for this Apple ID."
             }
         }
     }
 
     @MainActor
-    private func completePurchaseSuccess() async {
+    private func completePurchaseSuccess(isReportPack: Bool = false) async {
+        purchaseSuccessWasReportPack = isReportPack
         withAnimation(.easeOut(duration: 0.22)) {
             showPurchaseSuccess = true
         }

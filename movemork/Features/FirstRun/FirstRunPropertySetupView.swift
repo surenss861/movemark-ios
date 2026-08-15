@@ -2,13 +2,14 @@
 //  FirstRunPropertySetupView.swift
 //  movemork
 //
-//  Minimal rental setup — first step of move-in proof.
+//  Minimal rental setup — framed by the selected rental moment.
 //
 
 import SwiftUI
 
 struct FirstRunPropertySetupView: View {
     let requiresOnboarding: Bool
+    var moment: RentalMoment = .justMovedIn
     let onCreated: (UUID) -> Void
     var onOnboardingNameCaptured: ((String) -> Void)? = nil
 
@@ -26,8 +27,8 @@ struct FirstRunPropertySetupView: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 24) {
                 MMRenterHeader(
-                    title: MoveMarkGrowthCopy.firstRunSetupTitle,
-                    subtitle: MoveMarkGrowthCopy.firstRunSetupSubtitle
+                    title: moment.setupTitle,
+                    subtitle: moment.setupSubtitle
                 )
 
                 VStack(alignment: .leading, spacing: 12) {
@@ -67,7 +68,7 @@ struct FirstRunPropertySetupView: View {
 
                     ZStack {
                         MMButton(
-                            title: "Create proof vault",
+                            title: moment.setupCTA,
                             action: { createVault() },
                             kind: .primary,
                             size: .auth,
@@ -152,6 +153,7 @@ struct FirstRunPropertySetupView: View {
                 }
 
                 MMHaptics.success()
+                MoveMarkAnalytics.track(.proofVaultCreated)
                 onCreated(propertyId)
             } catch {
                 errorMessage = MoveMarkFlowMessage.propertyCreateFailed(error)

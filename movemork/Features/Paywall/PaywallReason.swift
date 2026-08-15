@@ -12,6 +12,8 @@ enum PaywallReason: Equatable {
     case unlimitedExports
     case disputePacket
     case moveOutExport
+    /// One-time polished report — for renters who only need protection once.
+    case reportPack
 
     /// Primary paywall headline (shared across entry points).
     var headline: String {
@@ -24,6 +26,8 @@ enum PaywallReason: Equatable {
             return "Build a dispute-ready packet."
         case .moveOutExport:
             return "Document move-out proof."
+        case .reportPack:
+            return "Get one polished report."
         }
     }
 
@@ -38,10 +42,21 @@ enum PaywallReason: Equatable {
             return "Organize photos and docs when your deposit is questioned."
         case .moveOutExport:
             return "Re-capture rooms and export move-out PDFs with Pro."
+        case .reportPack:
+            return "One polished move-in report — no subscription required."
         }
     }
 
     var ctaTitle: String {
-        "Start Pro"
+        switch self {
+        case .reportPack:
+            return "Buy Report Pack"
+        default:
+            return "Start Pro"
+        }
+    }
+
+    var prefersReportPackFirst: Bool {
+        self == .reportPack || self == .unlimitedExports
     }
 }

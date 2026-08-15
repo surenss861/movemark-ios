@@ -1509,6 +1509,7 @@ struct ExportHistoryView: View {
             let item = try ReportFileDownloader.makeShareItem(for: fileURL, exportType: exportType)
             shareItems = [item]
             showShareSheet = true
+            MoveMarkAnalytics.track(.reportShared, properties: ["type": exportType])
         } catch {
             errorMessage = (error as? ReportFileError)?.localizedDescription
                 ?? "Couldn't share report. Try saving it first."
@@ -1529,6 +1530,7 @@ struct ExportHistoryView: View {
                 let item = try ReportFileDownloader.makeShareItem(for: localURL, exportType: row.exportType)
                 shareItems = [item]
                 showShareSheet = true
+                MoveMarkAnalytics.track(.reportShared, properties: ["type": row.exportType])
                 verificationStatus[row.id] = .ready
                 successBanner = nil
                 presentProofToast(
@@ -1627,6 +1629,8 @@ struct ExportHistoryView: View {
                 if !subscriptionManager.hasPro, let uid = sessionManager.userId {
                     subscriptionManager.incrementFreeMoveInExportCount(forUser: uid)
                 }
+
+                MoveMarkAnalytics.track(.reportGenerated, properties: ["type": "move_in"])
 
                 MMProofToastPresenter.show(
                     .reportQueued(),
