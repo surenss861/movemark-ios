@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct MaintenanceRecord: Identifiable, Codable, Hashable {
+nonisolated struct MaintenanceRecord: Identifiable, Codable, Hashable {
     enum Status: String, Codable, CaseIterable, Hashable {
         case open = "Open"
         case followUp = "Follow-up"

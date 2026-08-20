@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import OSLog
 import Supabase
 
 /// Decoded shape of `public.get_property_snapshot(p_property_id)` — one round trip replacing the
@@ -46,6 +47,15 @@ struct PropertySnapshot: Decodable {
 }
 
 extension PropertyStore {
+    fileprivate static let hydrationSignposter = OSSignposter(
+        subsystem: Bundle.main.bundleIdentifier ?? "MoveMark",
+        category: "PropertyHydration"
+    )
+    fileprivate static let hydrationLog = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "MoveMark",
+        category: "PropertyHydration"
+    )
+
 
     /// Shared `yyyy-MM-dd` parser; `PropertyStore` is `@MainActor`, so this is not accessed concurrently across threads.
     static let dbDateFormatter: DateFormatter = {
@@ -67,6 +77,17 @@ extension PropertyStore {
     /// Loads rooms, docs, inspections, maintenance for one property and returns (PropertyRecord, maintenance log).
     /// Single round trip via `get_property_snapshot`; all grouping/parsing below is unchanged from the old per-table fetch path.
     func hydrateProperty(_ row: PropertyRow, userId: UUID) async throws -> (PropertyRecord, [MaintenanceRecord]) {
+        // Paired with the snapshot-cache signposts so one Instruments trace shows local read and
+        // remote refresh on the same timeline. Instrumentation only — no behaviour change.
+        let hydrationState = Self.hydrationSignposter.beginInterval("remote_hydration")
+        let hydrationClock = ContinuousClock()
+        let hydrationStart = hydrationClock.now
+        defer {
+            Self.hydrationSignposter.endInterval("remote_hydration", hydrationState)
+            let ms = Int(hydrationStart.duration(to: hydrationClock.now) / .milliseconds(1))
+            Self.hydrationLog.debug("remote_hydration \(ms, privacy: .public)ms")
+        }
+
         let snapshot = try await fetchPropertySnapshot(propertyId: row.id)
 
         let rooms = snapshot.rooms

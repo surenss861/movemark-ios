@@ -80,6 +80,10 @@ final class SessionManager {
 
     private var hasResolvedInitialAuthState = false
     private var hasStartedAuthListener = false
+    /// User-scoped cache teardown, kicked off at sign-out and awaited before the *next* account
+    /// hydrates. Sign-out itself must never wait on disk work, but the previous account's deletion
+    /// must never run concurrently with the next account's cache writes either.
+    private var pendingSessionCleanup: Task<Void, Never>?
     /// `SessionManager` is `@MainActor`; `deinit` is not — the box is the only cross-isolation handle to the listener task.
     private let authStateTaskBox = TaskCancellationBox()
 
@@ -209,6 +213,8 @@ final class SessionManager {
     /// non-throwing: it must never sign the user out, and must never tell an onboarded user they
     /// still need onboarding.
     private func applyAuthenticatedSession(_ session: Session) async {
+        await awaitPreviousSessionCleanup()
+
         userId = session.user.id
         userEmail = session.user.email ?? ""
 
@@ -453,6 +459,39 @@ final class SessionManager {
         clearAuthenticatedFields()
         authPhase = .signedOut
         hasResolvedInitialAuthState = true
+
+        // Sign-out is visible immediately; the purge runs behind it. Awaiting here instead would put
+        // a lazy ModelContainer init plus a SwiftData delete in front of the user seeing themselves
+        // logged out. The race that ordering avoided is closed by awaitPreviousSessionCleanup()
+        // before the next account touches the cache, rather than by making logout wait.
+        scheduleSessionCleanup()
+    }
+
+    /// Chains onto any cleanup already in flight rather than replacing it.
+    ///
+    /// Replacing the handle would only *look* safe: a second sign-out before the first purge finished
+    /// would leave the first task running untracked, and awaiting the second proves nothing about the
+    /// first. The next account could then hydrate, write a snapshot, and have the older purge delete
+    /// it. Chaining makes awaiting the newest task transitively await every earlier one.
+    ///
+    /// Nothing is cancelled: the purge does not check `Task.isCancelled`, so cancelling would mislead
+    /// without stopping it — and a half-run purge is worse than a duplicated one, which is idempotent.
+    private func scheduleSessionCleanup() {
+        let previous = pendingSessionCleanup
+        pendingSessionCleanup = Task {
+            await previous?.value
+            await PropertySnapshotCache.shared.removeAll()
+            await MoveMarkSignedURLCache.shared.removeAll()
+        }
+    }
+
+    /// Blocks the incoming account's first cache access until every outgoing purge has finished.
+    ///
+    /// The handle is deliberately not cleared afterwards — a sign-out landing during this `await`
+    /// would install a newer task, and nilling here would drop it. Retaining one finished
+    /// `Task<Void, Never>` costs nothing.
+    private func awaitPreviousSessionCleanup() async {
+        await pendingSessionCleanup?.value
     }
 
     enum AuthError: LocalizedError {

@@ -51,10 +51,12 @@ extension PropertyStore {
         return (thumbPath, url)
     }
 
-    /// Call on sign-out to prevent stale data from showing for a different user.
+    /// In-memory reset only — synchronous, and honestly so.
+    ///
+    /// Persistent caches are purged by `SessionManager.signOut()`, which awaits them before the auth
+    /// phase flips. Doing it here would mean either an unstructured `Task` racing the next user's
+    /// hydration, or a disk purge hidden inside a synchronous-looking reset.
     func clear() {
-        Task { await MoveMarkSignedURLCache.shared.removeAll() }
-        PropertySnapshotCache.shared.removeAll()
         let was = currentProperty?.id.uuidString ?? "nil"
         currentProperty = nil
         properties = []
@@ -71,18 +73,20 @@ extension PropertyStore {
     func fetchAll(userId: UUID) async {
         errorMessage = nil
         lastFetchFailed = false
+        // Set before the cache await: the local read is now asynchronous, so the UI would otherwise
+        // report "not loading" during it. Callers keep showing existing content while refreshing.
+        isLoading = true
 
         // Instant local read: if we have a cached snapshot for the last-active property, publish it
         // immediately (synchronous, no network wait) so the UI isn't blank while the fetch below runs —
         // or stays blank if it fails offline.
         let savedId = UserDefaults.standard.string(forKey: Self.persistedActivePropertyIdKey(userId: userId))
             .flatMap { UUID(uuidString: $0) }
-        if let savedId, let cached = PropertySnapshotCache.shared.load(propertyId: savedId) {
+        if let savedId, let cached = await PropertySnapshotCache.shared.load(propertyId: savedId) {
             currentProperty = cached.record
             maintenanceLog = cached.maintenance
         }
 
-        isLoading = true
         defer {
             isLoading = false
             hasCompletedInitialFetch = true
@@ -110,7 +114,7 @@ extension PropertyStore {
 
             // The seeded cache above may not match `targetId` (e.g. no saved id yet, or it pointed at a
             // property that's since been removed) — re-seed from the actual target's cache in that case.
-            if currentProperty?.id != targetId, let cached = PropertySnapshotCache.shared.load(propertyId: targetId) {
+            if currentProperty?.id != targetId, let cached = await PropertySnapshotCache.shared.load(propertyId: targetId) {
                 currentProperty = cached.record
                 maintenanceLog = cached.maintenance
             }
@@ -119,7 +123,7 @@ extension PropertyStore {
             currentProperty = record
             maintenanceLog = issues
             errorMessage = nil
-            PropertySnapshotCache.shared.save(propertyId: targetId, record: record, maintenance: issues)
+            await PropertySnapshotCache.shared.save(propertyId: targetId, record: record, maintenance: issues)
         } catch {
             errorMessage = MoveMarkFlowMessage.propertyListLoadFailed(error)
             lastFetchFailed = true
@@ -145,7 +149,7 @@ extension PropertyStore {
             currentProperty = record
             maintenanceLog = issues
             errorMessage = nil
-            PropertySnapshotCache.shared.save(propertyId: activeId, record: record, maintenance: issues)
+            await PropertySnapshotCache.shared.save(propertyId: activeId, record: record, maintenance: issues)
             return true
         } catch {
             #if DEBUG
@@ -164,7 +168,7 @@ extension PropertyStore {
 
         // Instant local read: show the cached snapshot for the newly-selected property (if any) before
         // the RPC hydration below completes, so switching properties isn't a blank screen while it loads.
-        if let cached = PropertySnapshotCache.shared.load(propertyId: id) {
+        if let cached = await PropertySnapshotCache.shared.load(propertyId: id) {
             currentProperty = cached.record
             maintenanceLog = cached.maintenance
         }
@@ -175,7 +179,7 @@ extension PropertyStore {
             currentProperty = record
             maintenanceLog = issues
             errorMessage = nil
-            PropertySnapshotCache.shared.save(propertyId: id, record: record, maintenance: issues)
+            await PropertySnapshotCache.shared.save(propertyId: id, record: record, maintenance: issues)
         } catch {
             errorMessage = MoveMarkFlowMessage.propertySwitchLoadFailed(error)
             // Keep whatever's already on screen (the cache seed above, if any) rather than clearing it —

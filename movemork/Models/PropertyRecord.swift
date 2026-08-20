@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct PropertyRecord: Identifiable, Codable, Hashable {
+nonisolated struct PropertyRecord: Identifiable, Codable, Hashable {
     let id: UUID
     var title: String
     var addressLine1: String

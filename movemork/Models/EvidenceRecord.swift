@@ -8,14 +8,14 @@
 import Foundation
 
 /// Reference to a row in `evidence_files` (storage path under `inspection-media`).
-struct EvidencePhoto: Identifiable, Codable, Hashable {
+nonisolated struct EvidencePhoto: Identifiable, Codable, Hashable {
     let id: UUID
     let filePath: String
     /// Small (~320px) JPEG path for grid/list thumbnails; `nil` until re-captured (fall back to `filePath`).
     var thumbnailPath: String? = nil
 }
 
-struct EvidenceRecord: Identifiable, Codable, Hashable {
+nonisolated struct EvidenceRecord: Identifiable, Codable, Hashable {
     let id: UUID
     var title: String
     var notes: String

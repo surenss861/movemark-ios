@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct RoomRecord: Identifiable, Codable, Hashable {
+nonisolated struct RoomRecord: Identifiable, Codable, Hashable {
     enum ConditionRating: String, Codable, CaseIterable, Hashable {
         /// Worst → best (matches picker order).
         case poor = "Poor"
