@@ -125,7 +125,7 @@ final class SessionManager {
                 return
             }
 
-            try await applyAuthenticatedSession(session)
+            await applyAuthenticatedSession(session)
             hasResolvedInitialAuthState = true
         } catch {
             clearAuthenticatedFields()
@@ -157,12 +157,7 @@ final class SessionManager {
 
                 case .userUpdated:
                     guard let session, self.isSessionValid(session) else { continue }
-                    do {
-                        try await self.applyAuthenticatedSession(session)
-                    } catch {
-                        self.clearAuthenticatedFields()
-                        self.authPhase = .signedOut
-                    }
+                    await self.applyAuthenticatedSession(session)
 
                 default:
                     break
@@ -181,25 +176,14 @@ final class SessionManager {
             return
         }
 
-        do {
-            try await applyAuthenticatedSession(session)
-        } catch {
-            clearAuthenticatedFields()
-            authPhase = .signedOut
-        }
+        await applyAuthenticatedSession(session)
     }
 
     private func handleSignedInOrRefreshed(_ session: Session?) async {
         guard let session, isSessionValid(session) else { return }
 
-        do {
-            try await applyAuthenticatedSession(session)
-            hasResolvedInitialAuthState = true
-        } catch {
-            clearAuthenticatedFields()
-            authPhase = .signedOut
-            hasResolvedInitialAuthState = true
-        }
+        await applyAuthenticatedSession(session)
+        hasResolvedInitialAuthState = true
     }
 
     private func handleSignedOut() async {
@@ -220,45 +204,60 @@ final class SessionManager {
         firstName = ""
     }
 
-    private func applyAuthenticatedSession(_ session: Session) async throws {
+    /// Identity comes from the already-validated session; the profile read only decides *where* the
+    /// user lands. That makes a failed profile read a hydration failure, not an auth failure — hence
+    /// non-throwing: it must never sign the user out, and must never tell an onboarded user they
+    /// still need onboarding.
+    private func applyAuthenticatedSession(_ session: Session) async {
         userId = session.user.id
         userEmail = session.user.email ?? ""
 
-        try await ensureProfileExists(session: session)
+        do {
+            try await ensureProfileExists(session: session)
 
-        let profile: ProfileRow? = try? await supabase
-            .from("profiles")
-            .select()
-            .eq("id", value: session.user.id)
-            .single()
-            .execute()
-            .value
+            // Decoded as an array rather than `.single()`: `.single()` throws for "no row", which is
+            // indistinguishable from a transport failure. An empty array is a definitive answer.
+            let profiles: [ProfileRow] = try await supabase
+                .from("profiles")
+                .select()
+                .eq("id", value: session.user.id)
+                .limit(1)
+                .execute()
+                .value
 
-        if let profile {
-            firstName = profile.fullName ?? ""
-            authPhase = profile.onboardingCompletedAt != nil ? .signedIn : .needsOnboarding
-        } else {
-            firstName = ""
-            authPhase = .needsOnboarding
+            if let profile = profiles.first {
+                firstName = profile.fullName ?? ""
+                authPhase = profile.onboardingCompletedAt != nil ? .signedIn : .needsOnboarding
+            } else {
+                // Definitively no profile row — a genuinely new account.
+                firstName = ""
+                authPhase = .needsOnboarding
+            }
+        } catch {
+            // Indeterminate: the profile could not be read. Stay signed in and let the property layer
+            // offer a retry. Preferring `.signedIn` over `.needsOnboarding` is deliberate — onboarding
+            // *writes* (it overwrites full_name), so guessing wrong there damages an existing account,
+            // while guessing wrong here self-corrects on the next token refresh.
+            authPhase = .signedIn
         }
     }
 
     /// Ensures a row exists in public.profiles for the session user (required for properties.user_id FK).
-    /// Inserts only when missing. Throws if profile is missing and insert fails (caller must not allow property creation).
+    ///
+    /// `ignoreDuplicates` makes this idempotent in a single round trip. The previous SELECT-then-INSERT
+    /// raced itself: a lost SELECT response led to an INSERT that violated the primary key, and that
+    /// throw signed the user out. A merging upsert is not an option here — `ProfileInsert` always
+    /// encodes `full_name`, so merging would blank an existing user's name.
     private func ensureProfileExists(session: Session) async throws {
         let uid = session.user.id
         let email = session.user.email ?? ""
-        let exists: ProfileRow? = try? await supabase
-            .from("profiles")
-            .select()
-            .eq("id", value: uid)
-            .single()
-            .execute()
-            .value
-        guard exists == nil else { return }
         try await supabase
             .from("profiles")
-            .insert(ProfileInsert(id: uid, email: email, fullName: ""))
+            .upsert(
+                ProfileInsert(id: uid, email: email, fullName: ""),
+                onConflict: "id",
+                ignoreDuplicates: true
+            )
             .execute()
     }
 
@@ -315,7 +314,7 @@ final class SessionManager {
 
         do {
             let session = try await supabase.auth.signIn(email: trimmedEmail, password: password)
-            try await applyAuthenticatedSession(session)
+            await applyAuthenticatedSession(session)
             hasResolvedInitialAuthState = true
         } catch {
             authPhase = .signedOut

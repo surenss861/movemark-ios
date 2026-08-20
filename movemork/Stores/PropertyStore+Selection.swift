@@ -62,6 +62,7 @@ extension PropertyStore {
         maintenanceLog = []
         errorMessage = nil
         hasCompletedInitialFetch = false
+        lastFetchFailed = false
         #if DEBUG
         print("👋 PropertyStore.clear(); currentProperty was \(was)")
         #endif
@@ -69,6 +70,7 @@ extension PropertyStore {
 
     func fetchAll(userId: UUID) async {
         errorMessage = nil
+        lastFetchFailed = false
 
         // Instant local read: if we have a cached snapshot for the last-active property, publish it
         // immediately (synchronous, no network wait) so the UI isn't blank while the fetch below runs —
@@ -120,6 +122,7 @@ extension PropertyStore {
             PropertySnapshotCache.shared.save(propertyId: targetId, record: record, maintenance: issues)
         } catch {
             errorMessage = MoveMarkFlowMessage.propertyListLoadFailed(error)
+            lastFetchFailed = true
             // Don't blank out data already on screen (from the cache seed above, or a prior successful
             // load) just because this refresh failed — only clear if there's genuinely nothing to show.
             if currentProperty == nil {
