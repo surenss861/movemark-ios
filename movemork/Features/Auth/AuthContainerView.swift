@@ -161,6 +161,7 @@ struct AuthContainerView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
+            .accessibilityIdentifier("auth.dismiss")
 
             Spacer(minLength: 0)
 
@@ -265,6 +266,7 @@ struct AuthContainerView: View {
                 keyboardType: .emailAddress,
                 density: .authCompact
             )
+            .accessibilityIdentifier("auth.email")
 
             MMTextField(
                 title: "Password",
@@ -273,6 +275,7 @@ struct AuthContainerView: View {
                 isSecure: true,
                 density: .authCompact
             )
+            .accessibilityIdentifier("auth.password")
 
             if mode == .signUp {
                 MMTextField(
@@ -298,6 +301,7 @@ struct AuthContainerView: View {
                             .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.92))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("auth.forgotPassword")
                 }
                 .transition(fieldTransition)
             }
@@ -331,6 +335,7 @@ struct AuthContainerView: View {
                 isDisabled: isLoading
             )
             .opacity(isLoading ? 0.6 : 1.0)
+            .accessibilityIdentifier("auth.primaryAction")
 
             if isLoading {
                 ProgressView()
@@ -361,6 +366,7 @@ struct AuthContainerView: View {
                     .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.95))
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("auth.switchMode")
         }
         .font(MoveMarkTheme.Typography.subheadline)
         .frame(maxWidth: .infinity)

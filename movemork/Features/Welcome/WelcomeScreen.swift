@@ -203,6 +203,7 @@ struct WelcomeScreen: View {
             )
             .scaleEffect(launchCTAPressed ? 0.97 : 1)
             .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82), value: launchCTAPressed)
+            .accessibilityIdentifier("welcome.primaryCTA")
 
             HStack(spacing: 6) {
                 Spacer(minLength: 0)
@@ -217,6 +218,7 @@ struct WelcomeScreen: View {
                         .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.95))
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("welcome.signIn")
                 Spacer(minLength: 0)
             }
             .padding(.top, 22)

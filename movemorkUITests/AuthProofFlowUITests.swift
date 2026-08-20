@@ -19,7 +19,7 @@ final class AuthProofFlowUITests: XCTestCase {
 
     @MainActor
     func testWelcomeSignInOpensSignInMode() throws {
-        let signIn = app.buttons["Sign in"]
+        let signIn = app.buttons["welcome.signIn"]
         XCTAssertTrue(signIn.waitForExistence(timeout: 8))
         signIn.tap()
 
@@ -32,13 +32,13 @@ final class AuthProofFlowUITests: XCTestCase {
 
     @MainActor
     func testWelcomeCTAOpensCreateVaultFlow() throws {
-        let cta = app.buttons["Start move-in proof"]
+        let cta = app.buttons["welcome.primaryCTA"]
         XCTAssertTrue(cta.waitForExistence(timeout: 8))
         cta.tap()
 
         XCTAssertTrue(app.staticTexts["Create your proof vault"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Private proof vault"].exists)
-        XCTAssertTrue(app.buttons["Create private vault"].exists)
+        XCTAssertTrue(app.buttons["auth.primaryAction"].exists)
     }
 
     @MainActor
@@ -47,11 +47,11 @@ final class AuthProofFlowUITests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["Private proof vault"].exists)
 
-        app.buttons["Sign in"].tap()
+        switchAuthMode()
 
         XCTAssertTrue(app.staticTexts["Welcome back."].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Proof vault ready"].exists)
-        XCTAssertTrue(app.buttons["Continue proof vault"].exists)
+        XCTAssertTrue(app.buttons["auth.primaryAction"].exists)
         XCTAssertEqual(app.secureTextFields.count, 1, "Sign-in should show one password field")
         XCTAssertFalse(app.staticTexts["By continuing, you agree to"].exists)
     }
@@ -59,10 +59,10 @@ final class AuthProofFlowUITests: XCTestCase {
     @MainActor
     func testSignInToCreateMorph() throws {
         openCreateAuth()
-        app.buttons["Sign in"].tap()
+        switchAuthMode()
         XCTAssertTrue(app.staticTexts["Welcome back."].waitForExistence(timeout: 3))
 
-        app.buttons["Create private vault"].tap()
+        switchAuthMode()
 
         XCTAssertTrue(app.staticTexts["Create your proof vault"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Private proof vault"].exists)
@@ -76,11 +76,11 @@ final class AuthProofFlowUITests: XCTestCase {
     func testKeyboardDoesNotHidePrimaryCTA() throws {
         openCreateAuth()
 
-        let email = app.textFields.firstMatch
+        let email = app.textFields["auth.email"]
         XCTAssertTrue(email.waitForExistence(timeout: 3))
         email.tap()
 
-        let cta = app.buttons["Create private vault"]
+        let cta = app.buttons["auth.primaryAction"]
         XCTAssertTrue(cta.waitForExistence(timeout: 3))
 
         if !cta.isHittable {
@@ -92,13 +92,13 @@ final class AuthProofFlowUITests: XCTestCase {
     @MainActor
     func testDismissAndReopenResetsToCreateMode() throws {
         openCreateAuth()
-        app.buttons["Sign in"].tap()
+        switchAuthMode()
         XCTAssertTrue(app.staticTexts["Welcome back."].waitForExistence(timeout: 3))
 
-        app.buttons["Back"].tap()
-        XCTAssertTrue(app.buttons["Start move-in proof"].waitForExistence(timeout: 5))
+        app.buttons["auth.dismiss"].tap()
+        XCTAssertTrue(app.buttons["welcome.primaryCTA"].waitForExistence(timeout: 5))
 
-        app.buttons["Start move-in proof"].tap()
+        app.buttons["welcome.primaryCTA"].tap()
         XCTAssertTrue(app.staticTexts["Create your proof vault"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Private proof vault"].exists)
         XCTAssertEqual(app.secureTextFields.count, 2)
@@ -111,18 +111,30 @@ final class AuthProofFlowUITests: XCTestCase {
         app.launch()
 
         openCreateAuth()
-        app.buttons["Sign in"].tap()
+        switchAuthMode(timeout: 5)
         XCTAssertTrue(app.staticTexts["Welcome back."].waitForExistence(timeout: 5))
-        app.buttons["Create private vault"].tap()
+        switchAuthMode(timeout: 5)
         XCTAssertTrue(app.staticTexts["Private proof vault"].waitForExistence(timeout: 5))
     }
 
     // MARK: - Helpers
 
+    /// Interactions address controls by accessibility identifier, never by visible label:
+    /// while the auth surface is up, Welcome's dimmed dock also carries a "Sign in" button,
+    /// so a label lookup is ambiguous and can resolve to the non-hittable one. Assertions
+    /// still check user-facing copy, which is part of the product contract.
     private func openCreateAuth() {
-        let cta = app.buttons["Start move-in proof"]
+        let cta = app.buttons["welcome.primaryCTA"]
         XCTAssertTrue(cta.waitForExistence(timeout: 8))
         cta.tap()
         XCTAssertTrue(app.staticTexts["Create your proof vault"].waitForExistence(timeout: 5))
+    }
+
+    @discardableResult
+    private func switchAuthMode(timeout: TimeInterval = 3) -> XCUIElement {
+        let toggle = app.buttons["auth.switchMode"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: timeout))
+        toggle.tap()
+        return toggle
     }
 }
