@@ -20,6 +20,7 @@ struct WelcomeScreen: View {
     @State private var ctaVisible = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     private let contentPadding: CGFloat = 18
     /// Screen-edge inset for the bottom launch dock (38–40pt total).
@@ -37,7 +38,25 @@ struct WelcomeScreen: View {
                 let dockSideInset = max(0, launchDockHorizontalInset - contentPadding)
 
             ZStack {
-                    MMEmeraldBackground(emphasizesHeroZone: false, emphasizesCTABloom: false)
+                    // Frame 0 of the shipped master, so the handoff to video is invisible.
+                    // Also the Reduce Motion presentation and the failure path if the asset
+                    // is missing or AVFoundation cannot prepare it.
+                    Image("WelcomeBackgroundPoster")
+                        .resizable()
+                        .scaledToFill()
+                        .ignoresSafeArea()
+                        .accessibilityHidden(true)
+
+                    if !reduceMotion {
+                        WelcomeBackgroundVideo(isPlaying: shouldPlayWelcomeVideo)
+                            .ignoresSafeArea()
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+
+                    welcomeVideoTreatment
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
 
                     welcomeContent(
                         layout: layout,
@@ -148,6 +167,36 @@ struct WelcomeScreen: View {
         }
     }
 
+    // MARK: - Background treatment
+
+    /// Nothing decodes unless the video is actually the thing being looked at.
+    private var shouldPlayWelcomeVideo: Bool {
+        !reduceMotion && !showAuth && scenePhase == .active
+    }
+
+    /// Deliberately light. The master is already graded dark and its UI zones were measured
+    /// safe (headline ~0.50 luma, CTA ~0.12), so this sets colour character rather than
+    /// re-grading the footage. Alpha composites as 1-(1-a)(1-b), not a+b: 0.12 over 0.20
+    /// is ~0.30 at the bottom edge, which is as far as an already-dark CTA region should go.
+    private var welcomeVideoTreatment: some View {
+        ZStack {
+            MoveMarkTheme.Colors.forestGreen
+                .opacity(0.12)
+
+            LinearGradient(
+                stops: [
+                    .init(color: MoveMarkTheme.Colors.appBackground.opacity(0.16), location: 0.00),
+                    .init(color: MoveMarkTheme.Colors.appBackground.opacity(0.06), location: 0.48),
+                    .init(color: MoveMarkTheme.Colors.appBackground.opacity(0.08), location: 0.70),
+                    .init(color: MoveMarkTheme.Colors.appBackground.opacity(0.20), location: 1.00)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        .ignoresSafeArea()
+    }
+
     // MARK: - Brand
 
     private var brandIdentityRow: some View {
@@ -184,9 +233,37 @@ struct WelcomeScreen: View {
             Text(MoveMarkGrowthCopy.welcomeBody)
                 .font(MoveMarkTheme.Typography.body)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.98))
+                // Body only — the headline keeps the full width so it stays on one line on large
+                // devices. Aspect-fill puts the lit wall and curtain on the right of wide screens,
+                // and this is the copy that runs into it; wrapping earlier keeps it over the dark
+                // centre-left rather than asking a scrim to cover ever more of the frame.
+                .frame(maxWidth: 330, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            // Anchored to the copy, not to a region of the video: aspect-fill puts different
+            // footage behind this text on every device, so a fixed video-space allowance cannot
+            // protect it. `maxWidth` above pulls the copy off the lit curtain, but the lit wall
+            // still sits behind the centre-left on wide screens — measured 0.47 background
+            // luminance without this, 0.33 with it. Falls to clear on the right so it reads as
+            // shading rather than a panel.
+            RadialGradient(
+                colors: [
+                    MoveMarkTheme.Colors.appBackground.opacity(0.34),
+                    MoveMarkTheme.Colors.appBackground.opacity(0.18),
+                    .clear
+                ],
+                center: UnitPoint(x: 0.32, y: 0.50),
+                startRadius: 10,
+                endRadius: 330
+            )
+            .blur(radius: 14)
+            .padding(.horizontal, -24)
+            .padding(.vertical, -18)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
         .opacity(copyVisible ? 1 : 0)
         .offset(y: copyVisible ? 0 : 8)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.44).delay(0.22), value: copyVisible)
