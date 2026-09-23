@@ -114,7 +114,7 @@ REVENUECAT_WEBHOOK_SECRET=<secret>
 APP_ENV=production
 ```
 
-Production URL (from Android config): `https://movemark-api-production.up.railway.app`
+Production URL (from Android config): `https://movemark-api-py-production.up.railway.app`
 
 Repo root `railway.toml` builds `movemark-api/Dockerfile`.
 
@@ -125,7 +125,7 @@ Repo root `railway.toml` builds `movemark-api/Dockerfile`.
 ### Webhook bad/missing secret
 
 ```bash
-API=https://movemark-api-production.up.railway.app
+API=https://movemark-api-py-production.up.railway.app
 
 curl -i -X POST $API/api/webhooks/revenuecat \
   -H "Content-Type: application/json" -d '{}'
@@ -140,7 +140,7 @@ curl -i -X POST $API/api/webhooks/revenuecat \
 ### Health rate limit
 
 ```bash
-API=https://movemark-api-production.up.railway.app
+API=https://movemark-api-py-production.up.railway.app
 for i in {1..75}; do
   code=$(curl -s -o /dev/null -w "%{http_code}" $API/api/health)
   echo "$i $code"
