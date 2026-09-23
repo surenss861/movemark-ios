@@ -446,7 +446,16 @@ struct AuthContainerView: View {
                 case .signIn:
                     try await sessionManager.signIn(email: email, password: password)
                 case .signUp:
-                    try await sessionManager.signUp(email: email, password: password, confirmPassword: confirmPassword)
+                    let result = try await sessionManager.signUp(
+                        email: email,
+                        password: password,
+                        confirmPassword: confirmPassword
+                    )
+                    // No session means no account to route into yet. The phase stays
+                    // `.signedOut`, so this surface remains up and says why.
+                    if result == .emailConfirmationRequired {
+                        infoMessage = "Check your email to confirm your account, then sign in."
+                    }
                 }
             } catch {
                 errorMessage = MoveMarkFlowMessage.authOperationFailed(error)

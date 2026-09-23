@@ -70,4 +70,50 @@ struct MoveMarkReliabilityTests {
         #expect(ExportVerificationStatus.serverFailed.isProblem == true)
         #expect(ExportVerificationStatus.ready.isProblem == false)
     }
+
+    @Test func intentionalSignOutDoesNotDefendStaleSession() {
+        // signOut() already set .signedOut before the provider event arrives.
+        #expect(
+            SignedOutReconciliation.shouldDefendAuthenticatedUI(
+                authPhase: .signedOut,
+                hasValidCurrentSession: true
+            ) == false
+        )
+        #expect(
+            SignedOutReconciliation.shouldDefendAuthenticatedUI(
+                authPhase: .signedOut,
+                hasValidCurrentSession: false
+            ) == false
+        )
+    }
+
+    @Test func unexpectedSignedOutWhileAuthenticatedReconcilesWhenSessionValid() {
+        #expect(
+            SignedOutReconciliation.shouldDefendAuthenticatedUI(
+                authPhase: .signedIn,
+                hasValidCurrentSession: true
+            ) == true
+        )
+        #expect(
+            SignedOutReconciliation.shouldDefendAuthenticatedUI(
+                authPhase: .needsOnboarding,
+                hasValidCurrentSession: true
+            ) == true
+        )
+    }
+
+    @Test func expiredOrAbsentSessionDoesNotResurrectAuthenticatedUI() {
+        #expect(
+            SignedOutReconciliation.shouldDefendAuthenticatedUI(
+                authPhase: .signedIn,
+                hasValidCurrentSession: false
+            ) == false
+        )
+        #expect(
+            SignedOutReconciliation.shouldDefendAuthenticatedUI(
+                authPhase: .loading,
+                hasValidCurrentSession: false
+            ) == false
+        )
+    }
 }

@@ -20,6 +20,14 @@ enum MoveMarkTheme {
         // Cards — green-tinted (legacy) + neutral evidence surfaces (Evidence OS)
         static let card = Color(red: 0.063, green: 0.137, blue: 0.106)                  // #10231B
         static let cardRaised = Color(red: 0.075, green: 0.161, blue: 0.122)             // #13291F
+        /// Welcome proof receipt. Near-neutral graphite so the artifact reads as a document
+        /// rather than as another green surface; deliberately outside the card family above.
+        static let evidenceReceipt = Color(red: 0.051, green: 0.063, blue: 0.055)      // #0D100E
+        /// Welcome launch control body. The control is graphite, never emerald — emerald is
+        /// worth more as the action indicator precisely because there is less of it.
+        static let controlGraphite = Color(red: 0.067, green: 0.082, blue: 0.071)      // #111512
+        /// The action chip. The only saturated brand colour in the dock.
+        static let ctaActionEmerald = Color(red: 0.086, green: 0.600, blue: 0.345)     // #169958
         static let evidenceCard = Color(red: 0.082, green: 0.090, blue: 0.086)           // warm charcoal
         static let evidenceCardRaised = Color(red: 0.102, green: 0.110, blue: 0.106)
         static let cardStroke = Color.white.opacity(0.08)
@@ -31,6 +39,7 @@ enum MoveMarkTheme {
         // Brand — calm green, lime only for tiny success accents
         static let primary = Color(red: 0.129, green: 0.722, blue: 0.400)               // #21B866
         static let primaryPressed = Color(red: 0.094, green: 0.588, blue: 0.310)       // #18A957-ish pressed
+
         static let limeAccent = Color(red: 0.608, green: 0.788, blue: 0.604)           // muted sage accent
         static let proofMint = Color(red: 0.545, green: 0.722, blue: 0.600)
 
@@ -38,6 +47,10 @@ enum MoveMarkTheme {
         static let textPrimary = Color(red: 0.949, green: 0.973, blue: 0.945)
         static let textSecondary = Color(red: 0.659, green: 0.722, blue: 0.678)
         static let textMuted = Color(red: 0.435, green: 0.514, blue: 0.463)
+        /// Body copy that must not compete with the CTA. `textSecondary` is sage, which reads
+        /// as a third brand colour wherever it sits beside emerald; this is that value with
+        /// the green pulled out. Warm ivory rather than white — white goes flat over video.
+        static let textBodyNeutral = Color(red: 0.894, green: 0.886, blue: 0.863)       // #E4E2DC
         static let textOnPrimary = Color.white
         static let textOnLight = Color(red: 0.12, green: 0.18, blue: 0.14)
         static let textDarkGreen = proofMint
@@ -115,6 +128,20 @@ enum MoveMarkTheme {
         static var caption: Font { .system(size: scaled(12, for: .caption1), weight: .medium) }
         static var captionEmphasis: Font { .system(size: scaled(12, for: .caption1), weight: .semibold) }
         static var subtitleLarge: Font { .system(size: scaled(20, for: .title3), weight: .semibold) }
+        /// Wordmark — SF Pro, not rounded. Rounded read as playful against evidence positioning.
+        static var wordmark: Font { .system(size: scaled(28, for: .title2), weight: .semibold) }
+        /// Welcome editorial headline. Set on two lines by the screen, never one.
+        static var welcomeHeadline: Font { .system(size: scaled(46, for: .largeTitle), weight: .bold) }
+        static var welcomeBody: Font { .system(size: scaled(18, for: .body), weight: .regular) }
+        static var welcomeControl: Font { .system(size: scaled(18, for: .callout), weight: .semibold) }
+        static var welcomeSupporting: Font { .system(size: scaled(15.5, for: .subheadline), weight: .regular) }
+        static var welcomeSupportingEmphasis: Font { .system(size: scaled(15.5, for: .subheadline), weight: .semibold) }
+        // Proof receipt scale
+        static var receiptLabel: Font { .system(size: scaled(14, for: .footnote), weight: .semibold) }
+        static var receiptAmount: Font { .system(size: scaled(18, for: .callout), weight: .semibold) }
+        static var receiptStatus: Font { .system(size: scaled(15.5, for: .subheadline), weight: .semibold) }
+        static var receiptMeta: Font { .system(size: scaled(14.5, for: .footnote), weight: .regular) }
+        static var receiptFooter: Font { .system(size: scaled(16, for: .callout), weight: .semibold) }
         static var bodySmallEmphasis: Font { .system(size: scaled(16, for: .callout), weight: .semibold) }
         static var detail: Font { .system(size: scaled(14, for: .footnote), weight: .regular) }
         static var detailMedium: Font { .system(size: scaled(14, for: .footnote), weight: .medium) }
@@ -142,6 +169,17 @@ enum MoveMarkTheme {
         static let caption: Font = .system(size: 12, weight: .medium)
         static let captionEmphasis: Font = .system(size: 12, weight: .semibold)
         static let subtitleLarge: Font = .system(size: 20, weight: .semibold)
+        static let wordmark: Font = .system(size: 28, weight: .semibold)
+        static let welcomeHeadline: Font = .system(size: 46, weight: .bold)
+        static let welcomeBody: Font = .system(size: 18, weight: .regular)
+        static let welcomeControl: Font = .system(size: 18, weight: .semibold)
+        static let welcomeSupporting: Font = .system(size: 15.5, weight: .regular)
+        static let welcomeSupportingEmphasis: Font = .system(size: 15.5, weight: .semibold)
+        static let receiptLabel: Font = .system(size: 14, weight: .semibold)
+        static let receiptAmount: Font = .system(size: 18, weight: .semibold)
+        static let receiptStatus: Font = .system(size: 15.5, weight: .semibold)
+        static let receiptMeta: Font = .system(size: 14.5, weight: .regular)
+        static let receiptFooter: Font = .system(size: 16, weight: .semibold)
         static let bodySmallEmphasis: Font = .system(size: 16, weight: .semibold)
         static let detail: Font = .system(size: 14, weight: .regular)
         static let detailMedium: Font = .system(size: 14, weight: .medium)

@@ -20,11 +20,19 @@ struct WelcomeScreen: View {
     @State private var ctaVisible = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.scenePhase) private var scenePhase
 
-    private let contentPadding: CGFloat = 18
+    /// Card and copy sit 20pt off each edge, so the receipt is exactly screen width - 40.
+    private let contentPadding: CGFloat = 20
     /// Screen-edge inset for the bottom launch dock (38–40pt total).
-    private let launchDockHorizontalInset: CGFloat = 38
+    private let launchDockHorizontalInset: CGFloat = 30
+
+    /// Accessibility Dynamic Type only. Keep the fixed poster composition through `.xxxLarge`;
+    /// at AX sizes the same content grows and scrolls so CTA + Sign in stay reachable.
+    private var usesAccessibilityScrollLayout: Bool {
+        dynamicTypeSize.isAccessibilitySize
+    }
 
     var body: some View {
         NavigationStack {
@@ -34,16 +42,32 @@ struct WelcomeScreen: View {
                     safeTop: geo.safeAreaInsets.top,
                     safeBottom: geo.safeAreaInsets.bottom
                 )
-                let cardWidth = min(geo.size.width - contentPadding * 2, 450)
+                let cardWidth = min(geo.size.width - contentPadding * 2, 430)
                 let dockSideInset = max(0, launchDockHorizontalInset - contentPadding)
 
             ZStack {
                     // Frame 0 of the shipped master, so the handoff to video is invisible.
                     // Also the Reduce Motion presentation and the failure path if the asset
                     // is missing or AVFoundation cannot prepare it.
-                    Image("WelcomeBackgroundPoster")
-                        .resizable()
-                        .scaledToFill()
+                    //
+                    // Painted through an overlay rather than placed directly in the ZStack.
+                    // `scaledToFill` reports the *filled* size, not the proposed one: the poster
+                    // is 9:16, so on any screen taller than that it reports more width than it
+                    // was offered — ~538pt against a 440pt proposal on a 17 Pro Max — and a
+                    // ZStack sizes itself to its largest child. That widened the whole content
+                    // stack, and since the GeometryReader pins its content top-leading, every
+                    // point of the excess fell on the right: the launch dock's emerald chip ran
+                    // off the screen edge while the fixed-width receipt above it looked fine.
+                    // An overlay is sized by its host and never resizes it, so the fill is
+                    // painted and clipped without reaching layout at all. The SE was immune
+                    // only because 375x667 is exactly 9:16.
+                    Color.clear
+                        .overlay {
+                            Image("WelcomeBackgroundPoster")
+                                .resizable()
+                                .scaledToFill()
+                        }
+                        .clipped()
                         .ignoresSafeArea()
                         .accessibilityHidden(true)
 
@@ -54,9 +78,9 @@ struct WelcomeScreen: View {
                             .accessibilityHidden(true)
                     }
 
-                    welcomeVideoTreatment
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
+                    // video -> emerald grade -> readability veil -> proof artifact -> copy -> CTA
+                    WelcomeEmeraldGrade()
+                    WelcomeReadabilityVeil()
 
                     welcomeContent(
                         layout: layout,
@@ -92,11 +116,43 @@ struct WelcomeScreen: View {
 
     // MARK: - Welcome content
 
+    @ViewBuilder
     private func welcomeContent(
         layout: WelcomeZoneLayout,
         cardWidth: CGFloat,
         dockSideInset: CGFloat,
         safeBottom: CGFloat
+    ) -> some View {
+        // Poster/background stays fixed. Only the interactive layer scrolls at AX sizes —
+        // and CTA + Sign in travel with that layer (no bottom dock) so they cannot collide
+        // with grown copy the way a fixed dock would.
+        if usesAccessibilityScrollLayout {
+            ScrollView {
+                welcomeInteractiveStack(
+                    layout: layout,
+                    cardWidth: cardWidth,
+                    dockSideInset: dockSideInset,
+                    pinsDockToBottom: false
+                )
+                .padding(.bottom, layout.bottomDockPadding(safeBottom: safeBottom))
+            }
+            .scrollIndicators(.hidden)
+        } else {
+            welcomeInteractiveStack(
+                layout: layout,
+                cardWidth: cardWidth,
+                dockSideInset: dockSideInset,
+                pinsDockToBottom: true
+            )
+            .padding(.bottom, layout.bottomDockPadding(safeBottom: safeBottom))
+        }
+    }
+
+    private func welcomeInteractiveStack(
+        layout: WelcomeZoneLayout,
+        cardWidth: CGFloat,
+        dockSideInset: CGFloat,
+        pinsDockToBottom: Bool
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             brandIdentityRow
@@ -105,21 +161,25 @@ struct WelcomeScreen: View {
             WelcomeDepositCaseFile(
                 maxWidth: cardWidth,
                 cardVisible: cardVisible,
-                tagsVisible: tagsVisible
+                tagsVisible: tagsVisible,
+                compactHeight: layout.isCompactHeight
             )
             .frame(maxWidth: .infinity, alignment: .leading)
 
             primaryCopyBlock
                 .padding(.top, layout.heroToCopyGap)
 
-            Spacer(minLength: 8)
+            if pinsDockToBottom {
+                Spacer(minLength: 8)
+            } else {
+                Color.clear.frame(height: layout.heroToCopyGap)
+            }
 
             bottomLaunchDock
                 .padding(.horizontal, dockSideInset)
         }
         .padding(.horizontal, contentPadding)
         .padding(.top, layout.topPadding)
-        .padding(.bottom, layout.bottomDockPadding(safeBottom: safeBottom))
     }
 
     private var welcomeBackdropAnimation: Animation? {
@@ -174,42 +234,17 @@ struct WelcomeScreen: View {
         !reduceMotion && !showAuth && scenePhase == .active
     }
 
-    /// Deliberately light. The master is already graded dark and its UI zones were measured
-    /// safe (headline ~0.50 luma, CTA ~0.12), so this sets colour character rather than
-    /// re-grading the footage. Alpha composites as 1-(1-a)(1-b), not a+b: 0.12 over 0.20
-    /// is ~0.30 at the bottom edge, which is as far as an already-dark CTA region should go.
-    private var welcomeVideoTreatment: some View {
-        ZStack {
-            MoveMarkTheme.Colors.forestGreen
-                .opacity(0.12)
-
-            LinearGradient(
-                stops: [
-                    .init(color: MoveMarkTheme.Colors.appBackground.opacity(0.16), location: 0.00),
-                    .init(color: MoveMarkTheme.Colors.appBackground.opacity(0.06), location: 0.48),
-                    .init(color: MoveMarkTheme.Colors.appBackground.opacity(0.08), location: 0.70),
-                    .init(color: MoveMarkTheme.Colors.appBackground.opacity(0.20), location: 1.00)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        }
-        .ignoresSafeArea()
-    }
-
     // MARK: - Brand
 
+    /// Wordmark only. The app icon already carries the mark on the Home Screen, and a badge
+    /// beside the word here made the corner read as a logo lockup on a marketing page rather
+    /// than as the quiet anchor this screen needs.
     private var brandIdentityRow: some View {
         HStack(alignment: .center, spacing: 10) {
-            Image("MoveMarkLogo")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 35, height: 35)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-
             Text("MoveMark")
-                .font(MoveMarkTheme.Typography.subtitleLarge)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                .font(MoveMarkTheme.Typography.wordmark)
+                .tracking(-0.6)
+                .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.92))
 
             Spacer(minLength: 0)
         }
@@ -221,18 +256,35 @@ struct WelcomeScreen: View {
 
     private var primaryCopyBlock: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(MoveMarkGrowthCopy.welcomeHeadline)
-                .font(MoveMarkTheme.Typography.cardValue)
-                .tracking(-0.7)
-                .lineSpacing(2)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                .lineLimit(2)
-                .minimumScaleFactor(0.92)
-                .fixedSize(horizontal: false, vertical: true)
+            // Two Text views rather than one wrapped string: SwiftUI has no line-height
+            // multiplier, and a -4 VStack spacing is the only way to reach the ~0.96 leading
+            // this size wants. It also makes the break editorial rather than a function of
+            // device width — the headline is never one line, on any screen.
+            VStack(alignment: .leading, spacing: -4) {
+                Text(MoveMarkGrowthCopy.welcomeHeadlineLead)
+                Text(MoveMarkGrowthCopy.welcomeHeadlineTail)
+            }
+            .font(MoveMarkTheme.Typography.welcomeHeadline)
+            .tracking(-1.0)
+            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+            // Fixed composition: one editorial line per Text through xxxLarge.
+            // Accessibility sizes: let the lines wrap and grow — scroll carries the overflow.
+            .modifier(WelcomeHeadlineDynamicTypeFit(allowsWrapping: usesAccessibilityScrollLayout))
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(MoveMarkGrowthCopy.welcomeHeadline)
 
             Text(MoveMarkGrowthCopy.welcomeBody)
-                .font(MoveMarkTheme.Typography.body)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.98))
+                .font(MoveMarkTheme.Typography.welcomeBody)
+                .foregroundStyle(MoveMarkTheme.Colors.textBodyNeutral.opacity(0.72))
+                // Contrast the scrim cannot buy. The plate under this copy is bimodal on wide
+                // screens — a lit door edge around 70-120pt and the lit wall from 250pt out, both
+                // reaching 0.44 luma — so flattening the worst decile with the radial would take
+                // an opacity that reads as a panel. These raise contrast at the character edge,
+                // where it is actually judged, and cost the surrounding frame nothing. Shadow
+                // colour is appBackground, so on an already-dark plate they render as nothing.
+                .shadow(color: MoveMarkTheme.Colors.appBackground.opacity(0.85), radius: 3, x: 0, y: 1)
+                .shadow(color: MoveMarkTheme.Colors.appBackground.opacity(0.55), radius: 10, x: 0, y: 2)
                 // Body only — the headline keeps the full width so it stays on one line on large
                 // devices. Aspect-fill puts the lit wall and curtain on the right of wide screens,
                 // and this is the copy that runs into it; wrapping earlier keeps it over the dark
@@ -245,12 +297,13 @@ struct WelcomeScreen: View {
             // Anchored to the copy, not to a region of the video: aspect-fill puts different
             // footage behind this text on every device, so a fixed video-space allowance cannot
             // protect it. `maxWidth` above pulls the copy off the lit curtain, but the lit wall
-            // still sits behind the centre-left on wide screens — measured 0.47 background
-            // luminance without this, 0.33 with it. Falls to clear on the right so it reads as
-            // shading rather than a panel.
+            // still sits behind the centre-left on wide screens — 0.42 background luma there
+            // untreated, 0.29 with this. Falls to clear on the right so it reads as shading
+            // rather than a panel; measured across the full 8s loop it also holds the plate
+            // steady while the untreated footage beside it swings 0.35-0.39.
             RadialGradient(
                 colors: [
-                    MoveMarkTheme.Colors.appBackground.opacity(0.34),
+                    MoveMarkTheme.Colors.appBackground.opacity(0.42),
                     MoveMarkTheme.Colors.appBackground.opacity(0.18),
                     .clear
                 ],
@@ -273,10 +326,9 @@ struct WelcomeScreen: View {
 
     private var bottomLaunchDock: some View {
         VStack(spacing: 0) {
-            MMButton(
+            WelcomeLaunchControl(
                 title: MoveMarkGrowthCopy.welcomeCTA,
-                action: { launchAuth(mode: .signUp) },
-                showsTrailingArrow: true
+                action: { launchAuth(mode: .signUp) }
             )
             .scaleEffect(launchCTAPressed ? 0.97 : 1)
             .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82), value: launchCTAPressed)
@@ -285,14 +337,17 @@ struct WelcomeScreen: View {
             HStack(spacing: 6) {
                 Spacer(minLength: 0)
                 Text("Already have an account?")
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
+                    .font(MoveMarkTheme.Typography.welcomeSupporting)
+                    .foregroundStyle(MoveMarkTheme.Colors.textBodyNeutral.opacity(0.58))
                 Button {
                     launchAuth(mode: .signIn)
                 } label: {
                     Text("Sign in")
-                        .font(MoveMarkTheme.Typography.subheadlineMedium)
-                        .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.95))
+                        .font(MoveMarkTheme.Typography.welcomeSupportingEmphasis)
+                        // Same emerald as the action chip, not `primary`. Emerald is a 44pt
+                        // accent now, so a #21B866 link under it would be the brightest green
+                        // on the screen — a secondary action out-shouting the primary one.
+                        .foregroundStyle(MoveMarkTheme.Colors.ctaActionEmerald)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("welcome.signIn")
@@ -335,14 +390,37 @@ private struct WelcomeZoneLayout {
     let topPadding: CGFloat
     let brandToHeroGap: CGFloat
     let heroToCopyGap: CGFloat
+    /// Drives the proof artifact's density. Only the card responds to this — the zone gaps are
+    /// identical on every device, so the screen keeps one spacing rhythm.
+    let isCompactHeight: Bool
 
     init(screenHeight: CGFloat, safeTop: CGFloat, safeBottom: CGFloat) {
         topPadding = max(4, safeTop - 71)
         brandToHeroGap = 14
         heroToCopyGap = 22
+        // Available vertical space, not a device check: an SE is short because of what it
+        // leaves the layout, and a model list would be wrong again on the next phone. This is
+        // the safe-area-excluded height, so the measured split is SE 647 and 13 mini 728 on the
+        // compact side, iPhone 16 759 and 17 Pro Max 860 on the regular side.
+        isCompactHeight = screenHeight < 750
     }
 
     func bottomDockPadding(safeBottom: CGFloat) -> CGFloat {
         max(36, safeBottom + 18)
+    }
+}
+
+/// Keeps the default/compact headline fit frozen; only AX sizes unwrap and grow.
+private struct WelcomeHeadlineDynamicTypeFit: ViewModifier {
+    let allowsWrapping: Bool
+
+    func body(content: Content) -> some View {
+        if allowsWrapping {
+            content
+        } else {
+            content
+                .lineLimit(1)
+                .minimumScaleFactor(0.86)
+        }
     }
 }

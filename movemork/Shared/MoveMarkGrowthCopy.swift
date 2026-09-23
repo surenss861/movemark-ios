@@ -13,6 +13,10 @@ enum MoveMarkGrowthCopy {
 
     static let coreTagline = "Document now. Prove it later."
     static let welcomeHeadline = "Prove what was already there."
+    /// Set as two lines on Welcome — the break is editorial, not a consequence of device width.
+    /// `welcomeHeadline` stays the spoken form for VoiceOver.
+    static let welcomeHeadlineLead = "Prove what was"
+    static let welcomeHeadlineTail = "already there."
     static let welcomeBody = "Document move-in condition before you unpack. Turn photos into a shareable report when you need proof."
     static let welcomePainLine = "Don’t get blamed for damage you didn’t cause."
     static let welcomeCTA = "Start move-in proof"

@@ -64,15 +64,11 @@
 		};
 		2152E0912F621A5300EDA905 /* movemorkTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = movemorkTests;
 			sourceTree = "<group>";
 		};
 		2152E09B2F621A5300EDA905 /* movemorkUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = movemorkUITests;
 			sourceTree = "<group>";
 		};
@@ -305,8 +301,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 1;
 			shellPath = /bin/bash;
-			shellScript = "#!/bin/bash\nset -e\n\n# Apple validates that every embedded framework's dSYM is present in the .xcarchive, but\n# Xcode's automatic embedding of Swift Package binary frameworks doesn't reliably copy\n# Sentry's bundled dSYM in. Sentry's SPM XCFrameworks ship a dSYM alongside every platform\n# slice of every variant (Sentry, Sentry-Dynamic, Sentry-Dynamic-WithARM64e,\n# Sentry-WithoutUIKitOrAppKit, ...); which exact variant/slice gets linked isn't reliably\n# predictable from a build script, and copying a dSYM whose UUID doesn't match the shipped\n# binary is a no-op as far as Apple's validator is concerned. So instead of trying to guess\n# or match one, copy every distinct iOS-relevant Sentry dSYM found in the SPM package cache\n# into the archive's dSYM folder under a unique name -- Apple's validator just needs *one* of\n# them to match the actually-shipped binary's UUID, and unrelated extras are ignored.\n# \"Run script only when installing\" (set on this phase) means this only runs for Archive\n# builds, not every Debug/Release build.\n\nCANDIDATE_ROOTS=(\n  \"${BUILD_DIR%/Build/*}/SourcePackages/artifacts/sentry-cocoa\"\n  \"${OBJROOT%/Build/*}/SourcePackages/artifacts/sentry-cocoa\"\n  \"$HOME/Library/Developer/Xcode/DerivedData\"/*/SourcePackages/artifacts/sentry-cocoa\n)\n\nmkdir -p \"${DWARF_DSYM_FOLDER_PATH}\"\nCOPIED=0\nSEEN_UUIDS=\"\"\n\nfor root in \"${CANDIDATE_ROOTS[@]}\"; do\n  [ -d \"$root\" ] || continue\n  while IFS= read -r dsym; do\n    # Only iOS device/simulator/catalyst slices are relevant to an iOS app archive.\n    case \"$dsym\" in\n      */ios-*) ;;\n      *) continue ;;\n    esac\n    dsym_uuid=$(dwarfdump --uuid \"$dsym/Contents/Resources/DWARF/Sentry\" 2>/dev/null | awk '{print $2}' | sort -u | tr '\n' '-')\n    [ -z \"$dsym_uuid\" ] && continue\n    case \" $SEEN_UUIDS \" in\n      *\" $dsym_uuid \"*) continue ;;\n    esac\n    SEEN_UUIDS=\"$SEEN_UUIDS $dsym_uuid\"\n    dest=\"${DWARF_DSYM_FOLDER_PATH}/Sentry-${dsym_uuid}.framework.dSYM\"\n    rm -rf \"$dest\"\n    cp -R \"$dsym\" \"$dest\"\n    COPIED=$((COPIED + 1))\n  done < <(find \"$root\" -name \"Sentry.framework.dSYM\" -type d 2>/dev/null)\ndone\n\nif [ \"$COPIED\" -eq 0 ]; then\n  echo \"warning: found no Sentry dSYMs in any candidate SourcePackages root -- Sentry.framework will be missing a dSYM in this archive.\"\nelse\n  echo \"Copied $COPIED distinct Sentry dSYM(s) into ${DWARF_DSYM_FOLDER_PATH}\"\nfi\n\ntouch \"${DERIVED_FILE_DIR}/copy-sentry-dsym.stamp\"\n";
-			showEnvVarsInLog = 1;
+			shellScript = "#!/bin/bash\nset -e\n\n# Apple validates that every embedded framework in the archive ships a dSYM with a matching\n# UUID. What gets embedded here is NOT one of Sentry's prebuilt XCFramework slices: the app\n# links the *static* `Sentry` product, and SPM wraps it in a ~51 KB dynamic stub that is\n# relinked on every build, so its LC_UUID is new each time and no vendored dSYM can ever\n# match it. Copying candidate dSYMs out of the package cache -- what this phase used to do --\n# always \"succeeded\" while satisfying nothing.\n#\n# Losing the stub's debug info costs nothing: it exports zero symbols, and Sentry's real code\n# is statically linked into the app binary, so MoveMark.app.dSYM already carries ~16k Sentry\n# symbols and does the actual symbolication.\n#\n# So: prefer a vendored dSYM whose UUIDs actually match -- which keeps full symbols if this\n# target is ever switched to the prebuilt Sentry-Dynamic product -- and otherwise synthesise a\n# UUID-matching dSYM from the binary that really shipped. \"Run script only when installing\"\n# (set on this phase) keeps it to Archive builds.\n\nFRAMEWORK_BIN=\"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/Sentry.framework/Sentry\"\nif [ ! -f \"$FRAMEWORK_BIN\" ]; then\n  echo \"note: no embedded Sentry.framework in this build -- nothing to do.\"\n  exit 0\nfi\n\nWANTED=$(dwarfdump --uuid \"$FRAMEWORK_BIN\" 2>/dev/null | awk '{print $2}' | sort -u)\nif [ -z \"$WANTED\" ]; then\n  echo \"warning: could not read a UUID from $FRAMEWORK_BIN -- Sentry.framework will be missing a dSYM.\"\n  exit 0\nfi\n\nmkdir -p \"${DWARF_DSYM_FOLDER_PATH}\"\nDEST=\"${DWARF_DSYM_FOLDER_PATH}/Sentry.framework.dSYM\"\n\nfor root in \"${BUILD_DIR%/Build/*}/SourcePackages/artifacts/sentry-cocoa\" \\\n            \"${OBJROOT%/Build/*}/SourcePackages/artifacts/sentry-cocoa\"; do\n  [ -d \"$root\" ] || continue\n  while IFS= read -r dsym; do\n    have=$(dwarfdump --uuid \"$dsym/Contents/Resources/DWARF/Sentry\" 2>/dev/null | awk '{print $2}' | sort -u)\n    if [ -n \"$have\" ] && [ \"$have\" = \"$WANTED\" ]; then\n      rm -rf \"$DEST\"\n      cp -R \"$dsym\" \"$DEST\"\n      echo \"Copied vendored Sentry dSYM matching $(echo $WANTED | tr '\\n' ' ')\"\n      touch \"${DERIVED_FILE_DIR}/copy-sentry-dsym.stamp\"\n      exit 0\n    fi\n  done < <(find \"$root\" -name \"Sentry.framework.dSYM\" -type d 2>/dev/null)\ndone\n\n# dsymutil warns \"no debug symbols in executable\" for the stub. That is expected, and the\n# resulting bundle still carries the right UUID, which is all the validator matches on.\nrm -rf \"$DEST\"\nxcrun dsymutil \"$FRAMEWORK_BIN\" -o \"$DEST\"\necho \"Generated Sentry.framework.dSYM for UUID(s): $(echo $WANTED | tr '\\n' ' ')\"\n\ntouch \"${DERIVED_FILE_DIR}/copy-sentry-dsym.stamp\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -356,7 +351,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = movemork/movemork.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = XR6D339C8V;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -371,7 +366,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				MoveMarkAPIBaseURL = "https://movemark-api-production.up.railway.app";
 				PRODUCT_BUNDLE_IDENTIFIER = movemark.movemork;
 				PRODUCT_NAME = MoveMark;
@@ -395,7 +390,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = movemork/movemork.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = XR6D339C8V;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -411,7 +406,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				MoveMarkAPIBaseURL = "https://movemark-api-production.up.railway.app";
 				PRODUCT_BUNDLE_IDENTIFIER = movemark.movemork;
 				PRODUCT_NAME = MoveMark;
@@ -557,7 +552,7 @@
 				DEVELOPMENT_TEAM = XR6D339C8V;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = movemark.movemorkTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -579,7 +574,7 @@
 				DEVELOPMENT_TEAM = XR6D339C8V;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = movemark.movemorkTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -599,7 +594,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = XR6D339C8V;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = movemark.movemorkUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -619,7 +614,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = XR6D339C8V;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = movemark.movemorkUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;

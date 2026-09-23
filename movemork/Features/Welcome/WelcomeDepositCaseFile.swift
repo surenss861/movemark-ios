@@ -9,12 +9,16 @@ struct WelcomeDepositCaseFile: View {
     let maxWidth: CGFloat
     var cardVisible: Bool = true
     var tagsVisible: Bool = false
+    /// Passed straight through to the artifact's density. Decided by available vertical space
+    /// in `WelcomeZoneLayout`, so this layer never has to know about devices either.
+    var compactHeight: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         WelcomeClaimProofStack(
-            proofVisible: tagsVisible
+            proofVisible: tagsVisible,
+            compactHeight: compactHeight
         )
         .frame(maxWidth: min(maxWidth, 390))
         .padding(.top, 8)

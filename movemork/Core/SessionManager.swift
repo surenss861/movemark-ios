@@ -190,7 +190,30 @@ final class SessionManager {
         hasResolvedInitialAuthState = true
     }
 
+    /// A `.signedOut` event is a claim, not a fact — reconcile it before acting on it.
+    ///
+    /// The auth-state stream races an explicit sign-in: a `.signedOut` queued before the call
+    /// can be delivered after `signIn` has already applied its session, and taking it at face
+    /// value drops a just-authenticated user back onto Welcome. Asking the client for the
+    /// session it currently holds settles it, because that is the same store the stream is
+    /// reporting on. Only a genuinely absent or expired session tears the authenticated UI down.
     private func handleSignedOut() async {
+        // `authPhase` is the guard against reviving a deliberate sign-out. `signOut()` sets
+        // `.signedOut` before Supabase emits its event, so a phase that already reads signed
+        // out means this event was asked for and must be obeyed. Only a phase still showing
+        // authenticated UI has anything worth defending against a stale event.
+        let currentSession = try? await supabase.auth.session
+        let hasValidCurrentSession = currentSession.map(isSessionValid) ?? false
+
+        if SignedOutReconciliation.shouldDefendAuthenticatedUI(
+            authPhase: authPhase,
+            hasValidCurrentSession: hasValidCurrentSession
+        ), let currentSession {
+            await applyAuthenticatedSession(currentSession)
+            hasResolvedInitialAuthState = true
+            return
+        }
+
         clearAuthenticatedFields()
         authPhase = .signedOut
         hasResolvedInitialAuthState = true
@@ -267,7 +290,18 @@ final class SessionManager {
             .execute()
     }
 
-    func signUp(email: String, password: String, confirmPassword: String) async throws {
+    /// Whether sign-up actually produced a usable session.
+    ///
+    /// Supabase returns a user with no session when email confirmation is enabled on the
+    /// project. The two cases route to completely different places, so the caller is told
+    /// which one happened rather than left to assume.
+    enum SignUpResult: Equatable {
+        case authenticated
+        case emailConfirmationRequired
+    }
+
+    @discardableResult
+    func signUp(email: String, password: String, confirmPassword: String) async throws -> SignUpResult {
         guard isSupabaseConfigured else {
             throw AuthError.validation("This build is not configured to reach MoveMark’s servers.")
         }
@@ -286,19 +320,27 @@ final class SessionManager {
 
         do {
             let response = try await supabase.auth.signUp(email: trimmedEmail, password: password)
-            let uid = response.user.id
-            userId = uid
-            userEmail = trimmedEmail
 
-            try await supabase
-                .from("profiles")
-                .upsert(ProfileInsert(id: uid, email: trimmedEmail, fullName: ""))
-                .execute()
+            // The response decides this, never an assumption. With confirmation enabled there
+            // is a user but no session, and the old unconditional `.needsOnboarding` walked
+            // that user into an authenticated flow they had no token for — every write behind
+            // it would have failed.
+            guard let session = response.session, isSessionValid(session) else {
+                clearAuthenticatedFields()
+                authPhase = .signedOut
+                hasResolvedInitialAuthState = true
+                return .emailConfirmationRequired
+            }
 
-            firstName = ""
-            authPhase = .needsOnboarding
+            // Both the profile row and the phase come from the shared path: its upsert is
+            // idempotent and, unlike the insert this replaces, `ignoreDuplicates` keeps it
+            // from blanking `full_name` on an account that already has one. A new row has no
+            // onboarding timestamp, so a genuinely new account still lands on onboarding.
+            await applyAuthenticatedSession(session)
             hasResolvedInitialAuthState = true
+            return .authenticated
         } catch {
+            clearAuthenticatedFields()
             authPhase = .signedOut
             throw error
         }
@@ -561,5 +603,19 @@ private struct ProfileUpsert: Encodable {
         if let email, !email.isEmpty {
             try container.encode(email, forKey: .email)
         }
+    }
+}
+
+/// Pure policy for provider `.signedOut` events.
+///
+/// Intentional sign-out sets `authPhase = .signedOut` before Supabase emits; that event must not
+/// resurrect a session. An unexpected `.signedOut` while authenticated UI is still up may defend
+/// against a stale stream event by re-reading a still-valid session.
+enum SignedOutReconciliation {
+    static func shouldDefendAuthenticatedUI(
+        authPhase: SessionManager.AuthPhase,
+        hasValidCurrentSession: Bool
+    ) -> Bool {
+        authPhase != .signedOut && hasValidCurrentSession
     }
 }
