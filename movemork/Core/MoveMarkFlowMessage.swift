@@ -215,14 +215,6 @@ enum MoveMarkFlowMessage {
         UserFacingDatabaseError.message(from: error, fallback: "Couldn’t update move-out checklist. Try again.", intent: .mutate)
     }
 
-    /// Client-side move-out PDF upload to Supabase `exports` (not Railway API).
-    static func moveOutReportExportFailed(_ error: Error) -> String {
-        if isLikelyStorageFailure(error) {
-            return "Report storage is unavailable right now. Try again soon."
-        }
-        return UserFacingDatabaseError.message(from: error, fallback: "Couldn’t make move-out report. Try again.", intent: .mutate)
-    }
-
     /// Local verify (signed URL) failure for an export row — distinct from API verify/download.
     static func exportFileVerificationFailed(_ error: Error) -> String {
         if isLikelyStorageFailure(error) {

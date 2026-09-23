@@ -44,20 +44,6 @@ struct ExportRepository {
             .value
     }
 
-    func uploadExport(data: Data, path: String) async throws -> String {
-        try await supabase.storage
-            .from("exports")
-            .upload(path, data: data, options: FileOptions(contentType: "application/pdf"))
-        return path
-    }
-
-    func insertExport(_ row: ExportRow) async throws {
-        try await supabase
-            .from("exports")
-            .insert(row)
-            .execute()
-    }
-
     func signedURL(filePath: String) async throws -> URL {
         try await MoveMarkSignedURLCache.shared.url(bucket: "exports", path: filePath) {
             try await supabase.storage
