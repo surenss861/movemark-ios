@@ -31,6 +31,10 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The action's default ("tools platform-tools") asks for the legacy
+          # SDK `tools` package, which current sdkmanager no longer serves.
+          packages: platform-tools
 
       - name: Prepare local.properties for compile
         run: |
