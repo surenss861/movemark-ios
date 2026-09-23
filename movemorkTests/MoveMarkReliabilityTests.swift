@@ -102,6 +102,25 @@ struct MoveMarkReliabilityTests {
         )
     }
 
+    @Test func staleSignedOutDuringInteractiveSignInDefendsNewSession() {
+        // signIn/signUp leave the phase at .signedOut while awaiting Supabase; a stale event
+        // landing after the session is stored must not undo it.
+        #expect(
+            SignedOutReconciliation.shouldDefendAuthenticatedUI(
+                authPhase: .signedOut,
+                hasValidCurrentSession: true,
+                interactiveAuthInFlight: true
+            ) == true
+        )
+        #expect(
+            SignedOutReconciliation.shouldDefendAuthenticatedUI(
+                authPhase: .signedOut,
+                hasValidCurrentSession: false,
+                interactiveAuthInFlight: true
+            ) == false
+        )
+    }
+
     @Test func expiredOrAbsentSessionDoesNotResurrectAuthenticatedUI() {
         #expect(
             SignedOutReconciliation.shouldDefendAuthenticatedUI(
