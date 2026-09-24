@@ -80,6 +80,10 @@ final class SessionManager {
 
     private var hasResolvedInitialAuthState = false
     private var hasStartedAuthListener = false
+    /// An email/password sign-in or sign-up is awaiting Supabase. The phase still reads
+    /// `.signedOut` during that window, so `.signedOut` reconciliation needs this to tell a
+    /// stale provider event apart from a deliberate sign-out.
+    private var interactiveAuthInFlight = false
     /// User-scoped cache teardown, kicked off at sign-out and awaited before the *next* account
     /// hydrates. Sign-out itself must never wait on disk work, but the previous account's deletion
     /// must never run concurrently with the next account's cache writes either.
@@ -207,7 +211,8 @@ final class SessionManager {
 
         if SignedOutReconciliation.shouldDefendAuthenticatedUI(
             authPhase: authPhase,
-            hasValidCurrentSession: hasValidCurrentSession
+            hasValidCurrentSession: hasValidCurrentSession,
+            interactiveAuthInFlight: interactiveAuthInFlight
         ), let currentSession {
             await applyAuthenticatedSession(currentSession)
             hasResolvedInitialAuthState = true
@@ -316,7 +321,11 @@ final class SessionManager {
             throw AuthError.validation("Passwords do not match.")
         }
 
-        authPhase = .loading
+        // The phase stays `.signedOut` while the request is in flight: `.loading` swaps the root
+        // view, which destroys the auth form along with the error it is about to show. The form
+        // owns its own progress state.
+        interactiveAuthInFlight = true
+        defer { interactiveAuthInFlight = false }
 
         do {
             let response = try await supabase.auth.signUp(email: trimmedEmail, password: password)
@@ -341,7 +350,6 @@ final class SessionManager {
             return .authenticated
         } catch {
             clearAuthenticatedFields()
-            authPhase = .signedOut
             throw error
         }
     }
@@ -358,16 +366,13 @@ final class SessionManager {
             throw AuthError.validation("Enter a valid password.")
         }
 
-        authPhase = .loading
+        // See signUp: stay `.signedOut` so a failure lands on the form that can display it.
+        interactiveAuthInFlight = true
+        defer { interactiveAuthInFlight = false }
 
-        do {
-            let session = try await supabase.auth.signIn(email: trimmedEmail, password: password)
-            await applyAuthenticatedSession(session)
-            hasResolvedInitialAuthState = true
-        } catch {
-            authPhase = .signedOut
-            throw error
-        }
+        let session = try await supabase.auth.signIn(email: trimmedEmail, password: password)
+        await applyAuthenticatedSession(session)
+        hasResolvedInitialAuthState = true
     }
 
     /// OAuth sign-in (Apple) through Supabase + ASWebAuthenticationSession.
@@ -610,12 +615,14 @@ private struct ProfileUpsert: Encodable {
 ///
 /// Intentional sign-out sets `authPhase = .signedOut` before Supabase emits; that event must not
 /// resurrect a session. An unexpected `.signedOut` while authenticated UI is still up may defend
-/// against a stale stream event by re-reading a still-valid session.
+/// against a stale stream event by re-reading a still-valid session. An interactive sign-in or
+/// sign-up keeps the phase at `.signedOut` while in flight, so it is defended the same way.
 enum SignedOutReconciliation {
     static func shouldDefendAuthenticatedUI(
         authPhase: SessionManager.AuthPhase,
-        hasValidCurrentSession: Bool
+        hasValidCurrentSession: Bool,
+        interactiveAuthInFlight: Bool = false
     ) -> Bool {
-        authPhase != .signedOut && hasValidCurrentSession
+        (authPhase != .signedOut || interactiveAuthInFlight) && hasValidCurrentSession
     }
 }

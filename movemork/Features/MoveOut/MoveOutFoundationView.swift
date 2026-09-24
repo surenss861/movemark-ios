@@ -7,6 +7,7 @@
 
 import SwiftUI
 import PhotosUI
+import Supabase
 
 struct MoveOutFoundationView: View {
     @Binding var path: [AppRoute]
@@ -21,14 +22,26 @@ struct MoveOutFoundationView: View {
     @State private var isExporting = false
     @State private var errorMessage: String? = nil
     @State private var lastErrorFromExport = false
-    @State private var shareItems: [Any] = []
-    @State private var showShareSheet = false
+    @State private var queuedNotice: String? = nil
 
     private let checklistRepo = ChecklistRepository()
-    private let exportRepo = ExportRepository()
 
     private var rooms: [RoomRecord] {
         propertyStore.currentProperty?.rooms ?? []
+    }
+
+    /// Mirrors the server's `not_enough_move_out_proof` guard: a room counts only once a move-out
+    /// entry carries at least one photo. An entry without photos does not make a report possible.
+    private var roomsWithMoveOutPhotos: Int {
+        rooms.filter { room in room.moveOutEvidence.contains { $0.photoCount > 0 } }.count
+    }
+
+    private var apiBaseURL: String? {
+        guard
+            let value = Bundle.main.object(forInfoDictionaryKey: "MoveMarkAPIBaseURL") as? String,
+            !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+        return value.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var body: some View {
@@ -64,11 +77,6 @@ struct MoveOutFoundationView: View {
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
                 .padding(.top, 22)
                 .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
-            }
-        }
-        .sheet(isPresented: $showShareSheet) {
-            if !shareItems.isEmpty {
-                ShareSheet(activityItems: shareItems)
             }
         }
         .sheet(isPresented: $showPaywall) {
@@ -326,7 +334,7 @@ struct MoveOutFoundationView: View {
                     MMButton(
                         title: "Export move-out report",
                         action: handleMoveOutExportTap,
-                        isDisabled: isExporting || rooms.isEmpty
+                        isDisabled: isExporting || roomsWithMoveOutPhotos == 0
                     )
                     .opacity(isExporting ? 0.6 : 1.0)
 
@@ -343,12 +351,14 @@ struct MoveOutFoundationView: View {
     }
 
     private var moveOutExportFootnote: String {
+        if let queuedNotice {
+            return queuedNotice
+        }
         if rooms.isEmpty {
             return "Add rooms in Room proof first"
         }
-        let roomsWithMoveOutProof = rooms.filter { !$0.moveOutEvidence.isEmpty }.count
-        if roomsWithMoveOutProof == 0 {
-            return "Capture move-out proof before exporting"
+        if roomsWithMoveOutPhotos == 0 {
+            return "Capture move-out photos before exporting"
         }
         if subscriptionManager.hasPro {
             return "Included with Pro"
@@ -425,40 +435,44 @@ struct MoveOutFoundationView: View {
         exportMoveOutReport()
     }
 
+    /// Queues the report on the API, which owns the proof and Pro checks, the export row, and the
+    /// PDF (rendered by the worker). The finished report appears in Reports, which downloads and
+    /// shares it through the authenticated API.
     private func exportMoveOutReport() {
-        guard let property = propertyStore.currentProperty,
-              let userId = sessionManager.userId else { return }
+        guard let property = propertyStore.currentProperty else { return }
+        guard roomsWithMoveOutPhotos > 0 else { return }
+        guard let baseURL = apiBaseURL else {
+            errorMessage = "API base URL is missing. Set MoveMarkAPIBaseURL in build settings."
+            lastErrorFromExport = false
+            return
+        }
 
         isExporting = true
         errorMessage = nil
+        queuedNotice = nil
 
         Task { @MainActor in
             defer { isExporting = false }
 
             do {
-                let data = PDFGenerator.generateMoveOutReport(property: property, rooms: property.rooms)
-                let path = "\(userId)/\(property.id)/move_out_report/\(UUID().uuidString).pdf"
-                let storedPath = try await exportRepo.uploadExport(data: data, path: path)
-
-                try await exportRepo.insertExport(
-                    ExportRow(
-                        id: UUID(),
-                        disputeId: nil,
-                        propertyId: property.id,
-                        userId: userId,
-                        exportType: "move_out_report",
-                        filePath: storedPath,
-                        createdAt: nil
-                    )
+                let session = try await supabase.auth.session
+                let apiClient = try ExportAPIClient(baseURLString: baseURL)
+                _ = try await apiClient.requestMoveOutExport(
+                    propertyId: property.id,
+                    accessToken: session.accessToken
                 )
-
                 lastErrorFromExport = false
-                shareItems = [data]
-                showShareSheet = true
+                queuedNotice = "Report queued — it will appear in Reports when ready"
+                NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
                 MMHaptics.success()
             } catch {
-                errorMessage = MoveMarkFlowMessage.moveOutReportExportFailed(error)
+                errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(
+                    error,
+                    fallback: "Couldn't queue move-out report. Try again.",
+                    intent: .mutate
+                )
                 lastErrorFromExport = true
+                MMHaptics.error()
             }
         }
     }

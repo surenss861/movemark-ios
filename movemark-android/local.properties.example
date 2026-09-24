@@ -4,7 +4,7 @@ sdk.dir=/Users/YOUR_USER/Library/Android/sdk
 SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key
 
-MOVE_MARK_API_BASE_URL=https://movemark-api-production.up.railway.app
+MOVE_MARK_API_BASE_URL=https://movemark-api-py-production.up.railway.app
 
 # Billing: mock (local QA) | revenuecat (Play + RevenueCat). Debug defaults to mock when key is empty.
 BILLING_MODE=mock

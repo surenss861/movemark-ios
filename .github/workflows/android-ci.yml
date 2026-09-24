@@ -31,6 +31,10 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The action's default ("tools platform-tools") asks for the legacy
+          # SDK `tools` package, which current sdkmanager no longer serves.
+          packages: platform-tools
 
       - name: Prepare local.properties for compile
         run: |
@@ -38,7 +42,7 @@ jobs:
           sdk.dir=$ANDROID_SDK_ROOT
           SUPABASE_URL=https://example.supabase.co
           SUPABASE_ANON_KEY=ci_placeholder_anon_key
-          MOVE_MARK_API_BASE_URL=https://movemark-api-production.up.railway.app
+          MOVE_MARK_API_BASE_URL=https://movemark-api-py-production.up.railway.app
           BILLING_MODE=mock
           EOF
 

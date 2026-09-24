@@ -367,7 +367,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.2;
-				MoveMarkAPIBaseURL = "https://movemark-api-production.up.railway.app";
+				MoveMarkAPIBaseURL = "https://movemark-api-py-production.up.railway.app";
 				PRODUCT_BUNDLE_IDENTIFIER = movemark.movemork;
 				PRODUCT_NAME = MoveMark;
 				REVENUECAT_APP_STORE_PUBLIC_KEY = appl_kabnpGBtlwWXwazHQeBsoxKiqSE;
@@ -407,7 +407,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.2;
-				MoveMarkAPIBaseURL = "https://movemark-api-production.up.railway.app";
+				MoveMarkAPIBaseURL = "https://movemark-api-py-production.up.railway.app";
 				PRODUCT_BUNDLE_IDENTIFIER = movemark.movemork;
 				PRODUCT_NAME = MoveMark;
 				REVENUECAT_APP_STORE_PUBLIC_KEY = appl_kabnpGBtlwWXwazHQeBsoxKiqSE;

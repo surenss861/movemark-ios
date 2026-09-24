@@ -7,11 +7,10 @@ on:
       - "movemark-api/**"
       - ".github/workflows/api-ci.yml"
       - "railway.toml"
+  # No path filter on PRs: `api` is a required check on main, and a required check
+  # that never runs leaves the PR blocked. The job always reports; the steps below
+  # only do real work when the API is touched.
   pull_request:
-    paths:
-      - "movemark-api/**"
-      - ".github/workflows/api-ci.yml"
-      - "railway.toml"
 
 jobs:
   api:
@@ -23,8 +22,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect API changes
+        id: changes
+        working-directory: .
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "api=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE_SHA" HEAD | grep -qE '^(movemark-api/|\.github/workflows/api-ci\.yml$|railway\.toml$)'; then
+            echo "api=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "api=false" >> "$GITHUB_OUTPUT"
+            echo "No API changes in this PR; skipping."
+          fi
 
       - name: Setup Node.js
+        if: steps.changes.outputs.api == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -32,18 +49,23 @@ jobs:
           cache-dependency-path: movemark-api/package-lock.json
 
       - name: Install dependencies
+        if: steps.changes.outputs.api == 'true'
         run: npm ci
 
       - name: Test
+        if: steps.changes.outputs.api == 'true'
         run: npm test
 
       - name: Build
+        if: steps.changes.outputs.api == 'true'
         run: npm run build
 
       - name: Set up Docker Buildx
+        if: steps.changes.outputs.api == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Docker build
+        if: steps.changes.outputs.api == 'true'
         uses: docker/build-push-action@v6
         with:
           context: movemark-api

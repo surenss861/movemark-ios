@@ -39,7 +39,7 @@ android {
         buildConfigField(
             "String",
             "MOVE_MARK_API_BASE_URL",
-            "\"${localProp("MOVE_MARK_API_BASE_URL", "https://movemark-api-production.up.railway.app")}\"",
+            "\"${localProp("MOVE_MARK_API_BASE_URL", "https://movemark-api-py-production.up.railway.app")}\"",
         )
         buildConfigField("String", "REVENUECAT_PUBLIC_KEY", "\"$revenueCatKey\"")
         buildConfigField("String", "BILLING_MODE", "\"$billingModeProp\"")
