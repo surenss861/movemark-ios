@@ -2,7 +2,9 @@
 //  RoomListView.swift
 //  movemork
 //
-//  MoveMark — Room proof: next room, documented rooms, locked report hint.
+//  MoveMark — Proof Sprint. Rooms are the only progress model; lease, deposit and
+//  maintenance sit after the rooms as supporting proof and never count toward
+//  "rooms documented".
 //
 
 import SwiftUI
@@ -41,28 +43,14 @@ struct RoomListView: View {
                 .mmProofShellBackground(heroFocus: true, ctaBloom: true)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    roomProofHeader
-
+                VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.sectionGap) {
                     progressCard
-
-                    if let property = propertyStore.currentProperty {
-                        ProofSprintChecklistCard(
-                            property: property,
-                            onSelectRoom: { room in
-                                path.append(.roomDetail(roomID: room.id))
-                            },
-                            onAddDocs: {
-                                path.append(.vaultDetail(propertyId: property.id))
-                            }
-                        )
-                    }
 
                     roomsSection
 
-                    moveInReportCard
+                    supportingProofSection
 
-                    moveOutLink
+                    moveInReportSection
 
                     MMSignedInScrollTailSpacer(kind: .focusedSignedIn)
                 }
@@ -79,13 +67,19 @@ struct RoomListView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                MMButton(
-                    title: "Add room",
-                    action: { showAddRoom = true },
-                    kind: .quiet,
-                    size: .compact,
-                    expandsToFillWidth: false
-                )
+                Button {
+                    showAddRoom = true
+                } label: {
+                    Label("Room", systemImage: "plus")
+                        .labelStyle(.titleAndIcon)
+                        .font(MoveMarkTheme.Typography.footnoteEmphasis)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .overlay(Capsule().stroke(MoveMarkTheme.Stroke.interactive, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Add room")
             }
         }
         .sheet(isPresented: $showAddRoom) {
@@ -97,13 +91,6 @@ struct RoomListView: View {
         }
     }
 
-    private var roomProofHeader: some View {
-        MMRenterHeader(
-            title: "Move-in Proof Sprint",
-            subtitle: "Document now. Prove it later — before boxes cover everything."
-        )
-    }
-
     private var progressCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let propertyTitle = propertyStore.currentProperty?.title.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -111,7 +98,8 @@ struct RoomListView: View {
                !rooms.isEmpty
             {
                 Text(propertyTitle)
-                    .font(MoveMarkTheme.Typography.cardTitle)
+                    .font(MoveMarkTheme.Typography.heroTitle)
+                    .tracking(-0.4)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
             }
 
@@ -165,19 +153,12 @@ struct RoomListView: View {
     }
 
     private var roomsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Rooms")
-                    .font(MoveMarkTheme.Typography.caption)
-                    .tracking(1.0)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-
-                Spacer()
-
+        VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardGap) {
+            MMSectionLabel("Rooms") {
                 if !rooms.isEmpty {
-                    Text("\(completedCount) of \(rooms.count) ready")
+                    Text("\(completedCount) of \(rooms.count)")
                         .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                 }
             }
 
@@ -189,7 +170,7 @@ struct RoomListView: View {
                 )
             }
 
-            VStack(spacing: 10) {
+            VStack(spacing: 8) {
                 ForEach(Array(rooms.enumerated()), id: \.element.id) { idx, room in
                     roomProofRow(index: idx + 1, room: room)
                         .mmStaggeredAppear(isVisible: roomsListAppeared, index: idx)
@@ -217,47 +198,88 @@ struct RoomListView: View {
         )
     }
 
-    private var moveInReportCard: some View {
-        Button {
-            path.append(.exports)
-        } label: {
-            MMCard(tone: .quiet, padding: 16, spacing: 8) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Move-in report")
-                        .font(MoveMarkTheme.Typography.sectionTitle)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+    /// Lease, deposit and maintenance — shown after rooms, outside the room count.
+    @ViewBuilder
+    private var supportingProofSection: some View {
+        if let property = propertyStore.currentProperty {
+            let issues = propertyStore.openIssueCount(for: property)
+            VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardGap) {
+                MMSectionLabel("Supporting proof")
 
-                    Text(
-                        allRoomsDocumented
-                            ? "Ready to share — export a timestamped PDF."
-                            : "Keep documenting rooms, then export your proof."
+                ForEach(ProofSprint.documentTargets) { target in
+                    let added = ProofSprint.isDocumentUploaded(target.documentType, in: property)
+                    ProofTaskCard(
+                        title: target.title,
+                        reason: added ? "Saved to your vault" : target.reason,
+                        action: { path.append(.vaultDetail(propertyId: property.id)) },
+                        statusLabel: added ? "Added" : "Needed",
+                        statusTone: added ? .success : .warning
                     )
-                    .font(MoveMarkTheme.Typography.subheadline)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-
-                    if !rooms.isEmpty {
-                        Text("\(completedCount) of \(rooms.count) rooms documented")
-                            .font(MoveMarkTheme.Typography.footnote)
-                            .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                    }
-
-                    Text(allRoomsDocumented ? "Export / Share report" : "View Reports")
-                        .font(MoveMarkTheme.Typography.footnoteEmphasis)
-                        .foregroundStyle(MoveMarkTheme.Colors.primary)
-                        .padding(.top, 2)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+
+                ProofTaskCard(
+                    title: "Maintenance issues",
+                    reason: issues == 0
+                        ? "Timestamp repairs and problems."
+                        : (issues == 1 ? "1 open issue" : "\(issues) open issues"),
+                    action: { path.append(.maintenance) },
+                    statusLabel: issues > 0 ? "\(issues) open" : nil,
+                    statusTone: .neutral
+                )
+
+                ProofTaskCard(
+                    title: "Move-out proof",
+                    reason: "Re-capture the same rooms when you leave.",
+                    action: { path.append(.moveOut) }
+                )
             }
         }
-        .buttonStyle(.plain)
     }
 
-    private var moveOutLink: some View {
-        MMProofListRow(
-            title: "Move-out proof",
-            subtitle: "Re-capture the same rooms when you leave.",
-            onTap: { path.append(.moveOut) }
-        )
+    @ViewBuilder
+    private var moveInReportSection: some View {
+        if !rooms.isEmpty {
+            let remaining = rooms.count - completedCount
+            VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardGap) {
+                MMSectionLabel("Move-in report")
+
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(completedCount) of \(rooms.count) rooms documented")
+                            .font(MoveMarkTheme.Typography.rowTitle)
+                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+
+                        Text(reportGuidance(remaining: remaining))
+                            .font(MoveMarkTheme.Typography.metadata)
+                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    MMButton(
+                        title: "View reports",
+                        action: { path.append(.exports) },
+                        kind: .secondary,
+                        size: .inline
+                    )
+                }
+                .padding(MoveMarkTheme.Spacing.panelPadding)
+                .background(
+                    RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.card, style: .continuous)
+                        .fill(MoveMarkTheme.Surface.raised)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.card, style: .continuous)
+                        .stroke(MoveMarkTheme.Stroke.normal, lineWidth: 1)
+                )
+            }
+        }
+    }
+
+    private func reportGuidance(remaining: Int) -> String {
+        if remaining <= 0 { return "Every room is documented. Your report is ready to make." }
+        if completedCount == 0 { return "Document a room to make your first report." }
+        let rooms = remaining == 1 ? "1 room still needs photos" : "\(remaining) rooms still need photos"
+        return "A report can already be made — \(rooms)."
     }
 }
 

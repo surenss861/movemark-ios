@@ -25,14 +25,14 @@ enum MMRoomProofStatus {
     var detailLine: String {
         switch self {
         case let .readyToReview(photoCount, issueCount):
-            var parts = ["Ready to review"]
-            parts.append("\(photoCount) \(photoCount == 1 ? "photo" : "photos")")
+            var parts = ["\(photoCount) \(photoCount == 1 ? "photo" : "photos")"]
             if issueCount > 0 {
                 parts.append(issueCount == 1 ? "1 tag" : "\(issueCount) tags")
             }
+            parts.append("Ready to review")
             return parts.joined(separator: " · ")
         case .nextUp:
-            return "Needs photos — tap to capture proof"
+            return "Needs photos"
         case .needsPhotos:
             return "Needs photos"
         }
@@ -53,65 +53,69 @@ struct MMRoomProofRow: View {
 
     var body: some View {
         Button(action: onTap) {
-            MMCard(tone: .quiet, padding: 14, spacing: 0) {
-                HStack(alignment: .center, spacing: 14) {
-                    indexBadge
+            HStack(alignment: .center, spacing: 14) {
+                indexBadge
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 8) {
-                            Text(roomName)
-                                .font(MoveMarkTheme.Typography.cardTitle)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                                .lineLimit(2)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 8) {
+                        Text(roomName)
+                            .font(MoveMarkTheme.Typography.rowTitle)
+                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                            .lineLimit(1)
 
-                            if showsNextBadge {
-                                MMPill(text: "Next", tone: .warning)
-                            }
+                        if showsNextBadge {
+                            ProofStatusBadge(text: "Next", tone: .success)
                         }
-
-                        Text(status.detailLine)
-                            .font(MoveMarkTheme.Typography.footnote)
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            .lineLimit(2)
-                            .mmRowStatusTransition(value: status.detailLine)
                     }
 
-                    Spacer(minLength: 0)
-
-                    Image(systemName: isDocumented ? "checkmark.circle.fill" : "chevron.right")
-                        .font(.system(size: isDocumented ? 22 : 14, weight: .medium))
-                        .foregroundStyle(
-                            isDocumented
-                                ? MoveMarkTheme.Colors.semanticSuccess
-                                : MoveMarkTheme.Colors.textSecondary
-                        )
+                    Text(status.detailLine)
+                        .font(MoveMarkTheme.Typography.metadata)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        .lineLimit(1)
+                        .mmRowStatusTransition(value: status.detailLine)
                 }
-                .frame(minHeight: 60)
+
+                Spacer(minLength: 0)
+
+                Image(systemName: isDocumented ? "checkmark.circle.fill" : "chevron.right")
+                    .font(.system(size: isDocumented ? 20 : 13, weight: .semibold))
+                    .foregroundStyle(
+                        isDocumented
+                            ? MoveMarkTheme.Colors.primary
+                            : MoveMarkTheme.Colors.textMuted
+                    )
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(minHeight: 64)
+            .background(
+                RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.row, style: .continuous)
+                    .fill(MoveMarkTheme.Surface.raised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.row, style: .continuous)
+                    .stroke(showsNextBadge ? MoveMarkTheme.Stroke.selected : MoveMarkTheme.Stroke.normal, lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.row, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
     }
 
+    /// Green only for the next room; done and pending rooms stay neutral.
     @ViewBuilder
     private var indexBadge: some View {
         let isNext = showsNextBadge
         ZStack {
             Circle()
-                .fill(
-                    isNext
-                        ? MoveMarkTheme.Colors.primary.opacity(0.16)
-                        : MoveMarkTheme.Colors.cardRaised.opacity(0.55)
-                )
-                .frame(width: 34, height: 34)
+                .fill(isNext ? MoveMarkTheme.Colors.primary : MoveMarkTheme.Surface.interactive)
+                .frame(width: 30, height: 30)
 
             Text("\(index)")
                 .font(MoveMarkTheme.Typography.footnoteEmphasis)
-                .foregroundStyle(
-                    isNext
-                        ? MoveMarkTheme.Colors.primary
-                        : MoveMarkTheme.Colors.textSecondary
-                )
+                .foregroundStyle(isNext ? MoveMarkTheme.Colors.textOnPrimary : MoveMarkTheme.Colors.textSecondary)
         }
+        .accessibilityHidden(true)
     }
 }
 

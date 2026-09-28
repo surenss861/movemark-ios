@@ -22,18 +22,14 @@ struct MMRoomProgressCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Room proof")
-                    .font(MoveMarkTheme.Typography.captionEmphasis)
-                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-
                 Text(headline)
-                    .font(MoveMarkTheme.Typography.button)
+                    .font(MoveMarkTheme.Typography.cardTitleCompact)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                     .mmRowStatusTransition(value: headline)
 
                 Text(nextLine)
-                    .font(MoveMarkTheme.Typography.footnote)
+                    .font(MoveMarkTheme.Typography.metadata)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .mmRowStatusTransition(value: nextLine)
@@ -43,14 +39,14 @@ struct MMRoomProgressCard: View {
                 ZStack(alignment: .leading) {
                     Capsule()
                         .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.85))
-                        .frame(height: 4)
+                        .frame(height: 6)
                     Capsule()
                         .fill(MoveMarkTheme.Colors.primary.opacity(0.88))
-                        .frame(width: max(4, geo.size.width * clampedProgress), height: 4)
+                        .frame(width: max(6, geo.size.width * clampedProgress), height: 6)
                         .animation(reduceMotion ? nil : MMMotion.proofProgress, value: clampedProgress)
                 }
             }
-            .frame(height: 4)
+            .frame(height: 6)
 
             if let progressLabel, !progressLabel.isEmpty {
                 Text(progressLabel)
@@ -65,10 +61,17 @@ struct MMRoomProgressCard: View {
                     onPrimary()
                 },
                 kind: .primary,
-                size: .standard
+                size: .inline
             )
         }
-        .padding(16)
-        .mmProofCardSurface(.neutral, cornerRadius: 18)
+        .padding(MoveMarkTheme.Spacing.panelPadding)
+        .background(
+            RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.hero, style: .continuous)
+                .fill(MoveMarkTheme.Surface.raised)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.hero, style: .continuous)
+                .stroke(MoveMarkTheme.Stroke.interactive, lineWidth: 1)
+        )
     }
 }
