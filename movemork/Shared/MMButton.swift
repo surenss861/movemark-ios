@@ -2,7 +2,9 @@
 //  MMButton.swift
 //  movemork
 //
-//  MoveMark — Premium primary CTA with glow and press depth.
+//  MoveMark — three button treatments:
+//  primary (solid green, one per screen), secondary (dark surface + border),
+//  tertiary (text-only inline action).
 //
 
 import SwiftUI
@@ -12,6 +14,8 @@ struct MMButton: View {
         case primary
         case secondary
         case quiet
+        /// Text-only inline action — "View history", "Show all".
+        case tertiary
     }
 
     enum Size {
@@ -43,8 +47,7 @@ struct MMButton: View {
 
         var cornerRadius: CGFloat {
             switch self {
-            case .hero: return 18
-            case .standard, .auth, .inline: return 14
+            case .hero, .standard, .auth, .inline: return MoveMarkTheme.Radius.button
             case .compact: return 12
             }
         }
@@ -113,8 +116,8 @@ struct MMButton: View {
                 .clipShape(RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous))
                 .shadow(
                     color: primaryGlowColor,
-                    radius: kind == .primary && size == .hero ? 16 : 0,
-                    y: kind == .primary && size == .hero ? 8 : 0
+                    radius: kind == .primary && size == .hero ? 10 : 0,
+                    y: kind == .primary && size == .hero ? 4 : 0
                 )
         }
         .buttonStyle(MMButtonPressStyle(kind: kind))
@@ -140,9 +143,8 @@ struct MMButton: View {
     private var primaryGlowColor: Color {
         guard kind == .primary, !isDisabled else { return .clear }
         switch size {
-        case .hero: return MoveMarkTheme.Colors.primary.opacity(0.38)
-        case .auth, .standard, .inline: return MoveMarkTheme.Colors.primary.opacity(0.12)
-        case .compact: return .clear
+        case .hero: return MoveMarkTheme.Colors.primary.opacity(0.16)
+        case .auth, .standard, .inline, .compact: return .clear
         }
     }
 
@@ -152,6 +154,8 @@ struct MMButton: View {
             return MoveMarkTheme.Colors.textOnPrimary
         case .secondary, .quiet:
             return MoveMarkTheme.Colors.textPrimary
+        case .tertiary:
+            return MoveMarkTheme.Colors.primary
         }
     }
 
@@ -174,19 +178,22 @@ struct MMButton: View {
 
         case .secondary:
             RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
-                .fill(MoveMarkTheme.Colors.cardRaised)
+                .fill(MoveMarkTheme.Surface.interactive)
                 .overlay(
                     RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
-                        .stroke(MoveMarkTheme.Colors.cardStroke, lineWidth: 1)
+                        .stroke(MoveMarkTheme.Stroke.interactive, lineWidth: 1)
                 )
 
         case .quiet:
             RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
-                .fill(MoveMarkTheme.Colors.surface.opacity(0.9))
+                .fill(MoveMarkTheme.Surface.raised)
                 .overlay(
                     RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
-                        .stroke(MoveMarkTheme.Colors.subtleStroke, lineWidth: 1)
+                        .stroke(MoveMarkTheme.Stroke.normal, lineWidth: 1)
                 )
+
+        case .tertiary:
+            Color.clear
         }
     }
 }

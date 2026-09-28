@@ -21,7 +21,7 @@ struct CompactProofRow: View {
     let onTap: () -> Void
 
     private var cornerRadius: CGFloat {
-        style == .settings ? 22 : 16
+        MoveMarkTheme.Radius.row
     }
 
     var body: some View {
@@ -29,7 +29,7 @@ struct CompactProofRow: View {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(MoveMarkTheme.Typography.bodySmallEmphasis)
+                        .font(MoveMarkTheme.Typography.rowTitle)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                         .lineLimit(1)
 
@@ -54,15 +54,15 @@ struct CompactProofRow: View {
                     .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.85))
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .frame(minHeight: style == .settings ? 72 : 0, alignment: .center)
+            .padding(.vertical, MoveMarkTheme.Spacing.rowVertical)
+            .frame(minHeight: style == .settings ? 60 : 0, alignment: .center)
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.card.opacity(0.96))
+                    .fill(MoveMarkTheme.Surface.raised)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    .stroke(MoveMarkTheme.Stroke.normal, lineWidth: 1)
             )
         }
         .buttonStyle(MMCardPressStyle())
