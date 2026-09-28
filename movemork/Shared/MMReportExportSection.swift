@@ -22,6 +22,9 @@ struct MMReportExportSection: View {
     var useQuietPrimaryWhenLocked: Bool = false
     var legalNote: String? = nil
     var generatedLine: String? = nil
+    /// Quiet second action, e.g. making a fresh report once one is ready.
+    var secondaryTitle: String? = nil
+    var onSecondary: (() -> Void)? = nil
     let onPrimary: () -> Void
 
     var body: some View {
@@ -45,7 +48,9 @@ struct MMReportExportSection: View {
                 isBright: !isProLocked && statusTone == .success,
                 isProcessing: isProcessing,
                 isCompact: true,
-                legalNote: legalNote
+                legalNote: legalNote,
+                secondaryTitle: isProLocked ? nil : secondaryTitle,
+                onSecondary: isProLocked ? nil : onSecondary
             )
     }
 

@@ -820,6 +820,9 @@ struct ExportHistoryView: View {
                 isProcessing: moveOutReadiness == .processing,
                 isProLocked: !subscriptionManager.hasPro,
                 generatedLine: generatedLine(for: ["move_out_report"]),
+                // Hidden while a request is in flight; the card shows "Building report…" next.
+                secondaryTitle: moveOutReadiness == .readyToShare ? "Make new report" : nil,
+                onSecondary: isMoveOutExporting ? nil : { requestMoveOutExport() },
                 onPrimary: moveOutPrimaryCTA.action
             )
 
@@ -835,6 +838,8 @@ struct ExportHistoryView: View {
                 isProLocked: !subscriptionManager.hasPro,
                 useQuietPrimaryWhenLocked: true,
                 generatedLine: generatedLine(for: ["dispute_packet", "dispute_summary"]),
+                secondaryTitle: disputeReadiness == .readyToShare ? "Make new packet" : nil,
+                onSecondary: isDisputeExporting ? nil : { requestDisputePacketExport() },
                 onPrimary: disputePrimaryCTA.action
             )
         }
