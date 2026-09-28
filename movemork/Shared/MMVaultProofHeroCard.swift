@@ -2,7 +2,8 @@
 //  MMVaultProofHeroCard.swift
 //  movemork
 //
-//  Evidence-first vault hero — photo, progress, one next action (not a dashboard tile).
+//  Property hero on Proof: identity, move-in coverage, next room, one primary action.
+//  Coverage is rooms documented — never a "score".
 //
 
 import SwiftUI
@@ -10,74 +11,79 @@ import SwiftUI
 struct MMVaultProofHeroCard: View {
     let propertyName: String
     var location: String? = nil
-    let progressLine: String
-    var proofScoreLine: String? = nil
+    /// Small letterspaced label above the coverage line — "Move-in coverage".
+    var coverageLabel: String = "Move-in coverage"
+    /// "1 of 10 rooms documented".
+    let coverageLine: String
+    /// "1 photo · 1 of 2 records".
     var statsLine: String? = nil
-    var reportStatusLine: String? = nil
-    let nextLine: String
+    /// Room name for the "Next room" line; nil hides it.
+    var nextRoomName: String? = nil
     let progress: Double
     var previewPath: String? = nil
     var previewURL: URL? = nil
     let primaryTitle: String
     let onPrimary: () -> Void
+    /// Quiet trailing link when a report is already available ("Move-in report ready").
+    var reportReadyLine: String? = nil
+    var onViewReport: (() -> Void)? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var clampedProgress: Double { min(1, max(0, progress)) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center, spacing: 14) {
                 proofThumbnail
 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(propertyName)
-                        .font(MoveMarkTheme.Typography.subtitleLarge)
+                        .font(MoveMarkTheme.Typography.cardTitleCompact)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                         .lineLimit(2)
 
                     if let location, !location.isEmpty {
                         Text(location)
-                            .font(MoveMarkTheme.Typography.footnote)
-                            .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                            .font(MoveMarkTheme.Typography.metadata)
+                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                             .lineLimit(1)
                     }
-
-                    if let proofScoreLine {
-                        Text(proofScoreLine)
-                            .font(MoveMarkTheme.Typography.subheadlineMedium)
-                            .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.95))
-                            .padding(.top, 2)
-                    }
-
-                    Text(progressLine)
-                        .font(MoveMarkTheme.Typography.subheadlineMedium)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        .padding(.top, proofScoreLine == nil ? 2 : 0)
-
-                    if let statsLine, !statsLine.isEmpty {
-                        Text(statsLine)
-                            .font(MoveMarkTheme.Typography.footnote)
-                            .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                            .lineLimit(2)
-                    }
-
-                    if let reportStatusLine, !reportStatusLine.isEmpty {
-                        Text(reportStatusLine)
-                            .font(MoveMarkTheme.Typography.footnoteEmphasis)
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    }
-
-                    Text(nextLine)
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                        .lineLimit(2)
                 }
 
                 Spacer(minLength: 0)
             }
 
-            progressBar
+            VStack(alignment: .leading, spacing: 6) {
+                Text(coverageLabel.uppercased())
+                    .font(MoveMarkTheme.Typography.tinyEmphasis)
+                    .tracking(0.9)
+                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+
+                Text(coverageLine)
+                    .font(MoveMarkTheme.Typography.rowTitle)
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+
+                if let statsLine, !statsLine.isEmpty {
+                    Text(statsLine)
+                        .font(MoveMarkTheme.Typography.metadata)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                }
+
+                progressBar
+                    .padding(.top, 6)
+
+                if let nextRoomName, !nextRoomName.isEmpty {
+                    HStack(spacing: 6) {
+                        Text("Next room")
+                            .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                        Text(nextRoomName)
+                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                    }
+                    .font(MoveMarkTheme.Typography.detailMedium)
+                    .padding(.top, 4)
+                }
+            }
 
             MMButton(
                 title: primaryTitle,
@@ -88,9 +94,36 @@ struct MMVaultProofHeroCard: View {
                 kind: .primary,
                 size: .inline
             )
+
+            if let reportReadyLine, let onViewReport {
+                Button(action: onViewReport) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(MoveMarkTheme.Colors.primary)
+                        Text(reportReadyLine)
+                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        Spacer(minLength: 8)
+                        Text("View")
+                            .foregroundStyle(MoveMarkTheme.Colors.primary)
+                        Image(systemName: "chevron.right")
+                            .font(MoveMarkTheme.Typography.caption)
+                            .foregroundStyle(MoveMarkTheme.Colors.primary)
+                    }
+                    .font(MoveMarkTheme.Typography.detailMedium)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .padding(16)
-        .mmProofCardSurface(.neutral, cornerRadius: 20)
+        .padding(MoveMarkTheme.Spacing.panelPadding)
+        .background(
+            RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.hero, style: .continuous)
+                .fill(MoveMarkTheme.Surface.raised)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.hero, style: .continuous)
+                .stroke(MoveMarkTheme.Stroke.interactive, lineWidth: 1)
+        )
     }
 
     @ViewBuilder
@@ -114,7 +147,7 @@ struct MMVaultProofHeroCard: View {
                 thumbnailPlaceholder
             }
         }
-        .frame(width: 80, height: 80)
+        .frame(width: 60, height: 60)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -142,13 +175,16 @@ struct MMVaultProofHeroCard: View {
             ZStack(alignment: .leading) {
                 Capsule()
                     .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.85))
-                    .frame(height: 4)
+                    .frame(height: 6)
                 Capsule()
                     .fill(MoveMarkTheme.Colors.primary.opacity(clampedProgress > 0 ? 0.9 : 0.35))
-                    .frame(width: max(4, geo.size.width * clampedProgress), height: 4)
+                    .frame(width: max(6, geo.size.width * clampedProgress), height: 6)
                     .animation(reduceMotion ? nil : MMMotion.proofProgress, value: clampedProgress)
             }
         }
-        .frame(height: 4)
+        .frame(height: 6)
+        .accessibilityElement()
+        .accessibilityLabel("Coverage")
+        .accessibilityValue("\(Int((clampedProgress * 100).rounded())) percent")
     }
 }

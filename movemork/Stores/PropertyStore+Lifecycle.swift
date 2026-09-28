@@ -25,7 +25,7 @@ extension PropertyStore {
             case .makeMoveInReport:
                 return "Make your move-in report"
             case .midLeaseMaintenance(let count):
-                return count == 1 ? "Log 1 maintenance issue" : "Review \(count) open issues"
+                return count == 1 ? "Review maintenance issue" : "Review maintenance issues"
             case .moveOutProofReminder:
                 return "Start move-out proof"
             }
@@ -39,8 +39,8 @@ extension PropertyStore {
                 return "Lease and deposit records strengthen your proof if money is disputed."
             case .makeMoveInReport:
                 return "Your room proof is ready — export a PDF before you need it."
-            case .midLeaseMaintenance:
-                return "Timestamp repairs and issues while you still live there."
+            case .midLeaseMaintenance(let count):
+                return count == 1 ? "1 open issue" : "\(count) open issues"
             case .moveOutProofReminder(let days):
                 if let days, days > 0 {
                     return "Lease ends in \(days) days — re-capture rooms before you return keys."

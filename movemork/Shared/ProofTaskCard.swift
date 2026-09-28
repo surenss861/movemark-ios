@@ -20,7 +20,7 @@ struct ProofTaskCard: View {
             HStack(alignment: .center, spacing: 8) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(MoveMarkTheme.Typography.subheadlineMedium)
+                        .font(MoveMarkTheme.Typography.bodySmallEmphasis)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                         .lineLimit(1)
                     Text(reason)
@@ -40,14 +40,15 @@ struct ProofTaskCard: View {
                         .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(MoveMarkTheme.Colors.cardRaised)
+            .padding(.horizontal, 16)
+            .padding(.vertical, MoveMarkTheme.Spacing.rowVertical)
+            .background(MoveMarkTheme.Surface.raised)
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(MoveMarkTheme.Colors.cardStroke, lineWidth: 1)
+                RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.row, style: .continuous)
+                    .stroke(MoveMarkTheme.Stroke.normal, lineWidth: 1)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.row, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.row, style: .continuous))
             .scaleEffect(pressed ? 0.97 : 1)
         }
         .buttonStyle(.plain)
