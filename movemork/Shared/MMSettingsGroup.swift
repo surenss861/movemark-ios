@@ -13,11 +13,12 @@ struct MMSettingsSectionHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(MoveMarkTheme.Typography.footnoteEmphasis)
+            Text(title.uppercased())
+                .font(MoveMarkTheme.Typography.sectionLabel)
+                .tracking(0.9)
                 .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                .textCase(.uppercase)
-                .padding(.leading, 2)
+                .padding(.leading, 4)
+                .accessibilityAddTraits(.isHeader)
 
             if let footer, !footer.isEmpty {
                 Text(footer)
@@ -37,12 +38,12 @@ struct MMSettingsGroup<Content: View>: View {
         VStack(spacing: 0) {
             content()
         }
-        .background(MoveMarkTheme.Colors.evidenceCard)
+        .background(MoveMarkTheme.Surface.raised)
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.cardStroke, lineWidth: 1)
+            RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.row, style: .continuous)
+                .stroke(MoveMarkTheme.Stroke.normal, lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.row, style: .continuous))
     }
 }
 
@@ -82,7 +83,7 @@ struct MMSettingsRow: View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: subtitle == nil ? 0 : 2) {
                 Text(title)
-                    .font(MoveMarkTheme.Typography.bodySmallEmphasis)
+                    .font(MoveMarkTheme.Typography.bodyMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .lineLimit(1)
 
@@ -99,8 +100,9 @@ struct MMSettingsRow: View {
 
             accessoryView
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, subtitle == nil ? 12 : 11)
+        .padding(.horizontal, 16)
+        .padding(.vertical, subtitle == nil ? 13 : 10)
+        .frame(minHeight: 48)
         .contentShape(Rectangle())
     }
 
@@ -143,6 +145,6 @@ struct MMSettingsDivider: View {
     var body: some View {
         Divider()
             .background(Color.white.opacity(0.06))
-            .padding(.leading, 14)
+            .padding(.leading, 16)
     }
 }

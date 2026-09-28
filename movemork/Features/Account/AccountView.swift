@@ -43,10 +43,10 @@ struct AccountView: View {
                 .mmProofShellBackground(heroFocus: false, ctaBloom: false)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 26) {
                     MMProofSectionHeader(
                         title: "Account",
-                        subtitle: "Manage your profile, plan, and proof vaults."
+                        subtitle: "Profile, plan, and privacy."
                     )
                     .mmAppearRise(isVisible: contentAppeared, delay: 0, offset: 6)
 
@@ -56,6 +56,8 @@ struct AccountView: View {
                     securitySection
                     aboutSection
                     signOutSection
+                        .padding(.top, 8)
+                    legalFooter
 
                     Color.clear
                         .frame(height: rootTabBarVisible
@@ -135,14 +137,12 @@ struct AccountView: View {
 
     private var planSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            MMSettingsSectionHeader(
-                title: "Plan",
-                footer: planStatusSummary
-            )
+            MMSettingsSectionHeader(title: "Plan")
 
             MMSettingsGroup {
                 MMSettingsRow(
                     title: subscriptionManager.hasPro ? "MoveMark Pro" : "MoveMark Free",
+                    subtitle: planStatusSummary,
                     accessory: .pill(
                         subscriptionManager.hasPro ? "Active" : "Current",
                         subscriptionManager.hasPro ? .success : .neutral
@@ -198,7 +198,7 @@ struct AccountView: View {
 
     private var planStatusSummary: String {
         if subscriptionManager.hasPro {
-            return "Unlimited vaults, reports, move-out proof, and dispute tools."
+            return "Unlimited vaults, reports, move-out proof and dispute packets"
         }
         return "1 proof vault · 1 move-in report"
     }
@@ -299,15 +299,20 @@ struct AccountView: View {
                     action: nil
                 )
             }
-
-            Text("MoveMark helps renters document proof and records. It does not provide legal advice.")
-                .font(MoveMarkTheme.Typography.footnote)
-                .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 4)
-                .padding(.top, 2)
         }
         .mmAppearRise(isVisible: contentAppeared, delay: 0.2, offset: 6)
+    }
+
+    /// One quiet line under Sign out — the disclaimer is not a section of its own.
+    private var legalFooter: some View {
+        Text("MoveMark organizes rental evidence. It does not provide legal advice.")
+            .font(MoveMarkTheme.Typography.caption)
+            .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.85))
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 12)
+            .padding(.top, -6)
+            .mmAppearRise(isVisible: contentAppeared, delay: 0.26, offset: 6)
     }
 
     // MARK: - Sign out
@@ -316,7 +321,7 @@ struct AccountView: View {
         MMSettingsGroup {
             MMSettingsRow(
                 title: "Sign out",
-                subtitle: "Clear this device and return to Welcome",
+                subtitle: "Return to Welcome",
                 action: {
                     propertyStore.clear()
                     Task { await sessionManager.signOut() }
