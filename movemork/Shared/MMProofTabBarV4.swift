@@ -14,8 +14,8 @@ struct MMProofTabBarV4: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let dockHeight: CGFloat = MoveMarkTheme.Spacing.floatingDockHeight
-    private let dockCornerRadius: CGFloat = 26
-    private let iconSize: CGFloat = 21
+    private let dockCornerRadius: CGFloat = 24
+    private let iconSize: CGFloat = 19
 
     private var inactiveForeground: Color {
         MoveMarkTheme.Colors.textSecondary.opacity(0.82)
@@ -23,7 +23,7 @@ struct MMProofTabBarV4: View {
 
     var body: some View {
         GeometryReader { geo in
-            let dockWidth = min(max(geo.size.width - 56, 260), 310)
+            let dockWidth = min(max(geo.size.width - 64, 250), 292)
 
             HStack(spacing: 0) {
                 tabItem(
@@ -48,7 +48,7 @@ struct MMProofTabBarV4: View {
             .frame(width: dockWidth, height: dockHeight)
             .background(dockBackground)
             .overlay(dockBorder)
-            .shadow(color: Color.black.opacity(0.22), radius: 14, x: 0, y: 6)
+            .shadow(color: Color.black.opacity(0.28), radius: 12, x: 0, y: 4)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .padding(.bottom, MoveMarkTheme.Spacing.floatingDockBottomInset)
         }
@@ -69,8 +69,8 @@ struct MMProofTabBarV4: View {
             .stroke(
                 LinearGradient(
                     colors: [
-                        MoveMarkTheme.Colors.primary.opacity(0.28),
-                        MoveMarkTheme.Colors.cardStroke.opacity(0.85)
+                        MoveMarkTheme.Stroke.interactive,
+                        MoveMarkTheme.Stroke.normal
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -95,12 +95,11 @@ struct MMProofTabBarV4: View {
                 selectedTab = tab
             }
         } label: {
-            VStack(spacing: isSelected ? 4 : 2) {
+            VStack(spacing: 2) {
                 Image(systemName: isSelected ? filledImage : outlineImage)
                     .font(.system(size: iconSize, weight: isSelected ? .semibold : .regular))
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(isSelected ? MoveMarkTheme.Colors.textPrimary : inactiveForeground)
-                    .scaleEffect(isSelected && !reduceMotion ? 1.04 : 1)
+                    .foregroundStyle(isSelected ? MoveMarkTheme.Colors.primary : inactiveForeground)
                     .contentTransition(.symbolEffect(.replace))
                     .animation(reduceMotion ? nil : MMMotion.quick, value: isSelected)
 
@@ -110,17 +109,17 @@ struct MMProofTabBarV4: View {
                     .opacity(isSelected ? 1 : 0.9)
                     .animation(reduceMotion ? nil : MMMotion.quick, value: isSelected)
             }
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 12)
+            .frame(minWidth: 72, minHeight: 46)
             .background {
                 if isSelected {
                     Capsule()
-                        .fill(MoveMarkTheme.Colors.primary.opacity(0.14))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 2)
+                        .fill(MoveMarkTheme.Colors.primary.opacity(0.16))
+                        .overlay(Capsule().stroke(MoveMarkTheme.Stroke.selected, lineWidth: 0.75))
                         .matchedGeometryEffect(id: "evidenceDockPill", in: tabNamespace)
                 }
             }
+            .frame(maxWidth: .infinity, minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(MMFloatingDockPressStyle())
