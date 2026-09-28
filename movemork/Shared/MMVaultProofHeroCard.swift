@@ -174,7 +174,7 @@ struct MMVaultProofHeroCard: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.85))
+                    .fill(Color.white.opacity(0.08))
                     .frame(height: 6)
                 Capsule()
                     .fill(MoveMarkTheme.Colors.primary.opacity(clampedProgress > 0 ? 0.9 : 0.35))

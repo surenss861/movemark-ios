@@ -970,7 +970,7 @@ struct ExportHistoryView: View {
         guard photos > 0 else { return nil }
         let rooms = propertyStore.moveOutDocumentedRoomCount(for: property)
         let total = propertyStore.totalRoomCount(for: property)
-        return "\(rooms) of \(total) rooms · \(photos) move-out photos"
+        return "\(rooms) of \(total) rooms · \(photos) move-out \(photos == 1 ? "photo" : "photos")"
     }
 
     /// "Move-in + move-out evidence · Lease included · 1 documented issue".

@@ -24,21 +24,33 @@ struct ExportHistoryRow: View {
             if canShare { onShare() } else if canRetry { onRetry?() }
         } label: {
             HStack(alignment: .center, spacing: 12) {
-                Text(title)
-                    .font(MoveMarkTheme.Typography.subheadlineMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                    .lineLimit(1)
+                // A ready row is one line; a row with a badge moves its date under the
+                // title so neither the title nor the badge truncates.
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(MoveMarkTheme.Typography.subheadlineMedium)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                        .lineLimit(1)
+
+                    if !canShare {
+                        Text(dateLine)
+                            .font(MoveMarkTheme.Typography.caption)
+                            .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                            .lineLimit(1)
+                    }
+                }
+                .layoutPriority(1)
 
                 Spacer(minLength: 8)
 
-                if !canShare {
+                if canShare {
+                    Text(dateLine)
+                        .font(MoveMarkTheme.Typography.caption)
+                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                        .lineLimit(1)
+                } else {
                     ProofStatusBadge(text: canRetry ? "Failed · Retry" : statusLabel, tone: statusTone)
                 }
-
-                Text(dateLine)
-                    .font(MoveMarkTheme.Typography.caption)
-                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                    .lineLimit(1)
 
                 Image(systemName: "chevron.right")
                     .font(MoveMarkTheme.Typography.caption)
