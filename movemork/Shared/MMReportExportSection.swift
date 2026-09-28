@@ -2,7 +2,8 @@
 //  MMReportExportSection.swift
 //  movemork
 //
-//  Secondary report cards — move-out and dispute packets.
+//  Move-out and dispute report cards. Same card as move-in; Pro lock changes the badge
+//  and the action, not the layout.
 //
 
 import SwiftUI
@@ -20,42 +21,41 @@ struct MMReportExportSection: View {
     var isProLocked: Bool = false
     var useQuietPrimaryWhenLocked: Bool = false
     var legalNote: String? = nil
-  let onPrimary: () -> Void
+    var generatedLine: String? = nil
+    let onPrimary: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(sectionTitle)
-                .font(MoveMarkTheme.Typography.footnoteEmphasis)
-                .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                .padding(.leading, 2)
-
-            if let sectionSubtitle, !sectionSubtitle.isEmpty {
-                Text(sectionSubtitle)
-                    .font(MoveMarkTheme.Typography.detailMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-            }
-
-            ProofReportCard(
+        ProofReportCard(
                 model: ProofReportModel(
                     reportTitle: sectionTitle,
-                    metricsLine: metricsLine,
-                    statusLabel: isProLocked ? "Pro feature" : statusLabel,
+                    metricsLine: metricsLine ?? sectionSubtitle,
+                    statusLabel: isProLocked ? "Pro" : statusLabel,
                     statusTone: isProLocked ? .neutral : statusTone,
                     footnote: isProLocked
                         ? (useQuietPrimaryWhenLocked
                             ? "Bundle proof if your deposit is questioned."
                             : "Unlock with MoveMark Pro")
-                        : footnote
+                        : footnote,
+                    generatedLine: generatedLine
                 ),
                 primaryTitle: primaryTitle,
                 onPrimary: onPrimary,
                 primaryEnabled: primaryEnabled,
-                primaryKind: (isProLocked && useQuietPrimaryWhenLocked) ? .quiet : .primary,
+                primaryKind: primaryKind,
                 isBright: !isProLocked && statusTone == .success,
                 isProcessing: isProcessing,
                 isCompact: true,
                 legalNote: legalNote
             )
+    }
+
+    /// Solid green only for forward progress (make / retry). Viewing, upgrading and
+    /// navigating elsewhere are secondary.
+    private var primaryKind: MMButton.Kind {
+        if isProLocked { return .secondary }
+        switch statusTone {
+        case .info, .danger: return .primary
+        case .success, .warning, .neutral: return .secondary
         }
     }
 }

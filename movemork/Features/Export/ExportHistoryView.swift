@@ -45,6 +45,7 @@ struct ExportHistoryView: View {
     @State private var showPaywall = false
     @State private var activePaywallReason: PaywallReason = .unlimitedExports
     @State private var reportsContentAppeared = false
+    @State private var showAllExports = false
 
     // MARK: - Realtime export status (falls back to polling below when unavailable)
     @State private var exportsChannel: RealtimeChannelV2?
@@ -106,21 +107,27 @@ struct ExportHistoryView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     header
-                        .padding(.bottom, 24)
+                        .padding(.bottom, 14)
 
                     if hasActiveVault {
-                        if shouldShowReportProofTrail {
+                        if hasAnyExport {
+                            reportStatusStrip
+                                .mmAppearRise(isVisible: reportsContentAppeared, delay: 0.02, offset: 4)
+                        } else if shouldShowReportProofTrail {
                             MMReportReadinessChecklist(
                                 items: reportChecklistItems,
                                 appeared: reportsContentAppeared
                             )
                         }
 
-                        reportPreviewHero
-                            .mmAppearRise(isVisible: reportsContentAppeared, delay: 0.06, offset: 6)
-
-                        secondaryExportSections
-                            .mmAppearRise(isVisible: reportsContentAppeared, delay: 0.12, offset: 6)
+                        VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardGap) {
+                            MMSectionLabel("Current reports")
+                            reportPreviewHero
+                                .mmAppearRise(isVisible: reportsContentAppeared, delay: 0.06, offset: 6)
+                            secondaryExportSections
+                                .mmAppearRise(isVisible: reportsContentAppeared, delay: 0.12, offset: 6)
+                        }
+                        .padding(.top, 8)
                     }
 
                     if let successBanner {
@@ -352,7 +359,7 @@ struct ExportHistoryView: View {
     private var header: some View {
         MMProofSectionHeader(
             title: "Your reports",
-            subtitle: "Turn saved proof into shareable records."
+            subtitle: "Shareable records built from your saved proof."
         )
     }
 
@@ -393,6 +400,98 @@ struct ExportHistoryView: View {
         return reports == 1 ? "1 report ready to share." : "\(reports) reports ready to share."
     }
 
+    private var hasAnyExport: Bool { !exports.isEmpty }
+
+    /// Replaces the five-row checklist once any report exists: one line per report type.
+    private var reportStatusStrip: some View {
+        HStack(spacing: 0) {
+            stripItem("Move-in", state: moveInStripState)
+            stripDivider
+            stripItem("Move-out", state: stripState(moveOutReadiness))
+            stripDivider
+            stripItem("Dispute", state: stripState(disputeReadiness))
+        }
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.row, style: .continuous)
+                .fill(MoveMarkTheme.Surface.raised)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.row, style: .continuous)
+                .stroke(MoveMarkTheme.Stroke.normal, lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Report status")
+    }
+
+    private enum StripState {
+        case ready, attention, pending, notStarted
+
+        var symbol: String {
+            switch self {
+            case .ready: "checkmark.circle.fill"
+            case .attention: "exclamationmark.circle.fill"
+            case .pending: "circle.dotted"
+            case .notStarted: "circle"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .ready: MoveMarkTheme.Colors.primary
+            case .attention: MoveMarkTheme.Colors.semanticWarning
+            case .pending, .notStarted: MoveMarkTheme.Colors.textMuted
+            }
+        }
+    }
+
+    private var moveInStripState: StripState {
+        switch currentReportReadiness {
+        case .readyToShare: .ready
+        case .failed, .notReady: .attention
+        case .processing: .pending
+        case .readyToMake, .noVault: .notStarted
+        }
+    }
+
+    private func stripState(_ readiness: SecondaryReportReadiness) -> StripState {
+        switch readiness {
+        case .readyToShare: .ready
+        case .failed: .attention
+        case .processing: .pending
+        case .noProof, .readyToMake: .notStarted
+        }
+    }
+
+    private func stripItem(_ title: String, state: StripState) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: state.symbol)
+                .font(MoveMarkTheme.Typography.footnoteEmphasis)
+                .foregroundStyle(state.color)
+            Text(title)
+                .font(MoveMarkTheme.Typography.footnoteEmphasis)
+                .foregroundStyle(
+                    state == .ready ? MoveMarkTheme.Colors.textPrimary : MoveMarkTheme.Colors.textSecondary
+                )
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var stripDivider: some View {
+        Rectangle()
+            .fill(MoveMarkTheme.Stroke.normal)
+            .frame(width: 1, height: 18)
+    }
+
+    /// "Generated Sep 23 · 8:29 PM" for the newest ready export of the given types.
+    private func generatedLine(for types: Set<String>) -> String? {
+        guard let row = exports
+            .filter({ types.contains($0.exportType) && verificationStatus[$0.id] == .ready })
+            .max(by: { ($0.createdAt ?? "") < ($1.createdAt ?? "") })
+        else { return nil }
+        return "Generated \(shortDate(row.createdAt))"
+    }
+
     private var shouldShowReportProofTrail: Bool {
         switch currentReportReadiness {
         case .notReady, .readyToMake, .readyToShare, .processing, .failed:
@@ -412,6 +511,7 @@ struct ExportHistoryView: View {
             primaryTitle: reportPrimaryCTA.title,
             isPrimaryDisabled: isExporting || currentReportReadiness == .processing || isLoading,
             unlockPulse: reportUnlockPulse,
+            generatedLine: generatedLine(for: ["move_in_report"]),
             onPrimary: reportPrimaryCTA.action
         )
     }
@@ -630,7 +730,7 @@ struct ExportHistoryView: View {
                 showPaywall = true
             })
         case .readyToShare:
-            return ("View / Share report", {
+            return ("View / Share", {
                 if let row = exports.first(where: {
                     $0.exportType == "move_in_report" && verificationStatus[$0.id] == .ready
                 }) {
@@ -707,7 +807,7 @@ struct ExportHistoryView: View {
     }
 
     private var secondaryExportSections: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardGap) {
             MMReportExportSection(
                 sectionTitle: "Move-out report",
                 sectionSubtitle: "Re-capture rooms before you return the keys.",
@@ -719,12 +819,13 @@ struct ExportHistoryView: View {
                 primaryEnabled: moveOutPrimaryCTA.enabled,
                 isProcessing: moveOutReadiness == .processing,
                 isProLocked: !subscriptionManager.hasPro,
+                generatedLine: generatedLine(for: ["move_out_report"]),
                 onPrimary: moveOutPrimaryCTA.action
             )
 
             MMReportExportSection(
                 sectionTitle: "Dispute packet",
-                sectionSubtitle: "Bundle your proof if your deposit is questioned.",
+                sectionSubtitle: disputeMetricsLine ?? "Bundle your proof if your deposit is questioned.",
                 statusLabel: disputeStatusLabel,
                 statusTone: disputeStatusTone,
                 footnote: disputeFootnote,
@@ -733,37 +834,62 @@ struct ExportHistoryView: View {
                 isProcessing: disputeReadiness == .processing,
                 isProLocked: !subscriptionManager.hasPro,
                 useQuietPrimaryWhenLocked: true,
-                legalNote: "MoveMark organizes your proof. It does not provide legal advice.",
+                generatedLine: generatedLine(for: ["dispute_packet", "dispute_summary"]),
                 onPrimary: disputePrimaryCTA.action
             )
         }
     }
 
     private var exportHistorySections: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Export history")
-                .font(MoveMarkTheme.Typography.footnoteEmphasis)
-                .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                .padding(.leading, 2)
+        let visible = showAllExports ? exports : Array(exports.prefix(Self.historyPreviewLimit))
+        return VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardGap) {
+            MMSectionLabel("Export history")
 
-            VStack(spacing: 8) {
-                ForEach(exports) { row in
+            VStack(spacing: 0) {
+                ForEach(Array(visible.enumerated()), id: \.element.id) { index, row in
                     let status = verificationStatus[row.id] ?? .unknown
+                    if index > 0 {
+                        Rectangle()
+                            .fill(MoveMarkTheme.Stroke.normal)
+                            .frame(height: 1)
+                            .padding(.leading, 16)
+                    }
                     ExportHistoryRow(
                         title: label(for: row.exportType),
-                        dateLine: formattedDate(row.createdAt),
+                        dateLine: shortDate(row.createdAt),
                         statusLabel: status.displayLabel,
                         statusTone: historyStatusTone(status),
                         isProcessing: isActiveExportJob(status),
                         canShare: canShareExport(status),
                         canRetry: status == .serverFailed,
-                        onShare: { share(row) },
+                        onShare: { viewReport(row) },
                         onRetry: { retryExport(row) }
                     )
                 }
             }
+            .background(
+                RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.row, style: .continuous)
+                    .fill(MoveMarkTheme.Surface.raised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.row, style: .continuous)
+                    .stroke(MoveMarkTheme.Stroke.normal, lineWidth: 1)
+            )
+
+            if exports.count > Self.historyPreviewLimit {
+                MMButton(
+                    title: showAllExports ? "Show fewer" : "Show all \(exports.count) exports",
+                    action: { withAnimation(MMMotion.quick) { showAllExports.toggle() } },
+                    kind: .tertiary,
+                    size: .compact,
+                    expandsToFillWidth: false
+                )
+            }
         }
+        .padding(.top, MoveMarkTheme.Spacing.sectionGap - 14)
     }
+
+    private static let historyPreviewLimit = 5
 
     private enum SecondaryReportReadiness {
         case noProof
@@ -801,9 +927,9 @@ struct ExportHistoryView: View {
     private var moveOutStatusLabel: String {
         switch moveOutReadiness {
         case .noProof: return "Needs proof"
-        case .readyToMake: return "Report can be made"
-        case .processing: return "Building report"
-        case .readyToShare: return "Ready to share"
+        case .readyToMake: return "Can be made"
+        case .processing: return "Building"
+        case .readyToShare: return "Ready"
         case .failed: return "Failed"
         }
     }
@@ -811,9 +937,9 @@ struct ExportHistoryView: View {
     private var disputeStatusLabel: String {
         switch disputeReadiness {
         case .noProof: return "Needs proof"
-        case .readyToMake: return "Report can be made"
-        case .processing: return "Building report"
-        case .readyToShare: return "Ready to share"
+        case .readyToMake: return "Can be made"
+        case .processing: return "Building"
+        case .readyToShare: return "Ready"
         case .failed: return "Failed"
         }
     }
@@ -822,9 +948,9 @@ struct ExportHistoryView: View {
         switch moveOutReadiness {
         case .readyToShare: return .success
         case .failed: return .danger
-        case .processing: return .warning
+        case .processing: return .neutral
         case .noProof: return .warning
-        case .readyToMake: return .neutral
+        case .readyToMake: return .info
         }
     }
 
@@ -832,9 +958,9 @@ struct ExportHistoryView: View {
         switch disputeReadiness {
         case .readyToShare: return .success
         case .failed: return .danger
-        case .processing: return .warning
+        case .processing: return .neutral
         case .noProof: return .warning
-        case .readyToMake: return .neutral
+        case .readyToMake: return .info
         }
     }
 
@@ -847,11 +973,29 @@ struct ExportHistoryView: View {
         return "\(rooms) of \(total) rooms · \(photos) move-out photos"
     }
 
+    /// "Move-in + move-out evidence · Lease included · 1 documented issue".
+    private var disputeMetricsLine: String? {
+        guard let property = resolvedPropertyRecord else { return nil }
+        var parts: [String] = []
+        let hasMoveOut = propertyStore.moveOutPhotoCount(for: property) > 0
+        parts.append(hasMoveOut ? "Move-in + move-out evidence" : "Move-in evidence")
+        let requiredDocs = PropertyStore.moveInRequiredDocumentTypes.count
+        let uploaded = max(0, requiredDocs - propertyStore.missingSupportingRecordCount(for: property))
+        if uploaded > 0 {
+            parts.append(uploaded == 1 ? "1 record" : "\(uploaded) records")
+        }
+        let issues = propertyStore.openIssueCount(for: property)
+        if issues > 0 {
+            parts.append(issues == 1 ? "1 documented issue" : "\(issues) documented issues")
+        }
+        return parts.joined(separator: " · ")
+    }
+
     private var moveOutFootnote: String? {
         switch moveOutReadiness {
         case .noProof: return "Capture move-out room photos first."
         case .readyToMake: return "Add more move-out proof for a stronger report."
-        case .readyToShare: return "Your move-out report is ready to share."
+        case .readyToShare: return nil
         case .failed: return "Something went wrong. Try again when you're ready."
         case .processing: return nil
         }
@@ -861,7 +1005,7 @@ struct ExportHistoryView: View {
         switch disputeReadiness {
         case .noProof: return "Save move-in room proof before building a packet."
         case .readyToMake: return "Add more proof for a stronger packet."
-        case .readyToShare: return "Your dispute packet is ready to share."
+        case .readyToShare: return nil
         case .failed: return "Something went wrong. Try again when you're ready."
         case .processing: return nil
         }
@@ -880,7 +1024,7 @@ struct ExportHistoryView: View {
         case .readyToMake:
             return (isMoveOutExporting ? "Making report…" : "Make move-out report", !isMoveOutExporting, { requestMoveOutExport() })
         case .readyToShare:
-            return ("View / Share report", true, {
+            return ("View / Share", true, {
                 if let row = exports.first(where: { $0.exportType == "move_out_report" && verificationStatus[$0.id] == .ready }) {
                     viewReport(row)
                 }
@@ -911,7 +1055,7 @@ struct ExportHistoryView: View {
         case .readyToMake:
             return (isDisputeExporting ? "Building packet…" : "Build dispute packet", !isDisputeExporting, { requestDisputePacketExport() })
         case .readyToShare:
-            return ("View / Share packet", true, {
+            return ("View / Share", true, {
                 if let row = exports.first(where: {
                     ($0.exportType == "dispute_packet" || $0.exportType == "dispute_summary") &&
                     verificationStatus[$0.id] == .ready
@@ -939,8 +1083,8 @@ struct ExportHistoryView: View {
         switch status {
         case .ready: return .success
         case .serverFailed: return .danger
-        case .queued, .processing, .verifying: return .warning
-        default: return .neutral
+        case .queued, .processing, .verifying, .unknown: return .neutral
+        default: return .warning
         }
     }
 
@@ -1361,6 +1505,28 @@ struct ExportHistoryView: View {
         formatter.dateFormat = "MMM d, yyyy · h:mm a"
         return formatter
     }()
+
+    private static let exportShortDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "MMM d · h:mm a"
+        return formatter
+    }()
+
+    /// "Sep 23 · 8:29 PM" — history rows and report cards.
+    private func shortDate(_ value: String?) -> String {
+        guard let date = parsedDate(value) else { return value ?? "" }
+        return Self.exportShortDateFormatter.string(from: date)
+    }
+
+    private func parsedDate(_ value: String?) -> Date? {
+        guard let value else { return nil }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = iso.date(from: value) { return date }
+        iso.formatOptions = [.withInternetDateTime]
+        return iso.date(from: value)
+    }
 
     private func formattedDate(_ value: String?) -> String {
         guard let value else { return "Unknown date" }

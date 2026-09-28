@@ -25,6 +25,7 @@ struct MMReportPreviewHero: View {
     let primaryTitle: String
     var isPrimaryDisabled: Bool = false
     var unlockPulse: Bool = false
+    var generatedLine: String? = nil
     let onPrimary: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -33,14 +34,15 @@ struct MMReportPreviewHero: View {
         state == .ready
     }
 
-  var body: some View {
+    var body: some View {
         ProofReportCard(
             model: ProofReportModel(
                 reportTitle: "Move-in report",
                 metricsLine: metricsLine ?? headline,
                 statusLabel: statusLabel,
                 statusTone: statusTone,
-                footnote: footnote
+                footnote: footnote,
+                generatedLine: generatedLine
             ),
             primaryTitle: primaryTitle,
             onPrimary: {
@@ -48,6 +50,7 @@ struct MMReportPreviewHero: View {
                 onPrimary()
             },
             primaryEnabled: !isPrimaryDisabled,
+            primaryKind: state == .canMake || state == .failed ? .primary : .secondary,
             isBright: isDocumentBright,
             isProcessing: state == .processing,
             proofChips: proofChips
@@ -60,9 +63,9 @@ struct MMReportPreviewHero: View {
         switch state {
         case .loading: return "Checking proof"
         case .notReady: return "Needs proof"
-        case .canMake: return "Report can be made"
-        case .processing: return "Building report"
-        case .ready: return "Ready to share"
+        case .canMake: return "Can be made"
+        case .processing: return "Building"
+        case .ready: return "Ready"
         case .failed: return "Failed"
         }
     }
@@ -70,8 +73,8 @@ struct MMReportPreviewHero: View {
     private var statusTone: ProofStatusTone {
         switch state {
         case .ready: return .success
-        case .canMake: return .neutral
-        case .processing, .loading: return .warning
+        case .canMake: return .info
+        case .processing, .loading: return .neutral
         case .failed: return .danger
         case .notReady: return .warning
         }

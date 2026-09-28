@@ -2,7 +2,8 @@
 //  ExportHistoryRow.swift
 //  movemork
 //
-//  Compact export history row — document-first, not photo cards.
+//  Archival export row: title, date, and a status badge only when the export is not ready.
+//  Ready rows open on tap; failed rows offer Retry.
 //
 
 import SwiftUI
@@ -19,46 +20,37 @@ struct ExportHistoryRow: View {
     var onRetry: (() -> Void)? = nil
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            ProofDocumentPreview(
-                large: false,
-                isBright: canShare,
-                isProcessing: isProcessing
-            )
-
-            VStack(alignment: .leading, spacing: 4) {
+        Button {
+            if canShare { onShare() } else if canRetry { onRetry?() }
+        } label: {
+            HStack(alignment: .center, spacing: 12) {
                 Text(title)
-                    .font(MoveMarkTheme.Typography.detailMedium)
+                    .font(MoveMarkTheme.Typography.subheadlineMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .lineLimit(1)
+
+                Spacer(minLength: 8)
+
+                if !canShare {
+                    ProofStatusBadge(text: canRetry ? "Failed · Retry" : statusLabel, tone: statusTone)
+                }
 
                 Text(dateLine)
                     .font(MoveMarkTheme.Typography.caption)
                     .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                    .lineLimit(1)
 
-                ProofStatusBadge(text: statusLabel, tone: statusTone)
+                Image(systemName: "chevron.right")
+                    .font(MoveMarkTheme.Typography.caption)
+                    .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(canShare || canRetry ? 1 : 0))
             }
-
-            Spacer(minLength: 0)
-
-            if canShare {
-                MMButton(
-                    title: "Share",
-                    action: onShare,
-                    kind: .quiet,
-                    size: .compact,
-                    expandsToFillWidth: false
-                )
-            } else if canRetry, let onRetry {
-                MMButton(
-                    title: "Retry",
-                    action: onRetry,
-                    kind: .quiet,
-                    size: .compact,
-                    expandsToFillWidth: false
-                )
-            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 13)
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, 4)
+        .buttonStyle(.plain)
+        .disabled(!canShare && !canRetry)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(canShare ? "Opens the report" : (canRetry ? "Retries the export" : ""))
     }
 }
