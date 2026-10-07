@@ -17,7 +17,7 @@ enum MoveMarkGrowthCopy {
     /// `welcomeHeadline` stays the spoken form for VoiceOver.
     static let welcomeHeadlineLead = "Prove what was"
     static let welcomeHeadlineTail = "already there."
-    static let welcomeBody = "Document move-in condition before you unpack. Turn photos into a shareable report when you need proof."
+    static let welcomeBody = "Document move-in condition before you unpack. Turn photos into a shareable record when you need proof."
     static let welcomePainLine = "Don’t get blamed for damage you didn’t cause."
     static let welcomeCTA = "Start move-in proof"
 

@@ -39,6 +39,7 @@ import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMMotion
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
+import com.surensureshkumar.movemark.core.growth.MoveMarkGrowthCopy
 @Composable
 fun WelcomeScreen(
     onStartMoveIn: () -> Unit,
@@ -124,7 +125,7 @@ fun WelcomeScreen(
                         .offset(y = copyOffsetY.dp),
                 ) {
                     Text(
-                        text = "Prove what was already there.",
+                        text = MoveMarkGrowthCopy.WELCOME_HEADLINE,
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Bold,
                         color = MMColors.TextPrimary,
@@ -132,7 +133,7 @@ fun WelcomeScreen(
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        text = "Take room photos before you unpack. Turn them into a report when you need it.",
+                        text = MoveMarkGrowthCopy.WELCOME_BODY,
                         style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
                         color = MMColors.TextSecondary,
                     )
@@ -148,7 +149,7 @@ fun WelcomeScreen(
                         .alpha(ctaAlpha)
                         .offset(y = ctaOffsetY.dp),
                 ) {
-                    MMButton(text = "Start move-in proof", onClick = onStartMoveIn)
+                    MMButton(text = MoveMarkGrowthCopy.WELCOME_CTA, onClick = onStartMoveIn)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
