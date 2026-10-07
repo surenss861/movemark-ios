@@ -41,7 +41,7 @@ struct MMVaultProofHeroCard: View {
                     Text(propertyName)
                         .font(MoveMarkTheme.Typography.cardTitleCompact)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                        .lineLimit(2)
+                        .lineLimit(3)
 
                     if let location, !location.isEmpty {
                         Text(location)

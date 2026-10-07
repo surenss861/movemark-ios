@@ -38,19 +38,32 @@ struct ProofReportCard: View {
         return model.metricsLine
     }
 
+    private var titleText: some View {
+        Text(model.reportTitle)
+            .font(MoveMarkTheme.Typography.rowTitle)
+            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 14) {
                 ProofDocumentIcon(isBright: isBright, isProcessing: isProcessing)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(model.reportTitle)
-                            .font(MoveMarkTheme.Typography.rowTitle)
-                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            .lineLimit(1)
-                        Spacer(minLength: 6)
-                        ProofStatusBadge(text: model.statusLabel, tone: model.statusTone)
+                    // Title and badge share a row when they fit; at large Dynamic Type sizes the
+                    // badge drops below so the title never collapses to "…".
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            titleText
+                            Spacer(minLength: 6)
+                            ProofStatusBadge(text: model.statusLabel, tone: model.statusTone)
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            titleText
+                                .fixedSize(horizontal: false, vertical: true)
+                            ProofStatusBadge(text: model.statusLabel, tone: model.statusTone)
+                        }
                     }
 
                     if let metricsText, !metricsText.isEmpty {

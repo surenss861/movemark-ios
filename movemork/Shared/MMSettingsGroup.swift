@@ -85,7 +85,7 @@ struct MMSettingsRow: View {
                 Text(title)
                     .font(MoveMarkTheme.Typography.bodyMedium)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                    .lineLimit(1)
+                    .lineLimit(2)
 
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
