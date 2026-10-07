@@ -406,14 +406,7 @@ struct VaultRootView: View {
         if propertyStore.documentedRoomCount(for: prop) == 0 {
             return "Start room proof"
         }
-        switch propertyStore.primaryNextAction(for: prop) {
-        case .captureRoom:
-            return "Continue move-in proof"
-        default:
-            return MMNextBestActionMapper.from(
-                propertyNextAction: propertyStore.primaryNextAction(for: prop)
-            ).title
-        }
+        return MMNextBestActionMapper.primaryTitle(for: propertyStore.primaryNextAction(for: prop))
     }
 
     private func openFeaturedVaultOrContinue() {
@@ -421,8 +414,9 @@ struct VaultRootView: View {
               let row = propertyStore.properties.first(where: { $0.id == fid }) else { return }
         if let prop = propertyStore.currentProperty, prop.id == fid {
             switch propertyStore.primaryNextAction(for: prop) {
-            case .captureRoom:
-                path.append(.walkthrough)
+            case .captureRoom(let roomID, _):
+                // The button names the room ("Capture Kitchen"), so open that room directly.
+                path.append(.roomDetail(roomID: roomID))
             default:
                 openVaultDetail(for: row)
             }

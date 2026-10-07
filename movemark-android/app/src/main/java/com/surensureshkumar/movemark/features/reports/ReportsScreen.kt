@@ -27,6 +27,7 @@ import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMMotion
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMProofSectionHeader
+import com.surensureshkumar.movemark.core.growth.MoveMarkGrowthCopy
 import com.surensureshkumar.movemark.data.export.DisputePacketReadiness
 import com.surensureshkumar.movemark.data.export.ExportRow
 import com.surensureshkumar.movemark.data.export.MoveOutReportReadiness
@@ -243,7 +244,8 @@ private fun moveOutMetricsLine(state: ReportsUiState): String? {
 private fun moveOutFootnote(readiness: MoveOutReportReadiness): String? = when (readiness) {
     MoveOutReportReadiness.NoProof -> "Capture move-out room photos first."
     MoveOutReportReadiness.ReadyToMake -> "Add more move-out proof for a stronger report."
-    MoveOutReportReadiness.ReadyToShare -> "Your move-out report is ready to share."
+    MoveOutReportReadiness.ReadyToShare ->
+        "${MoveMarkGrowthCopy.MOVE_OUT_RECORD_READY} ${MoveMarkGrowthCopy.MOVE_OUT_RECORD_READY_DETAIL}"
     MoveOutReportReadiness.Failed -> "Something went wrong. Try again when you're ready."
     MoveOutReportReadiness.Processing -> null
 }
@@ -251,7 +253,8 @@ private fun moveOutFootnote(readiness: MoveOutReportReadiness): String? = when (
 private fun disputeFootnote(readiness: DisputePacketReadiness): String? = when (readiness) {
     DisputePacketReadiness.NoProof -> "Save move-in room proof before building a packet."
     DisputePacketReadiness.ReadyToMake -> "Add more proof for a stronger packet."
-    DisputePacketReadiness.ReadyToShare -> "Your dispute packet is ready to share."
+    DisputePacketReadiness.ReadyToShare ->
+        "${MoveMarkGrowthCopy.DISPUTE_PACKET_READY} ${MoveMarkGrowthCopy.DISPUTE_PACKET_READY_DETAIL}"
     DisputePacketReadiness.Failed -> "Something went wrong. Try again when you're ready."
     DisputePacketReadiness.Processing -> null
 }

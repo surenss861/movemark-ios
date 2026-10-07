@@ -112,6 +112,8 @@ fun ProPaywallScreen(
             Spacer(Modifier.height(16.dp))
             MMProofCard {
                 Text("MoveMark Pro includes", color = MMColors.TextPrimary, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(4.dp))
+                Text(MoveMarkGrowthCopy.PAYWALL_SUPPORT_LINE, color = MMColors.TextSecondary, fontSize = 13.sp)
                 Spacer(Modifier.height(12.dp))
                 MoveMarkGrowthCopy.PAYWALL_BENEFITS.forEach { (title, subtitle) ->
                     Row(Modifier.fillMaxWidth()) {

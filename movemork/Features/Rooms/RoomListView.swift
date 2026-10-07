@@ -278,7 +278,7 @@ struct RoomListView: View {
     private func reportGuidance(remaining: Int) -> String {
         if remaining <= 0 { return "Every room is documented. Your report is ready to make." }
         if completedCount == 0 { return "Document a room to make your first report." }
-        let rooms = remaining == 1 ? "1 room still needs photos" : "\(remaining) rooms still need photos"
+        let rooms = remaining == 1 ? "1 room still needs proof" : "\(remaining) rooms still need proof"
         return "A report can already be made — \(rooms)."
     }
 }

@@ -312,7 +312,7 @@ enum MMProofTimelineBuilder {
                 id: "room-\(room.id.uuidString)",
                 iconName: "circle.dashed",
                 title: "\(room.name) not started",
-                message: "Still needs photos",
+                message: "Still needs proof",
                 timestamp: nil,
                 status: .missing
             )

@@ -128,7 +128,7 @@ fun VaultScreen(
                 }
                 val primaryTitle = when {
                     documented == 0 -> "Start room proof"
-                    next != null -> "Continue room proof"
+                    next != null -> "Capture ${next.name}"
                     else -> "Review rooms"
                 }
 

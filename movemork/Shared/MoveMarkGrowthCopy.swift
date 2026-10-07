@@ -56,8 +56,18 @@ enum MoveMarkGrowthCopy {
     static let firstRunRoomTitle = "Start with one room."
     static let firstRunRoomSubtitle = "Kitchen works well — save what was already there."
 
-    static let paywallValueLine =
-        "Turn rental photos, notes, and receipts into shareable proof — before deposits get questioned."
+    /// Pro is sold by its outcome; the benefits list underneath is evidence for it.
+    static let proOutcomeLine = "Keep a complete rental record from move-in to move-out."
+    static let paywallValueLine = proOutcomeLine
+    static let paywallSupportLine = "MoveMark Pro keeps your proof organized across the full rental lifecycle."
+    static let proActiveSummary = "Complete rental record, move-in to move-out."
+
+    static let moveInRecordReady = "Your move-in record is ready."
+    static let moveInRecordReadyDetail = "A dated record of the condition you documented at move-in."
+    static let moveOutRecordReady = "Your move-out record is ready."
+    static let moveOutRecordReadyDetail = "A dated record of the condition you documented before returning the keys."
+    static let disputePacketReady = "Your evidence packet is ready."
+    static let disputePacketReadyDetail = "Your saved rental evidence organized into one shareable record."
 
     static let paywallBenefits: [(title: String, subtitle: String)] = [
         ("Unlimited proof vaults", "Protect more than one rental over time."),

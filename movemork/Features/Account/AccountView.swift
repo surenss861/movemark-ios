@@ -155,7 +155,7 @@ struct AccountView: View {
 
                     MMSettingsRow(
                         title: "Upgrade to Pro",
-                        subtitle: "Unlimited vaults, reports, and dispute tools",
+                        subtitle: MoveMarkGrowthCopy.proOutcomeLine,
                         action: {
                             subscriptionRestoreFeedback = nil
                             showPaywall = true
@@ -198,7 +198,7 @@ struct AccountView: View {
 
     private var planStatusSummary: String {
         if subscriptionManager.hasPro {
-            return "Unlimited vaults, reports, move-out proof and dispute packets"
+            return MoveMarkGrowthCopy.proActiveSummary
         }
         return "1 proof vault · 1 move-in report"
     }

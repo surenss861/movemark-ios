@@ -32,6 +32,7 @@ import com.surensureshkumar.movemark.core.design.components.MMSettingsDivider
 import com.surensureshkumar.movemark.core.design.components.MMSettingsGroup
 import com.surensureshkumar.movemark.core.design.components.MMSettingsRow
 import com.surensureshkumar.movemark.core.design.components.MMSettingsSectionHeader
+import com.surensureshkumar.movemark.core.growth.MoveMarkGrowthCopy
 import com.surensureshkumar.movemark.core.util.PlaySubscriptionIntents
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
 
@@ -65,8 +66,8 @@ fun AccountScreen(
     val displayEmail = email?.takeIf { it.isNotBlank() } ?: "—"
     val planFooter = when {
         hasPro && isMockMode ->
-            "Test mode · Unlimited vaults, reports, move-out proof, and dispute tools."
-        hasPro -> "Unlimited vaults, reports, move-out proof, and dispute tools."
+            "Test mode · ${MoveMarkGrowthCopy.PRO_ACTIVE_SUMMARY}"
+        hasPro -> MoveMarkGrowthCopy.PRO_ACTIVE_SUMMARY
         isMockMode -> "Test mode · 1 proof vault · 1 move-in report"
         else -> "1 proof vault · 1 move-in report"
     }
@@ -142,7 +143,7 @@ fun AccountScreen(
                     MMSettingsDivider()
                     MMSettingsRow(
                         title = "Upgrade to Pro",
-                        subtitle = "Unlimited vaults, reports, and dispute tools",
+                        subtitle = MoveMarkGrowthCopy.PRO_OUTCOME_LINE,
                         onClick = {
                             viewModel.dismissNotice()
                             onShowPaywall(PaywallReason.ExtraProperty)

@@ -42,8 +42,8 @@ extension PropertyStore {
 
         var shortCTA: String {
             switch self {
-            case .captureRoom:
-                return "Finish move-in proof"
+            case .captureRoom(_, let roomName):
+                return "Capture \(roomName)"
             case .uploadDocument:
                 return "Add docs"
             case .reviewMaintenance:

@@ -151,9 +151,16 @@ struct ProPaywallView: View {
     private var benefitsCard: some View {
         MMCard {
             VStack(alignment: .leading, spacing: 14) {
-                Text(benefitsTitle)
-                    .font(MoveMarkTheme.Typography.cardTitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(benefitsTitle)
+                        .font(MoveMarkTheme.Typography.cardTitle)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+
+                    Text(MoveMarkGrowthCopy.paywallSupportLine)
+                        .font(MoveMarkTheme.Typography.footnote)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 VStack(alignment: .leading, spacing: 14) {
                     ForEach(Array(benefits.enumerated()), id: \.offset) { _, item in

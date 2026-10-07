@@ -91,7 +91,7 @@ struct MMSettingsRow: View {
                     Text(subtitle)
                         .font(MoveMarkTheme.Typography.footnoteRegular)
                         .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                        .lineLimit(2)
+                        .lineLimit(4)
                         .multilineTextAlignment(.leading)
                 }
             }

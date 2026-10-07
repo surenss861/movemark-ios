@@ -535,7 +535,7 @@ struct ExportHistoryView: View {
         case .readyToMake:
             return "You have enough proof to create a move-in report."
         case .readyToShare:
-            return "Your move-in report is ready to share."
+            return MoveMarkGrowthCopy.moveInRecordReady
         case .processing:
             return "Building your PDF report."
         case .failed:
@@ -550,6 +550,8 @@ struct ExportHistoryView: View {
             return "Complete each room before creating your report."
         case .readyToMake:
             return "Add more rooms and docs for a stronger report."
+        case .readyToShare:
+            return MoveMarkGrowthCopy.moveInRecordReadyDetail
         default:
             return nil
         }
@@ -1000,7 +1002,7 @@ struct ExportHistoryView: View {
         switch moveOutReadiness {
         case .noProof: return "Capture move-out room photos first."
         case .readyToMake: return "Add more move-out proof for a stronger report."
-        case .readyToShare: return nil
+        case .readyToShare: return "\(MoveMarkGrowthCopy.moveOutRecordReady) \(MoveMarkGrowthCopy.moveOutRecordReadyDetail)"
         case .failed: return "Something went wrong. Try again when you're ready."
         case .processing: return nil
         }
@@ -1010,7 +1012,7 @@ struct ExportHistoryView: View {
         switch disputeReadiness {
         case .noProof: return "Save move-in room proof before building a packet."
         case .readyToMake: return "Add more proof for a stronger packet."
-        case .readyToShare: return nil
+        case .readyToShare: return "\(MoveMarkGrowthCopy.disputePacketReady) \(MoveMarkGrowthCopy.disputePacketReadyDetail)"
         case .failed: return "Something went wrong. Try again when you're ready."
         case .processing: return nil
         }

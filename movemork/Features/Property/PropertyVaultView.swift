@@ -182,10 +182,17 @@ struct PropertyVaultView: View {
                         nextLine: propertyVaultProofHeroNextLine,
                         progress: progress,
                         progressLabel: "\(totalPhotos) photos saved",
-                        primaryTitle: MMNextBestActionMapper.from(
-                            propertyNextAction: propertyStore.primaryNextAction(for: property)
-                        ).title,
-                        onPrimary: { path.append(.walkthrough) }
+                        primaryTitle: MMNextBestActionMapper.primaryTitle(
+                            for: propertyStore.primaryNextAction(for: property)
+                        ),
+                        onPrimary: {
+                            // "Capture Kitchen" opens Kitchen; anything else continues the guided list.
+                            if case .captureRoom(let roomID, _) = propertyStore.primaryNextAction(for: property) {
+                                path.append(.roomDetail(roomID: roomID))
+                            } else {
+                                path.append(.walkthrough)
+                            }
+                        }
                     )
                     .opacity(contentVisible ? 1 : 0)
                     .offset(y: contentVisible ? 0 : 8)

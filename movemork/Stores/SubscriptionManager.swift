@@ -206,7 +206,7 @@ final class SubscriptionManager {
     /// Free-tier plan line for Account (never blocked by offerings fetch).
     var accountPlanSummaryLine: String {
         if hasPro {
-            return "Unlimited vaults, reports, move-out proof, and dispute tools."
+            return MoveMarkGrowthCopy.proActiveSummary
         }
         return "1 property · 1 move-in report"
     }
@@ -726,7 +726,7 @@ final class SubscriptionManager {
 
     func currentCountSummary(currentPropertyCount: Int) -> String {
         if hasPro {
-            return "Unlimited vaults and exports"
+            return MoveMarkGrowthCopy.proActiveSummary
         }
 
         if currentPropertyCount == 0 {

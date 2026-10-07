@@ -3,6 +3,7 @@ package com.surensureshkumar.movemark.features.reports
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.surensureshkumar.movemark.core.growth.MoveMarkGrowthCopy
 import com.surensureshkumar.movemark.data.export.DisputePacketReadiness
 import com.surensureshkumar.movemark.data.export.DisputePacketReadinessMapper
 import com.surensureshkumar.movemark.data.export.ExportRealtimeWatcher
@@ -515,7 +516,7 @@ fun disputePrimaryCta(
 ): Triple<String, Boolean, Boolean> {
     if (loading) return Triple("Checking dispute packet…", false, false)
     return when (readiness) {
-        DisputePacketReadiness.NoProof -> Triple("Continue room proof", true, false)
+        DisputePacketReadiness.NoProof -> Triple("Continue move-in proof", true, false)
         DisputePacketReadiness.ReadyToMake ->
             Triple(if (busy) "Building packet…" else "Build dispute packet", !busy, busy)
         DisputePacketReadiness.ReadyToShare ->
@@ -536,7 +537,7 @@ private fun moveOutStatusLine(readiness: MoveOutReportReadiness): String = when 
 private fun primaryCta(readiness: ReportReadiness, loading: Boolean, busy: Boolean): Triple<String, Boolean, Boolean> {
     if (loading) return Triple("Checking report…", false, false)
     return when (readiness) {
-        ReportReadiness.NotReady, ReportReadiness.NoVault -> Triple("Continue room proof", true, false)
+        ReportReadiness.NotReady, ReportReadiness.NoVault -> Triple("Continue move-in proof", true, false)
         ReportReadiness.ReadyToMake -> Triple(if (busy) "Making report…" else "Make report", !busy, busy)
         ReportReadiness.ReadyToShare -> Triple(if (busy) "Opening…" else "View / Share report", !busy, busy)
         ReportReadiness.Processing -> Triple("Building report…", false, false)
@@ -564,7 +565,7 @@ fun moveOutPrimaryCta(
 fun ReportsUiState.heroHeadline(): String = when (readiness) {
     ReportReadiness.NotReady, ReportReadiness.NoVault -> "Finish room proof first."
     ReportReadiness.ReadyToMake -> "You have enough proof to create a move-in report."
-    ReportReadiness.ReadyToShare -> "Your move-in report is ready to share."
+    ReportReadiness.ReadyToShare -> MoveMarkGrowthCopy.MOVE_IN_RECORD_READY
     ReportReadiness.Processing -> "Building your PDF report."
     ReportReadiness.Failed -> "We couldn't finish your report."
 }
@@ -573,6 +574,7 @@ fun ReportsUiState.heroFootnote(): String? = when (readiness) {
     ReportReadiness.NotReady, ReportReadiness.NoVault ->
         "Complete each room before creating your report."
     ReportReadiness.ReadyToMake -> "Add more rooms for a stronger report."
+    ReportReadiness.ReadyToShare -> MoveMarkGrowthCopy.MOVE_IN_RECORD_READY_DETAIL
     else -> null
 }
 

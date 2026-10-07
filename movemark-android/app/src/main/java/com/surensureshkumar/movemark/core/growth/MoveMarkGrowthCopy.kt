@@ -38,8 +38,18 @@ object MoveMarkGrowthCopy {
     const val FIRST_RUN_ROOM_TITLE = "Start with one room."
     const val FIRST_RUN_ROOM_SUBTITLE = "Kitchen works well — save what was already there."
 
-    const val PAYWALL_VALUE_LINE =
-        "Turn move-in and move-out proof into reports — unlimited vaults, move-out capture, and dispute tools."
+    // Pro is sold by its outcome; the benefits list underneath is evidence for it.
+    const val PRO_OUTCOME_LINE = "Keep a complete rental record from move-in to move-out."
+    const val PAYWALL_VALUE_LINE = PRO_OUTCOME_LINE
+    const val PAYWALL_SUPPORT_LINE = "MoveMark Pro keeps your proof organized across the full rental lifecycle."
+    const val PRO_ACTIVE_SUMMARY = "Complete rental record, move-in to move-out."
+
+    const val MOVE_IN_RECORD_READY = "Your move-in record is ready."
+    const val MOVE_IN_RECORD_READY_DETAIL = "A dated record of the condition you documented at move-in."
+    const val MOVE_OUT_RECORD_READY = "Your move-out record is ready."
+    const val MOVE_OUT_RECORD_READY_DETAIL = "A dated record of the condition you documented before returning the keys."
+    const val DISPUTE_PACKET_READY = "Your evidence packet is ready."
+    const val DISPUTE_PACKET_READY_DETAIL = "Your saved rental evidence organized into one shareable record."
 
     val PAYWALL_BENEFITS = listOf(
         "Unlimited proof vaults" to "Protect more than one rental over time.",
