@@ -16,6 +16,13 @@ struct movemorkApp: App {
             options.debug = false
             options.sendDefaultPii = false
             options.tracesSampleRate = 0.0
+            // Without this every build reports as "production", so simulator/test-run hangs
+            // (slow debug cold launches under xcodebuild) were firing production alerts.
+            #if DEBUG
+            options.environment = "development"
+            #else
+            options.environment = "production"
+            #endif
             if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
                let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
                 options.releaseName = "\(version) (\(build))"
