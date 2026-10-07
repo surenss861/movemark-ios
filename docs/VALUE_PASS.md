@@ -30,7 +30,7 @@ Items 1–6 are shipped on iOS and Android as copy-only changes, and both apps b
 
 - On iOS, "Capture {Room}" on the Vault home and property vault now opens that room directly. "Continue move-in proof" still opens the guided Proof Sprint list. Android already worked this way.
 - iOS layout QA: each changed surface was rendered at default and AX3 text sizes, with "Primary Bedroom" and "Balcony/Patio" as room names. To fix what turned up, `MMButton` labels now shrink (down to 0.7×) before truncating, the `MMSettingsRow` subtitle limit went from 2 to 4 lines, and the subscriber line was shortened to "Complete rental record, move-in to move-out."
-- **Still open, pre-existing (not from this pass):** at AX3, `MMReportExportSection` titles shrink to "…" next to the status pill; settings row titles ("MoveMark Free") and long vault addresses also truncate.
+- Fixed in `844c6a7` (pre-existing): at AX3, report section titles collapsed to "…" next to the status pill (now the badge drops below), settings row titles truncated (now 2 lines), and long vault addresses truncated (now 3 lines).
 - **Still pending: QA with a signed-in account and Android visual QA.** Nothing in the repo provides a QA account or an Android emulator, so the paywall entry points, the real ready states with data, and the 0/1/nearly-complete rooms scenarios still need a pass on real devices.
 
 ## Blockers found during the audit
