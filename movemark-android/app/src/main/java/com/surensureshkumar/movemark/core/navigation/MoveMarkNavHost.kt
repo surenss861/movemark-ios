@@ -17,6 +17,7 @@ import com.surensureshkumar.movemark.data.auth.AuthState
 import com.surensureshkumar.movemark.domain.ProofPhase
 import com.surensureshkumar.movemark.features.auth.AuthMode
 import com.surensureshkumar.movemark.features.auth.AuthScreen
+import com.surensureshkumar.movemark.features.documents.DocumentsScreen
 import com.surensureshkumar.movemark.features.firstrun.CreatePropertyScreen
 import com.surensureshkumar.movemark.features.firstrun.FirstRunRoomPickerScreen
 import com.surensureshkumar.movemark.features.maintenance.MaintenanceIssueDetailScreen
@@ -132,7 +133,11 @@ fun MoveMarkNavHost() {
                 },
                 onAddProperty = { navController.navigate(Routes.AddProperty) },
                 onOpenMaintenance = { navController.navigate(Routes.MaintenanceLog) },
+                onOpenDocuments = { navController.navigate(Routes.Documents) },
             )
+        }
+        composable(Routes.Documents) {
+            DocumentsScreen(onBack = { navController.popBackStack() })
         }
         composable(Routes.MaintenanceLog) {
             MaintenanceLogScreen(

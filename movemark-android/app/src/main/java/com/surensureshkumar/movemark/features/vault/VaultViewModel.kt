@@ -28,6 +28,7 @@ class VaultViewModel @Inject constructor(
     subscriptionRepository: SubscriptionRepository,
 ) : ViewModel() {
     val property: StateFlow<PropertyRecord?> = propertyStore.currentProperty
+    val maintenanceLog = propertyStore.maintenanceLog
     val properties: StateFlow<List<PropertyRow>> = propertyStore.properties
     val loading: StateFlow<Boolean> = propertyStore.isLoading
     val error: StateFlow<String?> = propertyStore.errorMessage

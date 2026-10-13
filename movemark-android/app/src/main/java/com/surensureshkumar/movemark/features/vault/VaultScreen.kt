@@ -37,7 +37,12 @@ import com.surensureshkumar.movemark.core.design.components.MMVaultProofHeroCard
 import com.surensureshkumar.movemark.data.models.PropertyRow
 import com.surensureshkumar.movemark.domain.LifecycleNudge
 import com.surensureshkumar.movemark.domain.RoomProofMetrics
+import com.surensureshkumar.movemark.domain.VaultDocumentKind
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.UUID
 
 @Composable
@@ -48,6 +53,7 @@ fun VaultScreen(
     onShowPaywall: (PaywallReason) -> Unit,
     onOpenReports: () -> Unit = {},
     onOpenMaintenance: () -> Unit = {},
+    onOpenDocuments: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: VaultViewModel = hiltViewModel(),
 ) {
@@ -59,6 +65,7 @@ fun VaultScreen(
     val propertyCount by viewModel.propertyCount.collectAsState()
     val previewImageUrl by viewModel.previewImageUrl.collectAsState()
     val previewImagePath by viewModel.previewImagePath.collectAsState()
+    val maintenanceLog by viewModel.maintenanceLog.collectAsState()
     val reduceMotion = MMMotion.rememberReduceMotion()
     var hasAnimatedIn by remember { mutableStateOf(reduceMotion) }
 
@@ -77,7 +84,7 @@ fun VaultScreen(
     ) {
         MMProofSectionHeader(
             title = "Your proof",
-            subtitle = "What rental needs proof next?",
+            subtitle = "Document now. Prove it later.",
             modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "vaultHeader"),
             trailingAction = {
                 TextButton(onClick = {
@@ -126,10 +133,15 @@ fun VaultScreen(
                     documented == 0 -> "Start with one room"
                     else -> "$documented of $total rooms documented"
                 }
+                val openIssues = maintenanceLog.count { it.status != "resolved" }
+                val records = p.supportingRecordCount
+                val exportReady = documented > 0 && (3 - records) <= 2
                 val primaryTitle = when {
                     documented == 0 -> "Start room proof"
                     next != null -> "Capture ${next.name}"
-                    else -> "Review rooms"
+                    records < 3 -> "Add docs"
+                    openIssues > 0 -> "Continue move-in proof"
+                    else -> "Make your move-in report"
                 }
 
                 MMVaultProofHeroCard(
@@ -141,11 +153,25 @@ fun VaultScreen(
                     progress = progress,
                     primaryTitle = primaryTitle,
                     onPrimary = {
-                        (next ?: p.rooms.firstOrNull())?.let { onOpenRoom(it.id) }
+                        when {
+                            documented == 0 || next != null ->
+                                (next ?: p.rooms.firstOrNull())?.let { onOpenRoom(it.id) }
+                            records < 3 -> onOpenDocuments()
+                            openIssues > 0 -> onOpenMaintenance()
+                            else -> onOpenReports()
+                        }
                     },
                     reduceMotion = reduceMotion,
                     previewImageUrl = previewImageUrl,
                     previewImagePath = previewImagePath,
+                    documentedCount = documented,
+                    totalRooms = total,
+                    photoCount = RoomProofMetrics.totalPhotoCount(p),
+                    recordCount = records,
+                    issueCount = openIssues,
+                    lastProofLine = formatProofAdded(RoomProofMetrics.lastProofAt(p)),
+                    reportReadyLine = if (exportReady) "Move-in report ready" else null,
+                    onViewReport = if (exportReady) onOpenReports else null,
                     modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "vaultHero"),
                 )
 
@@ -162,7 +188,7 @@ fun VaultScreen(
                             when (nudge) {
                                 is LifecycleNudge.FinishRoomsBeforeUnpacking ->
                                     (next ?: p.rooms.firstOrNull())?.let { onOpenRoom(it.id) }
-                                is LifecycleNudge.AddLeaseAndDepositDocs -> Unit
+                                is LifecycleNudge.AddLeaseAndDepositDocs -> onOpenDocuments()
                                 is LifecycleNudge.MakeMoveInReport -> onOpenReports()
                                 is LifecycleNudge.MidLeaseMaintenance -> onOpenMaintenance()
                                 is LifecycleNudge.MoveOutProofReminder ->
@@ -176,10 +202,11 @@ fun VaultScreen(
                 }
 
                 Spacer(Modifier.height(12.dp))
+                val leaseCount = VaultDocumentKind.leaseAndDepositCount(p.documentTypes)
                 MMProofTaskCard(
                     title = "Lease & deposit records",
-                    reason = "Helps if your deposit is questioned later.",
-                    onClick = { /* future: lease docs */ },
+                    reason = "$leaseCount of 2 added",
+                    onClick = onOpenDocuments,
                     showChevron = true,
                     modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "leaseCard"),
                 )
@@ -228,6 +255,16 @@ fun VaultScreen(
             }
         }
     }
+}
+
+private fun formatProofAdded(raw: String?): String? {
+    if (raw.isNullOrBlank()) return null
+    return runCatching {
+        val instant = Instant.parse(raw)
+        DateTimeFormatter.ofPattern("MMM d · h:mm a", Locale.US)
+            .withZone(ZoneId.systemDefault())
+            .format(instant)
+    }.getOrElse { raw }
 }
 
 @Composable

@@ -9,6 +9,7 @@ import com.surensureshkumar.movemark.BuildConfig
 import com.surensureshkumar.movemark.data.auth.ProfileRepository
 import com.surensureshkumar.movemark.data.cache.MoveMarkDatabase
 import com.surensureshkumar.movemark.data.cache.PropertySnapshotDao
+import com.surensureshkumar.movemark.data.property.DocumentRepository
 import com.surensureshkumar.movemark.data.property.InspectionRepository
 import com.surensureshkumar.movemark.data.property.MaintenanceRepository
 import com.surensureshkumar.movemark.data.property.PropertyRepository
@@ -78,6 +79,11 @@ object AppModule {
     @Singleton
     fun provideInspectionRepository(client: SupabaseClient): InspectionRepository =
         InspectionRepository(client)
+
+    @Provides
+    @Singleton
+    fun provideDocumentRepository(client: SupabaseClient): DocumentRepository =
+        DocumentRepository(client)
 
     @Provides
     @Singleton
