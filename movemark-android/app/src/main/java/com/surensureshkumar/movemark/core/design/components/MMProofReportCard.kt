@@ -1,23 +1,18 @@
 package com.surensureshkumar.movemark.core.design.components
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,12 +24,10 @@ data class MMProofReportModel(
     val statusLabel: String,
     val statusTone: MMProofStatusTone = MMProofStatusTone.Neutral,
     val footnote: String? = null,
+    val generatedLine: String? = null,
+    val recordId: String? = null,
 )
 
-/**
- * Report artifact card — document/PDF preview, honest status, proof metrics. No room photos.
- */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MMProofReportCard(
     model: MMProofReportModel,
@@ -51,85 +44,93 @@ fun MMProofReportCard(
     legalNote: String? = null,
     reduceMotion: Boolean = false,
 ) {
-    val cardPadding = if (isCompact) 12.dp else 14.dp
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(if (isCompact) 16.dp else 20.dp),
-        color = MMColors.EvidenceCard,
-        border = BorderStroke(1.dp, MMColors.CardStroke),
+    val metrics = if (proofChips.isNotEmpty()) proofChips.joinToString(" · ") else model.metricsLine
+    MMCaseFilePlate(
+        modifier = modifier,
+        emphasis = !isCompact && isBright,
     ) {
-        Column(Modifier.padding(cardPadding)) {
-            Text(
-                model.reportTitle.uppercase(),
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.7.sp,
-                color = MMColors.TextMuted,
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
+        ) {
+            MMProofDocumentPreview(
+                large = !isCompact,
+                isBright = isBright,
+                isProcessing = isProcessing,
+                reduceMotion = reduceMotion,
             )
-            model.metricsLine?.takeIf { it.isNotBlank() }?.let {
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
                 Text(
-                    it,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MMColors.TextSecondary,
+                    model.reportTitle.uppercase(),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.05.sp,
+                    color = MMColors.TextMuted,
+                )
+                Text(
+                    model.statusLabel.uppercase(),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.4.sp,
+                    color = statusColor(model.statusTone),
                     modifier = Modifier.padding(top = 4.dp),
                 )
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp),
-                verticalAlignment = Alignment.Top,
-            ) {
-                MMProofDocumentPreview(
-                    large = !isCompact,
-                    isBright = isBright,
-                    isProcessing = isProcessing,
-                    reduceMotion = reduceMotion,
-                )
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    MMProofStatusBadge(text = model.statusLabel, tone = model.statusTone)
-                    model.footnote?.takeIf { it.isNotBlank() }?.let {
-                        Text(
-                            it,
-                            fontSize = 12.sp,
-                            color = MMColors.TextMuted,
-                            modifier = Modifier.padding(top = 6.dp),
-                        )
-                    }
+                metrics?.takeIf { it.isNotBlank() }?.let {
+                    Text(
+                        it,
+                        fontSize = 14.sp,
+                        color = MMColors.TextSecondary,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+                model.generatedLine?.takeIf { it.isNotBlank() }?.let {
+                    Text(
+                        it,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        color = MMColors.TextMuted,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+                model.footnote?.takeIf { it.isNotBlank() }?.let {
+                    Text(
+                        it,
+                        fontSize = 12.sp,
+                        color = MMColors.TextSecondary,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+                model.recordId?.takeIf { it.isNotBlank() }?.let {
+                    Text(
+                        it,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        color = MMColors.TextMuted,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
                 }
             }
-            if (proofChips.isNotEmpty()) {
-                Spacer(Modifier.height(12.dp))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    proofChips.forEach { chip ->
-                        Text(
-                            chip,
-                            modifier = Modifier
-                                .background(MMColors.FieldFill.copy(alpha = 0.85f), RoundedCornerShape(50))
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            color = MMColors.TextSecondary,
-                            fontSize = 11.sp,
-                        )
-                    }
-                }
-            }
-            legalNote?.takeIf { it.isNotBlank() }?.let {
-                Spacer(Modifier.height(10.dp))
-                Text(it, fontSize = 12.sp, color = MMColors.TextMuted)
-            }
-            Spacer(Modifier.height(14.dp))
-            MMButton(
-                text = primaryTitle,
-                onClick = onPrimary,
-                enabled = primaryEnabled,
-                loading = primaryLoading,
-                style = primaryStyle,
-            )
         }
+        legalNote?.takeIf { it.isNotBlank() }?.let {
+            Spacer(Modifier.height(10.dp))
+            Text(it, fontSize = 12.sp, color = MMColors.TextMuted)
+        }
+        Spacer(Modifier.height(14.dp))
+        MMButton(
+            text = primaryTitle,
+            onClick = onPrimary,
+            enabled = primaryEnabled,
+            loading = primaryLoading,
+            style = primaryStyle,
+        )
     }
+}
+
+private fun statusColor(tone: MMProofStatusTone): Color = when (tone) {
+    MMProofStatusTone.Success -> MMColors.Primary
+    MMProofStatusTone.Warning -> MMColors.SemanticWarning
+    MMProofStatusTone.Danger -> MMColors.SemanticDanger
+    MMProofStatusTone.Info -> MMColors.SemanticInfo
+    MMProofStatusTone.Neutral -> MMColors.TextPrimary
 }

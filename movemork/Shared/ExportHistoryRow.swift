@@ -11,6 +11,7 @@ import SwiftUI
 struct ExportHistoryRow: View {
     let title: String
     let dateLine: String
+    var recordId: String? = nil
     let statusLabel: String
     let statusTone: ProofStatusTone
     var isProcessing: Bool = false
@@ -24,17 +25,20 @@ struct ExportHistoryRow: View {
             if canShare { onShare() } else if canRetry { onRetry?() }
         } label: {
             HStack(alignment: .center, spacing: 12) {
-                // A ready row is one line; a row with a badge moves its date under the
-                // title so neither the title nor the badge truncates.
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(MoveMarkTheme.Typography.subheadlineMedium)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                        .lineLimit(2)
+
+                    Text(dateLine)
+                        .font(MoveMarkTheme.Typography.monoMeta)
+                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                         .lineLimit(1)
 
-                    if !canShare {
-                        Text(dateLine)
-                            .font(MoveMarkTheme.Typography.caption)
+                    if let recordId, !recordId.isEmpty {
+                        Text(recordId)
+                            .font(MoveMarkTheme.Typography.monoMeta)
                             .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                             .lineLimit(1)
                     }
@@ -43,12 +47,7 @@ struct ExportHistoryRow: View {
 
                 Spacer(minLength: 8)
 
-                if canShare {
-                    Text(dateLine)
-                        .font(MoveMarkTheme.Typography.caption)
-                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                        .lineLimit(1)
-                } else {
+                if !canShare {
                     ProofStatusBadge(text: canRetry ? "Failed · Retry" : statusLabel, tone: statusTone)
                 }
 

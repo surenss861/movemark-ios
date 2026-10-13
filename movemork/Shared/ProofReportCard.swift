@@ -2,9 +2,7 @@
 //  ProofReportCard.swift
 //  movemork
 //
-//  Compact current-report card: small document icon, title, one status badge, a metrics
-//  line, when it was generated, and one action. Optional secondary action sits beside the
-//  primary (reserved for "Make updated report").
+//  A report is a document object: cover, status, record id, and one action.
 //
 
 import SwiftUI
@@ -17,6 +15,8 @@ struct ProofReportModel {
     var footnote: String?
     /// "Generated Sep 23 · 8:29 PM" — shown when a report exists.
     var generatedLine: String? = nil
+    /// Short archival id, e.g. MM-RP-4C82. Omitted until a real export exists.
+    var recordId: String? = nil
 }
 
 struct ProofReportCard: View {
@@ -38,33 +38,28 @@ struct ProofReportCard: View {
         return model.metricsLine
     }
 
-    private var titleText: some View {
-        Text(model.reportTitle)
-            .font(MoveMarkTheme.Typography.rowTitle)
-            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: isCompact ? 12 : 16) {
             HStack(alignment: .top, spacing: 14) {
-                ProofDocumentIcon(isBright: isBright, isProcessing: isProcessing)
+                ProofDocumentIcon(
+                    isBright: isBright,
+                    isProcessing: isProcessing,
+                    compact: isCompact
+                )
 
-                VStack(alignment: .leading, spacing: 4) {
-                    // Title and badge share a row when they fit; at large Dynamic Type sizes the
-                    // badge drops below so the title never collapses to "…".
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            titleText
-                            Spacer(minLength: 6)
-                            ProofStatusBadge(text: model.statusLabel, tone: model.statusTone)
-                        }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(model.reportTitle.uppercased())
+                        .font(MoveMarkTheme.Typography.kicker)
+                        .tracking(1.05)
+                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
 
-                        VStack(alignment: .leading, spacing: 6) {
-                            titleText
-                                .fixedSize(horizontal: false, vertical: true)
-                            ProofStatusBadge(text: model.statusLabel, tone: model.statusTone)
-                        }
-                    }
+                    Text(model.statusLabel.uppercased())
+                        .font(MoveMarkTheme.Typography.rowTitle)
+                        .tracking(0.4)
+                        .foregroundStyle(statusColor)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.7)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     if let metricsText, !metricsText.isEmpty {
                         Text(metricsText)
@@ -75,14 +70,20 @@ struct ProofReportCard: View {
 
                     if let generated = model.generatedLine, !generated.isEmpty {
                         Text(generated)
-                            .font(MoveMarkTheme.Typography.caption)
+                            .font(MoveMarkTheme.Typography.monoMeta)
+                            .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                    }
+
+                    if let recordId = model.recordId, !recordId.isEmpty {
+                        Text(recordId)
+                            .font(MoveMarkTheme.Typography.monoMeta)
                             .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                     }
 
                     if let footnote = model.footnote, !footnote.isEmpty {
                         Text(footnote)
                             .font(MoveMarkTheme.Typography.caption)
-                            .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -114,41 +115,85 @@ struct ProofReportCard: View {
                 }
             }
         }
-        .padding(MoveMarkTheme.Spacing.panelPadding)
-        .background(
-            RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.card, style: .continuous)
-                .fill(MoveMarkTheme.Surface.raised)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.card, style: .continuous)
-                .stroke(MoveMarkTheme.Stroke.normal, lineWidth: 1)
-        )
+        .padding(isCompact ? 14 : MoveMarkTheme.Spacing.panelPadding)
+        .mmCaseFilePlate(cornerRadius: MoveMarkTheme.Radius.card, emphasis: !isCompact && isBright)
+    }
+
+    private var statusColor: Color {
+        switch model.statusTone {
+        case .success: MoveMarkTheme.Colors.primary
+        case .warning: MoveMarkTheme.Colors.semanticWarning
+        case .danger: MoveMarkTheme.Colors.semanticDanger
+        case .info: MoveMarkTheme.Colors.semanticInfo
+        case .neutral: MoveMarkTheme.Colors.textPrimary
+        }
     }
 }
 
-/// 44pt document glyph — replaces the large stacked-paper illustration, which took room
-/// without saying anything the title and badge don't.
+/// Paper cover. The edge turns green only once the record is ready.
 struct ProofDocumentIcon: View {
     var isBright: Bool = true
     var isProcessing: Bool = false
-    var size: CGFloat = 44
+    var compact: Bool = true
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private var width: CGFloat { compact ? 58 : 84 }
+    private var height: CGFloat { compact ? 76 : 112 }
+
     var body: some View {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill(MoveMarkTheme.Surface.interactive)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isBright ? MoveMarkTheme.Stroke.selected : MoveMarkTheme.Stroke.normal, lineWidth: 1)
-            )
-            .overlay(
-                Image(systemName: isBright ? "doc.text.fill" : "doc.text")
-                    .font(.system(size: size * 0.4, weight: .medium))
-                    .foregroundStyle(isBright ? MoveMarkTheme.Colors.primary : MoveMarkTheme.Colors.textSecondary)
-                    .symbolEffect(.pulse, isActive: isProcessing && !reduceMotion)
-            )
-            .frame(width: size, height: size)
-            .accessibilityHidden(true)
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(MoveMarkTheme.Colors.paperSurface.opacity(isBright ? 1 : 0.78))
+
+            VStack(alignment: .leading, spacing: compact ? 5 : 7) {
+                Text("MM")
+                    .font(.system(size: compact ? 11 : 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(MoveMarkTheme.Colors.textOnLight.opacity(0.72))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+
+                rule(width: compact ? 28 : 44)
+                rule(width: compact ? 34 : 52)
+                rule(width: compact ? 22 : 36)
+
+                Spacer(minLength: 0)
+
+                Text(isProcessing ? "FILE" : (isBright ? "PDF" : "FILE"))
+                    .font(.system(size: compact ? 9 : 11, weight: .semibold))
+                    .tracking(0.6)
+                    .foregroundStyle(MoveMarkTheme.Colors.textOnLight.opacity(0.55))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .padding(compact ? 8 : 12)
+
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(MoveMarkTheme.Colors.textOnLight.opacity(0.12), lineWidth: 0.5)
+
+            Rectangle()
+                .fill(edgeColor)
+                .frame(width: 3)
+        }
+        .frame(width: width, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .phaseAnimator(isProcessing && !reduceMotion ? [1.0, 0.78] : [1.0]) { content, phase in
+            content.opacity(phase)
+        } animation: { _ in
+            .easeInOut(duration: 0.9)
+        }
+        .accessibilityHidden(true)
+    }
+
+    private var edgeColor: Color {
+        if isBright { return MoveMarkTheme.Colors.primary }
+        if isProcessing { return MoveMarkTheme.Colors.semanticWarning }
+        return MoveMarkTheme.Colors.textOnLight.opacity(0.28)
+    }
+
+    private func rule(width: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: 1, style: .continuous)
+            .fill(MoveMarkTheme.Colors.textOnLight.opacity(isProcessing ? 0.18 : 0.28))
+            .frame(width: width, height: 2)
     }
 }

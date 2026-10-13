@@ -492,6 +492,18 @@ struct ExportHistoryView: View {
         return "Generated \(shortDate(row.createdAt))"
     }
 
+    private var latestMoveInRecordId: String? {
+        guard let row = exports
+            .filter({ $0.exportType == "move_in_report" })
+            .max(by: { ($0.createdAt ?? "") < ($1.createdAt ?? "") })
+        else { return nil }
+        return archivalRecordId(row)
+    }
+
+    private func archivalRecordId(_ row: ExportRow) -> String {
+        "MM-RP-" + String(row.id.uuidString.prefix(4)).uppercased()
+    }
+
     private var shouldShowReportProofTrail: Bool {
         switch currentReportReadiness {
         case .notReady, .readyToMake, .readyToShare, .processing, .failed:
@@ -512,6 +524,7 @@ struct ExportHistoryView: View {
             isPrimaryDisabled: isExporting || currentReportReadiness == .processing || isLoading,
             unlockPulse: reportUnlockPulse,
             generatedLine: generatedLine(for: ["move_in_report"]),
+            recordId: latestMoveInRecordId,
             onPrimary: reportPrimaryCTA.action
         )
     }
@@ -864,6 +877,7 @@ struct ExportHistoryView: View {
                     ExportHistoryRow(
                         title: label(for: row.exportType),
                         dateLine: shortDate(row.createdAt),
+                        recordId: archivalRecordId(row),
                         statusLabel: status.displayLabel,
                         statusTone: historyStatusTone(status),
                         isProcessing: isActiveExportJob(status),
@@ -935,8 +949,8 @@ struct ExportHistoryView: View {
         switch moveOutReadiness {
         case .noProof: return "Needs proof"
         case .readyToMake: return "Can be made"
-        case .processing: return "Building"
-        case .readyToShare: return "Ready"
+        case .processing: return "Generating record"
+        case .readyToShare: return "Ready to share"
         case .failed: return "Failed"
         }
     }
@@ -945,8 +959,8 @@ struct ExportHistoryView: View {
         switch disputeReadiness {
         case .noProof: return "Needs proof"
         case .readyToMake: return "Can be made"
-        case .processing: return "Building"
-        case .readyToShare: return "Ready"
+        case .processing: return "Generating record"
+        case .readyToShare: return "Ready to share"
         case .failed: return "Failed"
         }
     }

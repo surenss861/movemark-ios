@@ -109,7 +109,9 @@ struct RoomListView: View {
                     nextLine: progressNextLine,
                     progress: progress,
                     primaryTitle: progressPrimaryTitle,
-                    onPrimary: openNextRoom
+                    onPrimary: openNextRoom,
+                    documentedCount: completedCount,
+                    totalCount: rooms.count
                 )
             }
 

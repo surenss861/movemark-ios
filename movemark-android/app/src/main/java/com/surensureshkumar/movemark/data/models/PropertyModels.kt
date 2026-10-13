@@ -120,6 +120,8 @@ data class EvidenceRecord(
     val photos: List<EvidencePhoto> = emptyList(),
     /** 1 (poor) .. 5 (excellent); matches InspectionItemRow.conditionRating. Null if never set. */
     val conditionRating: Int? = null,
+    val createdAt: String? = null,
+    val issueTagCount: Int = 0,
 )
 
 data class RoomRecord(
@@ -138,6 +140,10 @@ data class PropertyRecord(
     val city: String,
     val provinceState: String,
     val rooms: List<RoomRecord>,
+    /** How many of lease, deposit receipt, and listing proof are on file. */
+    val supportingRecordCount: Int = 0,
+    /** Raw `property_documents.document_type` values, including legacy spellings. */
+    val documentTypes: List<String> = emptyList(),
 )
 
 @Serializable

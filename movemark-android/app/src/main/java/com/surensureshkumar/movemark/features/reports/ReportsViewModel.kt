@@ -520,7 +520,7 @@ fun disputePrimaryCta(
         DisputePacketReadiness.ReadyToMake ->
             Triple(if (busy) "Building packet…" else "Build dispute packet", !busy, busy)
         DisputePacketReadiness.ReadyToShare ->
-            Triple(if (busy) "Opening…" else "View / Share packet", !busy, busy)
+            Triple(if (busy) "Opening…" else "View / Share", !busy, busy)
         DisputePacketReadiness.Processing -> Triple("Building packet…", false, false)
         DisputePacketReadiness.Failed -> Triple(if (busy) "Retrying…" else "Retry packet", !busy, busy)
     }
@@ -537,11 +537,11 @@ private fun moveOutStatusLine(readiness: MoveOutReportReadiness): String = when 
 private fun primaryCta(readiness: ReportReadiness, loading: Boolean, busy: Boolean): Triple<String, Boolean, Boolean> {
     if (loading) return Triple("Checking report…", false, false)
     return when (readiness) {
-        ReportReadiness.NotReady, ReportReadiness.NoVault -> Triple("Continue move-in proof", true, false)
+        ReportReadiness.NotReady, ReportReadiness.NoVault -> Triple("Continue room proof", true, false)
         ReportReadiness.ReadyToMake -> Triple(if (busy) "Making report…" else "Make report", !busy, busy)
-        ReportReadiness.ReadyToShare -> Triple(if (busy) "Opening…" else "View / Share report", !busy, busy)
-        ReportReadiness.Processing -> Triple("Building report…", false, false)
-        ReportReadiness.Failed -> Triple(if (busy) "Retrying…" else "Retry report", !busy, busy)
+        ReportReadiness.ReadyToShare -> Triple(if (busy) "Opening…" else "View / Share", !busy, busy)
+        ReportReadiness.Processing -> Triple("Building…", false, false)
+        ReportReadiness.Failed -> Triple(if (busy) "Retrying…" else "Try again", !busy, busy)
     }
 }
 
@@ -556,7 +556,7 @@ fun moveOutPrimaryCta(
         MoveOutReportReadiness.ReadyToMake ->
             Triple(if (busy) "Making move-out report…" else "Make move-out report", !busy, busy)
         MoveOutReportReadiness.ReadyToShare ->
-            Triple(if (busy) "Opening…" else "View / Share report", !busy, busy)
+            Triple(if (busy) "Opening…" else "View / Share", !busy, busy)
         MoveOutReportReadiness.Processing -> Triple("Building move-out report…", false, false)
         MoveOutReportReadiness.Failed -> Triple(if (busy) "Retrying…" else "Retry report", !busy, busy)
     }
@@ -573,7 +573,7 @@ fun ReportsUiState.heroHeadline(): String = when (readiness) {
 fun ReportsUiState.heroFootnote(): String? = when (readiness) {
     ReportReadiness.NotReady, ReportReadiness.NoVault ->
         "Complete each room before creating your report."
-    ReportReadiness.ReadyToMake -> "Add more rooms for a stronger report."
+    ReportReadiness.ReadyToMake -> "Add more rooms and docs for a stronger report."
     ReportReadiness.ReadyToShare -> MoveMarkGrowthCopy.MOVE_IN_RECORD_READY_DETAIL
     else -> null
 }

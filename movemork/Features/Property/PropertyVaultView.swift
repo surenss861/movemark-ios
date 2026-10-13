@@ -192,7 +192,9 @@ struct PropertyVaultView: View {
                             } else {
                                 path.append(.walkthrough)
                             }
-                        }
+                        },
+                        documentedCount: completedRooms,
+                        totalCount: totalRooms
                     )
                     .opacity(contentVisible ? 1 : 0)
                     .offset(y: contentVisible ? 0 : 8)

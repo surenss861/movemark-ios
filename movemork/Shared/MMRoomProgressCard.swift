@@ -2,7 +2,7 @@
 //  MMRoomProgressCard.swift
 //  movemork
 //
-//  Room proof progress — next action for renters, not a metrics dashboard.
+//  Proof Sprint coverage. The active room below this card is the star; this states the count.
 //
 
 import SwiftUI
@@ -14,43 +14,48 @@ struct MMRoomProgressCard: View {
     var progressLabel: String? = nil
     let primaryTitle: String
     let onPrimary: () -> Void
+    var documentedCount: Int? = nil
+    var totalCount: Int? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var clampedProgress: Double { min(1, max(0, progress)) }
 
+    private var showsFigure: Bool {
+        guard let totalCount, totalCount > 0, documentedCount != nil else { return false }
+        return true
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(headline)
-                    .font(MoveMarkTheme.Typography.cardTitleCompact)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .mmRowStatusTransition(value: headline)
+        VStack(alignment: .leading, spacing: 14) {
+            if showsFigure, let documentedCount, let totalCount {
+                HStack(alignment: .center, spacing: 12) {
+                    MMCoverageFigure(documented: documentedCount, total: totalCount)
+                    Spacer(minLength: 8)
+                    ProgressRingView(progress: clampedProgress, size: 58, lineWidth: 3)
+                        .accessibilityHidden(true)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(headline)
+                        .font(MoveMarkTheme.Typography.cardTitleCompact)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .mmRowStatusTransition(value: headline)
 
-                Text(nextLine)
-                    .font(MoveMarkTheme.Typography.metadata)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .mmRowStatusTransition(value: nextLine)
-            }
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.white.opacity(0.08))
-                        .frame(height: 6)
-                    Capsule()
-                        .fill(MoveMarkTheme.Colors.primary.opacity(0.88))
-                        .frame(width: max(6, geo.size.width * clampedProgress), height: 6)
-                        .animation(reduceMotion ? nil : MMMotion.proofProgress, value: clampedProgress)
+                    coverageBar
                 }
             }
-            .frame(height: 6)
+
+            Text(nextLine)
+                .font(MoveMarkTheme.Typography.metadata)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .mmRowStatusTransition(value: nextLine)
 
             if let progressLabel, !progressLabel.isEmpty {
                 Text(progressLabel)
-                    .font(MoveMarkTheme.Typography.caption)
+                    .font(MoveMarkTheme.Typography.monoMeta)
                     .foregroundStyle(MoveMarkTheme.Colors.textMuted)
             }
 
@@ -65,13 +70,21 @@ struct MMRoomProgressCard: View {
             )
         }
         .padding(MoveMarkTheme.Spacing.panelPadding)
-        .background(
-            RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.hero, style: .continuous)
-                .fill(MoveMarkTheme.Surface.raised)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.hero, style: .continuous)
-                .stroke(MoveMarkTheme.Stroke.interactive, lineWidth: 1)
-        )
+        .mmCaseFilePlate(emphasis: false)
+    }
+
+    private var coverageBar: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 3)
+                Capsule()
+                    .fill(MoveMarkTheme.Colors.primary.opacity(0.9))
+                    .frame(width: max(3, geo.size.width * clampedProgress), height: 3)
+                    .animation(reduceMotion ? nil : MMMotion.proofProgress, value: clampedProgress)
+            }
+        }
+        .frame(height: 3)
     }
 }

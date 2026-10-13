@@ -80,6 +80,12 @@ class PropertyHydrator @Inject constructor(
             .mapValues { (_, files) ->
                 files.map { EvidencePhoto(UUID.fromString(it.id), it.filePath) }
             }
+        val latestFileAtByItem = allFiles
+            .groupBy { UUID.fromString(it.inspectionItemId!!) }
+            .mapValues { (_, files) -> files.mapNotNull { it.createdAt }.maxOrNull() }
+        val tagCountByItem = snapshot.itemTags
+            .groupBy { it.inspectionItemId }
+            .mapValues { (_, tags) -> tags.size }
 
         val roomRecords = snapshot.rooms.map { roomRow ->
             val roomId = UUID.fromString(roomRow.id)
@@ -90,12 +96,16 @@ class PropertyHydrator @Inject constructor(
                     roomId = roomId,
                     items = moveInItems,
                     photosByItem = photosByItem,
+                    latestFileAtByItem = latestFileAtByItem,
+                    tagCountByItem = tagCountByItem,
                     defaultTitle = "Move-in capture",
                 ),
                 moveOutEvidence = buildEvidenceForRoom(
                     roomId = roomId,
                     items = moveOutItems,
                     photosByItem = photosByItem,
+                    latestFileAtByItem = latestFileAtByItem,
+                    tagCountByItem = tagCountByItem,
                     defaultTitle = "Move-out capture",
                 ),
             )
@@ -108,6 +118,8 @@ class PropertyHydrator @Inject constructor(
             city = propertyRow.city,
             provinceState = propertyRow.provinceState,
             rooms = roomRecords,
+            supportingRecordCount = supportingRecordCount(snapshot),
+            documentTypes = snapshot.documents.map { it.documentType },
         )
     }
 
@@ -128,6 +140,8 @@ class PropertyHydrator @Inject constructor(
         roomId: UUID,
         items: List<InspectionItemRow>,
         photosByItem: Map<UUID, List<EvidencePhoto>>,
+        latestFileAtByItem: Map<UUID, String?>,
+        tagCountByItem: Map<String, Int>,
         defaultTitle: String,
     ): List<EvidenceRecord> {
         return items
@@ -144,8 +158,21 @@ class PropertyHydrator @Inject constructor(
                     photoCount = photos.size,
                     photos = photos,
                     conditionRating = item.conditionRating,
+                    createdAt = latestFileAtByItem[itemId] ?: item.createdAt,
+                    issueTagCount = tagCountByItem[item.id] ?: 0,
                 )
             }
+    }
+
+    /** Lease, deposit receipt, and listing proof. Legacy hyphenated types count. */
+    private fun supportingRecordCount(snapshot: PropertySnapshot): Int {
+        val uploaded = snapshot.documents.map { it.documentType }.toSet()
+        val required = listOf(
+            setOf("lease"),
+            setOf("deposit_receipt", "deposit-receipt"),
+            setOf("listing_screenshot", "listing-screenshot"),
+        )
+        return required.count { keys -> keys.any { it in uploaded } }
     }
 
     private fun parseNotes(raw: String?, defaultTitle: String): Pair<String, String> {

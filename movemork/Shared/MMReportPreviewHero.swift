@@ -26,9 +26,8 @@ struct MMReportPreviewHero: View {
     var isPrimaryDisabled: Bool = false
     var unlockPulse: Bool = false
     var generatedLine: String? = nil
+    var recordId: String? = nil
     let onPrimary: () -> Void
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isDocumentBright: Bool {
         state == .ready
@@ -42,7 +41,8 @@ struct MMReportPreviewHero: View {
                 statusLabel: statusLabel,
                 statusTone: statusTone,
                 footnote: footnote,
-                generatedLine: generatedLine
+                generatedLine: generatedLine,
+                recordId: recordId
             ),
             primaryTitle: primaryTitle,
             onPrimary: {
@@ -50,9 +50,10 @@ struct MMReportPreviewHero: View {
                 onPrimary()
             },
             primaryEnabled: !isPrimaryDisabled,
-            primaryKind: state == .canMake || state == .failed ? .primary : .secondary,
+            primaryKind: state == .canMake || state == .failed || state == .ready ? .primary : .secondary,
             isBright: isDocumentBright,
             isProcessing: state == .processing,
+            isCompact: false,
             proofChips: proofChips
         )
         .mmAppearRise(isVisible: state != .loading, delay: 0.08, offset: 6)
@@ -61,11 +62,11 @@ struct MMReportPreviewHero: View {
 
     private var statusLabel: String {
         switch state {
-        case .loading: return "Checking proof"
+        case .loading: return "Preparing evidence"
         case .notReady: return "Needs proof"
         case .canMake: return "Can be made"
-        case .processing: return "Building"
-        case .ready: return "Ready"
+        case .processing: return "Generating record"
+        case .ready: return "Ready to share"
         case .failed: return "Failed"
         }
     }

@@ -12,6 +12,15 @@ object RoomProofMetrics {
     fun photoCount(room: RoomRecord, phase: ProofPhase = ProofPhase.MoveIn): Int =
         evidenceFor(room, phase).sumOf { it.photoCount }
 
+    fun issueTagCount(room: RoomRecord, phase: ProofPhase = ProofPhase.MoveIn): Int =
+        evidenceFor(room, phase).sumOf { it.issueTagCount }
+
+    fun lastProofAt(property: PropertyRecord): String? =
+        property.rooms
+            .flatMap { it.moveInEvidence + it.moveOutEvidence }
+            .mapNotNull { it.createdAt }
+            .maxOrNull()
+
     fun moveInPhotoCount(room: RoomRecord): Int = photoCount(room, ProofPhase.MoveIn)
 
     fun moveOutPhotoCount(room: RoomRecord): Int = photoCount(room, ProofPhase.MoveOut)

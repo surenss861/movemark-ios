@@ -190,6 +190,12 @@ enum MoveMarkTheme {
         static var tinyMedium: Font { .system(size: scaled(11, for: .caption2), weight: .medium) }
         static var tinyEmphasis: Font { .system(size: scaled(11, for: .caption2), weight: .semibold) }
         static var microLabel: Font { .system(size: scaled(10, for: .caption2), weight: .semibold) }
+        /// Case-file display. Serif so evidence headings are not another SF label.
+        static var editorialTitle: Font { .system(size: scaled(32, for: .title1), weight: .semibold, design: .serif) }
+        static var coverageFigure: Font { .system(size: scaled(44, for: .largeTitle), weight: .medium, design: .serif) }
+        static var statFigure: Font { .system(size: scaled(22, for: .title2), weight: .medium, design: .serif) }
+        static var monoMeta: Font { .system(size: scaled(12, for: .caption1), weight: .medium, design: .monospaced) }
+        static var kicker: Font { .system(size: scaled(11, for: .caption2), weight: .semibold) }
         #else
         static let pageTitle: Font = .system(size: 38, weight: .bold)
         static let heroTitle: Font = .system(size: 28, weight: .bold)
@@ -234,6 +240,11 @@ enum MoveMarkTheme {
         static let tinyMedium: Font = .system(size: 11, weight: .medium)
         static let tinyEmphasis: Font = .system(size: 11, weight: .semibold)
         static let microLabel: Font = .system(size: 10, weight: .semibold)
+        static let editorialTitle: Font = .system(size: 32, weight: .semibold, design: .serif)
+        static let coverageFigure: Font = .system(size: 44, weight: .medium, design: .serif)
+        static let statFigure: Font = .system(size: 22, weight: .medium, design: .serif)
+        static let monoMeta: Font = .system(size: 12, weight: .medium, design: .monospaced)
+        static let kicker: Font = .system(size: 11, weight: .semibold)
         #endif
     }
 }
@@ -379,6 +390,11 @@ extension View {
         mmEmeraldBackground(heroFocus: heroFocus, ctaBloom: ctaBloom)
     }
 
+    /// Layered case-file surface. Green stays out of the fill; emphasis only adds a soft light.
+    func mmCaseFilePlate(cornerRadius: CGFloat = MoveMarkTheme.Radius.hero, emphasis: Bool = false) -> some View {
+        modifier(MMCaseFilePlate(cornerRadius: cornerRadius, emphasis: emphasis))
+    }
+
     /// Keeps scroll content below status bar / TestFlight chrome.
     func mmScrollContentTopInset(_ extra: CGFloat = 0) -> some View {
         safeAreaPadding(.top, extra)
@@ -411,5 +427,54 @@ struct MMSignedInScrollTailSpacer: View {
         case .focusedSignedIn:
             MoveMarkTheme.Spacing.scrollTailFocusedSignedIn
         }
+    }
+}
+
+private struct MMCaseFilePlate: ViewModifier {
+    var cornerRadius: CGFloat
+    var emphasis: Bool
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        content
+            .background {
+                shape
+                    .fill(MoveMarkTheme.Surface.raised)
+                    .overlay {
+                        if emphasis {
+                            RadialGradient(
+                                colors: [
+                                    MoveMarkTheme.Colors.primary.opacity(0.11),
+                                    .clear
+                                ],
+                                center: UnitPoint(x: 0.12, y: 0.0),
+                                startRadius: 4,
+                                endRadius: 240
+                            )
+                            .clipShape(shape)
+                            .allowsHitTesting(false)
+                        }
+                    }
+                    .overlay(alignment: .top) {
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.07), .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: 36)
+                        .clipShape(shape)
+                        .allowsHitTesting(false)
+                    }
+            }
+            .overlay {
+                shape.stroke(Color.white.opacity(emphasis ? 0.12 : 0.08), lineWidth: 0.5)
+            }
+            .compositingGroup()
+            .shadow(
+                color: Color(red: 0.012, green: 0.035, blue: 0.024).opacity(emphasis ? 0.55 : 0.28),
+                radius: emphasis ? 22 : 8,
+                x: 0,
+                y: emphasis ? 14 : 4
+            )
     }
 }

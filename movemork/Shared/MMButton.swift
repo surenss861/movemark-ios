@@ -132,7 +132,7 @@ struct MMButton: View {
                 .foregroundStyle(foregroundColor)
                 // Fixed-height button: shrink long labels ("Capture Primary Bedroom" at AX sizes) before truncating.
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.5)
 
             if showsTrailingArrow {
                 Spacer(minLength: 0)

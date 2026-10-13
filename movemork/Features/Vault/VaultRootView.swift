@@ -154,7 +154,7 @@ struct VaultRootView: View {
             .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
             }
             .scrollIndicators(.hidden, axes: .vertical)
-        .mmProofShellBackground(heroFocus: false, ctaBloom: false)
+        .mmProofShellBackground(heroFocus: true, ctaBloom: false)
         .task { await loadPreviewURLs() }
         .task(id: featuredPropertyId) { await ensureFeaturedPropertyLoaded() }
         .task(id: otherProperties.map(\.id)) { await loadOtherRentalSummaries() }
@@ -187,7 +187,13 @@ struct VaultRootView: View {
             primaryTitle: featuredContinueProofTitle,
             onPrimary: { openFeaturedVaultOrContinue() },
             reportReadyLine: featuredReportReady ? "Move-in report ready" : nil,
-            onViewReport: { path.append(.exports) }
+            onViewReport: { path.append(.exports) },
+            documentedCount: vaultDocumentedCount,
+            totalRooms: vaultTotalRooms,
+            photoCount: vaultPhotoCount,
+            recordCount: vaultRecordCount,
+            issueCount: vaultIssueCount,
+            lastProofLine: vaultLastProofLine
         )
     }
 
@@ -363,6 +369,39 @@ struct VaultRootView: View {
             return "0 of \(total) rooms ready · Start move-in proof"
         }
         return "\(documented) of \(total) rooms ready"
+    }
+
+    private var vaultDocumentedCount: Int? {
+        guard let prop = propertyStore.currentProperty else { return nil }
+        return propertyStore.documentedRoomCount(for: prop)
+    }
+
+    private var vaultTotalRooms: Int? {
+        guard let prop = propertyStore.currentProperty else { return nil }
+        return propertyStore.totalRoomCount(for: prop)
+    }
+
+    private var vaultPhotoCount: Int? {
+        guard let prop = propertyStore.currentProperty else { return nil }
+        return propertyStore.totalPhotoCount(for: prop)
+    }
+
+    private var vaultRecordCount: Int? {
+        guard let prop = propertyStore.currentProperty else { return nil }
+        return propertyStore.uploadedSupportingRecordCount(for: prop)
+    }
+
+    private var vaultIssueCount: Int? {
+        guard let prop = propertyStore.currentProperty else { return nil }
+        return propertyStore.openIssueCount(for: prop)
+    }
+
+    private var vaultLastProofLine: String? {
+        guard let prop = propertyStore.currentProperty else { return nil }
+        guard let latest = prop.rooms.flatMap(\.evidence).map(\.createdAt).max() else { return nil }
+        let day = latest.formatted(.dateTime.month(.abbreviated).day())
+        let time = latest.formatted(.dateTime.hour().minute())
+        return "\(day) · \(time)"
     }
 
     private var vaultCoverageLine: String {

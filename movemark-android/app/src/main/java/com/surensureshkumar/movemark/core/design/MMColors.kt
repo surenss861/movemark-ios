@@ -8,6 +8,9 @@ object MMColors {
     val Surface = Color(0xFF10231B)
     val Card = Color(0xFF10231B)
     val CardRaised = Color(0xFF13291F)
+    /** Near-neutral plate. Green is a signal, not a surface. */
+    val SurfaceRaised = Color(0xFF121815)
+    val SurfaceInteractive = Color(0xFF171D1A)
     val EvidenceCard = Color(0xFF151716)
     val EvidenceCardRaised = Color(0xFF1A1C1B)
     val TabBarFill = Color(0xF008130F)
@@ -17,6 +20,7 @@ object MMColors {
     val TextSecondary = Color(0xFFA8B8AD)
     val TextMuted = Color(0xFF6F8376)
     val SemanticWarning = Color(0xFFD89A1E)
+    val SemanticInfo = Color(0xFF80BAE2)
     val SemanticDanger = Color(0xFFEF5B5B)
     val CardStroke = Color.White.copy(alpha = 0.08f)
     val FieldFill = Color(0xFF0E1E17)
