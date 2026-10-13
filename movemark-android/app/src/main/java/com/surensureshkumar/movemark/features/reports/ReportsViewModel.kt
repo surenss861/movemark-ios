@@ -493,7 +493,7 @@ class ReportsViewModel @Inject constructor(
                     ReportReadiness.ReadyToShare -> "Ready to view or share"
                     ReportReadiness.Processing -> "Building from saved proof"
                     ReportReadiness.Failed -> "Last report failed — retry when ready"
-                    else -> "Unlocks after room proof"
+                    else -> "Unlocks after room proof + docs"
                 },
                 state = reportState,
             ),
@@ -516,7 +516,7 @@ fun disputePrimaryCta(
 ): Triple<String, Boolean, Boolean> {
     if (loading) return Triple("Checking dispute packet…", false, false)
     return when (readiness) {
-        DisputePacketReadiness.NoProof -> Triple("Continue move-in proof", true, false)
+        DisputePacketReadiness.NoProof -> Triple("Continue room proof", true, false)
         DisputePacketReadiness.ReadyToMake ->
             Triple(if (busy) "Building packet…" else "Build dispute packet", !busy, busy)
         DisputePacketReadiness.ReadyToShare ->
@@ -554,10 +554,10 @@ fun moveOutPrimaryCta(
     return when (readiness) {
         MoveOutReportReadiness.NoProof -> Triple("Open move-out proof", true, false)
         MoveOutReportReadiness.ReadyToMake ->
-            Triple(if (busy) "Making move-out report…" else "Make move-out report", !busy, busy)
+            Triple(if (busy) "Making report…" else "Make move-out report", !busy, busy)
         MoveOutReportReadiness.ReadyToShare ->
             Triple(if (busy) "Opening…" else "View / Share", !busy, busy)
-        MoveOutReportReadiness.Processing -> Triple("Building move-out report…", false, false)
+        MoveOutReportReadiness.Processing -> Triple("Building report…", false, false)
         MoveOutReportReadiness.Failed -> Triple(if (busy) "Retrying…" else "Retry report", !busy, busy)
     }
 }
