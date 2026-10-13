@@ -1088,6 +1088,7 @@ struct PropertyVaultView: View {
                     MoveMarkAnalytics.track(.receiptAdded)
                 }
             } catch {
+                await documentRepo.removeStaleUpload(documentType: canonicalType, path: path)
                 uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
                 return
             }
@@ -1193,6 +1194,7 @@ struct PropertyVaultView: View {
                     MoveMarkAnalytics.track(.receiptAdded)
                 }
             } catch {
+                await documentRepo.removeStaleUpload(documentType: canonicalType, path: path)
                 uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
                 lastFailedFileDocType = docType
                 return

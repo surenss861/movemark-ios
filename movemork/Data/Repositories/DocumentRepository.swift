@@ -175,6 +175,8 @@ struct DocumentRepository {
                     await MoveMarkSignedURLCache.shared.invalidateKeys(containing: String(segments[1]))
                 }
                 return path
+            } catch let error as CancellationError {
+                throw error
             } catch {
                 lastError = error
             }
