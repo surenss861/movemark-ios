@@ -34,16 +34,39 @@ struct movemorkApp: App {
     @State private var propertyStore = PropertyStore()
     @State private var subscriptionManager = SubscriptionManager()
 
+    #if DEBUG
+    /// `-MMRichQA vault-9` renders one fixture case. Absent in release builds.
+    private static var richQAScreen: String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let flag = args.firstIndex(of: "-MMRichQA"), args.indices.contains(flag + 1) else { return nil }
+        return args[flag + 1]
+    }
+    #endif
+
+    private var signedInRoot: some View {
+        AppRouter()
+            .environment(sessionManager)
+            .environment(propertyStore)
+            .environment(subscriptionManager)
+            .preferredColorScheme(.dark)
+            .onAppear {
+                MoveMarkAnalytics.track(.appOpened)
+            }
+    }
+
     var body: some Scene {
         WindowGroup {
-            AppRouter()
-                .environment(sessionManager)
-                .environment(propertyStore)
-                .environment(subscriptionManager)
-                .preferredColorScheme(.dark)
-                .onAppear {
-                    MoveMarkAnalytics.track(.appOpened)
+            Group {
+                #if DEBUG
+                if let qaScreen = Self.richQAScreen {
+                    MMRichQAGallery(screen: qaScreen)
+                } else {
+                    signedInRoot
                 }
+                #else
+                signedInRoot
+                #endif
+            }
         }
     }
 }
