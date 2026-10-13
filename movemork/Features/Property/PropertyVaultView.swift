@@ -1057,12 +1057,15 @@ struct PropertyVaultView: View {
         Task { @MainActor in
             defer { isUploading = false }
             let canonicalType = DocumentRepository.normalizedDocumentType(docType)
+            // Replace never removes the current copy up front: it is retired only after the
+            // new file and its row are both saved.
+            var previousRows: [PropertyDocumentRow] = []
             do {
                 if hasVaultDocMatching(docType) {
-                    try await documentRepo.deleteDocuments(propertyId: property.id, documentType: docType)
+                    previousRows = try await documentRepo.fetchDocuments(propertyId: property.id, documentType: docType)
                 }
             } catch {
-                uploadError = MoveMarkFlowMessage.documentDeleteFailed(error)
+                uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
                 return
             }
 
@@ -1119,6 +1122,10 @@ struct PropertyVaultView: View {
                 return
             }
 
+            for old in previousRows where old.id != row.id {
+                await documentRepo.retireDocument(old)
+            }
+
             let metaOK = await propertyStore.refreshDocuments(propertyId: property.id)
             let rowsOK = await refreshDocumentRowsAfterMutation()
             reconcileDocumentRows(anchoring: row)
@@ -1153,12 +1160,15 @@ struct PropertyVaultView: View {
         Task { @MainActor in
             defer { isUploading = false }
             let canonicalType = DocumentRepository.normalizedDocumentType(docType)
+            // Replace never removes the current copy up front: it is retired only after the
+            // new file and its row are both saved.
+            var previousRows: [PropertyDocumentRow] = []
             do {
                 if hasVaultDocMatching(docType) {
-                    try await documentRepo.deleteDocuments(propertyId: property.id, documentType: docType)
+                    previousRows = try await documentRepo.fetchDocuments(propertyId: property.id, documentType: docType)
                 }
             } catch {
-                uploadError = MoveMarkFlowMessage.documentDeleteFailed(error)
+                uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
                 lastFailedFileDocType = docType
                 return
             }
@@ -1217,6 +1227,10 @@ struct PropertyVaultView: View {
                 uploadError = MoveMarkFlowMessage.documentRecordCreateFailed(error)
                 lastFailedFileDocType = docType
                 return
+            }
+
+            for old in previousRows where old.id != row.id {
+                await documentRepo.retireDocument(old)
             }
 
             let metaOK = await propertyStore.refreshDocuments(propertyId: property.id)

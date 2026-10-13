@@ -222,6 +222,24 @@ struct DocumentRepository {
             .execute()
     }
 
+    /// Retires a replaced document after its successor is saved: row first, then the file, so a
+    /// failure can leave an unreferenced file but never a row pointing at a missing one.
+    func retireDocument(_ row: PropertyDocumentRow) async {
+        do {
+            try await supabase
+                .from("property_documents")
+                .delete()
+                .eq("id", value: row.id)
+                .execute()
+        } catch {
+            return
+        }
+        for bucketName in Self.bucketCandidates(for: row.documentType) {
+            try? await removeFromStorage(bucket: bucketName, path: row.filePath)
+        }
+        await MoveMarkSignedURLCache.shared.invalidateKeys(containing: row.propertyId.uuidString)
+    }
+
     /// Deletes all document rows for the given property and type (canonical or legacy spelling).
     func deleteDocuments(propertyId: UUID, documentType: String) async throws {
         let keys = Self.documentTypeQueryKeys(documentType)

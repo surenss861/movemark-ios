@@ -21,6 +21,7 @@ import javax.inject.Singleton
 @Singleton
 class DocumentRepository @Inject constructor(
     private val client: SupabaseClient,
+    private val saveFaults: DocumentSaveFaults,
 ) {
     suspend fun fetchDocuments(propertyId: UUID): List<PropertyDocumentRow> =
         client.from("property_documents").select {
@@ -30,8 +31,11 @@ class DocumentRepository @Inject constructor(
         }.decodeList()
 
     /**
-     * Replaces any existing row of this type, uploads the file, then inserts the record.
+     * Saves a new copy of this document type, then retires the old one.
      * Storage path matches iOS: `{userId}/{propertyId}/{type}/{file}`.
+     *
+     * The existing copy is never touched until the new file and its row are both saved: if
+     * the upload or insert fails, the old document stays exactly as it was.
      */
     suspend fun replaceDocument(
         propertyId: UUID,
@@ -39,14 +43,13 @@ class DocumentRepository @Inject constructor(
         kind: VaultDocumentKind,
         bytes: ByteArray,
         fileName: String,
-        failAfterUpload: Boolean = false,
     ) {
-        deleteDocuments(propertyId, kind)
+        val previous = existingDocuments(propertyId, kind)
         val safeName = fileName.substringAfterLast('/').ifBlank { "document" }
         val path = "$userId/$propertyId/${kind.raw}/${UUID.randomUUID()}-$safeName"
         try {
             upload(kind, path, bytes, contentType(safeName))
-            if (failAfterUpload) {
+            if (saveFaults.failNextInsert()) {
                 throw IllegalStateException("Document record was not saved.")
             }
             val row = DocumentInsert(
@@ -65,6 +68,9 @@ class DocumentRepository @Inject constructor(
             withContext(NonCancellable) { removeStale(kind, path) }
             throw error
         }
+        // The new copy is saved. Retiring the old one is best-effort: a failure here leaves
+        // an extra row (the newest is shown), never a missing document.
+        withContext(NonCancellable) { removeDocuments(kind, previous) }
     }
 
     suspend fun signedUrl(kind: VaultDocumentKind, path: String): String {
@@ -84,20 +90,15 @@ class DocumentRepository @Inject constructor(
         throw last ?: IllegalStateException("Couldn't open that file.")
     }
 
-    private suspend fun deleteDocuments(propertyId: UUID, kind: VaultDocumentKind) {
-        val existing = fetchDocuments(propertyId).filter { row ->
-            kind.queryKeys().contains(row.documentType)
-        }
-        existing.forEach { row ->
-            val buckets = if (kind.storageBucket() == "documents") listOf("documents") else listOf(kind.storageBucket(), "documents")
-            buckets.forEach { bucket -> runCatching { client.storage.from(bucket).delete(row.filePath) } }
-        }
-        kind.queryKeys().forEach { key ->
-            client.from("property_documents").delete {
-                filter {
-                    eq("property_id", propertyId.toString())
-                    eq("document_type", key)
-                }
+    private suspend fun existingDocuments(propertyId: UUID, kind: VaultDocumentKind): List<PropertyDocumentRow> =
+        fetchDocuments(propertyId).filter { row -> kind.queryKeys().contains(row.documentType) }
+
+    private suspend fun removeDocuments(kind: VaultDocumentKind, rows: List<PropertyDocumentRow>) {
+        rows.forEach { row ->
+            runCatching {
+                client.from("property_documents").delete { filter { eq("id", row.id) } }
+            }.onSuccess {
+                removeStale(kind, row.filePath)
             }
         }
     }
