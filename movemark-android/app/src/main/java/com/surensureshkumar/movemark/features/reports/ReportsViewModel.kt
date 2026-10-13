@@ -67,6 +67,9 @@ data class ReportsUiState(
 /** Fallback poll cadence while an export is in flight, as a backstop for a dropped realtime socket. */
 private const val EXPORT_FALLBACK_POLL_INTERVAL_MS = 15_000L
 
+/** Lease, deposit receipt and listing proof — iOS `moveInRequiredDocumentTypes`. */
+private const val REQUIRED_SUPPORTING_RECORDS = 3
+
 enum class ReportPdfAction {
     View,
     Share,
@@ -416,7 +419,7 @@ class ReportsViewModel @Inject constructor(
             totalRooms = total,
             totalPhotos = photos,
             proofChips = buildProofChips(documented, total, photos),
-            checklistItems = buildChecklist(documented, total, readiness, moveOutPhotos),
+            checklistItems = buildChecklist(documented, total, readiness, moveOutPhotos, property.supportingRecordCount),
             exports = exports,
             moveInActionInProgress = moveInBusy,
             moveOutActionInProgress = moveOutBusy,
@@ -444,7 +447,15 @@ class ReportsViewModel @Inject constructor(
         total: Int,
         readiness: ReportReadiness,
         moveOutPhotos: Int,
+        supportingRecords: Int,
     ): List<ReportChecklistItem> {
+        // Same rule as iOS: lease, deposit receipt and listing proof; complete only when all
+        // three are on file, otherwise incomplete (never locked).
+        val docsState = if (supportingRecords >= REQUIRED_SUPPORTING_RECORDS) {
+            ChecklistItemState.Complete
+        } else {
+            ChecklistItemState.Incomplete
+        }
         val roomsState = when {
             total == 0 || documented == 0 -> ChecklistItemState.Incomplete
             documented >= total -> ChecklistItemState.Complete
@@ -469,8 +480,8 @@ class ReportsViewModel @Inject constructor(
             ),
             ReportChecklistItem(
                 title = "Lease & docs",
-                detail = "Add lease and deposit records in your vault",
-                state = ChecklistItemState.Locked,
+                detail = "${supportingRecords.coerceIn(0, REQUIRED_SUPPORTING_RECORDS)} of $REQUIRED_SUPPORTING_RECORDS docs uploaded",
+                state = docsState,
             ),
             ReportChecklistItem(
                 title = "Damage tags",

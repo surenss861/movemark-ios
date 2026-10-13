@@ -128,7 +128,9 @@ fun DocumentsScreen(
                 Spacer(Modifier.height(12.dp))
             }
 
-            MMCaseFilePlate {
+            // Collapsed, this lists only missing priority records (as on iOS); with all three on
+            // file there is nothing to list, so no empty plate — just "See all records".
+            if (visible.isNotEmpty()) MMCaseFilePlate {
                 visible.forEachIndexed { index, kind ->
                     val present = VaultDocumentKind.isPresent(kind, types)
                     if (index > 0) Spacer(Modifier.height(14.dp))

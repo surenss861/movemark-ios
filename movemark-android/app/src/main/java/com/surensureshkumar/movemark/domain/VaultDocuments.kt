@@ -11,7 +11,7 @@ enum class VaultDocumentKind(
     val presentSubtitle: String,
     val acceptsImage: Boolean,
 ) {
-    Lease("lease", "lease", "Tenancy agreement", "Tenancy agreement attached", false),
+    Lease("lease", "Lease", "Tenancy agreement", "Tenancy agreement attached", false),
     DepositReceipt("deposit_receipt", "Deposit receipt", "Payment proof", "Payment proof attached", false),
     ListingScreenshot("listing_screenshot", "Listing proof", "Original listing", "Original listing attached", true),
     CleaningReceipt("cleaning_receipt", "Cleaning receipt", "Cleaning proof", "Cleaning proof attached", false),
