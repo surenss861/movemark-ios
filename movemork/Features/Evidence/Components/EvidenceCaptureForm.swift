@@ -24,11 +24,12 @@ struct EvidenceCaptureForm: View {
     var onRetry: (() -> Void)? = nil
 
     var body: some View {
-        MMCard(tone: .artifact, padding: 18, spacing: 16) {
+        // No card: the form sits in the Room body under a NEW ENTRY label (ROOM_EVIDENCE_RECORD §4).
+        VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(moveOutMode ? "Add move-out proof" : "Details")
-                        .font(MoveMarkTheme.Typography.cardTitle)
+                    Text("Details")
+                        .font(MoveMarkTheme.Typography.sectionTitle)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
                     Text("Title, notes, condition, and optional issue markers.")

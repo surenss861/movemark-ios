@@ -338,7 +338,7 @@ private struct SavedProofPhotoThumbnails: View {
     }
 }
 
-private struct PhotoPreviewFullScreen: View {
+struct PhotoPreviewFullScreen: View {
     let filePath: String
     let onClose: () -> Void
 

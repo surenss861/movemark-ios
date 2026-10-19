@@ -53,6 +53,7 @@ struct EvidenceCaptureView: View {
     @State var proofToast: MMProofToastMessage? = nil
     @State var proofToastVisible = false
     @State var proofScanlineTrigger = 0
+    @State var previewTarget: RoomPhotoPreviewTarget? = nil
 
     var room: RoomRecord? {
         propertyStore.currentProperty?.rooms.first(where: { $0.id == roomID })
@@ -71,71 +72,97 @@ struct EvidenceCaptureView: View {
         return MMRoomProofMetrics.isDocumented(room)
     }
 
-    var body: some View {
-        ZStack {
-            Color.clear
-                .mmProofShellBackground(heroFocus: true, ctaBloom: false)
+    /// Room-level comparison when both phases have photos (shown under the hero).
+    private var compareLine: String? {
+        guard let room else { return nil }
+        let moveIn = room.evidence.reduce(0) { $0 + $1.photoCount }
+        let moveOut = room.moveOutEvidence.reduce(0) { $0 + $1.photoCount }
+        guard moveIn > 0, moveOut > 0 else { return nil }
+        return "MOVE-IN \(moveIn) · MOVE-OUT \(moveOut) PHOTOS"
+    }
 
+    /// Save bar appears only when there is something to save (or a save just happened).
+    private var showsSaveBar: Bool {
+        !loadedImages.isEmpty || isUploading || didJustSave
+    }
+
+    private func resolvePhotoURL(_ path: String) async -> URL? {
+        try? await inspectionRepo.signedURL(bucket: "inspection-media", path: path)
+    }
+
+    private func openPreview(_ photo: EvidencePhoto) {
+        Task {
+            guard let url = await resolvePhotoURL(photo.filePath) else { return }
+            previewTarget = RoomPhotoPreviewTarget(id: photo.id, url: url, filePath: photo.filePath)
+        }
+    }
+
+    var body: some View {
+        GeometryReader { geo in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    EvidenceCaptureHero(
+                    RoomEvidenceHero(
                         roomName: roomName,
-                        room: room,
+                        entries: existingEntries,
                         moveOutMode: moveOutMode,
-                        inspectionRepo: inspectionRepo
+                        topInset: geo.safeAreaInsets.top,
+                        containerSize: geo.size,
+                        resolvePhotoURL: resolvePhotoURL,
+                        onOpenPhoto: { openPreview($0) },
+                        hasPendingPhotos: !loadedImages.isEmpty,
+                        isBusy: isUploading,
+                        onTakePhotos: { presentCameraIfAllowed() },
+                        pickerSelection: $selectedItems,
+                        compareLine: compareLine
                     )
-                    .padding(.bottom, 16)
 
-                    EvidenceCaptureMediaModule(
-                        selectedItems: $selectedItems,
-                        onOpenCamera: { presentCameraIfAllowed() },
-                        loadedImages: loadedImages,
-                        isUploading: isUploading,
-                        moveOutMode: moveOutMode
-                    )
-                    .padding(.bottom, 18)
-                    .mmScanline(trigger: proofScanlineTrigger, intensity: 0.1)
+                    VStack(alignment: .leading, spacing: 0) {
+                        if !existingEntries.isEmpty {
+                            RoomEvidenceBody(
+                                entries: existingEntries,
+                                moveOutMode: moveOutMode,
+                                isBusy: isUploading,
+                                onEdit: { editingEntry = $0 },
+                                onAddPhotos: { appendPhotosEntry = $0 },
+                                onDelete: { deleteConfirmEntry = $0 },
+                                onTakePhotos: { presentCameraIfAllowed() },
+                                pickerSelection: $selectedItems
+                            )
+                            .padding(.top, 10)
+                        }
 
-                    EvidenceCaptureForm(
-                        title: $title,
-                        notes: $notes,
-                        selectedTags: $selectedTags,
-                        selectedCondition: $selectedCondition,
-                        selectedItems: $selectedItems,
-                        loadedImages: loadedImages,
-                        isUploading: isUploading,
-                        errorMessage: errorMessage,
-                        successMessage: successMessage,
-                        moveOutMode: moveOutMode,
-                        fixedIssueTags: fixedIssueTags,
-                        onRetry: { saveEvidence() }
-                    )
-                    .padding(.bottom, 18)
-
-                    EvidenceSavedProofSection(
-                        existingEntries: existingEntries,
-                        moveOutMode: moveOutMode,
-                        inspectionRepo: inspectionRepo,
-                        onEdit: { editingEntry = $0 },
-                        onAddPhotos: { appendPhotosEntry = $0 },
-                        onDelete: { deleteConfirmEntry = $0 }
-                    )
+                        if !loadedImages.isEmpty || errorMessage != nil || successMessage != nil {
+                            newEntrySection
+                                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        }
+                    }
+                    .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
+                    .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
+                    .animation(MMMotion.cardReveal, value: loadedImages.count)
                 }
-                .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.top, 22)
-                .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
+            }
+            .ignoresSafeArea(edges: .top)
+        }
+        .background(MoveMarkTheme.Colors.appBackground.ignoresSafeArea())
+        .safeAreaInset(edge: .bottom) {
+            if showsSaveBar {
+                EvidenceCaptureBottomSaveBar(
+                    photoCount: loadedImages.count,
+                    tagCount: selectedTags.count,
+                    condition: selectedCondition,
+                    isUploading: isUploading,
+                    didJustSave: didJustSave,
+                    moveOutMode: moveOutMode,
+                    onSave: { saveEvidence() }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .safeAreaInset(edge: .bottom) {
-            EvidenceCaptureBottomSaveBar(
-                photoCount: loadedImages.count,
-                tagCount: selectedTags.count,
-                condition: selectedCondition,
-                isUploading: isUploading,
-                didJustSave: didJustSave,
-                moveOutMode: moveOutMode,
-                onSave: { saveEvidence() }
-            )
+        .animation(MMMotion.cardReveal, value: showsSaveBar)
+        .fullScreenCover(item: $previewTarget) { target in
+            PhotoPreviewFullScreen(initialURL: target.url, filePath: target.filePath) {
+                previewTarget = nil
+            }
         }
         .onChange(of: selectedItems) { _, newItems in
             loadSelectedItems(newItems)
@@ -191,6 +218,21 @@ struct EvidenceCaptureView: View {
         }
         .navigationTitle(roomName)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // The room name lives in the hero; keep the bar clear over the photo.
+            ToolbarItem(placement: .principal) {
+                Color.clear.frame(width: 1, height: 1).accessibilityHidden(true)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Text(moveOutMode ? "Move-out" : "Move-in")
+                    .font(MoveMarkTheme.Typography.footnoteEmphasis)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 4)
+                    .accessibilityLabel(moveOutMode ? "Move-out evidence" : "Move-in evidence")
+            }
+        }
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .mmProofToast(message: proofToast, isVisible: proofToastVisible)
         .onAppear {
@@ -205,6 +247,46 @@ struct EvidenceCaptureView: View {
         }
     }
 
+    private var newEntrySection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if !existingEntries.isEmpty {
+                Rectangle().fill(MoveMarkTheme.Colors.divider).frame(height: 0.5)
+            }
+            HStack {
+                Text(moveOutMode ? "New move-out entry" : "New entry")
+                    .font(MoveMarkTheme.Typography.kicker)
+                    .tracking(1.0)
+                    .textCase(.uppercase)
+                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                Spacer()
+                if !loadedImages.isEmpty {
+                    Text(loadedImages.count == 1 ? "1 photo" : "\(loadedImages.count) photos")
+                        .font(MoveMarkTheme.Typography.monoMeta)
+                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                }
+            }
+            if !loadedImages.isEmpty {
+                ProofPhotoGridView(images: loadedImages, isUploading: isUploading)
+                    .mmScanline(trigger: proofScanlineTrigger, intensity: 0.1)
+            }
+            EvidenceCaptureForm(
+                title: $title,
+                notes: $notes,
+                selectedTags: $selectedTags,
+                selectedCondition: $selectedCondition,
+                selectedItems: $selectedItems,
+                loadedImages: loadedImages,
+                isUploading: isUploading,
+                errorMessage: errorMessage,
+                successMessage: successMessage,
+                moveOutMode: moveOutMode,
+                fixedIssueTags: fixedIssueTags,
+                onRetry: { saveEvidence() }
+            )
+        }
+        .padding(.vertical, 18)
+    }
+
     private func presentCameraIfAllowed() {
         MoveMarkCameraPermission.requestPresentationIfEligible(
             onPresentCamera: { showCamera = true },
@@ -213,6 +295,13 @@ struct EvidenceCaptureView: View {
         )
     }
 
+}
+
+/// Full-screen preview of one saved photo (signed URL resolved on tap).
+struct RoomPhotoPreviewTarget: Identifiable {
+    let id: UUID
+    let url: URL
+    let filePath: String
 }
 
 // MARK: - Edit evidence sheet

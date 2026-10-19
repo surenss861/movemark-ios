@@ -202,6 +202,8 @@ enum MoveMarkTheme {
         static var statFigure: Font { .system(size: scaled(22, for: .title2), weight: .medium, design: .serif) }
         static var monoMeta: Font { .system(size: scaled(12, for: .caption1), weight: .medium, design: .monospaced) }
         static var kicker: Font { .system(size: scaled(11, for: .caption2), weight: .semibold) }
+        /// Large sans hero heading ("Primary Bedroom"). Replaces the retired editorial serif on redesigned screens.
+        static var roomTitle: Font { .system(size: scaled(34, for: .largeTitle), weight: .bold) }
         #else
         static let pageTitle: Font = .system(size: 38, weight: .bold)
         static let heroTitle: Font = .system(size: 28, weight: .bold)
@@ -250,6 +252,7 @@ enum MoveMarkTheme {
         static let coverageFigure: Font = .system(size: 44, weight: .medium, design: .serif)
         static let statFigure: Font = .system(size: 22, weight: .medium, design: .serif)
         static let monoMeta: Font = .system(size: 12, weight: .medium, design: .monospaced)
+        static let roomTitle: Font = .system(size: 34, weight: .bold)
         static let kicker: Font = .system(size: 11, weight: .semibold)
         #endif
     }

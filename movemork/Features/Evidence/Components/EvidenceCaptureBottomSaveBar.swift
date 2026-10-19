@@ -55,10 +55,12 @@ struct EvidenceCaptureBottomSaveBar: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(MoveMarkTheme.Colors.evidenceCard)
+        // Floats over the evidence: native material, not another slab.
+        .background(.ultraThinMaterial)
+        .environment(\.colorScheme, .dark)
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(MoveMarkTheme.Colors.cardStroke)
+                .fill(Color.white.opacity(0.08))
                 .frame(height: 0.5)
         }
     }

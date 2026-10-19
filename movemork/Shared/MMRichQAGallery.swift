@@ -14,11 +14,20 @@
 
 #if DEBUG
 import SwiftUI
+import PhotosUI
 
 struct MMRichQAGallery: View {
     let screen: String
 
     var body: some View {
+        if screen.hasPrefix("room-") {
+            RoomQAScreen(screen: screen)
+        } else {
+            standardGallery
+        }
+    }
+
+    private var standardGallery: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 screenBody
@@ -61,68 +70,10 @@ struct MMRichQAGallery: View {
             reports(state: .failed, title: "The report didn’t finish.", chips: ["9 rooms", "24 photos"])
         case "reports-pro":
             reportsPro
-        case "room-photo":
-            roomPlate(name: "Primary Bedroom", moveIn: 4, moveOut: 0, issues: ["Scratch"], moveOutMode: false)
-        case "room-empty":
-            roomPlate(name: "Balcony/Patio", moveIn: 0, moveOut: 0, issues: [], moveOutMode: false)
-        case "room-moveout":
-            roomPlate(name: "Kitchen", moveIn: 4, moveOut: 3, issues: [], moveOutMode: true)
         default:
             Text(screen)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
         }
-    }
-
-    // MARK: - Room (evidence plate)
-
-    private func roomPlate(name: String, moveIn: Int, moveOut: Int, issues: [String], moveOutMode: Bool) -> some View {
-        func entry(_ count: Int, _ stage: EvidenceRecord.Stage, minutesAgo: Double) -> [EvidenceRecord] {
-            guard count > 0 else { return [] }
-            return [EvidenceRecord(
-                title: name,
-                notes: "",
-                issueTags: stage == .moveIn ? issues : [],
-                condition: .good,
-                createdAt: Date().addingTimeInterval(-minutesAgo * 60),
-                photoCount: count,
-                photos: (0..<count).map { _ in EvidencePhoto(id: UUID(), filePath: Self.fixturePhotoPath) },
-                stage: stage
-            )]
-        }
-        let room = RoomRecord(
-            name: name,
-            evidence: entry(moveIn, .moveIn, minutesAgo: 90),
-            moveOutEvidence: entry(moveOut, .moveOut, minutesAgo: 5)
-        )
-        return MMRoomEvidencePlate(
-            roomName: name,
-            room: room,
-            moveOutMode: moveOutMode,
-            resolvePhotoURL: { _ in Self.fixturePhotoURL() }
-        )
-    }
-
-    private static let fixturePhotoPath = "qa-fixture/room-plate.jpg"
-
-    /// A drawn stand-in for a room photo (warm wall, floor, window light), written to a temp file.
-    private static func fixturePhotoURL() -> URL? {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("mm-qa-room-plate.jpg")
-        if FileManager.default.fileExists(atPath: url.path) { return url }
-        let size = CGSize(width: 1200, height: 900)
-        let image = UIGraphicsImageRenderer(size: size).image { ctx in
-            let c = ctx.cgContext
-            UIColor(red: 0.78, green: 0.72, blue: 0.62, alpha: 1).setFill()
-            c.fill(CGRect(origin: .zero, size: size))
-            UIColor(red: 0.45, green: 0.33, blue: 0.22, alpha: 1).setFill()
-            c.fill(CGRect(x: 0, y: 620, width: 1200, height: 280))
-            UIColor(red: 0.93, green: 0.95, blue: 0.98, alpha: 1).setFill()
-            c.fill(CGRect(x: 760, y: 120, width: 300, height: 380))
-            UIColor(white: 0.95, alpha: 1).setFill()
-            c.fill(CGRect(x: 0, y: 600, width: 1200, height: 24))
-        }
-        guard let data = image.jpegData(compressionQuality: 0.85) else { return nil }
-        try? data.write(to: url)
-        return url
     }
 
     private func vault(
@@ -259,4 +210,161 @@ struct MMRichQAGallery: View {
         }
     }
 }
+
+// MARK: - Room QA (full-bleed; mirrors EvidenceCaptureView composition)
+
+private struct RoomQAScreen: View {
+    let screen: String
+    @State private var picker: [PhotosPickerItem] = []
+    @State private var title = ""
+    @State private var notes = ""
+    @State private var tags: Set<String> = ["Scratch"]
+    @State private var condition: RoomRecord.ConditionRating = .fair
+
+    private struct Fixture {
+        var name: String
+        var moveIn: [EvidenceRecord] = []
+        var moveOut: [EvidenceRecord] = []
+        var moveOutMode = false
+        var pending = 0
+    }
+
+    private var fixture: Fixture {
+        switch screen {
+        case "room-one":
+            return Fixture(name: "Primary Bedroom", moveIn: [Self.entry("Primary Bedroom", photos: 1, seed: 0, minutesAgo: 40)])
+        case "room-many":
+            return Fixture(name: "Kitchen", moveIn: [
+                Self.entry("Counters and cabinets", photos: 4, seed: 1, minutesAgo: 20),
+                Self.entry("Appliances", photos: 3, seed: 5, minutesAgo: 60),
+                Self.entry("Kitchen", photos: 2, seed: 8, minutesAgo: 90),
+            ])
+        case "room-damage":
+            return Fixture(name: "Living Room", moveIn: [
+                Self.entry("North wall", photos: 3, seed: 2, minutesAgo: 15, tags: ["Scratch", "Chipped paint"], condition: .fair,
+                           notes: "Two scratches beside the window, about 20 cm long. Paint chipped at the baseboard corner."),
+                Self.entry("Floor by the balcony door", photos: 2, seed: 6, minutesAgo: 50, tags: ["Water damage"], condition: .belowFair,
+                           notes: "Swollen laminate seam, already there at move-in."),
+            ])
+        case "room-moveout":
+            return Fixture(name: "Kitchen",
+                           moveIn: [Self.entry("Kitchen", photos: 4, seed: 1, minutesAgo: 60 * 24 * 300)],
+                           moveOut: [Self.entry("Kitchen at move-out", photos: 3, seed: 3, minutesAgo: 10)],
+                           moveOutMode: true)
+        case "room-pending":
+            return Fixture(name: "Living Room", pending: 3)
+        case "room-long":
+            return Fixture(name: "Primary Bedroom Closet and Ensuite Bathroom",
+                           moveIn: [Self.entry("Closet", photos: 2, seed: 4, minutesAgo: 30, tags: ["Stain"])])
+        default: // room-empty
+            return Fixture(name: "Balcony/Patio")
+        }
+    }
+
+    var body: some View {
+        let f = fixture
+        let entries = f.moveOutMode ? f.moveOut : f.moveIn
+        let pendingImages = (0..<f.pending).compactMap { Self.drawnPhoto(seed: $0 + 2) }
+        GeometryReader { geo in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    RoomEvidenceHero(
+                        roomName: f.name,
+                        entries: entries,
+                        moveOutMode: f.moveOutMode,
+                        topInset: geo.safeAreaInsets.top,
+                        containerSize: geo.size,
+                        resolvePhotoURL: { Self.fixtureURL(path: $0) },
+                        hasPendingPhotos: !pendingImages.isEmpty,
+                        pickerSelection: $picker,
+                        compareLine: f.moveOutMode && !f.moveIn.isEmpty
+                            ? "MOVE-IN \(f.moveIn.reduce(0) { $0 + $1.photoCount }) · MOVE-OUT \(f.moveOut.reduce(0) { $0 + $1.photoCount }) PHOTOS"
+                            : nil
+                    )
+                    VStack(alignment: .leading, spacing: 16) {
+                        if !entries.isEmpty {
+                            RoomEvidenceBody(
+                                entries: entries, moveOutMode: f.moveOutMode, isBusy: false,
+                                onEdit: { _ in }, onAddPhotos: { _ in }, onDelete: { _ in },
+                                onTakePhotos: {}, pickerSelection: $picker
+                            )
+                            .padding(.top, 10)
+                        }
+                        if !pendingImages.isEmpty {
+                            Text("New entry")
+                                .font(MoveMarkTheme.Typography.kicker).tracking(1.0).textCase(.uppercase)
+                                .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                                .padding(.top, 18)
+                            ProofPhotoGridView(images: pendingImages)
+                            EvidenceCaptureForm(
+                                title: $title, notes: $notes, selectedTags: $tags, selectedCondition: $condition,
+                                selectedItems: $picker, loadedImages: pendingImages, isUploading: false,
+                                errorMessage: nil, successMessage: nil, moveOutMode: false,
+                                fixedIssueTags: ["Scratch", "Stain", "Water damage", "Chipped paint", "Cracked tile", "Appliance damage"]
+                            )
+                        }
+                    }
+                    .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
+                    .padding(.bottom, 120)
+                }
+            }
+            .ignoresSafeArea(edges: .top)
+        }
+        .background(MoveMarkTheme.Colors.appBackground.ignoresSafeArea())
+        .safeAreaInset(edge: .bottom) {
+            if !pendingImages.isEmpty {
+                EvidenceCaptureBottomSaveBar(
+                    photoCount: pendingImages.count, tagCount: tags.count, condition: condition,
+                    isUploading: false, didJustSave: false, moveOutMode: false, onSave: {}
+                )
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private static func entry(
+        _ title: String, photos: Int, seed: Int, minutesAgo: Double,
+        tags: [String] = [], condition: RoomRecord.ConditionRating = .good, notes: String = ""
+    ) -> EvidenceRecord {
+        EvidenceRecord(
+            title: title, notes: notes, issueTags: tags, condition: condition,
+            createdAt: Date().addingTimeInterval(-minutesAgo * 60),
+            photoCount: photos,
+            photos: (0..<photos).map { EvidencePhoto(id: UUID(), filePath: "qa-fixture/room-\(seed + $0).jpg") },
+            stage: .moveIn
+        )
+    }
+
+    /// Drawn stand-ins for room photos (wall, floor, window light), varied by seed.
+    private static func drawnPhoto(seed: Int) -> UIImage? {
+        let palettes: [(UIColor, UIColor)] = [
+            (UIColor(red: 0.78, green: 0.72, blue: 0.62, alpha: 1), UIColor(red: 0.45, green: 0.33, blue: 0.22, alpha: 1)),
+            (UIColor(red: 0.86, green: 0.86, blue: 0.83, alpha: 1), UIColor(red: 0.55, green: 0.50, blue: 0.44, alpha: 1)),
+            (UIColor(red: 0.70, green: 0.76, blue: 0.74, alpha: 1), UIColor(red: 0.36, green: 0.30, blue: 0.26, alpha: 1)),
+            (UIColor(red: 0.91, green: 0.85, blue: 0.76, alpha: 1), UIColor(red: 0.62, green: 0.47, blue: 0.33, alpha: 1)),
+        ]
+        let (wall, floor) = palettes[seed % palettes.count]
+        let size = CGSize(width: 1200, height: 1400)
+        return UIGraphicsImageRenderer(size: size).image { ctx in
+            let c = ctx.cgContext
+            wall.setFill(); c.fill(CGRect(origin: .zero, size: size))
+            floor.setFill(); c.fill(CGRect(x: 0, y: 960, width: 1200, height: 440))
+            UIColor(white: 0.97, alpha: 1).setFill()
+            c.fill(CGRect(x: 0, y: 940, width: 1200, height: 22))
+            UIColor(red: 0.92, green: 0.95, blue: 0.99, alpha: 1).setFill()
+            c.fill(CGRect(x: CGFloat(200 + (seed * 170) % 600), y: 220, width: 320, height: 460))
+        }
+    }
+
+    private static func fixtureURL(path: String) -> URL? {
+        let seed = Int(path.filter(\.isNumber)) ?? 0
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("mm-qa-room-\(seed).jpg")
+        if !FileManager.default.fileExists(atPath: url.path),
+           let data = drawnPhoto(seed: seed)?.jpegData(compressionQuality: 0.85) {
+            try? data.write(to: url)
+        }
+        return url
+    }
+}
+
 #endif
