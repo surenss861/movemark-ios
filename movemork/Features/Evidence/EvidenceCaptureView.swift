@@ -81,7 +81,8 @@ struct EvidenceCaptureView: View {
                     EvidenceCaptureHero(
                         roomName: roomName,
                         room: room,
-                        moveOutMode: moveOutMode
+                        moveOutMode: moveOutMode,
+                        inspectionRepo: inspectionRepo
                     )
                     .padding(.bottom, 16)
 

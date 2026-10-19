@@ -5,6 +5,12 @@
 //  Debug-only runtime check for the three rich screens. Launch with -MMRichQA <case>.
 //  Not a product screen.
 //
+//  @file Debug-only fixture gallery for visual QA (vault-*, sprint-*, reports-*, room-*)
+//  @domain design-system
+//  @status stable
+//  @see [[RichQAActivity.kt]] — Android counterpart (same case names)
+//  @see [[ROOM_EVIDENCE_RECORD]] — room-* cases verify this spec
+//
 
 #if DEBUG
 import SwiftUI
@@ -55,10 +61,68 @@ struct MMRichQAGallery: View {
             reports(state: .failed, title: "The report didn’t finish.", chips: ["9 rooms", "24 photos"])
         case "reports-pro":
             reportsPro
+        case "room-photo":
+            roomPlate(name: "Primary Bedroom", moveIn: 4, moveOut: 0, issues: ["Scratch"], moveOutMode: false)
+        case "room-empty":
+            roomPlate(name: "Balcony/Patio", moveIn: 0, moveOut: 0, issues: [], moveOutMode: false)
+        case "room-moveout":
+            roomPlate(name: "Kitchen", moveIn: 4, moveOut: 3, issues: [], moveOutMode: true)
         default:
             Text(screen)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
         }
+    }
+
+    // MARK: - Room (evidence plate)
+
+    private func roomPlate(name: String, moveIn: Int, moveOut: Int, issues: [String], moveOutMode: Bool) -> some View {
+        func entry(_ count: Int, _ stage: EvidenceRecord.Stage, minutesAgo: Double) -> [EvidenceRecord] {
+            guard count > 0 else { return [] }
+            return [EvidenceRecord(
+                title: name,
+                notes: "",
+                issueTags: stage == .moveIn ? issues : [],
+                condition: .good,
+                createdAt: Date().addingTimeInterval(-minutesAgo * 60),
+                photoCount: count,
+                photos: (0..<count).map { _ in EvidencePhoto(id: UUID(), filePath: Self.fixturePhotoPath) },
+                stage: stage
+            )]
+        }
+        let room = RoomRecord(
+            name: name,
+            evidence: entry(moveIn, .moveIn, minutesAgo: 90),
+            moveOutEvidence: entry(moveOut, .moveOut, minutesAgo: 5)
+        )
+        return MMRoomEvidencePlate(
+            roomName: name,
+            room: room,
+            moveOutMode: moveOutMode,
+            resolvePhotoURL: { _ in Self.fixturePhotoURL() }
+        )
+    }
+
+    private static let fixturePhotoPath = "qa-fixture/room-plate.jpg"
+
+    /// A drawn stand-in for a room photo (warm wall, floor, window light), written to a temp file.
+    private static func fixturePhotoURL() -> URL? {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("mm-qa-room-plate.jpg")
+        if FileManager.default.fileExists(atPath: url.path) { return url }
+        let size = CGSize(width: 1200, height: 900)
+        let image = UIGraphicsImageRenderer(size: size).image { ctx in
+            let c = ctx.cgContext
+            UIColor(red: 0.78, green: 0.72, blue: 0.62, alpha: 1).setFill()
+            c.fill(CGRect(origin: .zero, size: size))
+            UIColor(red: 0.45, green: 0.33, blue: 0.22, alpha: 1).setFill()
+            c.fill(CGRect(x: 0, y: 620, width: 1200, height: 280))
+            UIColor(red: 0.93, green: 0.95, blue: 0.98, alpha: 1).setFill()
+            c.fill(CGRect(x: 760, y: 120, width: 300, height: 380))
+            UIColor(white: 0.95, alpha: 1).setFill()
+            c.fill(CGRect(x: 0, y: 600, width: 1200, height: 24))
+        }
+        guard let data = image.jpegData(compressionQuality: 0.85) else { return nil }
+        try? data.write(to: url)
+        return url
     }
 
     private func vault(

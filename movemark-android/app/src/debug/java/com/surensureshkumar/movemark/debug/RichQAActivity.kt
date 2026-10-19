@@ -1,5 +1,18 @@
+/**
+ * @file Debug-only fixture gallery for visual QA (vault-*, sprint-*, reports-*, room-*)
+ * @domain design-system
+ * @status stable
+ * @see [[MMRichQAGallery.swift]] — iOS counterpart (same case names)
+ * @see [[ROOM_EVIDENCE_RECORD]] — room-* cases verify this spec
+ */
 package com.surensureshkumar.movemark.debug
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color as AndroidColor
+import android.graphics.Paint
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -13,18 +26,24 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.MMTheme
+import com.surensureshkumar.movemark.core.design.components.MMRoomEvidencePlate
 import com.surensureshkumar.movemark.core.design.components.MMRoomProgressCard
 import com.surensureshkumar.movemark.core.design.components.MMRoomProofRow
 import com.surensureshkumar.movemark.core.design.components.MMVaultProofHeroCard
 import com.surensureshkumar.movemark.data.export.ReportReadiness
+import com.surensureshkumar.movemark.data.models.EvidencePhoto
 import com.surensureshkumar.movemark.data.models.EvidenceRecord
 import com.surensureshkumar.movemark.data.models.RoomRecord
+import com.surensureshkumar.movemark.domain.ProofPhase
 import com.surensureshkumar.movemark.features.reports.components.MMReportExportSection
 import com.surensureshkumar.movemark.features.reports.components.MMReportPreviewHero
+import java.io.File
+import java.time.Instant
 import java.util.UUID
 
 /** Debug-only. Start with: adb shell am start -n com.surensureshkumar.movemark/.debug.RichQAActivity --es case vault-9 */
@@ -77,6 +96,9 @@ private fun QACase(screen: String) {
         )
         "reports-failed" -> ReportCase(ReportReadiness.Failed, "The report didn’t finish.", listOf("9 rooms", "24 photos"), "Try again")
         "reports-pro" -> ProCase()
+        "room-photo" -> RoomPlateCase("Primary Bedroom", moveIn = 4, moveOut = 0, issues = 1, phase = ProofPhase.MoveIn)
+        "room-empty" -> RoomPlateCase("Balcony/Patio", moveIn = 0, moveOut = 0, issues = 0, phase = ProofPhase.MoveIn)
+        "room-moveout" -> RoomPlateCase("Kitchen", moveIn = 4, moveOut = 3, issues = 0, phase = ProofPhase.MoveOut)
         else -> VaultCase(9, 24, "123 Main St", "Primary Bedroom")
     }
 }
@@ -192,4 +214,56 @@ private fun qaRoom(name: String, photos: Int): RoomRecord {
         listOf(EvidenceRecord(id = UUID.randomUUID(), title = name, notes = "", photoCount = photos))
     }
     return RoomRecord(id = UUID.randomUUID(), name = name, moveInEvidence = evidence)
+}
+
+/** Same fixtures as iOS `MMRichQAGallery` room cases; the photo is drawn, not a real one. */
+@Composable
+private fun RoomPlateCase(name: String, moveIn: Int, moveOut: Int, issues: Int, phase: ProofPhase) {
+    val context = LocalContext.current
+    fun entries(count: Int, minutesAgo: Long, tags: Int) = if (count == 0) emptyList() else listOf(
+        EvidenceRecord(
+            id = UUID.randomUUID(),
+            title = name,
+            notes = "",
+            photoCount = count,
+            photos = List(count) { EvidencePhoto(UUID.randomUUID(), "qa-fixture/room-plate.jpg") },
+            conditionRating = 4,
+            createdAt = Instant.now().minusSeconds(minutesAgo * 60).toString(),
+            issueTagCount = tags,
+        ),
+    )
+    val room = RoomRecord(
+        id = UUID.randomUUID(),
+        name = name,
+        moveInEvidence = entries(moveIn, 90, issues),
+        moveOutEvidence = entries(moveOut, 5, 0),
+    )
+    MMRoomEvidencePlate(
+        roomName = name,
+        room = room,
+        proofPhase = phase,
+        shotPrompts = listOf(
+            "Take a wide room photo",
+            "Photograph walls and baseboards",
+            "Photograph floors",
+            "Photograph windows / blinds",
+        ),
+        signPhotoUrl = { fixturePhotoUri(context) },
+    )
+}
+
+/** Warm wall, floor and window light, written once to the cache dir. */
+private fun fixturePhotoUri(context: Context): String {
+    val file = File(context.cacheDir, "mm-qa-room-plate.jpg")
+    if (!file.exists()) {
+        val bmp = Bitmap.createBitmap(1200, 900, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val p = Paint()
+        p.color = AndroidColor.rgb(199, 184, 158); c.drawRect(0f, 0f, 1200f, 900f, p)
+        p.color = AndroidColor.rgb(115, 84, 56); c.drawRect(0f, 620f, 1200f, 900f, p)
+        p.color = AndroidColor.rgb(237, 242, 250); c.drawRect(760f, 120f, 1060f, 500f, p)
+        p.color = AndroidColor.rgb(242, 242, 242); c.drawRect(0f, 600f, 1200f, 624f, p)
+        file.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+    }
+    return Uri.fromFile(file).toString()
 }

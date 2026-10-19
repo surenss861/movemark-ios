@@ -187,7 +187,9 @@ fun RoomProofScreen(
 
                 RoomProofCaptureHero(
                     roomName = room?.name ?: "Room",
+                    room = room,
                     proofPhase = proofPhase,
+                    signPhotoUrl = viewModel::signedPhotoUrl,
                 )
                 Spacer(Modifier.height(20.dp))
 

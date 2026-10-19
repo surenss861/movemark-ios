@@ -11,6 +11,7 @@ import com.surensureshkumar.movemark.core.util.toJpegBytes
 import com.surensureshkumar.movemark.data.auth.SessionManager
 import com.surensureshkumar.movemark.data.models.RoomRecord
 import com.surensureshkumar.movemark.data.property.EvidenceUploadContext
+import com.surensureshkumar.movemark.data.property.InspectionRepository
 import com.surensureshkumar.movemark.data.property.PropertyStore
 import com.surensureshkumar.movemark.domain.ProofPhase
 import com.surensureshkumar.movemark.core.navigation.Routes
@@ -41,8 +42,13 @@ class RoomProofViewModel @Inject constructor(
     private val propertyStore: PropertyStore,
     private val receiptCache: SavedProofReceiptCache,
     private val cameraResultHolder: CameraCaptureResultHolder,
+    private val inspectionRepository: InspectionRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
+    /** Signed URL for a saved evidence photo (the Room hero plate); null if signing fails. */
+    suspend fun signedPhotoUrl(path: String): String? =
+        runCatching { inspectionRepository.signedUrl(path) }.getOrNull()
+
     val roomId: UUID? = runCatching {
         UUID.fromString(checkNotNull(savedStateHandle.get<String>(Routes.RoomProofArg)))
     }.getOrNull()
