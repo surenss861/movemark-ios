@@ -78,14 +78,14 @@ class PropertyHydrator @Inject constructor(
         val photosByItem = allFiles
             .groupBy { UUID.fromString(it.inspectionItemId!!) }
             .mapValues { (_, files) ->
-                files.map { EvidencePhoto(UUID.fromString(it.id), it.filePath) }
+                files.map { EvidencePhoto(UUID.fromString(it.id), it.filePath, it.thumbnailPath) }
             }
         val latestFileAtByItem = allFiles
             .groupBy { UUID.fromString(it.inspectionItemId!!) }
             .mapValues { (_, files) -> files.mapNotNull { it.createdAt }.maxOrNull() }
-        val tagCountByItem = snapshot.itemTags
+        val tagsByItem = snapshot.itemTags
             .groupBy { it.inspectionItemId }
-            .mapValues { (_, tags) -> tags.size }
+            .mapValues { (_, tags) -> tags.map { it.name } }
 
         val roomRecords = snapshot.rooms.map { roomRow ->
             val roomId = UUID.fromString(roomRow.id)
@@ -97,7 +97,7 @@ class PropertyHydrator @Inject constructor(
                     items = moveInItems,
                     photosByItem = photosByItem,
                     latestFileAtByItem = latestFileAtByItem,
-                    tagCountByItem = tagCountByItem,
+                    tagsByItem = tagsByItem,
                     defaultTitle = "Move-in capture",
                 ),
                 moveOutEvidence = buildEvidenceForRoom(
@@ -105,7 +105,7 @@ class PropertyHydrator @Inject constructor(
                     items = moveOutItems,
                     photosByItem = photosByItem,
                     latestFileAtByItem = latestFileAtByItem,
-                    tagCountByItem = tagCountByItem,
+                    tagsByItem = tagsByItem,
                     defaultTitle = "Move-out capture",
                 ),
             )
@@ -141,7 +141,7 @@ class PropertyHydrator @Inject constructor(
         items: List<InspectionItemRow>,
         photosByItem: Map<UUID, List<EvidencePhoto>>,
         latestFileAtByItem: Map<UUID, String?>,
-        tagCountByItem: Map<String, Int>,
+        tagsByItem: Map<String, List<String>>,
         defaultTitle: String,
     ): List<EvidenceRecord> {
         return items
@@ -159,7 +159,8 @@ class PropertyHydrator @Inject constructor(
                     photos = photos,
                     conditionRating = item.conditionRating,
                     createdAt = latestFileAtByItem[itemId] ?: item.createdAt,
-                    issueTagCount = tagCountByItem[item.id] ?: 0,
+                    issueTagCount = tagsByItem[item.id]?.size ?: 0,
+                    issueTags = tagsByItem[item.id].orEmpty(),
                 )
             }
     }

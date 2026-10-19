@@ -10,4 +10,6 @@ data class EvidenceUploadContext(
     val propertyId: UUID,
     val userId: UUID,
     val proofPhase: ProofPhase,
+    /** Linked after the photos save (best-effort, as on iOS). */
+    val issueTags: List<String> = emptyList(),
 )

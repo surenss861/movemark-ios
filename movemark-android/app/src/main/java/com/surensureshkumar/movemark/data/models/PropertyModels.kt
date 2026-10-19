@@ -75,6 +75,27 @@ data class ItemTagRow(
     val name: String,
 )
 
+/** `issue_tags` row — the fixed damage vocabulary (see iOS `fixedIssueTags`). */
+@Serializable
+data class IssueTagRow(
+    val id: String,
+    val name: String,
+)
+
+/** `inspection_item_tags` link row. */
+@Serializable
+data class InspectionItemTagLink(
+    @SerialName("inspection_item_id") val inspectionItemId: String,
+    @SerialName("issue_tag_id") val issueTagId: String,
+)
+
+/** Patch for `inspection_items` (title is encoded as the first line of `notes`, as on iOS). */
+@Serializable
+data class InspectionItemPatch(
+    val notes: String,
+    @SerialName("condition_rating") val conditionRating: Int,
+)
+
 /** Mirrors `property_documents` columns (see iOS `DocumentRepository.PropertyDocumentRow` for the same schema). */
 @Serializable
 data class PropertyDocumentRow(
@@ -110,6 +131,8 @@ data class PropertySnapshot(
 data class EvidencePhoto(
     val id: UUID,
     val filePath: String,
+    /** ~320px JPEG for grids; null on rows captured before thumbnails existed (fall back to filePath). */
+    val thumbnailPath: String? = null,
 )
 
 data class EvidenceRecord(
@@ -122,6 +145,8 @@ data class EvidenceRecord(
     val conditionRating: Int? = null,
     val createdAt: String? = null,
     val issueTagCount: Int = 0,
+    /** Issue tag names (`issue_tags.name`) linked to this entry — same set iOS shows and edits. */
+    val issueTags: List<String> = emptyList(),
 )
 
 data class RoomRecord(

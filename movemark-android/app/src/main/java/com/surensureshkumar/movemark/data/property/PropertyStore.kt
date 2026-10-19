@@ -202,6 +202,8 @@ class PropertyStore @Inject constructor(
     }
 
     private companion object {
+        /** "Good" — iOS `RoomRecord.ConditionRating.good`, the capture form's default. */
+        const val DEFAULT_CONDITION_RATING = 4
         const val UPLOAD_TAG = "MoveMarkUpload"
         const val UPLOAD_FAILURE_MESSAGE =
             "Photos couldn't upload. Check your connection and try again."
@@ -214,13 +216,15 @@ class PropertyStore @Inject constructor(
         propertyId: UUID,
         userId: UUID,
         proofPhase: ProofPhase = ProofPhase.MoveIn,
+        conditionRating: Int = DEFAULT_CONDITION_RATING,
+        issueTags: List<String> = emptyList(),
     ): EvidenceUploadContext {
         val inspectionId = inspectionRepository.upsertInspection(propertyId, userId, proofPhase.key)
         val itemId = inspectionRepository.insertInspectionItem(
             inspectionId = inspectionId,
             roomId = roomId,
             notes = "$title\n$notes",
-            conditionRating = 4,
+            conditionRating = conditionRating,
         )
         return EvidenceUploadContext(
             inspectionItemId = itemId,
@@ -229,6 +233,7 @@ class PropertyStore @Inject constructor(
             propertyId = propertyId,
             userId = userId,
             proofPhase = proofPhase,
+            issueTags = issueTags,
         )
     }
 
@@ -272,6 +277,11 @@ class PropertyStore @Inject constructor(
             }
             throw IllegalStateException(UPLOAD_FAILURE_MESSAGE)
         }
+        // Tags are optional metadata: a failure here must not turn a saved entry into "save failed".
+        if (context.issueTags.isNotEmpty()) {
+            runCatching { inspectionRepository.insertItemTags(context.inspectionItemId, context.issueTags) }
+                .onFailure { Log.e(UPLOAD_TAG, "insertItemTags failed after save (evidence stored)", it) }
+        }
         applyOptimisticEvidence(
             context.roomId,
             context.inspectionItemId,
@@ -281,6 +291,53 @@ class PropertyStore @Inject constructor(
         )
         val refreshed = refreshActive(context.userId)
         return SaveEvidenceResult(uploadedCount, attemptedCount, refreshed)
+    }
+
+    /** Edit a saved entry. Mirrors iOS `updateEvidence`: item first, then replace its tag links. */
+    suspend fun updateEvidence(
+        entryId: UUID,
+        title: String,
+        notes: String,
+        issueTags: List<String>,
+        conditionRating: Int,
+        userId: UUID,
+    ): Boolean {
+        inspectionRepository.updateInspectionItem(entryId, "$title\n$notes", conditionRating)
+        inspectionRepository.deleteItemTags(entryId)
+        if (issueTags.isNotEmpty()) inspectionRepository.insertItemTags(entryId, issueTags)
+        return refreshActive(userId)
+    }
+
+    /** Delete a saved entry with its photos and tags. Mirrors iOS `deleteEvidence`. */
+    suspend fun deleteEvidence(entryId: UUID, userId: UUID): Boolean {
+        inspectionRepository.deleteInspectionItem(entryId)
+        return refreshActive(userId)
+    }
+
+    /**
+     * Add photos to an existing entry. Unlike a new save, a failed batch never deletes the
+     * entry — it already holds the user's earlier photos.
+     */
+    suspend fun appendPhotosToEvidence(
+        entryId: UUID,
+        roomId: UUID,
+        proofPhase: ProofPhase,
+        photos: List<ByteArray>,
+        propertyId: UUID,
+        userId: UUID,
+    ): SaveEvidenceResult {
+        val context = EvidenceUploadContext(
+            inspectionItemId = entryId,
+            roomId = roomId,
+            title = "",
+            propertyId = propertyId,
+            userId = userId,
+            proofPhase = proofPhase,
+        )
+        val saved = photos.count { uploadSingleEvidencePhoto(context, it) }
+        if (saved == 0) throw IllegalStateException(UPLOAD_FAILURE_MESSAGE)
+        val refreshed = refreshActive(userId)
+        return SaveEvidenceResult(saved, photos.size, refreshed)
     }
 
     suspend fun abandonEvidenceUpload(context: EvidenceUploadContext) {

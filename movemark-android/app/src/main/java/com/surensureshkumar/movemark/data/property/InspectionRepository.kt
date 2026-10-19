@@ -1,8 +1,11 @@
 package com.surensureshkumar.movemark.data.property
 
 import com.surensureshkumar.movemark.data.models.EvidenceFileRow
+import com.surensureshkumar.movemark.data.models.InspectionItemPatch
 import com.surensureshkumar.movemark.data.models.InspectionItemRow
+import com.surensureshkumar.movemark.data.models.InspectionItemTagLink
 import com.surensureshkumar.movemark.data.models.InspectionRow
+import com.surensureshkumar.movemark.data.models.IssueTagRow
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
@@ -202,6 +205,29 @@ class InspectionRepository @Inject constructor(
         }
     }
 
+    /** Links tag names to an item via `issue_tags` ids (unknown names are skipped, as on iOS). */
+    suspend fun insertItemTags(inspectionItemId: UUID, tagNames: List<String>) {
+        if (tagNames.isEmpty()) return
+        val tags = client.from("issue_tags")
+            .select { filter { isIn("name", tagNames) } }
+            .decodeList<IssueTagRow>()
+        val links = tags.map { InspectionItemTagLink(inspectionItemId.toString(), it.id) }
+        if (links.isNotEmpty()) client.from("inspection_item_tags").insert(links)
+    }
+
+    suspend fun deleteItemTags(inspectionItemId: UUID) {
+        client.from("inspection_item_tags").delete {
+            filter { eq("inspection_item_id", inspectionItemId.toString()) }
+        }
+    }
+
+    suspend fun updateInspectionItem(id: UUID, notes: String, conditionRating: Int) {
+        client.from("inspection_items").update(InspectionItemPatch(notes, conditionRating)) {
+            filter { eq("id", id.toString()) }
+        }
+    }
+
+    /** Same order as iOS: files (storage, then rows), then tag links, then the item. */
     suspend fun deleteInspectionItem(id: UUID) {
         val files = client.from("evidence_files")
             .select { filter { eq("inspection_item_id", id.toString()) } }
@@ -210,6 +236,7 @@ class InspectionRepository @Inject constructor(
             runCatching { client.storage.from(EVIDENCE_BUCKET).delete(file.filePath) }
         }
         client.from("evidence_files").delete { filter { eq("inspection_item_id", id.toString()) } }
+        deleteItemTags(id)
         client.from("inspection_items").delete { filter { eq("id", id.toString()) } }
     }
 }
