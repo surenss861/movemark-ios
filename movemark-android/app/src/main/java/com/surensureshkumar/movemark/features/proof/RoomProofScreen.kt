@@ -8,40 +8,75 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import coil.compose.SubcomposeAsyncImage
 import com.surensureshkumar.movemark.core.design.MMBackground
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMMotion
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
-import com.surensureshkumar.movemark.core.design.components.MMProofCard
+import com.surensureshkumar.movemark.data.models.EvidencePhoto
+import com.surensureshkumar.movemark.data.models.EvidenceRecord
+import com.surensureshkumar.movemark.domain.ProofPhase
 import java.util.UUID
 
 @Composable
@@ -155,77 +190,229 @@ fun RoomProofScreen(
         )
     }
 
+    val draft by viewModel.draft.collectAsState()
+    val entryBusy by viewModel.entryBusy.collectAsState()
+    val snackbar = remember { SnackbarHostState() }
+    var editingEntry by remember { mutableStateOf<EvidenceRecord?>(null) }
+    var deletingEntry by remember { mutableStateOf<EvidenceRecord?>(null) }
+    var appendTarget by remember { mutableStateOf<UUID?>(null) }
+    var viewerPhoto by remember { mutableStateOf<EvidencePhoto?>(null) }
+
+    LaunchedEffect(Unit) {
+        viewModel.entryNotice.collect { snackbar.showSnackbar(it) }
+    }
+
+    val appendPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(12),
+    ) { uris ->
+        val target = appendTarget
+        appendTarget = null
+        if (target != null && uris.isNotEmpty()) viewModel.appendPhotos(target, uris)
+    }
+
+    val entries = room?.let { if (proofPhase == ProofPhase.MoveOut) it.moveOutEvidence else it.moveInEvidence }.orEmpty()
+    val hasPending = photos.isNotEmpty()
+    val showsSaveBar = hasPending || isBusy || isPartial || isFailed
+    val compareLine = room?.let { r ->
+        val moveIn = r.moveInEvidence.sumOf { it.photoCount }
+        val moveOut = r.moveOutEvidence.sumOf { it.photoCount }
+        if (moveIn > 0 && moveOut > 0) "MOVE-IN $moveIn · MOVE-OUT $moveOut PHOTOS" else null
+    }
+    fun chooseGallery() = picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+
     MMBackground {
         Scaffold(
             containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            contentWindowInsets = WindowInsets(0),
+            snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = {
-                RoomProofBottomSaveBar(
-                    saveButtonLabel = saveButtonLabel,
-                    statusLine = statusLine,
-                    photoCount = photoCount,
-                    isBusy = isBusy,
-                    isPartial = isPartial,
-                    isFailed = isFailed,
-                    onSave = viewModel::save,
-                    onContinueWithSaved = viewModel::continueWithSavedProof,
-                    onRetry = viewModel::retryFailedUploads,
-                )
+                AnimatedVisibility(
+                    visible = showsSaveBar,
+                    enter = slideInVertically { it } + fadeIn(),
+                    exit = slideOutVertically { it } + fadeOut(),
+                ) {
+                    RoomProofBottomSaveBar(
+                        saveButtonLabel = saveButtonLabel,
+                        statusLine = statusLine,
+                        photoCount = photoCount,
+                        isBusy = isBusy,
+                        isPartial = isPartial,
+                        isFailed = isFailed,
+                        onSave = viewModel::save,
+                        onContinueWithSaved = viewModel::continueWithSavedProof,
+                        onRetry = viewModel::retryFailedUploads,
+                        modifier = Modifier.navigationBarsPadding(),
+                    )
+                }
             },
         ) { padding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
+                    .padding(bottom = padding.calculateBottomPadding())
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-                    .padding(top = 16.dp, bottom = MMSpacing.TabScrollBottom.dp),
+                    .padding(bottom = 48.dp),
             ) {
-                TextButton(onClick = { handleBack() }) {
-                    Text("Back", color = MMColors.TextSecondary)
-                }
-                Spacer(Modifier.height(8.dp))
-
-                RoomProofCaptureHero(
+                RoomEvidenceHero(
                     roomName = room?.name ?: "Room",
-                    room = room,
+                    entries = entries,
                     proofPhase = proofPhase,
                     signPhotoUrl = viewModel::signedPhotoUrl,
-                )
-                Spacer(Modifier.height(20.dp))
-
-                RoomProofMediaModule(
-                    photos = photos,
-                    isBusy = isBusy,
-                    reduceMotion = reduceMotion,
+                    onBack = ::handleBack,
+                    onOpenPhoto = { viewerPhoto = it },
+                    hasPendingPhotos = hasPending,
+                    isBusy = isBusy || entryBusy,
                     onTakePhotos = ::launchCamera,
-                    onChooseGallery = {
-                        picker.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                        )
-                    },
+                    onChooseGallery = ::chooseGallery,
+                    compareLine = compareLine,
                 )
 
-                if (cameraDenied) {
-                    Spacer(Modifier.height(16.dp))
-                    MMProofCard {
-                        Text(
-                            "Camera access is needed to take proof photos.",
-                            color = MMColors.TextSecondary,
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        MMButton(text = "Open Settings", onClick = ::openAppSettings)
-                        Spacer(Modifier.height(8.dp))
-                        MMButton(
-                            text = "Choose from gallery",
-                            onClick = {
-                                picker.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                                )
+                Column(Modifier.padding(horizontal = MMSpacing.ScreenHorizontal.dp)) {
+                    if (cameraDenied) {
+                        Spacer(Modifier.height(16.dp))
+                        Text("Camera access is needed to take proof photos.", color = MMColors.TextSecondary)
+                        Spacer(Modifier.height(10.dp))
+                        MMButton(text = "Open Settings", onClick = ::openAppSettings, style = MMButtonStyle.Secondary)
+                    }
+
+                    if (entries.isNotEmpty()) {
+                        RoomEvidenceBody(
+                            entries = entries,
+                            proofPhase = proofPhase,
+                            isBusy = isBusy || entryBusy,
+                            onEdit = { editingEntry = it },
+                            onAddPhotos = { entry ->
+                                appendTarget = entry.id
+                                appendPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                             },
-                            style = MMButtonStyle.Secondary,
+                            onDelete = { deletingEntry = it },
+                            onTakePhotos = ::launchCamera,
+                            onChooseGallery = ::chooseGallery,
+                            modifier = Modifier.padding(top = 10.dp),
                         )
                     }
+
+                    AnimatedVisibility(visible = hasPending, enter = fadeIn(), exit = fadeOut()) {
+                        Column(Modifier.padding(vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            if (entries.isNotEmpty()) HorizontalDivider(thickness = 0.5.dp, color = MMColors.CardStroke)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Kicker(if (proofPhase == ProofPhase.MoveOut) "NEW MOVE-OUT ENTRY" else "NEW ENTRY", MMColors.TextMuted)
+                                Spacer(Modifier.weight(1f))
+                                Text(
+                                    if (photos.size == 1) "1 photo" else "${photos.size} photos",
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 12.sp,
+                                    color = MMColors.TextMuted,
+                                )
+                            }
+                            RoomProofPhotoGrid(photos = photos, reduceMotion = reduceMotion)
+                            EntryDetailsForm(
+                                draft = draft,
+                                onChange = { next -> viewModel.updateDraft { next } },
+                                enabled = !isBusy,
+                            )
+                        }
+                    }
                 }
+            }
+        }
+    }
+
+    editingEntry?.let { entry ->
+        EditEntrySheet(
+            entry = entry,
+            isSaving = entryBusy,
+            onSave = { edit -> viewModel.updateEntry(entry.id, edit) { ok -> if (ok) editingEntry = null } },
+            onDismiss = { if (!entryBusy) editingEntry = null },
+        )
+    }
+
+    deletingEntry?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { deletingEntry = null },
+            title = { Text("Delete proof?") },
+            text = { Text("Photos and notes for this entry will be removed. This can't be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    deletingEntry = null
+                    viewModel.deleteEntry(entry.id)
+                }) { Text("Delete", color = MMColors.SemanticDanger) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingEntry = null }) { Text("Cancel", color = MMColors.TextSecondary) }
+            },
+        )
+    }
+
+    viewerPhoto?.let { photo ->
+        RoomPhotoViewer(photo = photo, signPhotoUrl = viewModel::signedPhotoUrl, onDismiss = { viewerPhoto = null })
+    }
+}
+
+/** Edit a saved entry's details — same fields as iOS `EditEvidenceSheet`. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EditEntrySheet(
+    entry: EvidenceRecord,
+    isSaving: Boolean,
+    onSave: (EntryDraft) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var edit by remember(entry.id) {
+        mutableStateOf(
+            EntryDraft(
+                title = entry.title,
+                notes = entry.notes,
+                conditionRating = entry.conditionRating ?: 4,
+                tags = entry.issueTags.toSet(),
+            ),
+        )
+    }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MMColors.AppBackgroundRaised,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text("Edit proof", color = MMColors.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            EntryDetailsForm(draft = edit, onChange = { edit = it }, enabled = !isSaving)
+            MMButton(text = if (isSaving) "Saving…" else "Save changes", onClick = { onSave(edit) }, loading = isSaving, enabled = !isSaving)
+        }
+    }
+}
+
+/** Full-screen photo, black backdrop — the Android counterpart of iOS `PhotoPreviewFullScreen`. */
+@Composable
+private fun RoomPhotoViewer(
+    photo: EvidencePhoto,
+    signPhotoUrl: suspend (String) -> String?,
+    onDismiss: () -> Unit,
+) {
+    val url by produceState<String?>(initialValue = null, photo.filePath) { value = signPhotoUrl(photo.filePath) }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
+            if (url != null) {
+                SubcomposeAsyncImage(
+                    model = url,
+                    contentDescription = "Evidence photo",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                    loading = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = androidx.compose.ui.graphics.Color.White) } },
+                    error = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Couldn't load image", color = androidx.compose.ui.graphics.Color.White) } },
+                )
+            }
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.statusBarsPadding().padding(8.dp),
+            ) {
+                Icon(Icons.Filled.Close, contentDescription = "Close", tint = androidx.compose.ui.graphics.Color.White)
             }
         }
     }

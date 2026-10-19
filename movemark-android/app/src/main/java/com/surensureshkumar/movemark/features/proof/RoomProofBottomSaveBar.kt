@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,7 +33,16 @@ fun RoomProofBottomSaveBar(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(MMColors.EvidenceCard)
+            // Floats over the evidence (translucent, hairline on top), like the iOS material bar.
+            .background(MMColors.AppBackgroundRaised.copy(alpha = 0.94f))
+            .drawBehind {
+                drawLine(
+                    color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.08f),
+                    start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                    end = androidx.compose.ui.geometry.Offset(size.width, 0f),
+                    strokeWidth = 1f,
+                )
+            }
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         statusLine?.takeIf { it.isNotBlank() }?.let { line ->

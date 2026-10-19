@@ -121,17 +121,27 @@ After photos are picked, a **NEW ENTRY** section appears with the pending-photo 
 
 ## 6. Runtime QA matrix
 
+Fixture runs use the debug galleries with drawn photos: `-MMRichQA room-*` on iOS, and `RichQAActivity --es case room-*` on Android. ✅ = checked on screen, ⏳ = not yet run.
+
 | Case | iOS default | iOS AX3 | Android 1.0× | Android 2.0× | Live (signed in) |
 |---|:-:|:-:|:-:|:-:|:-:|
-| Empty room | | | | | |
-| One photo | | | | | |
-| Many photos + filmstrip selection | | | | | |
-| Damage: tags and notes | | | | | |
-| Move-out with both phases | | | | | |
-| Long room name (`Balcony/Patio`, `Primary Bedroom`) | | | | | |
-| Pending photos + form + save bar | | | | | |
-| Upload failure → retry | | | | | |
-| Edit / Add photos / Delete entry | — | — | — | — | |
-| Small phone (iPhone SE / 360dp) | | — | | — | |
+| Empty room (`room-empty`) | ✅ | ✅ | ✅ | ✅ | ⏳ |
+| One photo (`room-one`) | ✅ | ⏳ | ✅ | ⏳ | ⏳ |
+| Many photos + filmstrip (`room-many`) | ✅ | ⏳ | ✅ | ⏳ | ⏳ |
+| Damage: tags and notes (`room-damage`) | ✅ | ✅ | ✅ | ✅ | ⏳ |
+| Move-out, both phases (`room-moveout`) | ✅ | ⏳ | ✅ | ⏳ | ⏳ |
+| Long room name (`room-long`) | ✅ | ⏳ | ✅ | ✅ | ⏳ |
+| Pending photos + form + save bar (`room-pending`) | ✅ | ⏳ | ✅ | ⏳ | ⏳ |
+| Upload failure → retry | — | — | — | — | ⏳ |
+| Edit / Add photos / Delete entry | — | — | — | — | ⏳ |
+| Small phone (iPhone SE / 360dp) | ⏳ | — | ⏳ | — | ⏳ |
 
-Results are filled in under "QA results" below as each case is run.
+### Fixed during QA
+- **iOS:** the fill-cropped hero image widened the whole screen, pushing the condition meter, menu and buttons off the right edge. The photo now sits in an overlay inside a fixed frame.
+- **iOS AX3:** the kicker lost contrast over pale walls. The gradient now starts higher and the title has a soft shadow.
+- **iOS AX3:** "Choose from gallery" was clipped by its fixed height. It now uses a minimum height.
+- **Both:** the gallery button now matches the secondary "Take photos" surface, and the save bar floats as material (iOS) or a translucent bar with a hairline (Android) instead of a slab.
+
+### Still open
+- **Live runs.** The new Android save (condition, tags, notes), edit, add photos and delete call the backend but have only been compiled, not run against it. They need a signed-in session on the emulator.
+- **Hero scroll response** (a gentle parallax or stretch) is deliberately not built yet. It's the next motion detail once the static composition is approved.

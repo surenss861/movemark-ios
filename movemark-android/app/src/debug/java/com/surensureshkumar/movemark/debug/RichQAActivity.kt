@@ -21,17 +21,23 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.surensureshkumar.movemark.core.design.MMBackground
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.MMTheme
-import com.surensureshkumar.movemark.core.design.components.MMRoomEvidencePlate
 import com.surensureshkumar.movemark.core.design.components.MMRoomProgressCard
 import com.surensureshkumar.movemark.core.design.components.MMRoomProofRow
 import com.surensureshkumar.movemark.core.design.components.MMVaultProofHeroCard
@@ -40,6 +46,14 @@ import com.surensureshkumar.movemark.data.models.EvidencePhoto
 import com.surensureshkumar.movemark.data.models.EvidenceRecord
 import com.surensureshkumar.movemark.data.models.RoomRecord
 import com.surensureshkumar.movemark.domain.ProofPhase
+import com.surensureshkumar.movemark.features.proof.EntryDetailsForm
+import com.surensureshkumar.movemark.features.proof.EntryDraft
+import com.surensureshkumar.movemark.features.proof.Kicker
+import com.surensureshkumar.movemark.features.proof.PendingPhoto
+import com.surensureshkumar.movemark.features.proof.RoomEvidenceBody
+import com.surensureshkumar.movemark.features.proof.RoomEvidenceHero
+import com.surensureshkumar.movemark.features.proof.RoomProofBottomSaveBar
+import com.surensureshkumar.movemark.features.proof.RoomProofPhotoGrid
 import com.surensureshkumar.movemark.features.reports.components.MMReportExportSection
 import com.surensureshkumar.movemark.features.reports.components.MMReportPreviewHero
 import java.io.File
@@ -53,6 +67,10 @@ class RichQAActivity : ComponentActivity() {
         val screen = intent.getStringExtra("case") ?: "vault-9"
         setContent {
             MMTheme {
+                if (screen.startsWith("room-")) {
+                    RoomQAScreen(screen)
+                    return@MMTheme
+                }
                 Column(
                     Modifier
                         .fillMaxSize()
@@ -96,9 +114,6 @@ private fun QACase(screen: String) {
         )
         "reports-failed" -> ReportCase(ReportReadiness.Failed, "The report didn’t finish.", listOf("9 rooms", "24 photos"), "Try again")
         "reports-pro" -> ProCase()
-        "room-photo" -> RoomPlateCase("Primary Bedroom", moveIn = 4, moveOut = 0, issues = 1, phase = ProofPhase.MoveIn)
-        "room-empty" -> RoomPlateCase("Balcony/Patio", moveIn = 0, moveOut = 0, issues = 0, phase = ProofPhase.MoveIn)
-        "room-moveout" -> RoomPlateCase("Kitchen", moveIn = 4, moveOut = 3, issues = 0, phase = ProofPhase.MoveOut)
         else -> VaultCase(9, 24, "123 Main St", "Primary Bedroom")
     }
 }
@@ -216,54 +231,134 @@ private fun qaRoom(name: String, photos: Int): RoomRecord {
     return RoomRecord(id = UUID.randomUUID(), name = name, moveInEvidence = evidence)
 }
 
-/** Same fixtures as iOS `MMRichQAGallery` room cases; the photo is drawn, not a real one. */
+/** Same fixtures and case names as iOS `MMRichQAGallery` RoomQAScreen; photos are drawn, not real. */
 @Composable
-private fun RoomPlateCase(name: String, moveIn: Int, moveOut: Int, issues: Int, phase: ProofPhase) {
+private fun RoomQAScreen(screen: String) {
     val context = LocalContext.current
-    fun entries(count: Int, minutesAgo: Long, tags: Int) = if (count == 0) emptyList() else listOf(
-        EvidenceRecord(
-            id = UUID.randomUUID(),
-            title = name,
-            notes = "",
-            photoCount = count,
-            photos = List(count) { EvidencePhoto(UUID.randomUUID(), "qa-fixture/room-plate.jpg") },
-            conditionRating = 4,
-            createdAt = Instant.now().minusSeconds(minutesAgo * 60).toString(),
-            issueTagCount = tags,
-        ),
-    )
-    val room = RoomRecord(
+    fun entry(
+        title: String, photos: Int, seed: Int, minutesAgo: Long,
+        tags: List<String> = emptyList(), rating: Int = 4, notes: String = "",
+    ) = EvidenceRecord(
         id = UUID.randomUUID(),
-        name = name,
-        moveInEvidence = entries(moveIn, 90, issues),
-        moveOutEvidence = entries(moveOut, 5, 0),
+        title = title,
+        notes = notes,
+        photoCount = photos,
+        photos = List(photos) { EvidencePhoto(UUID.randomUUID(), "qa-fixture/room-${seed + it}.jpg") },
+        conditionRating = rating,
+        createdAt = Instant.now().minusSeconds(minutesAgo * 60).toString(),
+        issueTagCount = tags.size,
+        issueTags = tags,
     )
-    MMRoomEvidencePlate(
-        roomName = name,
-        room = room,
-        proofPhase = phase,
-        shotPrompts = listOf(
-            "Take a wide room photo",
-            "Photograph walls and baseboards",
-            "Photograph floors",
-            "Photograph windows / blinds",
-        ),
-        signPhotoUrl = { fixturePhotoUri(context) },
+    data class Fixture(
+        val name: String,
+        val moveIn: List<EvidenceRecord> = emptyList(),
+        val moveOut: List<EvidenceRecord> = emptyList(),
+        val phase: ProofPhase = ProofPhase.MoveIn,
+        val pending: Int = 0,
     )
+    val f = when (screen) {
+        "room-one" -> Fixture("Primary Bedroom", listOf(entry("Primary Bedroom", 1, 0, 40)))
+        "room-many" -> Fixture("Kitchen", listOf(
+            entry("Counters and cabinets", 4, 1, 20),
+            entry("Appliances", 3, 5, 60),
+            entry("Kitchen", 2, 8, 90),
+        ))
+        "room-damage" -> Fixture("Living Room", listOf(
+            entry("North wall", 3, 2, 15, listOf("Scratch", "Chipped paint"), 3,
+                "Two scratches beside the window, about 20 cm long. Paint chipped at the baseboard corner."),
+            entry("Floor by the balcony door", 2, 6, 50, listOf("Water damage"), 2,
+                "Swollen laminate seam, already there at move-in."),
+        ))
+        "room-moveout" -> Fixture(
+            "Kitchen",
+            moveIn = listOf(entry("Kitchen", 4, 1, 60L * 24 * 300)),
+            moveOut = listOf(entry("Kitchen at move-out", 3, 3, 10)),
+            phase = ProofPhase.MoveOut,
+        )
+        "room-pending" -> Fixture("Living Room", pending = 3)
+        "room-long" -> Fixture("Primary Bedroom Closet and Ensuite Bathroom", listOf(entry("Closet", 2, 4, 30, listOf("Stain"))))
+        else -> Fixture("Balcony/Patio")
+    }
+    val entries = if (f.phase == ProofPhase.MoveOut) f.moveOut else f.moveIn
+    val pending = remember(screen) { List(f.pending) { PendingPhoto(bytes = fixtureJpeg(it + 2)) } }
+    var draft by remember { mutableStateOf(EntryDraft(conditionRating = 3, tags = setOf("Scratch"))) }
+    val signUrl: suspend (String) -> String? = { path -> fixturePhotoUri(context, path.filter { it.isDigit() }.toIntOrNull() ?: 0) }
+
+    MMBackground {
+        Scaffold(
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
+            bottomBar = {
+                if (pending.isNotEmpty()) {
+                    RoomProofBottomSaveBar(
+                        saveButtonLabel = "Save proof", statusLine = "${pending.size} photos ready to save",
+                        photoCount = pending.size, isBusy = false, isPartial = false, isFailed = false,
+                        onSave = {}, onContinueWithSaved = {}, onRetry = {},
+                        modifier = Modifier.navigationBarsPadding(),
+                    )
+                }
+            },
+        ) { padding ->
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(bottom = padding.calculateBottomPadding())
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = 48.dp),
+            ) {
+                RoomEvidenceHero(
+                    roomName = f.name, entries = entries, proofPhase = f.phase, signPhotoUrl = signUrl,
+                    onBack = {}, onOpenPhoto = {}, hasPendingPhotos = pending.isNotEmpty(), isBusy = false,
+                    onTakePhotos = {}, onChooseGallery = {},
+                    compareLine = if (f.phase == ProofPhase.MoveOut && f.moveIn.isNotEmpty())
+                        "MOVE-IN ${f.moveIn.sumOf { it.photoCount }} · MOVE-OUT ${f.moveOut.sumOf { it.photoCount }} PHOTOS" else null,
+                )
+                Column(Modifier.padding(horizontal = MMSpacing.ScreenHorizontal.dp)) {
+                    if (entries.isNotEmpty()) {
+                        RoomEvidenceBody(
+                            entries = entries, proofPhase = f.phase, isBusy = false,
+                            onEdit = {}, onAddPhotos = {}, onDelete = {}, onTakePhotos = {}, onChooseGallery = {},
+                            modifier = Modifier.padding(top = 10.dp),
+                        )
+                    }
+                    if (pending.isNotEmpty()) {
+                        Spacer(Modifier.height(18.dp))
+                        Kicker("NEW ENTRY", MMColors.TextMuted)
+                        Spacer(Modifier.height(16.dp))
+                        RoomProofPhotoGrid(photos = pending, reduceMotion = true)
+                        Spacer(Modifier.height(16.dp))
+                        EntryDetailsForm(draft = draft, onChange = { draft = it }, enabled = true)
+                    }
+                }
+            }
+        }
+    }
 }
 
-/** Warm wall, floor and window light, written once to the cache dir. */
-private fun fixturePhotoUri(context: Context): String {
-    val file = File(context.cacheDir, "mm-qa-room-plate.jpg")
-    if (!file.exists()) {
-        val bmp = Bitmap.createBitmap(1200, 900, Bitmap.Config.ARGB_8888)
-        val c = Canvas(bmp)
-        val p = Paint()
-        p.color = AndroidColor.rgb(199, 184, 158); c.drawRect(0f, 0f, 1200f, 900f, p)
-        p.color = AndroidColor.rgb(115, 84, 56); c.drawRect(0f, 620f, 1200f, 900f, p)
-        p.color = AndroidColor.rgb(237, 242, 250); c.drawRect(760f, 120f, 1060f, 500f, p)
-        p.color = AndroidColor.rgb(242, 242, 242); c.drawRect(0f, 600f, 1200f, 624f, p)
-        file.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 85, it) }
-    }
+/** Drawn stand-in for a room photo, varied by seed (same palettes as iOS). */
+private fun fixtureJpeg(seed: Int): ByteArray {
+    val palettes = listOf(
+        AndroidColor.rgb(199, 184, 158) to AndroidColor.rgb(115, 84, 56),
+        AndroidColor.rgb(219, 219, 212) to AndroidColor.rgb(140, 128, 112),
+        AndroidColor.rgb(179, 194, 189) to AndroidColor.rgb(92, 77, 66),
+        AndroidColor.rgb(232, 217, 194) to AndroidColor.rgb(158, 120, 84),
+    )
+    val (wall, floor) = palettes[seed % palettes.size]
+    val bmp = Bitmap.createBitmap(1200, 1400, Bitmap.Config.ARGB_8888)
+    val c = Canvas(bmp)
+    val p = Paint()
+    p.color = wall; c.drawRect(0f, 0f, 1200f, 1400f, p)
+    p.color = floor; c.drawRect(0f, 960f, 1200f, 1400f, p)
+    p.color = AndroidColor.rgb(247, 247, 247); c.drawRect(0f, 940f, 1200f, 962f, p)
+    val x = 200f + (seed * 170) % 600
+    p.color = AndroidColor.rgb(235, 242, 252); c.drawRect(x, 220f, x + 320f, 680f, p)
+    val out = java.io.ByteArrayOutputStream()
+    bmp.compress(Bitmap.CompressFormat.JPEG, 85, out)
+    return out.toByteArray()
+}
+
+private fun fixturePhotoUri(context: Context, seed: Int): String {
+    val file = File(context.cacheDir, "mm-qa-room-$seed.jpg")
+    if (!file.exists()) file.writeBytes(fixtureJpeg(seed))
     return Uri.fromFile(file).toString()
 }

@@ -78,6 +78,18 @@ class RoomProofViewModel @Inject constructor(
     private val _proofSaved = MutableSharedFlow<SavedProofReceiptPayload>(extraBufferCapacity = 1)
     val proofSaved: SharedFlow<SavedProofReceiptPayload> = _proofSaved.asSharedFlow()
 
+    /** Details for the next saved entry (title, notes, condition, issue tags). */
+    private val _draft = MutableStateFlow(EntryDraft())
+    val draft: StateFlow<EntryDraft> = _draft.asStateFlow()
+
+    /** Edit / add photos / delete on a saved entry. */
+    private val _entryBusy = MutableStateFlow(false)
+    val entryBusy: StateFlow<Boolean> = _entryBusy.asStateFlow()
+
+    /** One-shot result of an entry action, shown as a snackbar. */
+    private val _entryNotice = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val entryNotice: SharedFlow<String> = _entryNotice.asSharedFlow()
+
     private var uploadContext: EvidenceUploadContext? = null
     private var pendingReceipt: SavedProofReceiptPayload? = null
 
@@ -144,13 +156,16 @@ class RoomProofViewModel @Inject constructor(
             pendingReceipt = null
             try {
                 val uploadCtx = uploadContext ?: withContext(Dispatchers.IO) {
+                    val d = _draft.value
                     propertyStore.createEvidenceUploadContext(
                         roomId = room.id,
-                        title = room.name,
-                        notes = "",
+                        title = d.title.trim().ifEmpty { room.name },
+                        notes = d.notes.trim(),
                         propertyId = property.id,
                         userId = userId,
                         proofPhase = proofPhase,
+                        conditionRating = d.conditionRating,
+                        issueTags = d.tags.toList(),
                     )
                 }.also { uploadContext = it }
 
@@ -213,6 +228,7 @@ class RoomProofViewModel @Inject constructor(
                         )
                         receiptCache.put(payload)
                         _photos.value = emptyList()
+                        _draft.value = EntryDraft()
                         uploadContext = null
                         _saveState.value = RoomProofSaveState.Success(totalUploaded)
                         _message.value = null
@@ -252,7 +268,78 @@ class RoomProofViewModel @Inject constructor(
         _proofSaved.tryEmit(payload)
     }
 
-    fun isUploadInProgress(): Boolean = _saveState.value.isBusy
+    fun isUploadInProgress(): Boolean = _saveState.value.isBusy || _entryBusy.value
+
+    fun updateDraft(transform: (EntryDraft) -> EntryDraft) {
+        _draft.value = transform(_draft.value)
+    }
+
+    /** Edit a saved entry's details (iOS `saveEditedEvidence`). Returns false on failure. */
+    fun updateEntry(entryId: UUID, edit: EntryDraft, onDone: (Boolean) -> Unit) {
+        val userId = sessionManager.userId.value ?: return onDone(false)
+        val fallbackTitle = room.value?.name ?: "Room"
+        runEntryAction(success = "Entry updated", failure = "Couldn't update this entry. Try again.", onDone = onDone) {
+            propertyStore.updateEvidence(
+                entryId = entryId,
+                title = edit.title.trim().ifEmpty { fallbackTitle },
+                notes = edit.notes.trim(),
+                issueTags = edit.tags.toList(),
+                conditionRating = edit.conditionRating,
+                userId = userId,
+            )
+        }
+    }
+
+    /** Delete a saved entry with its photos and tags (iOS `deleteEntry`). */
+    fun deleteEntry(entryId: UUID) {
+        val userId = sessionManager.userId.value ?: return
+        runEntryAction(success = "Entry deleted", failure = "Couldn't delete this entry. Try again.") {
+            propertyStore.deleteEvidence(entryId, userId)
+        }
+    }
+
+    /** Add photos to an existing entry (iOS `appendPhotos`). */
+    fun appendPhotos(entryId: UUID, uris: List<Uri>) {
+        val userId = sessionManager.userId.value ?: return
+        val property = propertyStore.currentProperty.value ?: return
+        val roomId = roomId ?: return
+        if (uris.isEmpty()) return
+        runEntryAction(success = null, failure = RoomProofUploadMessages.FULL_FAILURE) {
+            val bytes = withContext(Dispatchers.IO) { uris.mapNotNull { it.toJpegBytes(context) } }
+            if (bytes.isEmpty()) throw IllegalStateException("Could not read selected photos.")
+            val result = withContext(Dispatchers.IO) {
+                propertyStore.appendPhotosToEvidence(entryId, roomId, proofPhase, bytes, property.id, userId)
+            }
+            _entryNotice.tryEmit(
+                if (result.hadPartialFailure) RoomProofUploadMessages.partial(result.savedCount, result.attemptedCount)
+                else if (result.savedCount == 1) "1 photo added" else "${result.savedCount} photos added",
+            )
+            result.hydrationRefreshed
+        }
+    }
+
+    private fun runEntryAction(
+        success: String?,
+        failure: String,
+        onDone: (Boolean) -> Unit = {},
+        block: suspend () -> Boolean,
+    ) {
+        if (_entryBusy.value || _saveState.value.isBusy) return
+        viewModelScope.launch {
+            _entryBusy.value = true
+            val ok = try {
+                block()
+                true
+            } catch (e: Exception) {
+                Log.e(UPLOAD_TAG, "Entry action failed", e)
+                false
+            } finally {
+                _entryBusy.value = false
+            }
+            if (ok) success?.let { _entryNotice.tryEmit(it) } else _entryNotice.tryEmit(failure)
+            onDone(ok)
+        }
+    }
 
     private fun setPhotoStatus(id: String, status: PhotoUploadStatus) {
         _photos.value = _photos.value.map { photo ->
@@ -282,3 +369,18 @@ class RoomProofViewModel @Inject constructor(
     }
 
 }
+
+/** Details for a Room entry — same fields iOS saves (title is stored as the first line of notes). */
+data class EntryDraft(
+    val title: String = "",
+    val notes: String = "",
+    /** 1 Poor … 5 Excellent; default Good, as on iOS. */
+    val conditionRating: Int = 4,
+    val tags: Set<String> = emptySet(),
+)
+
+/** Must match the seeded `issue_tags` rows — same list as iOS `fixedIssueTags`. */
+val RoomIssueTags = listOf("Scratch", "Stain", "Water damage", "Chipped paint", "Cracked tile", "Appliance damage")
+
+/** iOS `RoomRecord.ConditionRating` order and wording. */
+val RoomConditionLabels = listOf(1 to "Poor", 2 to "Below fair", 3 to "Fair", 4 to "Good", 5 to "Excellent")
