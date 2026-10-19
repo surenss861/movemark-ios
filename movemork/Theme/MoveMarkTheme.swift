@@ -4,6 +4,12 @@
 //
 //  MoveMark — Dark Rental Proof Desk (warm charcoal, calm green, paper artifacts).
 //
+//  @file Design tokens: colors, type scale (sans / serif / mono voices), spacing, radii
+//  @domain design-system
+//  @status stable
+//  @see [[VISUAL_STANDARD]] — rules these tokens implement
+//  @see [[MMTypography.kt]] — Android counterpart
+//
 
 import SwiftUI
 #if os(iOS)

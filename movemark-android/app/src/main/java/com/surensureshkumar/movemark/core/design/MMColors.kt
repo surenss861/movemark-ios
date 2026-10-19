@@ -1,3 +1,10 @@
+/**
+ * @file Android color tokens — near-neutral surfaces; green is a signal, not a surface
+ * @domain design-system
+ * @status stable
+ * @see [[VISUAL_STANDARD]] — material and color rules
+ * @see [[MoveMarkTheme.swift]] — iOS reference tokens
+ */
 package com.surensureshkumar.movemark.core.design
 
 import androidx.compose.ui.graphics.Color

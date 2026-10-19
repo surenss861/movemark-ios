@@ -1,3 +1,10 @@
+/**
+ * @file Vault hero: the rental as a case file, coverage as the proof figure
+ * @domain vault
+ * @status stable
+ * @see [[VISUAL_STANDARD]] — next in the rollout (evidence-photo atmosphere)
+ * @see [[MMVaultProofHeroCard.swift]] — iOS reference implementation
+ */
 package com.surensureshkumar.movemark.core.design.components
 
 import androidx.compose.foundation.background
