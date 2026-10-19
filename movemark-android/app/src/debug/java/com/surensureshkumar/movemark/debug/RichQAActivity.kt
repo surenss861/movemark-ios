@@ -276,6 +276,7 @@ private fun RoomQAScreen(screen: String) {
             phase = ProofPhase.MoveOut,
         )
         "room-pending" -> Fixture("Living Room", pending = 3)
+        "room-dark" -> Fixture("Bedroom 2", listOf(entry("Bedroom 2 at night", 2, 100, 25, listOf("Stain"))))
         "room-long" -> Fixture("Primary Bedroom Closet and Ensuite Bathroom", listOf(entry("Closet", 2, 4, 30, listOf("Stain"))))
         else -> Fixture("Balcony/Patio")
     }
@@ -343,7 +344,8 @@ private fun fixtureJpeg(seed: Int): ByteArray {
         AndroidColor.rgb(179, 194, 189) to AndroidColor.rgb(92, 77, 66),
         AndroidColor.rgb(232, 217, 194) to AndroidColor.rgb(158, 120, 84),
     )
-    val (wall, floor) = palettes[seed % palettes.size]
+    val dark = AndroidColor.rgb(41, 38, 36) to AndroidColor.rgb(20, 18, 15)
+    val (wall, floor) = if (seed >= 100) dark else palettes[seed % palettes.size]
     val bmp = Bitmap.createBitmap(1200, 1400, Bitmap.Config.ARGB_8888)
     val c = Canvas(bmp)
     val p = Paint()

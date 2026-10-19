@@ -130,6 +130,7 @@ Fixture runs use the debug galleries with drawn photos: `-MMRichQA room-*` on iO
 | Many photos + filmstrip (`room-many`) | ✅ | ⏳ | ✅ | ⏳ | ⏳ |
 | Damage: tags and notes (`room-damage`) | ✅ | ✅ | ✅ | ✅ | ⏳ |
 | Move-out, both phases (`room-moveout`) | ✅ | ⏳ | ✅ | ⏳ | ⏳ |
+| Dark photo (`room-dark`) | ✅ | ⏳ | ✅ | ⏳ | ⏳ |
 | Long room name (`room-long`) | ✅ | ⏳ | ✅ | ✅ | ⏳ |
 | Pending photos + form + save bar (`room-pending`) | ✅ | ⏳ | ✅ | ⏳ | ⏳ |
 | Upload failure → retry | — | — | — | — | ⏳ |

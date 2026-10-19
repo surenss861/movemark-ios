@@ -253,6 +253,9 @@ private struct RoomQAScreen: View {
                            moveOutMode: true)
         case "room-pending":
             return Fixture(name: "Living Room", pending: 3)
+        case "room-dark":
+            // Dark evening photo: the gradient and chips must still read and the photo must stay the star.
+            return Fixture(name: "Bedroom 2", moveIn: [Self.entry("Bedroom 2 at night", photos: 2, seed: 100, minutesAgo: 25, tags: ["Stain"])])
         case "room-long":
             return Fixture(name: "Primary Bedroom Closet and Ensuite Bathroom",
                            moveIn: [Self.entry("Closet", photos: 2, seed: 4, minutesAgo: 30, tags: ["Stain"])])
@@ -343,7 +346,8 @@ private struct RoomQAScreen: View {
             (UIColor(red: 0.70, green: 0.76, blue: 0.74, alpha: 1), UIColor(red: 0.36, green: 0.30, blue: 0.26, alpha: 1)),
             (UIColor(red: 0.91, green: 0.85, blue: 0.76, alpha: 1), UIColor(red: 0.62, green: 0.47, blue: 0.33, alpha: 1)),
         ]
-        let (wall, floor) = palettes[seed % palettes.count]
+        let dark = (UIColor(red: 0.16, green: 0.15, blue: 0.14, alpha: 1), UIColor(red: 0.08, green: 0.07, blue: 0.06, alpha: 1))
+        let (wall, floor) = seed >= 100 ? dark : palettes[seed % palettes.count]
         let size = CGSize(width: 1200, height: 1400)
         return UIGraphicsImageRenderer(size: size).image { ctx in
             let c = ctx.cgContext
