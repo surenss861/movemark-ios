@@ -83,6 +83,7 @@ Every Supabase dependency found in the iOS app, the Android app, the FastAPI API
 | Storage RLS: first path segment = `auth.uid()`, case-insensitive | clients | API: DB ownership check, server-built or row-stored key, key re-checked against caller's folder (case-insensitive). DB: `0910` restrictive policies stop a client recording a key outside `{caller}/{property}/` | S5 | ✅ local · ✅ Neon dev |
 | Client direct upload (evidence, thumbnails, maintenance, documents) | iOS, Android | `POST /api/storage/uploads` → presigned `PUT` (10 min) with signed Content-Type + Content-Length | S5 | ✅ API · ⏳ apps |
 | Client signed download URLs (evidence 24h, documents 1h, exports 1h) | iOS, Android | `POST /api/storage/downloads` by row id → presigned `GET`, **1h for evidence and documents** (evidence shortened from 24h) | S5 | ✅ API · ⏳ apps |
+| (new) Object uploaded but row insert failed | iOS, Android | Upload ticket (`0920`) + `POST /api/storage/uploads/{id}/abandon`; deletes only unreferenced objects | S5 | ✅ local · ✅ Neon dev |
 | Client direct deletes (evidence and documents) | iOS | `DELETE /api/storage/evidence` and `/documents` by row id; objects then rows, server-side | S5 | ✅ API · ⏳ apps |
 | API export download (signed 900s, cached 840s in Redis) | API | S3 presigned GET, `EXPORT_URL_TTL_SECONDS`=900, cache 840s (test-enforced below the signature) | S4 | ✅ Neon dev |
 | Worker evidence download (≤48 photos, concurrency 8) | worker | S3 GetObject via `app/object_store.py` | S4 | ✅ Neon dev |

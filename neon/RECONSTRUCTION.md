@@ -114,7 +114,7 @@ Columns that existed in Supabase but that no code ever read or wrote **cannot be
 - **Owner-path gate on Neon** (`tests/neon_owner_gate.sql`, rolled back): **10/10 ok**. Covers RLS on all tables, no extension functions, the tag seed, client-callable functions, constraints, credits, export queue and account deletion. `dev` is left empty.
 - **Finding 2 (resolved below; raw-SQL artifact):** schema `auth` (which holds `auth.user_id()` and `auth.uid()`) is owned by Neon's `cloud_admin` and has **no grants**. `authenticated` gets "permission denied for schema auth" when a policy calls `auth.user_id()`, and `neondb_owner` cannot grant it. If the Data API runs policies as `authenticated` (as its docs describe), every client request would fail. Needs either an end-to-end Data API check with a real Neon Auth token (two QA accounts on the `dev` branch's auth), or a fix or confirmation from Neon.
 
-## Data API end-to-end on `dev` (2026-10-20): **48/48 passed**
+## Data API end-to-end on `dev` (2026-10-20): **50/50 passed**
 
 `tests/data_api_e2e.py`, run against `dev`'s own endpoints (Auth `ep-quiet-salad…neonauth…`, Data API `ep-quiet-salad…apirest…`). The script refuses production endpoints.
 - **Setup:** signs up two disposable QA users (`qa-neon-a@movemark.test`, `qa-neon-b@movemark.test`) through real Neon Auth, with random passwords that are never stored. It uses their real JWTs, then deletes all its rows and both users. `dev` is verified empty afterwards. No Auth settings were changed; verification is not required on `dev`.
@@ -126,12 +126,13 @@ Columns that existed in Supabase but that no code ever read or wrote **cannot be
 - **Anonymous:** requests with no token are refused before any SQL runs (HTTP 400, "missing authentication credentials"), for reads and RPC.
 - **Forged token** (A's token with `sub` changed to B): HTTP 400, "signature error".
 - **`get_property_snapshot`:** returns A's own property; for B's property it returns `property: null` and empty lists.
+- **Upload tickets (`0920`):** A cannot read or insert `storage_upload_tickets` (403 `42501`).
 - **Storage keys (`0910`):** A recording an `evidence_files` row whose key sits in B's folder returns 403 `42501`.
 - **Privileged functions:** `delete_user_owned_data`, `grant_report_credit`, `consume_report_credit`, `claim_next_export_job` and `reap_stuck_export_jobs` all return 403 `42501` "permission denied for function" (proves `0900`). B's data is intact after A tried to delete it.
 
 **Conclusion:** through the Data API, `auth.user_id()` resolves to the verified JWT `sub`, and RLS enforces ownership. The "permission denied for schema auth" in Finding 2 only happens over a raw SQL connection, not on the Data API path. **Option A is viable.**
 
-## Object Storage on `dev` (2026-10-20): **31/31 passed**
+## Object Storage on `dev` (2026-10-20): **34/34 passed**
 
 `movemark-api-py/scripts/neon_dev_storage_gate.py`: API running locally against `dev` (pooled Postgres, Neon Auth, branch S3 credentials), two real QA users, a real room photo, the worker in-process. It refuses production endpoints and leaves `dev` empty (0 users, rows and objects in all 7 buckets afterwards).
 
@@ -141,6 +142,7 @@ Columns that existed in Supabase but that no code ever read or wrote **cannot be
 - Real photo + thumbnail uploaded, row inserted through the Data API, download returns identical bytes; B gets 404 on download and delete.
 - Export queued, worker reads the photo, PDF embeds it, PDF lands at `exports/{user}/{export}.pdf`, owner downloads it, B gets 404.
 - Single evidence delete removes object and row; repeat is 404.
+- Abandon (`0920`): row committed but response "lost" → abandon returns `kept` and the photo still downloads; insert genuinely refused (403) → abandon deletes photo and thumbnail, repeat is safe; B cannot abandon A's ticket.
 - Account deletion with objects in all seven buckets: rows, auth identity and every object gone; B untouched; repeat deletion 204 and still clean.
 
 `0910_storage_key_ownership.sql` (restrictive RLS, check inlined so no function is exposed over RPC) applied on `dev`; owner gate still 10/10.

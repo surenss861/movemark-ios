@@ -177,6 +177,13 @@ def main() -> None:
             r2 = b.get(f"/properties?id=eq.{rb['property']}&select=id")
             record("B's data intact after A's delete_user_owned_data attempt", len(r2.json()) == 1, r2)
 
+            # Upload tickets are backend-only (0920).
+            r = a.get("/storage_upload_tickets?select=id")
+            record("A cannot read upload tickets (0920)", r.status_code in (401, 403, 404), r)
+            r = a.post("/storage_upload_tickets", json={"id": a_id, "user_id": a_id, "property_id": ra["property"], "kind": "evidence",
+                                                        "bucket": "exports", "object_key": f"{b_id}/x.pdf", "expires_at": "2099-01-01T00:00:00Z"})
+            record("A cannot forge an upload ticket (0920)", r.status_code in (401, 403, 404), r)
+
             # Owners delete their own rows.
             r = a.delete(f"/evidence_files?id=eq.{ra['evidence']}")
             record("A deletes own evidence row", r.status_code == 200 and len(r.json()) == 1, r)

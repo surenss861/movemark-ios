@@ -92,7 +92,8 @@ Authorization: authenticated Neon Auth user → ownership check in Postgres → 
 
 | Endpoint | Behaviour | Replaces |
 |---|---|---|
-| `POST /api/storage/uploads` `{kind: evidence\|maintenance\|document, propertyId, roomId+phase \| issueId \| documentType, contentType, size, thumbnailSize?}` | Validates type and size, checks ownership, returns `{bucket, path, url, method: PUT, headers, thumbnail, expiresInSeconds: 600}`. Content-Type and Content-Length are signed, so storage rejects any other type or byte count | Client `storage.upload` |
+| `POST /api/storage/uploads` `{kind: evidence\|maintenance\|document, propertyId, roomId+phase \| issueId \| documentType, contentType, size, thumbnailSize?}` | Validates type and size, checks ownership, returns `{uploadTicketId, bucket, path, url, method: PUT, headers, thumbnail, expiresInSeconds: 600}`. Content-Type and Content-Length are signed, so storage rejects any other type or byte count | Client `storage.upload` |
+| `POST /api/storage/uploads/{uploadTicketId}/abandon` (no body) | Ticket must be the caller's (0920 table, backend-only). If any `evidence_files`/`property_documents` row references the object or thumbnail → `{status: kept}`, nothing deleted (covers "insert committed, response lost"). Otherwise deletes both → `{status: deleted}`; repeats and missing objects are safe. Abandon window 24h, then 410. Call only after the insert attempt has finished | — (new) |
 | `POST /api/storage/downloads` `{kind: evidence\|document, ids[≤100]}` | Rows owned via the property; returns `{items: [{id, url, thumbnailUrl}], expiresInSeconds: 3600}` | Client `createSignedURL` |
 | `DELETE /api/storage/evidence` / `/documents` `{ids[≤100]}` | Ownership check, delete objects, then rows and dispute links in one transaction. 204; repeat 404 | iOS direct deletes |
 | `GET /api/exports/{id}/download` | Unchanged contract; presigned GET 900s, Redis 840s | Supabase signed URL |
