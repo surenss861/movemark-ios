@@ -86,23 +86,27 @@ Keep the seven bucket names, so stored `file_path` values and paths keep their m
 
 All private. The existing `uploads` bucket is unused.
 
-### API endpoints (S4/S5)
+### API endpoints (S4/S5) — built, tested on `dev`
 
-Ownership rule (replaces the Supabase storage policy): the first path segment must equal the caller's `sub`, compared case-insensitively, because Swift writes uppercase UUIDs.
+Authorization: authenticated Neon Auth user → ownership check in Postgres → the server builds the key (uploads) or reads it from the owned row (downloads, deletes) → key re-checked against the caller's folder, case-insensitively → one presigned URL for one object, or a server-side delete. Clients never choose a bucket or key, never get list or delete authority, and never hold storage credentials. Missing, not-yours and tampered all return the same 404.
 
 | Endpoint | Behaviour | Replaces |
 |---|---|---|
-| `POST /api/storage/upload-url` `{bucket, path, contentType}` | Checks bucket allow-list, ownership and content type (`image/jpeg`, `application/pdf`). Returns a presigned `PUT`, valid 10 min | Client `storage.upload` (evidence, thumbnails, maintenance, documents) |
-| `POST /api/storage/download-urls` `{bucket, paths[]}` | Ownership check per path; batch presigned `GET`s. Evidence 24h, documents 1h, as today | Client `createSignedURL` |
-| `DELETE /api/storage/objects` `{bucket, paths[]}` | Ownership check, then delete | iOS direct deletes |
-| `GET /api/exports/{id}/download` | Unchanged contract; S3 presigned GET, 900s, Redis 840s | Supabase signed URL |
+| `POST /api/storage/uploads` `{kind: evidence\|maintenance\|document, propertyId, roomId+phase \| issueId \| documentType, contentType, size, thumbnailSize?}` | Validates type and size, checks ownership, returns `{bucket, path, url, method: PUT, headers, thumbnail, expiresInSeconds: 600}`. Content-Type and Content-Length are signed, so storage rejects any other type or byte count | Client `storage.upload` |
+| `POST /api/storage/downloads` `{kind: evidence\|document, ids[≤100]}` | Rows owned via the property; returns `{items: [{id, url, thumbnailUrl}], expiresInSeconds: 3600}` | Client `createSignedURL` |
+| `DELETE /api/storage/evidence` / `/documents` `{ids[≤100]}` | Ownership check, delete objects, then rows and dispute links in one transaction. 204; repeat 404 | iOS direct deletes |
+| `GET /api/exports/{id}/download` | Unchanged contract; presigned GET 900s, Redis 840s | Supabase signed URL |
+
+Keys (new uploads; ids lowercase): evidence `{user}/{property}/move-in|move-out/{room}/{uuid}.jpg`, maintenance `{user}/{property}/{issue}/{uuid}.jpg`, documents `{user}/{property}/{document_type}/{uuid}.{pdf|jpg|png}`, thumbnails `{key}_thumb.jpg` in the same bucket, exports `{user}/{export}.pdf`.
+
+Limits: photos `image/jpeg` ≤ 15 MB, thumbnails `image/jpeg` ≤ 1 MB, documents `application/pdf`/`image/jpeg`/`image/png` ≤ 25 MB.
 
 - **Worker:** `GetObject` for evidence (same 48-photo / 8-per-room limits, concurrency 8). `PutObject` `{user_id}/{export_id}.pdf` to `exports`.
 - **`/api/ready`:** `HeadBucket` on `exports`.
-- **Account deletion:** `ListObjectsV2` under both id casings in all seven buckets, then batch delete.
+- **Account deletion:** `ListObjectsV2` under every id casing in all seven buckets, then batch delete; missing objects are fine, a failing bucket doesn't stop the others, and the auth identity is kept until storage succeeds so a retry finishes.
 - **Credentials:** the branch S3 credential lives only in Railway (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL_S3`, `AWS_REGION`). Never in the apps.
 
-**Upload flow change in the apps:** one extra round trip per photo (ask for a URL, then `PUT`). Thumbnails ride on the same request (two paths in one call). The existing per-photo retry and orphan-cleanup logic stays.
+**Upload flow change in the apps:** one extra round trip per photo (ask for a ticket, then `PUT`). The thumbnail rides on the same ticket. The existing per-photo retry and orphan-cleanup logic stays.
 
 ## 3. Order of work on `dev`
 

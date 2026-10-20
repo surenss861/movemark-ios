@@ -73,23 +73,23 @@ Every Supabase dependency found in the iOS app, the Android app, the FastAPI API
 | `movemark://auth-callback` redirect | iOS | Same scheme registered as a trusted redirect | S7 | ⏳ |
 | API JWT check: HS256 secret → project JWKS → `auth.get_user` | API | Branch JWKS only: EdDSA signature, `iss`/`aud` pinned, `exp`, UUID `sub`, banned rejected; fallbacks removed | S3 | ✅ local · ✅ Neon dev |
 | `auth.admin.delete_user` | API account deletion | `DELETE FROM neon_auth."user"` (cascades sessions/accounts) after rows and storage | S3 | ✅ local · ✅ Neon dev |
-| `auth.admin.create_user` / `delete_user` | staging verifier scripts | Neon Auth admin API on dev | S9 | ⏳ |
+| `auth.admin.create_user` / `delete_user` | staging verifier scripts | Neon Auth email sign-up over HTTP; teardown via `delete_account_for_user` (`scripts/_neon_fixture.py`) | S9 | ✅ Neon dev (all 3 scripts GO) |
 
 ## 4. Storage
 
 | Supabase dependency | Used by | Neon replacement | Step | Status |
 |---|---|---|---|---|
-| Buckets: inspection-media, maintenance-media, leases, deposit-receipts, listing-screenshots, documents, exports | all | Private Neon buckets, same names (or one bucket with prefixes; decide in S4) | S4 | 🟡 |
-| Storage RLS: first path segment = `auth.uid()`, case-insensitive | clients | API issues links only for paths starting with the caller's id, compared case-insensitively | S5 | 🟡 |
-| Client direct upload (evidence, thumbnails, maintenance, documents) | iOS, Android | `POST` upload-link endpoint → client `PUT`s to the presigned URL | S5 | ⏳ |
-| Client signed download URLs (evidence 24h, documents 1h, exports 1h) | iOS, Android | Download-link endpoint, same expiries | S5 | ⏳ |
-| Client direct deletes (evidence and documents) | iOS | Delete endpoint (verifies ownership, removes object) | S5 | ⏳ |
-| API export download (signed 900s, cached 840s in Redis) | API | S3 presigned GET, same TTLs and cache | S4 | ⏳ |
-| Worker evidence download (≤48 photos, concurrency 8) | worker | S3 GetObject (call sites already behind `app/object_store.py`) | S4 | ⏳ |
-| Worker PDF upload `{user_id}/{export_id}.pdf` | worker | S3 PutObject, same key | S4 | ⏳ |
-| Account deletion: recursive remove under `{user_id}` in 7 buckets | API | S3 list + batch delete under both id casings | S4 | ⏳ |
-| `/api/ready` lists the export bucket | API | S3 HeadBucket / ListObjects | S4 | ⏳ |
-| Path convention differences (Android `move_in`, iOS `move-in`; Swift uppercase ids) | clients | Keep as stored; the worker reads `file_path` | — | noted |
+| Buckets: inspection-media, maintenance-media, leases, deposit-receipts, listing-screenshots, documents, exports | all | Seven private Neon buckets, same names; API allow-list (`app/object_store.BUCKETS`) | S4 | ✅ Neon dev |
+| Storage RLS: first path segment = `auth.uid()`, case-insensitive | clients | API: DB ownership check, server-built or row-stored key, key re-checked against caller's folder (case-insensitive). DB: `0910` restrictive policies stop a client recording a key outside `{caller}/{property}/` | S5 | ✅ local · ✅ Neon dev |
+| Client direct upload (evidence, thumbnails, maintenance, documents) | iOS, Android | `POST /api/storage/uploads` → presigned `PUT` (10 min) with signed Content-Type + Content-Length | S5 | ✅ API · ⏳ apps |
+| Client signed download URLs (evidence 24h, documents 1h, exports 1h) | iOS, Android | `POST /api/storage/downloads` by row id → presigned `GET`, **1h for evidence and documents** (evidence shortened from 24h) | S5 | ✅ API · ⏳ apps |
+| Client direct deletes (evidence and documents) | iOS | `DELETE /api/storage/evidence` and `/documents` by row id; objects then rows, server-side | S5 | ✅ API · ⏳ apps |
+| API export download (signed 900s, cached 840s in Redis) | API | S3 presigned GET, `EXPORT_URL_TTL_SECONDS`=900, cache 840s (test-enforced below the signature) | S4 | ✅ Neon dev |
+| Worker evidence download (≤48 photos, concurrency 8) | worker | S3 GetObject via `app/object_store.py` | S4 | ✅ Neon dev |
+| Worker PDF upload `{user_id}/{export_id}.pdf` | worker | S3 PutObject, same key | S4 | ✅ Neon dev |
+| Account deletion: recursive remove under `{user_id}` in 7 buckets | API | S3 list + batch delete under lower/upper/as-is casings; every bucket attempted, failures raised so a retry finishes | S4 | ✅ Neon dev |
+| `/api/ready` lists the export bucket | API | S3 HeadBucket | S4 | ✅ Neon dev |
+| Path convention differences (Android `move_in`, iOS `move-in`; Swift uppercase ids) | clients | New keys: lowercase ids, `move-in`/`move-out`; legacy keys still readable and deletable | — | ✅ |
 
 ## 5. API and worker plumbing
 
@@ -99,8 +99,9 @@ Every Supabase dependency found in the iOS app, the Android app, the FastAPI API
 | Manual `.eq("user_id", …)` ownership filters | Same filters in SQL (still required; owner bypasses RLS) | S1 | ✅ |
 | Unique-violation 23505 on one-active-job | Same index; psycopg `UniqueViolation` | S1 | ✅ index |
 | Worker claim / reap / status writes | Same SQL functions over the pooled connection | S2 | ✅ local · ✅ Neon dev |
-| Env: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `SUPABASE_ANON_KEY`, bucket names | `DATABASE_URL` (pooled), `NEON_AUTH_JWKS_URL`, S3 endpoint/keys, bucket names. Old names kept, unused, until cutover | S1–S4 | ⏳ |
-| Query-chain tests against `supabase-py` | Replaced: whole suite runs real SQL on the reconstructed schema (153 passed) + `neon_dev_smoke.py` 25/25 | S1 | ✅ |
+| Env: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `SUPABASE_ANON_KEY`, bucket names | `DATABASE_URL` (pooled), `NEON_AUTH_URL`, `AWS_ENDPOINT_URL_S3`/`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_REGION`, bucket names. Supabase settings removed | S1–S4 | ✅ |
+| `supabase`, `supabase-auth`, `supabase-functions`, `postgrest`, `storage3`, `realtime` Python packages | Removed (plus their exclusive transitive deps); `boto3` added. Full suite 180/180 in a clean venv without them | S4 | ✅ |
+| Query-chain tests against `supabase-py` | Replaced: whole suite runs real SQL on the reconstructed schema (180 passed) + `neon_dev_smoke.py` 25/25 | S1 | ✅ |
 
 ## 6. Billing and identity
 

@@ -135,6 +135,7 @@ def main() -> None:
                 ("A cannot INSERT item into B's inspection", "/inspection_items", {"inspection_id": rb["inspection"], "room_id": rb["room"]}),
                 ("A cannot INSERT evidence on B's property", "/evidence_files", {"property_id": rb["property"], "inspection_item_id": rb["item"], "file_path": "x", "file_type": "image"}),
                 ("A cannot INSERT evidence in own property pointing at B's item", "/evidence_files", {"property_id": ra["property"], "inspection_item_id": rb["item"], "file_path": "x", "file_type": "image"}),
+                ("A cannot record a storage key in B's folder (0910)", "/evidence_files", {"property_id": ra["property"], "inspection_item_id": ra["item"], "file_path": f"{b_id}/{rb['property']}/move-in/{rb['room']}/1.jpg", "file_type": "image"}),
                 ("A cannot INSERT property owned by B", "/properties", {"user_id": b_id, "title": "x", "address_line_1": "x", "city": "x", "province_state": "x", "postal_code": "x", "country": "x"}),
             ]:
                 r = a.post(path, json=body)

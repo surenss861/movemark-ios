@@ -97,12 +97,13 @@ def seed_rental(dsn: str, user: str) -> dict[str, str]:
         ids["inspection"] = str(one(c, "INSERT INTO inspections (property_id, user_id, inspection_type) VALUES (%s, %s, 'move_in') RETURNING id", (ids["property"], user))[0])
         ids["item"] = str(one(c, "INSERT INTO inspection_items (inspection_id, room_id, notes, condition_rating) VALUES (%s, %s, 'Wall\nscratch', 3) RETURNING id", (ids["inspection"], ids["room"]))[0])
         ids["evidence"] = str(one(c, """INSERT INTO evidence_files (property_id, inspection_item_id, file_path, file_type, thumbnail_path)
-            VALUES (%s, %s, %s, 'image', %s) RETURNING id""", (ids["property"], ids["item"], f"{user}/p/move-in/r/1.jpg", f"{user}/p/move-in/r/1_thumb.jpg"))[0])
+            VALUES (%s, %s, %s, 'image', %s) RETURNING id""", (ids["property"], ids["item"],
+            f"{user}/{ids['property']}/move-in/{ids['room']}/1.jpg", f"{user}/{ids['property']}/move-in/{ids['room']}/1_thumb.jpg"))[0])
         tag = one(c, "SELECT id FROM issue_tags WHERE name = 'Scratch'")[0]
         c.execute("INSERT INTO inspection_item_tags (inspection_item_id, issue_tag_id) VALUES (%s, %s)", (ids["item"], tag))
         ids["maintenance"] = str(one(c, "INSERT INTO maintenance_issues (property_id, user_id, title) VALUES (%s, %s, 'Leak') RETURNING id", (ids["property"], user))[0])
         ids["document"] = str(one(c, """INSERT INTO property_documents (property_id, user_id, document_type, file_path, file_name)
-            VALUES (%s, %s, 'lease', %s, 'lease.pdf') RETURNING id""", (ids["property"], user, f"{user}/p/lease/l.pdf"))[0])
+            VALUES (%s, %s, 'lease', %s, 'lease.pdf') RETURNING id""", (ids["property"], user, f"{user}/{ids['property']}/lease/l.pdf"))[0])
         ids["checklist"] = str(one(c, "INSERT INTO move_out_checklists (property_id, user_id) VALUES (%s, %s) RETURNING id", (ids["property"], user))[0])
         c.commit()
     return ids
@@ -189,6 +190,7 @@ INSERT_ATTACKS = {
     "room in B's property": "INSERT INTO rooms (property_id, name) VALUES ('{bp}', 'x')",
     "inspection on B's property": "INSERT INTO inspections (property_id, user_id, inspection_type) VALUES ('{bp}', '{A}', 'move_out')",
     "item in B's inspection": "INSERT INTO inspection_items (inspection_id, room_id) VALUES ('{bi}', '{br}')",
+    "key in B's folder recorded on own property": "INSERT INTO evidence_files (property_id, inspection_item_id, file_path, file_type) VALUES ('{ap}', '{aitem}', '{B}/{bp}/move-in/r/x.jpg', 'image')",
     "evidence on B's property": "INSERT INTO evidence_files (property_id, inspection_item_id, file_path, file_type) VALUES ('{bp}', '{bitem}', 'x', 'image')",
     "evidence in own property pointing at B's item": "INSERT INTO evidence_files (property_id, inspection_item_id, file_path, file_type) VALUES ('{ap}', '{bitem}', 'x', 'image')",
     "tag on B's item": "INSERT INTO inspection_item_tags (inspection_item_id, issue_tag_id) SELECT '{bitem}', id FROM issue_tags WHERE name = 'Stain'",
@@ -202,7 +204,7 @@ INSERT_ATTACKS = {
 @pytest.mark.parametrize("name", sorted(INSERT_ATTACKS))
 def test_insert_attacks_rejected(dsn: str, two_rentals: Any, name: str) -> None:
     a, b = two_rentals
-    sql = INSERT_ATTACKS[name].format(A=A, B=B, ap=a["property"], bp=b["property"], bi=b["inspection"],
+    sql = INSERT_ATTACKS[name].format(A=A, B=B, ap=a["property"], aitem=a["item"], bp=b["property"], bi=b["inspection"],
                                       br=b["room"], bitem=b["item"], newid=str(uuid.uuid4()))
     with as_user(dsn, A) as c, pytest.raises(errors.InsufficientPrivilege):
         c.execute(sql)
