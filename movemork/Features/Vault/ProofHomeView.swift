@@ -255,12 +255,14 @@ struct ProofHomeView: View {
                 .font(.system(size: 14 * k, weight: .semibold))
                 .foregroundStyle(Ink.text)
                 .frame(width: spec.controlSize, height: spec.controlSize)
-                .background(Color(red: 0.965, green: 0.961, blue: 0.961), in: Circle())
+                .background(Color(red: 0.965, green: 0.961, blue: 0.961).opacity(0.94), in: Circle())
+                .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
                 .frame(width: 44 * k, height: 44 * k)
                 .contentShape(Rectangle())
         }
         .accessibilityLabel(model.otherRentals.isEmpty ? "Add a rental" : "Rentals")
-        .padding(.trailing, -6.5)
+        // The 44pt hit area overhangs; the visible circle's edge sits exactly on the screen inset.
+        .padding(.trailing, -(44 * k - spec.controlSize) / 2)
     }
 
     private var coveragePill: some View {
@@ -325,6 +327,7 @@ struct ProofHomeView: View {
                     .padding(.top, 31 * k)
                 recentStrip.padding(.top, 11 * k)
             }
+            roomsToCapture.padding(.top, 20 * k)
             if !model.actions.isEmpty {
                 sectionHeader("Next actions").padding(.top, 24 * k)
                 actionGrid.padding(.top, 10 * k)
@@ -460,11 +463,6 @@ struct ProofHomeView: View {
                         Button { onOpenRoom(item.id) } label: { evidenceTile(item, width: w) }
                             .buttonStyle(MMLightPressStyle())
                     }
-                    // Keep the reference's three-across rhythm with rooms still to capture.
-                    ForEach(model.upcoming.prefix(max(0, 3 - model.recent.count))) { room in
-                        Button { onOpenRoom(room.id) } label: { captureSlot(room, width: w) }
-                            .buttonStyle(MMLightPressStyle())
-                    }
                 }
             }
             .scrollClipDisabled()
@@ -494,37 +492,34 @@ struct ProofHomeView: View {
             .accessibilityLabel("\(item.roomName), \(item.photoCount) photos")
     }
 
-    /// Same frame as an evidence tile: a quiet invitation, clearly not evidence.
-    private func captureSlot(_ room: ProofHomeModel.Upcoming, width: CGFloat) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 11 * k, style: .continuous)
-                .fill(Color(red: 0.925, green: 0.925, blue: 0.918))
-            RoundedRectangle(cornerRadius: 11 * k, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-            VStack(spacing: 6 * k) {
-                Image(systemName: "camera")
-                    .font(.system(size: 17 * k, weight: .regular))
-                    .foregroundStyle(Ink.text.opacity(0.55))
-                Text("Capture")
-                    .mmFont(9, .medium)
-                    .foregroundStyle(Ink.text.opacity(0.55))
+    /// Rooms with no proof besides the next room: a quiet line, never placed among evidence.
+    @ViewBuilder
+    private var roomsToCapture: some View {
+        let others = model.upcoming.filter { $0.roomName != model.nextRoomName }
+        if !others.isEmpty {
+            Button(action: onOpenRental) {
+                HStack(spacing: 8 * k) {
+                    VStack(alignment: .leading, spacing: 3 * k) {
+                        Text("Rooms still to capture")
+                            .mmFont(10.5)
+                            .foregroundStyle(Ink.secondary)
+                        Text(others.prefix(3).map(\.roomName).joined(separator: " · ")
+                             + (others.count > 3 ? " +\(others.count - 3)" : ""))
+                            .mmFont(12.5, .medium)
+                            .foregroundStyle(Ink.text)
+                            .lineLimit(isAX ? 3 : 1)
+                    }
+                    Spacer(minLength: 4 * k)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10 * k, weight: .semibold))
+                        .foregroundStyle(Ink.secondary)
+                        .padding(.trailing, 12 * k)
+                }
+                .contentShape(Rectangle())
             }
-            .offset(y: -6)
-            VStack {
-                Spacer()
-                Text(room.roomName)
-                    .mmFont(8, .medium)
-                    .foregroundStyle(Ink.text.opacity(0.7))
-                    .lineLimit(1)
-                    .padding(.horizontal, 9 * k)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(height: 21 * k)
-            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(others.count) rooms still to capture: \(others.map(\.roomName).joined(separator: ", "))")
         }
-        .frame(width: width, height: spec.tileHeight)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(room.roomName), no proof yet. Capture.")
-        .accessibilityAddTraits(.isButton)
     }
 
     private var actionGrid: some View {

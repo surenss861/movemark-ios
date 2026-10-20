@@ -73,6 +73,15 @@ Ignore the travel and plant boards: they were exploration and drifted generic.
 
 **One system, different compositions:** photographic rental evidence on top, clean Apple-like utility underneath. Screens share type, radii, spacing and green; they do not share a layout.
 
+## Evidence integrity (rule)
+
+Evidence photography may dominate the UI, but **MoveMark never beautifies, enhances, generatively modifies, replaces or destructively crops original evidence.** No automatic border removal, no filters, no AI fill.
+
+- Thumbnails and heroes may use standard aspect-fill framing (a display crop only).
+- Opening a photo always shows the untouched original, uncropped (`RoomPhotoViewer` uses aspect-fit).
+- Placeholders for missing evidence must never resemble evidence, and never appear in an evidence section ("Recent evidence" shows only saved photos; rooms without proof are listed separately).
+- Generated or stock imagery is allowed only in debug and test fixtures, never in a user's record.
+
 ## Material and color
 
 | Role | Value |
