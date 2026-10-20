@@ -401,16 +401,16 @@ private struct ProofQAScreen: View {
 
     private var model: ProofHomeModel {
         let actions: [ProofHomeModel.Action] = [
-            .init(id: "lease", kind: .document(.lease), title: "Lease", subtitle: "Add your lease agreement", icon: "doc.text", needed: true),
-            .init(id: "deposit", kind: .document(.depositReceipt), title: "Deposit receipt", subtitle: "Upload proof of deposit", icon: "banknote", needed: true),
-            .init(id: "listing", kind: .document(.listingScreenshot), title: "Listing proof", subtitle: "Save the original listing", icon: "photo", needed: true),
-            .init(id: "maintenance", kind: .maintenance, title: "Maintenance issue", subtitle: "Log a repair or problem", icon: "wrench.adjustable"),
+            .init(id: "lease", kind: .document(.lease), title: "Lease", subtitle: "Add your lease", icon: "doc.text", needed: true),
+            .init(id: "deposit", kind: .document(.depositReceipt), title: "Deposit receipt", subtitle: "Proof of deposit", icon: "receipt", needed: true),
+            .init(id: "listing", kind: .document(.listingScreenshot), title: "Listing proof", subtitle: "Original listing", icon: "photo", needed: true),
+            .init(id: "maintenance", kind: .maintenance, title: "Maintenance", subtitle: "Report an issue", icon: "wrench.adjustable"),
         ]
         var m = ProofHomeModel(
             propertyName: "88 Harbour St",
             addressLine: "Unit 2304",
             documented: 9, totalRooms: 10,
-            heroPhotoPath: Self.fixture("proof-hero-v2"),
+            heroPhotoPath: Self.fixture("proof-hero-v3"),
             nextRoomName: "Primary Bedroom",
             primaryTitle: "Capture Primary Bedroom",
             photos: 12, records: 3, issues: 1,
@@ -438,11 +438,11 @@ private struct ProofQAScreen: View {
         if screen == "proof-empty" {
             ProofHomeEmptyView(onStart: {}, onRetry: {})
         } else {
+            // Same mounting as AuthenticatedTabShellView: the bar is a bottom safe-area inset.
             ProofHomeView(model: model, resolvePhotoURL: { await Self.resolve($0) })
-                .overlay(alignment: .bottom) {
+                .safeAreaInset(edge: .bottom, spacing: 0) {
                     MMProofTabBarV4(selectedTab: .constant(.vaults))
                 }
-                .ignoresSafeArea(edges: .bottom)
         }
     }
 }

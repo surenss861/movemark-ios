@@ -26,6 +26,68 @@ struct MMProofTabBarV4: View {
     }
 
     var body: some View {
+        if isLight {
+            lightBar
+        } else {
+            floatingDock
+        }
+    }
+
+    // MARK: - Light bar (Proof redesign): attached to the bottom edge, full width, native material.
+
+    private var lightBar: some View {
+        HStack(spacing: 0) {
+            lightItem(.vaults, title: "Proof", outline: "house", filled: "house.fill")
+            lightItem(.exports, title: "Reports", outline: "doc.text", filled: "doc.text.fill")
+            lightItem(.account, title: "Account", outline: "person", filled: "person.fill")
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 6)
+        .padding(.bottom, 2)
+        .frame(maxWidth: .infinity)
+        // White, slightly translucent — the reference bar reads white, not system gray.
+        .background(Color.white.opacity(0.92), ignoresSafeAreaEdges: .bottom)
+        .background(.ultraThinMaterial, ignoresSafeAreaEdges: .bottom)
+        .environment(\.colorScheme, .light)
+        .overlay(alignment: .top) {
+            Rectangle().fill(MoveMarkTheme.Light.hairline).frame(height: 0.5)
+        }
+    }
+
+    private func lightItem(_ tab: RootTab, title: String, outline: String, filled: String) -> some View {
+        let isSelected = selectedTab == tab
+        return Button {
+            guard selectedTab != tab else { return }
+            MMHaptics.selection()
+            withAnimation(reduceMotion ? nil : MMMotion.tabSwitch) { selectedTab = tab }
+        } label: {
+            VStack(spacing: 3) {
+                Image(systemName: isSelected ? filled : outline)
+                    .font(.system(size: 17, weight: isSelected ? .semibold : .light))
+                    .foregroundStyle(isSelected ? MoveMarkTheme.Light.onAccent : MoveMarkTheme.Light.textSecondary)
+                    .frame(width: 48, height: 30)
+                    .background {
+                        if isSelected {
+                            Capsule()
+                                .fill(MoveMarkTheme.Light.accentWash)
+                                .matchedGeometryEffect(id: "lightTabPill", in: tabNamespace)
+                        }
+                    }
+                Text(title)
+                    .font(.system(size: 10.5, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? MoveMarkTheme.Light.textPrimary : MoveMarkTheme.Light.textSecondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 50)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(MMFloatingDockPressStyle())
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    // MARK: - Floating dock (screens not yet redesigned)
+
+    private var floatingDock: some View {
         GeometryReader { geo in
             let dockWidth = min(max(geo.size.width - 64, 250), 292)
 
@@ -52,8 +114,7 @@ struct MMProofTabBarV4: View {
             .frame(width: dockWidth, height: dockHeight)
             .background(dockBackground)
             .overlay(dockBorder)
-            .shadow(color: Color.black.opacity(isLight ? 0.10 : 0.28), radius: isLight ? 18 : 12, x: 0, y: 4)
-            .animation(reduceMotion ? nil : MMMotion.tabSwitch, value: isLight)
+            .shadow(color: Color.black.opacity(0.28), radius: 12, x: 0, y: 4)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .padding(.bottom, MoveMarkTheme.Spacing.floatingDockBottomInset)
         }

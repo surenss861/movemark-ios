@@ -67,15 +67,24 @@ struct ProofHomeView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    // Proportions measured from design-refs/proof.jpg (560px screen ↔ 393pt).
+    private enum M {
+        static let inset: CGFloat = 20
+        static let sheetRadius: CGFloat = 28
+        /// The sheet starts at 31% of the screen height and rises this far over the photo.
+        static let sheetTopFraction: CGFloat = 0.29
+        static let overlap: CGFloat = 28
+    }
+
     var body: some View {
         GeometryReader { geo in
-            let heroHeight = max(geo.size.height * 0.40, 300) + geo.safeAreaInsets.top
+            let fullHeight = geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom
+            let sheetTop = max(fullHeight * M.sheetTopFraction, 250)
             ScrollView {
                 VStack(spacing: 0) {
-                    hero(height: heroHeight, topInset: geo.safeAreaInsets.top, width: geo.size.width)
+                    hero(height: sheetTop + M.overlap, topInset: geo.safeAreaInsets.top, width: geo.size.width)
                     sheet
-                        // The sheet rises over the bottom of the photo.
-                        .padding(.top, -MoveMarkTheme.Light.sheetRadius)
+                        .padding(.top, -M.overlap)
                 }
             }
             .scrollIndicators(.hidden)
@@ -87,7 +96,8 @@ struct ProofHomeView: View {
     // MARK: - Hero
 
     private func hero(height: CGFloat, topInset: CGFloat, width: CGFloat) -> some View {
-        ZStack(alignment: .bottomLeading) {
+        ZStack(alignment: .topLeading) {
+            // Fixed frame + overlay: a fill-cropped photo can never widen the screen or letterbox.
             Color.clear
                 .frame(width: width, height: height)
                 .overlay { heroPhoto }
@@ -100,56 +110,61 @@ struct ProofHomeView: View {
                 }
                 .clipped()
 
-            // Only as much shade as legibility needs: top for the wordmark, bottom for the title.
+            // Just enough shade for white text: a whisper at the top, a soft floor under the title.
             LinearGradient(
                 stops: [
-                    .init(color: .black.opacity(0.38), location: 0),
-                    .init(color: .clear, location: 0.28),
-                    .init(color: .clear, location: 0.45),
-                    .init(color: .black.opacity(0.55), location: 1),
+                    .init(color: .black.opacity(0.28), location: 0),
+                    .init(color: .clear, location: 0.22),
+                    .init(color: .clear, location: 0.42),
+                    .init(color: .black.opacity(0.42), location: 0.92),
                 ],
                 startPoint: .top, endPoint: .bottom
             )
+            .frame(width: width, height: height)
             .allowsHitTesting(false)
 
             VStack(alignment: .leading, spacing: 0) {
-                HStack {
+                HStack(alignment: .center) {
                     wordmark
                     Spacer()
                     Button(action: onAddRental) {
                         Image(systemName: "plus")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(MoveMarkTheme.Light.textPrimary)
-                            .frame(width: 40, height: 40)
+                            .frame(width: 36, height: 36)
                             .background(.regularMaterial, in: Circle())
                             .environment(\.colorScheme, .light)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .accessibilityLabel("Add a rental")
+                    .padding(.trailing, -4)
                 }
-                .padding(.top, topInset + 8)
+                .padding(.top, topInset - 4)
 
-                Spacer(minLength: 0)
+                Spacer(minLength: 8)
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text("Your proof")
-                        .font(.system(size: 34, weight: .bold))
+                        .font(.system(size: 26, weight: .bold))
                         .foregroundStyle(.white)
                         .accessibilityAddTraits(.isHeader)
                     Text([model.propertyName, model.addressLine].compactMap { $0 }.joined(separator: " · "))
-                        .font(.system(size: 17))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .lineLimit(2)
+                        .font(.system(size: 15))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
-                .shadow(color: .black.opacity(0.25), radius: 8, y: 1)
+                .shadow(color: .black.opacity(0.22), radius: 6, y: 1)
 
                 coveragePill
-                    .padding(.top, 16)
-                    .padding(.bottom, MoveMarkTheme.Light.sheetRadius + 18)
+                    .padding(.top, 14)
+                    .padding(.bottom, M.overlap + 16)
             }
-            .padding(.horizontal, 22)
-            .frame(height: height, alignment: .top)
+            .padding(.horizontal, M.inset)
+            .frame(width: width, height: height, alignment: .topLeading)
         }
-        .frame(height: height)
+        .frame(width: width, height: height)
     }
 
     @ViewBuilder
@@ -160,70 +175,72 @@ struct ProofHomeView: View {
             // No evidence yet: a calm designed field, never stock photography.
             ZStack {
                 LinearGradient(
-                    colors: [Color(red: 0.36, green: 0.40, blue: 0.38), Color(red: 0.20, green: 0.23, blue: 0.22)],
+                    colors: [Color(red: 0.42, green: 0.45, blue: 0.43), Color(red: 0.24, green: 0.27, blue: 0.26)],
                     startPoint: .topLeading, endPoint: .bottomTrailing
                 )
                 Image(systemName: "house")
-                    .font(.system(size: 64, weight: .ultraLight))
-                    .foregroundStyle(.white.opacity(0.16))
-                    .offset(y: -20)
+                    .font(.system(size: 56, weight: .ultraLight))
+                    .foregroundStyle(.white.opacity(0.18))
+                    .offset(y: -24)
             }
         }
     }
 
     private var wordmark: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 7) {
             Image(systemName: "checkmark.shield")
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(MoveMarkTheme.Light.accent)
             Text("MOVEMARK")
-                .font(.system(size: 15, weight: .semibold))
-                .tracking(2.2)
+                .font(.system(size: 14, weight: .semibold))
+                .tracking(2.0)
                 .foregroundStyle(.white)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("MoveMark")
     }
 
-    /// Slim, glass, tappable: segments show rooms, the line says it in words.
+    /// Compact secondary overlay: small house, slim segments, one line of text, small chevron.
     private var coveragePill: some View {
         Button(action: onOpenRental) {
-            HStack(spacing: 12) {
-                Image(systemName: model.totalRooms > 0 && model.documented == model.totalRooms ? "house.fill" : "house")
-                    .font(.system(size: 17, weight: .medium))
+            HStack(spacing: 10) {
+                Image(systemName: "house")
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(MoveMarkTheme.Light.accent)
-                VStack(alignment: .leading, spacing: 6) {
-                    if model.totalRooms > 0 {
-                        segments
-                    }
+                VStack(alignment: .leading, spacing: 5) {
+                    if model.totalRooms > 0 { segments }
                     Text(model.totalRooms == 0
-                         ? "Add rooms to start documenting"
+                         ? "Add rooms to start"
                          : "\(model.documented) of \(model.totalRooms) rooms documented")
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.white)
-                        .lineLimit(2)
+                        .lineLimit(1)
                 }
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.white.opacity(0.7))
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.leading, 14)
+            .padding(.trailing, 14)
+            .frame(minHeight: 44)
+            .background(Color.black.opacity(0.42), in: Capsule())
             .background(.ultraThinMaterial, in: Capsule())
             .environment(\.colorScheme, .dark)
+            .fixedSize(horizontal: true, vertical: false)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(model.documented) of \(model.totalRooms) rooms documented. Open rental.")
     }
 
+    /// Five slim segments regardless of room count, filled in proportion (reference treatment).
     private var segments: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<min(model.totalRooms, 12), id: \.self) { i in
+        let filled = model.totalRooms == 0 ? 0
+            : Int((Double(model.documented) / Double(model.totalRooms) * 5).rounded(.down))
+        return HStack(spacing: 4) {
+            ForEach(0..<5, id: \.self) { i in
                 Capsule()
-                    .fill(i < Int((Double(model.documented) / Double(max(model.totalRooms, 1)) * Double(min(model.totalRooms, 12))).rounded())
-                          ? MoveMarkTheme.Light.accent
-                          : Color.white.opacity(0.28))
-                    .frame(width: model.totalRooms > 8 ? 12 : 22, height: 4)
+                    .fill(i < filled ? MoveMarkTheme.Light.accent : Color.white.opacity(0.3))
+                    .frame(width: 22, height: 4)
             }
         }
         .accessibilityHidden(true)
@@ -234,129 +251,130 @@ struct ProofHomeView: View {
     private var sheet: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let error = model.errorMessage {
-                errorRow(error).padding(.bottom, 18)
+                errorRow(error).padding(.bottom, 14)
             }
 
-            nextRoomBlock
-
-            metrics
-                .padding(.top, 22)
+            nextRoomRow
+            primaryButton.padding(.top, 8)
+            metrics.padding(.top, 12)
 
             if !model.recent.isEmpty {
-                recentEvidence
-                    .padding(.top, 30)
+                sectionHeader("Recent evidence", trailing: "View all", action: onOpenRental)
+                    .padding(.top, 16)
+                recentStrip.padding(.top, 10)
             }
 
             if !model.actions.isEmpty {
-                nextActions
-                    .padding(.top, 30)
+                sectionHeader("Next actions").padding(.top, 18)
+                actionGrid.padding(.top, 10)
             }
 
             if !model.otherRentals.isEmpty {
-                otherRentals
-                    .padding(.top, 30)
+                sectionHeader("Other rentals").padding(.top, 22)
+                otherRentals.padding(.top, 12)
             }
 
             MMSignedInScrollTailSpacer(kind: .rootTab)
         }
-        .padding(.horizontal, 22)
-        .padding(.top, 26)
+        .padding(.horizontal, M.inset)
+        .padding(.top, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            UnevenRoundedRectangle(
-                topLeadingRadius: MoveMarkTheme.Light.sheetRadius,
-                topTrailingRadius: MoveMarkTheme.Light.sheetRadius,
-                style: .continuous
-            )
-            .fill(MoveMarkTheme.Light.surface)
-            .shadow(color: .black.opacity(0.08), radius: 16, y: -4)
+            UnevenRoundedRectangle(topLeadingRadius: M.sheetRadius, topTrailingRadius: M.sheetRadius, style: .continuous)
+                .fill(MoveMarkTheme.Light.surface)
         )
     }
 
-    private var nextRoomBlock: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if let name = model.nextRoomName {
-                Button(action: onPrimary) {
-                    HStack(spacing: 16) {
-                        RoomGlyph(name: name)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Next room")
-                                .font(.system(size: 14))
-                                .foregroundStyle(MoveMarkTheme.Light.textSecondary)
-                            Text(name)
-                                .font(.system(size: 22, weight: .semibold))
-                                .foregroundStyle(MoveMarkTheme.Light.textPrimary)
-                                .lineLimit(2)
-                        }
-                        Spacer(minLength: 8)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(MoveMarkTheme.Light.textTertiary)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            } else if model.totalRooms > 0 {
-                HStack(spacing: 12) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 28))
-                        .foregroundStyle(MoveMarkTheme.Light.accent)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Every room documented")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(MoveMarkTheme.Light.textPrimary)
-                        Text("Your move-in proof is complete.")
-                            .font(.system(size: 15))
-                            .foregroundStyle(MoveMarkTheme.Light.textSecondary)
-                    }
-                }
-            }
-
-            // The one green action on the screen.
+    @ViewBuilder
+    private var nextRoomRow: some View {
+        if let name = model.nextRoomName {
             Button(action: onPrimary) {
-                Label(model.primaryTitle, systemImage: model.nextRoomName != nil ? "camera.fill" : "arrow.right")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(MoveMarkTheme.Light.onAccent)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 54)
-                    .padding(.horizontal, 12)
-                    .background(MoveMarkTheme.Light.accent, in: Capsule())
-                    .shadow(color: MoveMarkTheme.Light.accent.opacity(0.25), radius: 10, y: 4)
+                HStack(spacing: 14) {
+                    RoomGlyph(name: name)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Next room")
+                            .font(.system(size: 12))
+                            .foregroundStyle(MoveMarkTheme.Light.textSecondary)
+                        Text(name)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(MoveMarkTheme.Light.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(MoveMarkTheme.Light.textTertiary)
+                }
+                .frame(minHeight: 60)
+                .contentShape(Rectangle())
             }
-            .buttonStyle(ProofPressStyle())
+            .buttonStyle(.plain)
+        } else if model.totalRooms > 0 {
+            HStack(spacing: 14) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(MoveMarkTheme.Light.accent)
+                    .frame(width: 60, height: 60)
+                    .background(MoveMarkTheme.Light.accentWash, in: Circle())
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Move-in proof")
+                        .font(.system(size: 13))
+                        .foregroundStyle(MoveMarkTheme.Light.textSecondary)
+                    Text("Every room documented")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(MoveMarkTheme.Light.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+            .frame(minHeight: 72)
         }
+    }
+
+    /// The one green action. Native proportions, no glow.
+    private var primaryButton: some View {
+        Button(action: onPrimary) {
+            Label(model.primaryTitle, systemImage: model.nextRoomName != nil ? "camera.fill" : "doc.text.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(MoveMarkTheme.Light.onAccent)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .frame(maxWidth: .infinity)
+                .frame(height: 46)
+                .background(MoveMarkTheme.Light.cta, in: Capsule())
+        }
+        .buttonStyle(ProofPressStyle())
     }
 
     private var metrics: some View {
         HStack(spacing: 0) {
             metric(icon: "camera", value: model.photos, label: model.photos == 1 ? "Photo" : "Photos")
-            divider
+            separator
             metric(icon: "doc.text", value: model.records, label: model.records == 1 ? "Record" : "Records")
-            divider
+            separator
             metric(icon: "exclamationmark.triangle", value: model.issues, label: model.issues == 1 ? "Issue" : "Issues",
                    tint: model.issues > 0 ? MoveMarkTheme.Light.attention : MoveMarkTheme.Light.textPrimary)
         }
-        .padding(.vertical, 14)
+        .frame(height: 42)
     }
 
-    private var divider: some View {
-        Rectangle().fill(MoveMarkTheme.Light.hairline).frame(width: 1, height: 36)
+    private var separator: some View {
+        Rectangle().fill(MoveMarkTheme.Light.hairline).frame(width: 1, height: 30)
     }
 
     private func metric(icon: String, value: Int, label: String, tint: Color = MoveMarkTheme.Light.textPrimary) -> some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 20))
+                .font(.system(size: 19, weight: .light))
                 .foregroundStyle(tint)
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: -1) {
                 Text("\(value)")
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(MoveMarkTheme.Light.textPrimary)
                     .monospacedDigit()
                 Text(label)
-                    .font(.system(size: 13))
+                    .font(.system(size: 11))
                     .foregroundStyle(MoveMarkTheme.Light.textSecondary)
             }
         }
@@ -364,74 +382,72 @@ struct ProofHomeView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var recentEvidence: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            sectionHeader("Recent evidence", trailing: "View all", action: onOpenRental)
+    /// Three across, equal width, filling the row (scrolls if there are more).
+    private var recentStrip: some View {
+        GeometryReader { geo in
+            let gap: CGFloat = 8
+            let w = (geo.size.width - gap * 2) / 3
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
+                HStack(spacing: gap) {
                     ForEach(model.recent) { item in
                         Button { onOpenRoom(item.id) } label: {
-                            RecentTile(item: item, resolvePhotoURL: resolvePhotoURL)
+                            RecentTile(item: item, width: w, height: w * 0.88, resolvePhotoURL: resolvePhotoURL)
                         }
                         .buttonStyle(ProofPressStyle())
                     }
                 }
             }
             .scrollClipDisabled()
+            .scrollDisabled(model.recent.count <= 3)
         }
+        .aspectRatio(3 / 0.88 * 0.98, contentMode: .fit)
     }
 
-    private var nextActions: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            sectionHeader("Next actions")
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                ForEach(model.actions) { action in
-                    Button { onAction(action) } label: { ActionTile(action: action) }
-                        .buttonStyle(ProofPressStyle())
-                }
+    private var actionGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+            ForEach(model.actions) { action in
+                Button { onAction(action) } label: { ActionTile(action: action) }
+                    .buttonStyle(ProofPressStyle())
             }
         }
     }
 
     private var otherRentals: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            sectionHeader("Other rentals")
-            VStack(spacing: 0) {
-                ForEach(Array(model.otherRentals.enumerated()), id: \.element.id) { index, rental in
-                    if index > 0 { Rectangle().fill(MoveMarkTheme.Light.hairline).frame(height: 1).padding(.leading, 16) }
-                    Button { onOpenOtherRental(rental.id) } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(rental.name).font(.system(size: 16, weight: .medium)).foregroundStyle(MoveMarkTheme.Light.textPrimary)
-                                Text(rental.status).font(.system(size: 13)).foregroundStyle(MoveMarkTheme.Light.textSecondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(MoveMarkTheme.Light.textTertiary)
+        VStack(spacing: 0) {
+            ForEach(Array(model.otherRentals.enumerated()), id: \.element.id) { index, rental in
+                if index > 0 { Rectangle().fill(MoveMarkTheme.Light.hairline).frame(height: 1).padding(.leading, 14) }
+                Button { onOpenOtherRental(rental.id) } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(rental.name).font(.system(size: 15, weight: .medium)).foregroundStyle(MoveMarkTheme.Light.textPrimary)
+                            Text(rental.status).font(.system(size: 12)).foregroundStyle(MoveMarkTheme.Light.textSecondary)
                         }
-                        .padding(16)
-                        .contentShape(Rectangle())
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(MoveMarkTheme.Light.textTertiary)
                     }
-                    .buttonStyle(.plain)
+                    .padding(14)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
-            .background(MoveMarkTheme.Light.background, in: RoundedRectangle(cornerRadius: MoveMarkTheme.Light.tileRadius, style: .continuous))
         }
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(MoveMarkTheme.Light.hairline))
     }
 
     private func sectionHeader(_ title: String, trailing: String? = nil, action: (() -> Void)? = nil) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(MoveMarkTheme.Light.textPrimary)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
             if let trailing, let action {
                 Button(action: action) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 3) {
                         Text(trailing)
-                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold))
+                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
                     }
-                    .font(.system(size: 15))
+                    .font(.system(size: 13))
                     .foregroundStyle(MoveMarkTheme.Light.textSecondary)
                 }
             }
@@ -476,21 +492,20 @@ private struct RoomGlyph: View {
     private var symbol: String {
         let n = name.lowercased()
         if n.contains("bed") { return "bed.double" }
-        if n.contains("kitchen") { return "fork.knife" }
+        if n.contains("kitchen") || n.contains("dining") { return "fork.knife" }
         if n.contains("bath") || n.contains("ensuite") || n.contains("washroom") { return "shower" }
         if n.contains("living") || n.contains("family") || n.contains("lounge") { return "sofa" }
         if n.contains("balcony") || n.contains("patio") || n.contains("terrace") { return "sun.max" }
         if n.contains("laundry") { return "washer" }
         if n.contains("office") || n.contains("study") { return "desktopcomputer" }
-        if n.contains("dining") { return "fork.knife" }
         return "door.left.hand.open"
     }
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: 26, weight: .regular))
-            .foregroundStyle(MoveMarkTheme.Light.textPrimary.opacity(0.75))
-            .frame(width: 72, height: 72)
+            .font(.system(size: 22))
+            .foregroundStyle(MoveMarkTheme.Light.textPrimary.opacity(0.7))
+            .frame(width: 56, height: 56)
             .background(MoveMarkTheme.Light.fill, in: Circle())
             .accessibilityHidden(true)
     }
@@ -498,40 +513,45 @@ private struct RoomGlyph: View {
 
 private struct RecentTile: View {
     let item: ProofHomeModel.Recent
+    let width: CGFloat
+    let height: CGFloat
     let resolvePhotoURL: (String) async -> URL?
     @State private var url: URL?
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            MMCachedAsyncImage(path: item.photoPath, signedURL: url) { phase in
-                switch phase {
-                case .success(let image): image.resizable().scaledToFill()
-                default: MoveMarkTheme.Light.fill
+        // Fixed frame + overlay so the fill-cropped photo never letterboxes.
+        Color.clear
+            .frame(width: width, height: height)
+            .overlay {
+                MMCachedAsyncImage(path: item.photoPath, signedURL: url) { phase in
+                    switch phase {
+                    case .success(let image): image.resizable().scaledToFill()
+                    default: MoveMarkTheme.Light.fill
+                    }
                 }
             }
-            .frame(width: 156, height: 156)
-            .clipped()
-
-            LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
-
-            HStack(spacing: 4) {
-                Text(item.roomName)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                Image(systemName: "camera").font(.system(size: 11, weight: .semibold))
-                Text("\(item.photoCount)").font(.system(size: 13, weight: .semibold)).monospacedDigit()
+            .overlay(alignment: .bottom) {
+                ZStack(alignment: .bottom) {
+                    LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 34)
+                    HStack(spacing: 3) {
+                        Text(item.roomName)
+                            .font(.system(size: 11, weight: .medium))
+                            .lineLimit(1)
+                        Spacer(minLength: 2)
+                        Image(systemName: "photo.on.rectangle").font(.system(size: 9, weight: .medium))
+                        Text("\(item.photoCount)").font(.system(size: 11, weight: .medium)).monospacedDigit()
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 7)
+                }
             }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 10)
-            .padding(.bottom, 9)
-        }
-        .frame(width: 156, height: 156)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .task(id: item.photoPath) { url = await resolvePhotoURL(item.photoPath) }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(item.roomName), \(item.photoCount) photos")
-        .accessibilityAddTraits(.isButton)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .task(id: item.photoPath) { url = await resolvePhotoURL(item.photoPath) }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(item.roomName), \(item.photoCount) photos")
+            .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -539,34 +559,38 @@ private struct ActionTile: View {
     let action: ProofHomeModel.Action
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(spacing: 8) {
             Image(systemName: action.icon)
-                .font(.system(size: 20))
+                .font(.system(size: 18, weight: .light))
                 .foregroundStyle(MoveMarkTheme.Light.textPrimary)
                 .frame(width: 24)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(action.title)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(MoveMarkTheme.Light.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
+                .overlay(alignment: .topTrailing) {
                     if action.needed {
                         Circle().fill(MoveMarkTheme.Light.attention).frame(width: 6, height: 6)
+                            .offset(x: 3, y: -2)
                             .accessibilityLabel("Needed")
                     }
                 }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(action.title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(MoveMarkTheme.Light.textPrimary)
+                    .lineLimit(1)
                 Text(action.subtitle)
-                    .font(.system(size: 13))
+                    .font(.system(size: 11))
                     .foregroundStyle(MoveMarkTheme.Light.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
             }
             Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(MoveMarkTheme.Light.textTertiary)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
-        .background(MoveMarkTheme.Light.surface, in: RoundedRectangle(cornerRadius: MoveMarkTheme.Light.tileRadius, style: .continuous))
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, minHeight: 52)
+        .background(MoveMarkTheme.Light.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: MoveMarkTheme.Light.tileRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(MoveMarkTheme.Light.hairline, lineWidth: 1)
         )
         .contentShape(Rectangle())

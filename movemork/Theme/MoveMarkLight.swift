@@ -28,6 +28,9 @@ extension MoveMarkTheme {
         static let onAccent = Color(red: 0.035, green: 0.110, blue: 0.067)           // #091C11
         /// Soft green wash for "done" / Pro states.
         static let accentWash = MoveMarkTheme.Colors.primary.opacity(0.12)
+        /// Primary button fill: MoveMark green, a touch calmer than the signal green so it reads
+        /// native on white (not neon). Dark label.
+        static let cta = Color(red: 0.200, green: 0.690, blue: 0.420)                // #33B06B
         static let attention = Color(red: 0.780, green: 0.520, blue: 0.090)
 
         static let sheetRadius: CGFloat = 28
