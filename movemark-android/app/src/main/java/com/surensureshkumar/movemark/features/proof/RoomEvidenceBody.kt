@@ -71,8 +71,6 @@ fun RoomEvidenceBody(
     onEdit: (EvidenceRecord) -> Unit,
     onAddPhotos: (EvidenceRecord) -> Unit,
     onDelete: (EvidenceRecord) -> Unit,
-    onTakePhotos: () -> Unit,
-    onChooseGallery: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val ordered = entries.sortedByDescending { it.createdAt.orEmpty() }
@@ -118,16 +116,7 @@ fun RoomEvidenceBody(
                 EntryRow(entry, isBusy, onEdit, onAddPhotos, onDelete)
             }
         }
-        Hairline()
-
-        Column(Modifier.padding(vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Kicker("ADD MORE PROOF", MMColors.TextMuted)
-            // Secondary on purpose: the room is documented, so green is reserved for saving.
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                MMButton("Take photos", onTakePhotos, Modifier.weight(1f), style = MMButtonStyle.Secondary, enabled = !isBusy)
-                MMButton("Gallery", onChooseGallery, Modifier.weight(1f), style = MMButtonStyle.Secondary, enabled = !isBusy)
-            }
-        }
+        // Adding evidence lives on the hero ("Add evidence"), so the body ends with the record.
     }
 }
 

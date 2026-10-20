@@ -146,3 +146,23 @@ Fixture runs use the debug galleries with drawn photos: `-MMRichQA room-*` on iO
 ### Still open
 - **Live runs.** The new Android save (condition, tags, notes), edit, add photos and delete call the backend but have only been compiled, not run against it. They need a signed-in session on the emulator.
 - **Hero scroll response** (a gentle parallax or stretch) is deliberately not built yet. It's the next motion detail once the static composition is approved.
+
+## Reference pass (2026-10-19)
+
+Following the locked references (`design-refs/room-dark-set.jpg`, screens 2, 3, 6 and 7; see [[VISUAL_STANDARD]]), the photo now plays the poster:
+
+- **Hero:** about two-thirds of the screen. Chips with icons come first (condition ✓, photos, issues ⚠), then the room name, then the RECORDED time, all on the photo.
+- **Add evidence:** a **white "Add evidence" pill** in the hero opens camera or library. The "Add more proof" section is gone; green stays reserved for saving.
+- **Scroll:** pulling down stretches the photo (iOS). Scrolling up gives a parallax drift (both). The room name settles into the bar once the hero leaves (both). All of it is off under Reduce Motion.
+- **Viewer:** a paging viewer with a "2 of 4" counter and a filmstrip. It pages through every photo in the phase, newest entry first, on both platforms.
+
+| Case | iOS | Android |
+|---|:-:|:-:|
+| Damage hero (chips, title, recorded, pill) | ✅ | ✅ |
+| One photo | ✅ | — |
+| Viewer `room-viewer` ("2 of 4", filmstrip) | ✅ | ✅ (filmstrip was under the gesture bar; fixed) |
+| Title in bar after scroll | build only | ✅ |
+| Parallax on scroll | build only | ✅ |
+| Empty | ✅ | ✅ |
+
+iOS scroll effects are compiled but not yet seen on screen: the simulator can't be swiped from the command line. They need a hands-on check.

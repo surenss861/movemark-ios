@@ -8,6 +8,7 @@
 package com.surensureshkumar.movemark.features.proof
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -26,19 +27,29 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.CenterFocusWeak
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -51,10 +62,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -62,10 +78,14 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import com.surensureshkumar.movemark.core.design.MMColors
+import com.surensureshkumar.movemark.core.design.MMMotion
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
@@ -97,6 +117,13 @@ fun recordedLabel(raw: String?): String? {
     return recordedFormat.format(instant.atZone(ZoneId.systemDefault())).uppercase(Locale.US)
 }
 
+/** Newest entry first, then each entry's photos in capture order. The viewer pages in this order too. */
+fun orderedRoomPhotos(entries: List<EvidenceRecord>): List<Pair<EvidencePhoto, EvidenceRecord>> =
+    entries.sortedByDescending { it.createdAt.orEmpty() }.flatMap { entry -> entry.photos.map { it to entry } }
+
+/** About two-thirds of the screen — shared with the screen so the bar knows when the hero has left. */
+fun roomHeroHeight(width: Dp, screenHeight: Dp): Dp = minOf(width * 1.35f, screenHeight * 0.66f)
+
 fun conditionLabel(rating: Int?): String =
     RoomConditionLabels.firstOrNull { it.first == rating }?.second ?: "Not rated"
 
@@ -106,41 +133,46 @@ fun RoomEvidenceHero(
     entries: List<EvidenceRecord>,
     proofPhase: ProofPhase,
     signPhotoUrl: suspend (String) -> String?,
-    onBack: () -> Unit,
     onOpenPhoto: (EvidencePhoto) -> Unit,
     hasPendingPhotos: Boolean,
     isBusy: Boolean,
     onTakePhotos: () -> Unit,
     onChooseGallery: () -> Unit,
     compareLine: String?,
+    /** Page scroll in px, for parallax. */
+    scrollOffset: () -> Int = { 0 },
     modifier: Modifier = Modifier,
 ) {
-    // Newest entry first, then each entry's photos in capture order.
-    val ordered = entries.sortedByDescending { it.createdAt.orEmpty() }
-    val allPhotos = ordered.flatMap { entry -> entry.photos.map { it to entry } }
+    val allPhotos = orderedRoomPhotos(entries)
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     val current = allPhotos.firstOrNull { it.first.id.toString() == selectedId } ?: allPhotos.firstOrNull()
 
     if (current == null) {
-        EmptyField(roomName, proofPhase, onBack, hasPendingPhotos, isBusy, onTakePhotos, onChooseGallery, modifier)
+        EmptyField(roomName, proofPhase, hasPendingPhotos, isBusy, onTakePhotos, onChooseGallery, modifier)
         return
     }
 
     val (photo, entry) = current
+    val reduceMotion = MMMotion.rememberReduceMotion()
     val photoCount = entries.sumOf { it.photoCount }
     val issueCount = entries.flatMap { it.issueTags }.toSet().size
 
     Column(modifier.fillMaxWidth()) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val heroHeight = minOf(maxWidth * 1.18f, 520.dp)
+            val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+            val heroHeight = roomHeroHeight(maxWidth, screenHeight)
             Box(
                 Modifier
                     .fillMaxWidth()
                     .height(heroHeight)
+                    .clipToBounds()
                     .clickable(role = Role.Button, onClickLabel = "Open photo full screen") { onOpenPhoto(photo) },
             ) {
-                Crossfade(targetState = photo, animationSpec = tween(350), label = "heroPhoto") { shown ->
-                    HeroImage(shown, signPhotoUrl)
+                // Scrolling up, the photo drifts slower than the page (parallax). Off under Reduce Motion.
+                Box(Modifier.fillMaxSize().graphicsLayer { translationY = if (reduceMotion) 0f else scrollOffset() * 0.4f }) {
+                    Crossfade(targetState = photo, animationSpec = tween(350), label = "heroPhoto") { shown ->
+                        HeroImage(shown, signPhotoUrl)
+                    }
                 }
                 Box(
                     Modifier
@@ -156,15 +188,19 @@ fun RoomEvidenceHero(
                             ),
                         ),
                 )
-                TopControls(onBack = onBack, phase = proofPhase)
                 HeroTitle(
                     roomName = roomName,
-                    proofPhase = proofPhase,
+                    recorded = recordedLabel(entry.createdAt),
                     chips = listOfNotNull(
-                        conditionLabel(entry.conditionRating) to false,
-                        (if (photoCount == 1) "1 photo" else "$photoCount photos") to false,
-                        issueCount.takeIf { it > 0 }?.let { (if (it == 1) "1 issue" else "$it issues") to true },
+                        HeroChip(conditionLabel(entry.conditionRating), Icons.Filled.CheckCircle, MMColors.Primary),
+                        HeroChip(if (photoCount == 1) "1 photo" else "$photoCount photos", Icons.Outlined.PhotoLibrary, Color.White),
+                        issueCount.takeIf { it > 0 }?.let {
+                            HeroChip(if (it == 1) "1 issue" else "$it issues", Icons.Filled.Warning, MMColors.SemanticWarning)
+                        },
                     ),
+                    isBusy = isBusy,
+                    onTakePhotos = onTakePhotos,
+                    onChooseGallery = onChooseGallery,
                     modifier = Modifier.align(Alignment.BottomStart),
                 )
             }
@@ -177,7 +213,6 @@ fun RoomEvidenceHero(
                 .padding(top = 6.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            recordedLabel(entry.createdAt)?.let { RecordedLine(it) }
             if (allPhotos.size > 1) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(allPhotos, key = { it.first.id }) { (thumb, _) ->
@@ -218,25 +253,42 @@ private fun HeroImage(photo: EvidencePhoto, signPhotoUrl: suspend (String) -> St
     }
 }
 
-/** Back and phase sit over the photo — translucent, like the iOS transparent nav bar. */
+/**
+ * Pinned over the screen (not inside the scrolling hero): back and phase sit on the photo as
+ * translucent controls; once the hero has scrolled away the bar fills and the room name settles in.
+ */
 @Composable
-private fun TopControls(onBack: () -> Unit, phase: ProofPhase) {
+fun RoomTopBar(roomName: String, phase: ProofPhase, onBack: () -> Unit, scrolledAway: Boolean) {
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val fill by animateFloatAsState(if (scrolledAway) 0.98f else 0f, tween(200), label = "barFill")
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(top = top + 4.dp, start = 8.dp, end = 16.dp),
+            .background(MMColors.AppBackground.copy(alpha = fill))
+            .padding(top = top + 4.dp, start = 8.dp, end = 16.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(
             onClick = onBack,
             modifier = Modifier
                 .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.35f)),
+                .background(Color.Black.copy(alpha = 0.35f * (1f - fill))),
         ) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
         }
-        Spacer(Modifier.weight(1f))
+        Text(
+            roomName,
+            color = Color.White,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 8.dp)
+                .alpha(fill / 0.98f),
+        )
         Text(
             if (phase == ProofPhase.MoveOut) "Move-out" else "Move-in",
             color = Color.White,
@@ -250,60 +302,110 @@ private fun TopControls(onBack: () -> Unit, phase: ProofPhase) {
     }
 }
 
+private data class HeroChip(val text: String, val icon: ImageVector, val tint: Color)
+
+/** Layered on the poster: state first, then the room, then provenance, then the action. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun HeroTitle(
     roomName: String,
-    proofPhase: ProofPhase,
-    chips: List<Pair<String, Boolean>>,
+    recorded: String?,
+    chips: List<HeroChip>,
+    isBusy: Boolean,
+    onTakePhotos: () -> Unit,
+    onChooseGallery: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier
             .fillMaxWidth()
             .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-            .padding(bottom = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(bottom = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Kicker(if (proofPhase == ProofPhase.MoveOut) "MOVE-OUT EVIDENCE" else "MOVE-IN EVIDENCE", Color.White.copy(alpha = 0.78f))
-        Text(
-            roomName,
-            color = Color.White,
-            fontSize = 34.sp,
-            lineHeight = 38.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.semantics { heading() },
-        )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            chips.forEach { (text, attention) -> GlassChip(text, attention) }
+            chips.forEach { GlassChip(it) }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                roomName,
+                color = Color.White,
+                fontSize = 34.sp,
+                lineHeight = 38.sp,
+                fontWeight = FontWeight.Bold,
+                style = LocalTextStyle.current.copy(shadow = Shadow(Color.Black.copy(alpha = 0.35f), blurRadius = 20f)),
+                modifier = Modifier.semantics { heading() },
+            )
+            recorded?.let { RecordedLine(it, onPhoto = true) }
+        }
+        AddEvidencePill(isBusy, onTakePhotos, onChooseGallery, Modifier.padding(top = 6.dp))
+    }
+}
+
+/** A documented room's next action isn't urgent: a white pill, not green (green is for saving). */
+@Composable
+private fun AddEvidencePill(isBusy: Boolean, onTakePhotos: () -> Unit, onChooseGallery: () -> Unit, modifier: Modifier = Modifier) {
+    var open by remember { mutableStateOf(false) }
+    Box(modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 50.dp)
+                .clip(RoundedCornerShape(50))
+                .background(Color.White.copy(alpha = if (isBusy) 0.5f else 1f))
+                .clickable(enabled = !isBusy, role = Role.Button) { open = true },
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.PhotoCamera, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Add evidence", color = Color.Black, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text("Take photos") },
+                leadingIcon = { Icon(Icons.Outlined.PhotoCamera, contentDescription = null) },
+                onClick = { open = false; onTakePhotos() },
+            )
+            DropdownMenuItem(
+                text = { Text("Choose from library") },
+                leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, contentDescription = null) },
+                onClick = { open = false; onChooseGallery() },
+            )
         }
     }
 }
 
 /** Translucent chip over evidence (Compose has no backdrop blur; a dark scrim stands in). */
 @Composable
-private fun GlassChip(text: String, attention: Boolean) {
+private fun GlassChip(chip: HeroChip) {
     Row(
         Modifier
             .clip(RoundedCornerShape(50))
             .background(Color.Black.copy(alpha = 0.45f))
             .border(0.5.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(50))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (attention) Box(Modifier.size(6.dp).clip(CircleShape).background(MMColors.SemanticWarning))
-        Text(text, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Icon(chip.icon, contentDescription = null, tint = chip.tint, modifier = Modifier.size(14.dp))
+        Text(chip.text, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RecordedLine(value: String) {
+private fun RecordedLine(value: String, onPhoto: Boolean = false) {
     // The timestamp never breaks mid-value; at large font scales it drops under its label.
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Kicker("RECORDED", MMColors.TextMuted)
-        Text(value, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MMColors.TextSecondary, softWrap = false)
+        Kicker("RECORDED", if (onPhoto) Color.White.copy(alpha = 0.7f) else MMColors.TextMuted)
+        Text(
+            value,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            color = if (onPhoto) Color.White.copy(alpha = 0.9f) else MMColors.TextSecondary,
+            softWrap = false,
+        )
     }
 }
 
@@ -352,7 +454,6 @@ private fun FilmstripThumb(
 private fun EmptyField(
     roomName: String,
     proofPhase: ProofPhase,
-    onBack: () -> Unit,
     hasPendingPhotos: Boolean,
     isBusy: Boolean,
     onTakePhotos: () -> Unit,
@@ -368,12 +469,12 @@ private fun EmptyField(
                 .background(Brush.verticalGradient(listOf(MMColors.CardRaised.copy(alpha = 0.85f), MMColors.AppBackground))),
         )
         Column(Modifier.fillMaxWidth()) {
-            TopControls(onBack = onBack, phase = proofPhase)
             Column(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-                    .padding(top = 28.dp, bottom = 8.dp),
+                    // Clears the pinned RoomTopBar.
+                    .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 84.dp, bottom = 8.dp),
             ) {
                 Kicker(if (moveOut) "MOVE-OUT EVIDENCE" else "MOVE-IN EVIDENCE", MMColors.TextMuted)
                 Spacer(Modifier.height(10.dp))

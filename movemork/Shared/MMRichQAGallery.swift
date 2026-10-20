@@ -259,12 +259,25 @@ private struct RoomQAScreen: View {
         case "room-long":
             return Fixture(name: "Primary Bedroom Closet and Ensuite Bathroom",
                            moveIn: [Self.entry("Closet", photos: 2, seed: 4, minutesAgo: 30, tags: ["Stain"])])
+        case "room-viewer":
+            return Fixture(name: "Kitchen", moveIn: [
+                Self.entry("Counters and cabinets", photos: 4, seed: 1, minutesAgo: 20),
+            ])
         default: // room-empty
             return Fixture(name: "Balcony/Patio")
         }
     }
 
     var body: some View {
+        if screen == "room-viewer", let first = fixture.moveIn.first {
+            RoomPhotoViewer(photos: first.photos, startID: first.photos[1].id, resolvePhotoURL: { Self.fixtureURL(path: $0) }, onClose: {})
+        } else {
+            roomScreen
+        }
+    }
+
+    @ViewBuilder
+    private var roomScreen: some View {
         let f = fixture
         let entries = f.moveOutMode ? f.moveOut : f.moveIn
         let pendingImages = (0..<f.pending).compactMap { Self.drawnPhoto(seed: $0 + 2) }
@@ -288,8 +301,7 @@ private struct RoomQAScreen: View {
                         if !entries.isEmpty {
                             RoomEvidenceBody(
                                 entries: entries, moveOutMode: f.moveOutMode, isBusy: false,
-                                onEdit: { _ in }, onAddPhotos: { _ in }, onDelete: { _ in },
-                                onTakePhotos: {}, pickerSelection: $picker
+                                onEdit: { _ in }, onAddPhotos: { _ in }, onDelete: { _ in }
                             )
                             .padding(.top, 10)
                         }

@@ -19,8 +19,6 @@ struct RoomEvidenceBody: View {
     let onEdit: (EvidenceRecord) -> Void
     let onAddPhotos: (EvidenceRecord) -> Void
     let onDelete: (EvidenceRecord) -> Void
-    let onTakePhotos: () -> Void
-    let pickerSelection: Binding<[PhotosPickerItem]>
 
     private var ordered: [EvidenceRecord] { entries.sorted { $0.createdAt > $1.createdAt } }
     private var latest: EvidenceRecord? { ordered.first }
@@ -48,10 +46,8 @@ struct RoomEvidenceBody: View {
                 hairline
             }
 
+            // Adding evidence lives on the hero ("Add evidence"), so the body ends with the record.
             entriesSection
-            hairline
-
-            addMoreSection
         }
     }
 
@@ -179,20 +175,6 @@ struct RoomEvidenceBody: View {
             parts.append(entry.issueTags.count == 1 ? "1 issue" : "\(entry.issueTags.count) issues")
         }
         return parts.joined(separator: " · ")
-    }
-
-    // MARK: - Add more
-
-    private var addMoreSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionLabel("Add more proof")
-            // Secondary on purpose: the room is already documented, so green is reserved for saving.
-            HStack(spacing: 10) {
-                MMButton(title: "Take photos", action: onTakePhotos, kind: .secondary, size: .standard, isDisabled: isBusy)
-                RoomGalleryPicker(selection: pickerSelection, isDisabled: isBusy, compact: true)
-            }
-        }
-        .padding(.vertical, 18)
     }
 
     // MARK: - Helpers

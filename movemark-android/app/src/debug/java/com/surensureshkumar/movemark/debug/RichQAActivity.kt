@@ -17,6 +17,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -52,8 +53,10 @@ import com.surensureshkumar.movemark.features.proof.Kicker
 import com.surensureshkumar.movemark.features.proof.PendingPhoto
 import com.surensureshkumar.movemark.features.proof.RoomEvidenceBody
 import com.surensureshkumar.movemark.features.proof.RoomEvidenceHero
+import com.surensureshkumar.movemark.features.proof.RoomPhotoViewer
 import com.surensureshkumar.movemark.features.proof.RoomProofBottomSaveBar
 import com.surensureshkumar.movemark.features.proof.RoomProofPhotoGrid
+import com.surensureshkumar.movemark.features.proof.RoomTopBar
 import com.surensureshkumar.movemark.features.reports.components.MMReportExportSection
 import com.surensureshkumar.movemark.features.reports.components.MMReportPreviewHero
 import java.io.File
@@ -276,6 +279,7 @@ private fun RoomQAScreen(screen: String) {
             phase = ProofPhase.MoveOut,
         )
         "room-pending" -> Fixture("Living Room", pending = 3)
+        "room-viewer" -> Fixture("Kitchen", listOf(entry("Counters and cabinets", 4, 1, 20)))
         "room-dark" -> Fixture("Bedroom 2", listOf(entry("Bedroom 2 at night", 2, 100, 25, listOf("Stain"))))
         "room-long" -> Fixture("Primary Bedroom Closet and Ensuite Bathroom", listOf(entry("Closet", 2, 4, 30, listOf("Stain"))))
         else -> Fixture("Balcony/Patio")
@@ -285,7 +289,14 @@ private fun RoomQAScreen(screen: String) {
     var draft by remember { mutableStateOf(EntryDraft(conditionRating = 3, tags = setOf("Scratch"))) }
     val signUrl: suspend (String) -> String? = { path -> fixturePhotoUri(context, path.filter { it.isDigit() }.toIntOrNull() ?: 0) }
 
+    if (screen == "room-viewer") {
+        val photos = entries.first().photos
+        RoomPhotoViewer(photos = photos, start = photos[1], signPhotoUrl = signUrl, onDismiss = {})
+        return
+    }
+    val scroll = rememberScrollState()
     MMBackground {
+        Box(Modifier.fillMaxSize()) {
         Scaffold(
             containerColor = androidx.compose.ui.graphics.Color.Transparent,
             contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
@@ -304,12 +315,13 @@ private fun RoomQAScreen(screen: String) {
                 Modifier
                     .fillMaxSize()
                     .padding(bottom = padding.calculateBottomPadding())
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scroll)
                     .padding(bottom = 48.dp),
             ) {
                 RoomEvidenceHero(
                     roomName = f.name, entries = entries, proofPhase = f.phase, signPhotoUrl = signUrl,
-                    onBack = {}, onOpenPhoto = {}, hasPendingPhotos = pending.isNotEmpty(), isBusy = false,
+                    scrollOffset = { scroll.value },
+                    onOpenPhoto = {}, hasPendingPhotos = pending.isNotEmpty(), isBusy = false,
                     onTakePhotos = {}, onChooseGallery = {},
                     compareLine = if (f.phase == ProofPhase.MoveOut && f.moveIn.isNotEmpty())
                         "MOVE-IN ${f.moveIn.sumOf { it.photoCount }} · MOVE-OUT ${f.moveOut.sumOf { it.photoCount }} PHOTOS" else null,
@@ -318,7 +330,7 @@ private fun RoomQAScreen(screen: String) {
                     if (entries.isNotEmpty()) {
                         RoomEvidenceBody(
                             entries = entries, proofPhase = f.phase, isBusy = false,
-                            onEdit = {}, onAddPhotos = {}, onDelete = {}, onTakePhotos = {}, onChooseGallery = {},
+                            onEdit = {}, onAddPhotos = {}, onDelete = {},
                             modifier = Modifier.padding(top = 10.dp),
                         )
                     }
@@ -332,6 +344,8 @@ private fun RoomQAScreen(screen: String) {
                     }
                 }
             }
+        }
+        RoomTopBar(roomName = f.name, phase = f.phase, onBack = {}, scrolledAway = scroll.value > (if (entries.isEmpty()) 420 else 1300))
         }
     }
 }

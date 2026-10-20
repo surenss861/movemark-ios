@@ -14,19 +14,31 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -51,11 +63,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -78,6 +95,7 @@ import com.surensureshkumar.movemark.data.models.EvidencePhoto
 import com.surensureshkumar.movemark.data.models.EvidenceRecord
 import com.surensureshkumar.movemark.domain.ProofPhase
 import java.util.UUID
+import kotlinx.coroutines.launch
 
 @Composable
 fun RoomProofScreen(
@@ -218,6 +236,14 @@ fun RoomProofScreen(
         val moveOut = r.moveOutEvidence.sumOf { it.photoCount }
         if (moveIn > 0 && moveOut > 0) "MOVE-IN $moveIn · MOVE-OUT $moveOut PHOTOS" else null
     }
+    val scroll = rememberScrollState()
+    val density = LocalDensity.current
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    // The title settles into the bar once the hero (or the empty-state heading) has scrolled away.
+    val scrolledAwayPx = with(density) {
+        (if (entries.isEmpty()) 140.dp else roomHeroHeight(screenWidth, screenHeight) - 90.dp).toPx()
+    }
     fun chooseGallery() = picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
 
     MMBackground {
@@ -246,11 +272,12 @@ fun RoomProofScreen(
                 }
             },
         ) { padding ->
+          Box(Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(bottom = padding.calculateBottomPadding())
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scroll)
                     .padding(bottom = 48.dp),
             ) {
                 RoomEvidenceHero(
@@ -258,7 +285,7 @@ fun RoomProofScreen(
                     entries = entries,
                     proofPhase = proofPhase,
                     signPhotoUrl = viewModel::signedPhotoUrl,
-                    onBack = ::handleBack,
+                    scrollOffset = { scroll.value },
                     onOpenPhoto = { viewerPhoto = it },
                     hasPendingPhotos = hasPending,
                     isBusy = isBusy || entryBusy,
@@ -286,8 +313,6 @@ fun RoomProofScreen(
                                 appendPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                             },
                             onDelete = { deletingEntry = it },
-                            onTakePhotos = ::launchCamera,
-                            onChooseGallery = ::chooseGallery,
                             modifier = Modifier.padding(top = 10.dp),
                         )
                     }
@@ -315,6 +340,13 @@ fun RoomProofScreen(
                     }
                 }
             }
+            RoomTopBar(
+                roomName = room?.name ?: "Room",
+                phase = proofPhase,
+                onBack = ::handleBack,
+                scrolledAway = scroll.value > scrolledAwayPx,
+            )
+          }
         }
     }
 
@@ -345,7 +377,12 @@ fun RoomProofScreen(
     }
 
     viewerPhoto?.let { photo ->
-        RoomPhotoViewer(photo = photo, signPhotoUrl = viewModel::signedPhotoUrl, onDismiss = { viewerPhoto = null })
+        RoomPhotoViewer(
+            photos = orderedRoomPhotos(entries).map { it.first },
+            start = photo,
+            signPhotoUrl = viewModel::signedPhotoUrl,
+            onDismiss = { viewerPhoto = null },
+        )
     }
 }
 
@@ -388,31 +425,82 @@ private fun EditEntrySheet(
     }
 }
 
-/** Full-screen photo, black backdrop — the Android counterpart of iOS `PhotoPreviewFullScreen`. */
+/** Every photo in the phase, paged, "2 of 4", filmstrip — the counterpart of iOS `RoomPhotoViewer`. */
 @Composable
-private fun RoomPhotoViewer(
-    photo: EvidencePhoto,
+fun RoomPhotoViewer(
+    photos: List<EvidencePhoto>,
+    start: EvidencePhoto,
     signPhotoUrl: suspend (String) -> String?,
     onDismiss: () -> Unit,
 ) {
-    val url by produceState<String?>(initialValue = null, photo.filePath) { value = signPhotoUrl(photo.filePath) }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    val pager = rememberPagerState(initialPage = photos.indexOfFirst { it.id == start.id }.coerceAtLeast(0)) { photos.size }
+    val scope = rememberCoroutineScope()
+    // A dialog window reports zero insets, so read the bars from the activity before opening it
+    // (the filmstrip sat under the gesture bar).
+    val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
-            if (url != null) {
-                SubcomposeAsyncImage(
-                    model = url,
-                    contentDescription = "Evidence photo",
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize(),
-                    loading = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = androidx.compose.ui.graphics.Color.White) } },
-                    error = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Couldn't load image", color = androidx.compose.ui.graphics.Color.White) } },
-                )
+            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
+                val photo = photos[page]
+                val url by produceState<String?>(initialValue = null, photo.filePath) { value = signPhotoUrl(photo.filePath) }
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    if (url == null) {
+                        CircularProgressIndicator(color = androidx.compose.ui.graphics.Color.White)
+                    } else {
+                        SubcomposeAsyncImage(
+                            model = url,
+                            contentDescription = "Evidence photo ${page + 1} of ${photos.size}",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize(),
+                            loading = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = androidx.compose.ui.graphics.Color.White) } },
+                            error = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Couldn't load this photo", color = androidx.compose.ui.graphics.Color.White) } },
+                        )
+                    }
+                }
             }
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier.statusBarsPadding().padding(8.dp),
+            Row(
+                Modifier.fillMaxWidth().padding(top = topInset).padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Filled.Close, contentDescription = "Close", tint = androidx.compose.ui.graphics.Color.White)
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = androidx.compose.ui.graphics.Color.White)
+                }
+                Text(
+                    "${pager.currentPage + 1} of ${photos.size}",
+                    color = androidx.compose.ui.graphics.Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.size(48.dp))
+            }
+            if (photos.size > 1) {
+                LazyRow(
+                    Modifier.align(Alignment.BottomCenter).padding(bottom = bottomInset + 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                ) {
+                    itemsIndexed(photos, key = { _, p -> p.id }) { index, p ->
+                        val path = p.thumbnailPath ?: p.filePath
+                        val thumb by produceState<String?>(initialValue = null, path) { value = signPhotoUrl(path) ?: signPhotoUrl(p.filePath) }
+                        val selected = index == pager.currentPage
+                        Box(
+                            Modifier
+                                .size(52.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.08f))
+                                .border(2.dp, if (selected) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(10.dp))
+                                .alpha(if (selected) 1f else 0.6f)
+                                .clickable { scope.launch { pager.animateScrollToPage(index) } },
+                        ) {
+                            if (thumb != null) {
+                                SubcomposeAsyncImage(model = thumb, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                            }
+                        }
+                    }
+                }
             }
         }
     }

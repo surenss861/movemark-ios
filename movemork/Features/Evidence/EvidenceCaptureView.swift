@@ -54,6 +54,7 @@ struct EvidenceCaptureView: View {
     @State var proofToastVisible = false
     @State var proofScanlineTrigger = 0
     @State var previewTarget: RoomPhotoPreviewTarget? = nil
+    @State var heroScrolledAway = false
 
     var room: RoomRecord? {
         propertyStore.currentProperty?.rooms.first(where: { $0.id == roomID })
@@ -91,10 +92,7 @@ struct EvidenceCaptureView: View {
     }
 
     private func openPreview(_ photo: EvidencePhoto) {
-        Task {
-            guard let url = await resolvePhotoURL(photo.filePath) else { return }
-            previewTarget = RoomPhotoPreviewTarget(id: photo.id, url: url, filePath: photo.filePath)
-        }
+        previewTarget = RoomPhotoPreviewTarget(id: photo.id)
     }
 
     var body: some View {
@@ -124,9 +122,7 @@ struct EvidenceCaptureView: View {
                                 isBusy: isUploading,
                                 onEdit: { editingEntry = $0 },
                                 onAddPhotos: { appendPhotosEntry = $0 },
-                                onDelete: { deleteConfirmEntry = $0 },
-                                onTakePhotos: { presentCameraIfAllowed() },
-                                pickerSelection: $selectedItems
+                                onDelete: { deleteConfirmEntry = $0 }
                             )
                             .padding(.top, 10)
                         }
@@ -142,6 +138,15 @@ struct EvidenceCaptureView: View {
                 }
             }
             .ignoresSafeArea(edges: .top)
+            .onScrollGeometryChange(for: Bool.self) { g in
+                // The title settles into the bar once the hero (or empty-state heading) has scrolled away.
+                let threshold = existingEntries.isEmpty
+                    ? 140
+                    : RoomEvidenceHero.heroHeight(container: geo.size, topInset: geo.safeAreaInsets.top) - 90
+                return g.contentOffset.y + g.contentInsets.top > threshold
+            } action: { _, past in
+                withAnimation(.easeInOut(duration: 0.2)) { heroScrolledAway = past }
+            }
         }
         .background(MoveMarkTheme.Colors.appBackground.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
@@ -160,9 +165,12 @@ struct EvidenceCaptureView: View {
         }
         .animation(MMMotion.cardReveal, value: showsSaveBar)
         .fullScreenCover(item: $previewTarget) { target in
-            PhotoPreviewFullScreen(initialURL: target.url, filePath: target.filePath) {
-                previewTarget = nil
-            }
+            RoomPhotoViewer(
+                photos: RoomEvidenceHero.orderedPhotos(existingEntries).map(\.photo),
+                startID: target.id,
+                resolvePhotoURL: resolvePhotoURL,
+                onClose: { previewTarget = nil }
+            )
         }
         .onChange(of: selectedItems) { _, newItems in
             loadSelectedItems(newItems)
@@ -221,7 +229,12 @@ struct EvidenceCaptureView: View {
         .toolbar {
             // The room name lives in the hero; keep the bar clear over the photo.
             ToolbarItem(placement: .principal) {
-                Color.clear.frame(width: 1, height: 1).accessibilityHidden(true)
+                Text(roomName)
+                    .font(MoveMarkTheme.Typography.subheadlineMedium)
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .opacity(heroScrolledAway ? 1 : 0)
+                    .accessibilityHidden(!heroScrolledAway)
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Text(moveOutMode ? "Move-out" : "Move-in")
@@ -231,7 +244,8 @@ struct EvidenceCaptureView: View {
                     .accessibilityLabel(moveOutMode ? "Move-out evidence" : "Move-in evidence")
             }
         }
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbarBackground(heroScrolledAway ? .visible : .hidden, for: .navigationBar)
+        .toolbarBackground(MoveMarkTheme.Colors.appBackground.opacity(0.92), for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .mmProofToast(message: proofToast, isVisible: proofToastVisible)
@@ -297,11 +311,9 @@ struct EvidenceCaptureView: View {
 
 }
 
-/// Full-screen preview of one saved photo (signed URL resolved on tap).
+/// Which photo the viewer opens on; it pages through every photo in the phase.
 struct RoomPhotoPreviewTarget: Identifiable {
     let id: UUID
-    let url: URL
-    let filePath: String
 }
 
 // MARK: - Edit evidence sheet

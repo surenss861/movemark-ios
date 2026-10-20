@@ -47,15 +47,22 @@ struct RoomEvidenceHero: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selectedPhotoID: UUID?
     @State private var heroURL: URL?
+    @State private var showAddChoice = false
+    @State private var showLibrary = false
 
-    /// Newest entry first, then each entry's photos in capture order.
-    private var orderedEntries: [EvidenceRecord] {
+    /// Newest entry first, then each entry's photos in capture order. The viewer pages in this order too.
+    static func orderedPhotos(_ entries: [EvidenceRecord]) -> [(photo: EvidencePhoto, entry: EvidenceRecord)] {
         entries.sorted { $0.createdAt > $1.createdAt }
+            .flatMap { entry in entry.photos.map { (photo: $0, entry: entry) } }
     }
 
-    private var allPhotos: [(photo: EvidencePhoto, entry: EvidenceRecord)] {
-        orderedEntries.flatMap { entry in entry.photos.map { (photo: $0, entry: entry) } }
+    /// Hero height — shared with the screen so the nav title knows when the hero has left.
+    static func heroHeight(container: CGSize, topInset: CGFloat) -> CGFloat {
+        // The poster: about two-thirds of the screen, never so tall the body disappears on small phones.
+        min(container.width * 1.35, container.height * 0.66) + topInset
     }
+
+    private var allPhotos: [(photo: EvidencePhoto, entry: EvidenceRecord)] { Self.orderedPhotos(entries) }
 
     private var current: (photo: EvidencePhoto, entry: EvidenceRecord)? {
         if let selectedPhotoID, let match = allPhotos.first(where: { $0.photo.id == selectedPhotoID }) {
@@ -85,6 +92,16 @@ struct RoomEvidenceHero: View {
                 Color.clear
                     .frame(width: containerSize.width, height: heroHeight)
                     .overlay { photoLayer(current.photo) }
+                    .visualEffect { content, proxy in
+                        // Pull down: the photo stretches from its bottom edge. Scroll up: it drifts
+                        // slower than the page (parallax). Off under Reduce Motion.
+                        let y = proxy.frame(in: .scrollView).minY
+                        guard !reduceMotion else { return content.scaleEffect(1).offset(y: 0) }
+                        let h = max(proxy.size.height, 1)
+                        return content
+                            .scaleEffect(y > 0 ? 1 + y / h : 1, anchor: .bottom)
+                            .offset(y: y < 0 ? -y * 0.4 : 0)
+                    }
                     .clipped()
                     .contentShape(Rectangle())
                     .onTapGesture { onOpenPhoto(current.photo) }
@@ -106,26 +123,30 @@ struct RoomEvidenceHero: View {
                 )
                 .allowsHitTesting(false)
 
-                VStack(alignment: .leading, spacing: 10) {
-                    kicker(moveOutMode ? "Move-out evidence" : "Move-in evidence", color: .white.opacity(0.78))
-                    Text(roomName)
-                        .font(MoveMarkTheme.Typography.roomTitle)
-                        .foregroundStyle(.white)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityAddTraits(.isHeader)
+                // Layered on the poster: state first, then the room, then provenance, then the action.
+                VStack(alignment: .leading, spacing: 12) {
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 6) { chips(current.entry) }
                         VStack(alignment: .leading, spacing: 6) { chips(current.entry) }
                     }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(roomName)
+                            .font(MoveMarkTheme.Typography.roomTitle)
+                            .foregroundStyle(.white)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityAddTraits(.isHeader)
+                        recordedLine(current.entry.createdAt, onPhoto: true)
+                    }
+                    // Real photos are often pale walls; a soft shadow keeps the title legible at any text size.
+                    .shadow(color: .black.opacity(0.35), radius: 10, y: 1)
+                    addEvidencePill
+                        .padding(.top, 6)
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.bottom, 14)
-                // Real photos are often pale walls; a soft shadow keeps the title legible at any text size.
-                .shadow(color: .black.opacity(0.35), radius: 10, y: 1)
+                .padding(.bottom, 18)
             }
 
             VStack(alignment: .leading, spacing: 14) {
-                recordedLine(current.entry.createdAt)
                 if allPhotos.count > 1 {
                     filmstrip(selectedID: current.photo.id)
                 }
@@ -136,14 +157,37 @@ struct RoomEvidenceHero: View {
                 }
             }
             .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-            .padding(.top, 6)
+            .padding(.top, 8)
         }
         .task(id: current.photo.id) { await loadHero(current.photo) }
+        .confirmationDialog("Add evidence", isPresented: $showAddChoice, titleVisibility: .hidden) {
+            Button("Take photos") { onTakePhotos() }
+            Button("Choose from library") { showLibrary = true }
+            Button("Cancel", role: .cancel) {}
+        }
+        .modifier(LibraryPickerModifier(isPresented: $showLibrary, selection: pickerSelection))
     }
 
-    private var heroHeight: CGFloat {
-        // Portrait-leaning crop that still leaves the body visible on small phones.
-        min(containerSize.width * 1.18, containerSize.height * 0.58) + topInset
+    private var heroHeight: CGFloat { Self.heroHeight(container: containerSize, topInset: topInset) }
+
+    /// A documented room's next action is not urgent, so it's a white pill, not green
+    /// (green stays reserved for saving). Opens camera or library.
+    private var addEvidencePill: some View {
+        Button {
+            MMHaptics.soft()
+            showAddChoice = true
+        } label: {
+            Label("Add evidence", systemImage: "camera.fill")
+                .font(MoveMarkTheme.Typography.subheadlineMedium)
+                .foregroundStyle(Color.black)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 50)
+                .background(Color.white, in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(isBusy)
+        .opacity(isBusy ? 0.5 : 1)
     }
 
     @ViewBuilder
@@ -170,36 +214,41 @@ struct RoomEvidenceHero: View {
 
     @ViewBuilder
     private func chips(_ entry: EvidenceRecord) -> some View {
-        glassChip(entry.condition.rawValue)
-        glassChip(photoCount == 1 ? "1 photo" : "\(photoCount) photos")
+        glassChip(entry.condition.rawValue, icon: "checkmark.circle.fill", tint: MoveMarkTheme.Colors.primary)
+        glassChip(photoCount == 1 ? "1 photo" : "\(photoCount) photos", icon: "photo.on.rectangle", tint: .white)
         if issueCount > 0 {
-            glassChip(issueCount == 1 ? "1 issue" : "\(issueCount) issues", attention: true)
+            glassChip(
+                issueCount == 1 ? "1 issue" : "\(issueCount) issues",
+                icon: "exclamationmark.triangle.fill",
+                tint: MoveMarkTheme.Colors.semanticWarning
+            )
         }
     }
 
     /// Glass is allowed here: the chip sits over evidence (VISUAL_STANDARD).
-    private func glassChip(_ text: String, attention: Bool = false) -> some View {
-        HStack(spacing: 5) {
-            if attention {
-                Circle().fill(MoveMarkTheme.Colors.semanticWarning).frame(width: 6, height: 6)
-            }
+    private func glassChip(_ text: String, icon: String, tint: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(MoveMarkTheme.Typography.tinyEmphasis)
+                .foregroundStyle(tint)
+                .accessibilityHidden(true)
             Text(text)
                 .font(MoveMarkTheme.Typography.tinyEmphasis)
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .fixedSize()
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(.ultraThinMaterial, in: Capsule())
         .environment(\.colorScheme, .dark)
     }
 
-    private func recordedLine(_ date: Date) -> some View {
-        let label = kicker("Recorded", color: MoveMarkTheme.Colors.textMuted)
+    private func recordedLine(_ date: Date, onPhoto: Bool = false) -> some View {
+        let label = kicker("Recorded", color: onPhoto ? .white.opacity(0.7) : MoveMarkTheme.Colors.textMuted)
         let value = Text(Self.recordedFormatter.string(from: date).uppercased())
             .font(MoveMarkTheme.Typography.monoMeta)
-            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+            .foregroundStyle(onPhoto ? .white.opacity(0.9) : MoveMarkTheme.Colors.textSecondary)
             .fixedSize()
         return ViewThatFits(in: .horizontal) {
             HStack(spacing: 8) { label; value }
@@ -386,5 +435,19 @@ struct RoomGalleryPicker: View {
                 )
         }
         .disabled(isDisabled)
+    }
+}
+
+/// `.photosPicker` needs a binding; the gallery QA screen passes none.
+private struct LibraryPickerModifier: ViewModifier {
+    @Binding var isPresented: Bool
+    let selection: Binding<[PhotosPickerItem]>?
+
+    func body(content: Content) -> some View {
+        if let selection {
+            content.photosPicker(isPresented: $isPresented, selection: selection, maxSelectionCount: 20, matching: .images)
+        } else {
+            content
+        }
     }
 }
