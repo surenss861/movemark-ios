@@ -104,3 +104,12 @@ Columns that existed in Supabase but that no code ever read or wrote **cannot be
 | Object storage | One private bucket, `uploads` |
 | `public` schema | Empty |
 | AI Gateway | Needs a plan upgrade (MoveMark doesn't use it) |
+
+## Neon `dev` branch run (2026-10-20)
+
+`dev` = `br-dark-scene-b582uffs`, branched from `production` (untouched). Postgres 18.6, with `pg_session_jwt`, `neon_auth` (uuid user ids), and roles `authenticated` / `anonymous` / `authenticator`.
+
+- **All 27 migrations apply on real Neon**, with no table skipped.
+- **Finding 1, fixed (`0900_neon_function_privileges.sql`):** enabling the Data API set a default privilege that makes every new `public` function executable by `authenticated`. The five privileged functions (`delete_user_owned_data`, the credit grant/consume functions, and the export queue's claim and reap) were therefore callable by any signed-in user through `/rpc`. Now only `get_property_snapshot` is client-callable, and functions are opt-in from here on. The local shim now reproduces this default, and the local gate fails without `0900` (5 targeted failures).
+- **Owner-path gate on Neon** (`tests/neon_owner_gate.sql`, rolled back): **10/10 ok**. Covers RLS on all tables, no extension functions, the tag seed, client-callable functions, constraints, credits, export queue and account deletion. `dev` is left empty.
+- **Finding 2, BLOCKER:** schema `auth` (which holds `auth.user_id()` and `auth.uid()`) is owned by Neon's `cloud_admin` and has **no grants**. `authenticated` gets "permission denied for schema auth" when a policy calls `auth.user_id()`, and `neondb_owner` cannot grant it. If the Data API runs policies as `authenticated` (as its docs describe), every client request would fail. Needs either an end-to-end Data API check with a real Neon Auth token (two QA accounts on the `dev` branch's auth), or a fix or confirmation from Neon.

@@ -18,3 +18,7 @@ CREATE TABLE IF NOT EXISTS neon_auth."user" (
   name text,
   "createdAt" timestamptz NOT NULL DEFAULT now()
 );
+
+-- Reproduce Neon's Data API defaults (observed on the real project, 2026-10-20):
+-- every function created in public is executable by `authenticated` unless revoked.
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO authenticated;
