@@ -5,8 +5,8 @@ related-code:
   - "[[MMColors.kt]]"
   - "[[MMVaultProofHeroCard.swift]]"
   - "[[MMVaultProofHeroCard.kt]]"
-  - "[[MMRoomEvidencePlate.swift]]"
-  - "[[MMRoomEvidencePlate.kt]]"
+  - "[[RoomEvidenceHero.swift]]"
+  - "[[RoomEvidenceHero.kt]]"
 domain: design-system
 type: guide
 status: wip
@@ -56,14 +56,30 @@ Kickers (`MOVE-IN EVIDENCE`, `RECORDED`) are small, tracked, uppercase sans. The
 
 The interface should be readable from the hierarchy alone.
 
+## Canonical references (locked 2026-10-19)
+
+These are the visual target. They are art direction, not specs to trace: keep the composition, improve the details.
+
+| Screen | Reference | What to take from it |
+|---|---|---|
+| Room | `design-refs/room-dark-set.jpg` (screens 2, 3, 6, 7) | The renter's photo as the poster: near edge-to-edge, chips and title layered on it, compact glass controls, a "2 of 4" viewer with filmstrip, a calm capture surface when empty |
+| Proof | `design-refs/proof.jpg` | The rental photo as a tall editorial hero with a floating coverage pill, then a bright working surface: next room, one capture action, quiet stats, recent evidence, next actions |
+| Reports | `design-refs/reports.jpg` | The report as a physical, tilted document inside a dark photographic card; Ready state, record ID and generated time prominent; move-out and dispute quiet below |
+| Account | `design-refs/account.jpg` | Native grouped settings, one Pro block with personality, nothing decorative |
+
+Ignore the travel and plant boards: they were exploration and drifted generic.
+
+**Corrections to the references:** the lime CTA moves to MoveMark green (no fitness-app lime); the coverage pill gets slimmer; on Reports the record ID and generated time get more weight because they are provenance; mockup people and stock photos never ship; the renter's evidence, or a designed empty state, takes their place.
+
+**One system, different compositions:** photographic rental evidence on top, clean Apple-like utility underneath. Screens share type, radii, spacing and green; they do not share a layout.
+
 ## Material and color
 
 | Role | Value |
 |---|---|
-| Background | Deep near-black / dark green |
-| Primary surface | Soft charcoal / green-black, near-neutral (green is a signal, not a surface) |
-| Warm ivory | Formal records (report covers), and the calmer body below a dark hero (Proof), or a whole quiet screen (Account), following Inspo V2 |
-| Accent | MoveMark green: attention, action, active state. **At most one green call to action per screen.** |
+| Evidence surfaces (Room, the Proof hero, the Reports artifact card) | Deep near-black, so the photo carries the screen |
+| Working surfaces (Proof body, Reports list, Account, documents) | Light: warm white / ivory with grouped rows, in the Apple settings idiom |
+| Accent | MoveMark green: the primary next action, active state, Ready. **At most one green call to action per screen.** A documented room's "Add evidence" is a white pill, not green. |
 | Warning | Muted amber |
 
 **Glass and translucency are allowed only where a control sits over evidence:** the floating dock, capture controls, metadata chips over photos, and View / Share over a report preview. A glass control should feel like it sits above the evidence, not like another card.
@@ -74,13 +90,13 @@ Prefer full-width sections, large editorial figures, photo crops, thin dividers,
 
 **User photos are visual material, not attachments.** When a room or rental has evidence, its photo carries the composition. Never use stock or decorative imagery in place of the user's evidence.
 
-**Room stays dark**, because evidence is viewed like a photo library. Reports is dark and photographic. Proof is a dark hero over an ivory body. Account is ivory.
+**Room stays dark**, because evidence is viewed like a photo library. Proof and Reports are a dark photographic object over a light working surface. Account is light throughout.
 
 **Sophistication comes from contrast.** Vault and Room can feel substantial; Reports feels formal; Account stays restrained. Don't make every screen a statement piece.
 
 ## Motion
 
-Motion should be slow, physical and intentional, and it must respect reduce-motion. Nothing bounces.
+Motion should be slow, physical and intentional, and it must respect reduce-motion. Nothing bounces. Heroes respond to scroll: a pull stretches the photo, scrolling up drifts it slower than the content (parallax), and the title settles into the navigation bar once the hero leaves.
 
 ## Rollout order
 
