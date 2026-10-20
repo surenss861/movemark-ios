@@ -112,4 +112,20 @@ Columns that existed in Supabase but that no code ever read or wrote **cannot be
 - **All 27 migrations apply on real Neon**, with no table skipped.
 - **Finding 1, fixed (`0900_neon_function_privileges.sql`):** enabling the Data API set a default privilege that makes every new `public` function executable by `authenticated`. The five privileged functions (`delete_user_owned_data`, the credit grant/consume functions, and the export queue's claim and reap) were therefore callable by any signed-in user through `/rpc`. Now only `get_property_snapshot` is client-callable, and functions are opt-in from here on. The local shim now reproduces this default, and the local gate fails without `0900` (5 targeted failures).
 - **Owner-path gate on Neon** (`tests/neon_owner_gate.sql`, rolled back): **10/10 ok**. Covers RLS on all tables, no extension functions, the tag seed, client-callable functions, constraints, credits, export queue and account deletion. `dev` is left empty.
-- **Finding 2, BLOCKER:** schema `auth` (which holds `auth.user_id()` and `auth.uid()`) is owned by Neon's `cloud_admin` and has **no grants**. `authenticated` gets "permission denied for schema auth" when a policy calls `auth.user_id()`, and `neondb_owner` cannot grant it. If the Data API runs policies as `authenticated` (as its docs describe), every client request would fail. Needs either an end-to-end Data API check with a real Neon Auth token (two QA accounts on the `dev` branch's auth), or a fix or confirmation from Neon.
+- **Finding 2 (resolved below; raw-SQL artifact):** schema `auth` (which holds `auth.user_id()` and `auth.uid()`) is owned by Neon's `cloud_admin` and has **no grants**. `authenticated` gets "permission denied for schema auth" when a policy calls `auth.user_id()`, and `neondb_owner` cannot grant it. If the Data API runs policies as `authenticated` (as its docs describe), every client request would fail. Needs either an end-to-end Data API check with a real Neon Auth token (two QA accounts on the `dev` branch's auth), or a fix or confirmation from Neon.
+
+## Data API end-to-end on `dev` (2026-10-20): **47/47 passed**
+
+`tests/data_api_e2e.py`, run against `dev`'s own endpoints (Auth `ep-quiet-salad…neonauth…`, Data API `ep-quiet-salad…apirest…`). The script refuses production endpoints.
+- **Setup:** signs up two disposable QA users (`qa-neon-a@movemark.test`, `qa-neon-b@movemark.test`) through real Neon Auth, with random passwords that are never stored. It uses their real JWTs, then deletes all its rows and both users. `dev` is verified empty afterwards. No Auth settings were changed; verification is not required on `dev`.
+- **Own records (12 cases):** both users create their profile, property, room, inspection, item and evidence (HTTP 201). A updates and deletes its own rows (200).
+- **Cross-user (21 cases):**
+  - A cannot SELECT or UPDATE B's properties, rooms, inspections, items or evidence (200 `[]`; B's title verified unchanged).
+  - A cannot DELETE B's evidence or property (200 `[]`; B's row verified still present).
+  - Inserts hanging off B's data return 403 `42501` "new row violates row-level security policy": room in B's property, item in B's inspection, evidence on B's property, evidence in A's property pointing at B's item, and a property claiming to be owned by B.
+- **Anonymous:** requests with no token are refused before any SQL runs (HTTP 400, "missing authentication credentials"), for reads and RPC.
+- **Forged token** (A's token with `sub` changed to B): HTTP 400, "signature error".
+- **`get_property_snapshot`:** returns A's own property; for B's property it returns `property: null` and empty lists.
+- **Privileged functions:** `delete_user_owned_data`, `grant_report_credit`, `consume_report_credit`, `claim_next_export_job` and `reap_stuck_export_jobs` all return 403 `42501` "permission denied for function" (proves `0900`). B's data is intact after A tried to delete it.
+
+**Conclusion:** through the Data API, `auth.user_id()` resolves to the verified JWT `sub`, and RLS enforces ownership. The "permission denied for schema auth" in Finding 2 only happens over a raw SQL connection, not on the Data API path. **Option A is viable.**

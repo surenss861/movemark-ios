@@ -43,7 +43,7 @@ Every Supabase dependency found in the iOS app, the Android app, the FastAPI API
 |---|---|---|---|---|
 | 15 dashboard-created base tables (no migration) | all | `0001_reconstructed_base_schema.sql` (assumptions A1–A15) | S0 | ✅ local · ⏳ Neon |
 | 28 tracked migrations | all | 25 ported + 2 superseded + 1 never-applied, via `port_migrations.py` | S0 | ✅ local · ⏳ Neon |
-| `auth.uid()` in RLS policies | Data API path | `(auth.user_id())::uuid` | S0 | ✅ local · ⛔ Neon: `authenticated` lacks USAGE on schema `auth` |
+| `auth.uid()` in RLS policies | Data API path | `(auth.user_id())::uuid` | S0 | ✅ local · ✅ Neon Data API e2e 47/47 |
 | `auth.users` FKs (entitlements, credits) | API | `neon_auth."user"` (Neon Auth enabled on production) | S0 | ✅ local |
 | `service_role` grants on privileged functions | API, worker | `movemark_backend` role; Railway connects as table owner; `0900` revokes Neon's default client EXECUTE | S0 | ✅ local · ✅ Neon dev |
 | Supabase default grants to `authenticated` | clients | `0000` grants + Data API's `authenticated` role | S0 | ✅ local |
