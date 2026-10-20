@@ -66,11 +66,13 @@ struct ProofHomeView: View {
     var onRetry: () -> Void = {}
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    private var isAX: Bool { dynamicTypeSize.isAccessibilitySize }
 
     // Proportions measured from design-refs/proof.jpg (560px screen ↔ 393pt).
     private enum M {
-        static let inset: CGFloat = 20
-        static let sheetRadius: CGFloat = 28
+        static let inset = MoveMarkTheme.Light.Space.inset
+        static let sheetRadius = MoveMarkTheme.Light.Radius.sheet
         /// The sheet starts at 31% of the screen height and rises this far over the photo.
         static let sheetTopFraction: CGFloat = 0.29
         static let overlap: CGFloat = 28
@@ -91,6 +93,10 @@ struct ProofHomeView: View {
             .ignoresSafeArea(edges: .top)
         }
         .background(MoveMarkTheme.Light.surface.ignoresSafeArea())
+        .task(id: model.recent.map(\.photoPath)) {
+            // Opening a room from here shows its photo full-size immediately.
+            MMEvidenceImages.prefetch(paths: model.recent.map(\.photoPath), resolve: resolvePhotoURL)
+        }
     }
 
     // MARK: - Hero
@@ -129,9 +135,11 @@ struct ProofHomeView: View {
                     Spacer()
                     Button(action: onAddRental) {
                         Image(systemName: "plus")
-                            .font(.system(size: 15, weight: .semibold))
+                            .mmFont(15, .semibold)
                             .foregroundStyle(MoveMarkTheme.Light.textPrimary)
                             .frame(width: 36, height: 36)
+                            // Solid base: renders the same wherever the material can't sample a backdrop.
+                            .background(Color.white.opacity(0.88), in: Circle())
                             .background(.regularMaterial, in: Circle())
                             .environment(\.colorScheme, .light)
                             .frame(width: 44, height: 44)
@@ -146,11 +154,11 @@ struct ProofHomeView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Your proof")
-                        .font(.system(size: 26, weight: .bold))
+                        .mmFont(26, .bold)
                         .foregroundStyle(.white)
                         .accessibilityAddTraits(.isHeader)
                     Text([model.propertyName, model.addressLine].compactMap { $0 }.joined(separator: " · "))
-                        .font(.system(size: 15))
+                        .mmFont(15)
                         .foregroundStyle(.white.opacity(0.92))
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
@@ -163,6 +171,8 @@ struct ProofHomeView: View {
             }
             .padding(.horizontal, M.inset)
             .frame(width: width, height: height, alignment: .topLeading)
+            // The hero is a fixed photo frame: its text grows to AX1, beyond that the sheet carries size.
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         }
         .frame(width: width, height: height)
     }
@@ -170,7 +180,7 @@ struct ProofHomeView: View {
     @ViewBuilder
     private var heroPhoto: some View {
         if let path = model.heroPhotoPath {
-            HeroPhoto(path: path, resolvePhotoURL: resolvePhotoURL)
+            MMEvidenceImage(path: path, resolve: resolvePhotoURL, placeholder: Color(red: 0.30, green: 0.33, blue: 0.32))
         } else {
             // No evidence yet: a calm designed field, never stock photography.
             ZStack {
@@ -179,7 +189,7 @@ struct ProofHomeView: View {
                     startPoint: .topLeading, endPoint: .bottomTrailing
                 )
                 Image(systemName: "house")
-                    .font(.system(size: 56, weight: .ultraLight))
+                    .mmFont(56, .ultraLight)
                     .foregroundStyle(.white.opacity(0.18))
                     .offset(y: -24)
             }
@@ -189,10 +199,10 @@ struct ProofHomeView: View {
     private var wordmark: some View {
         HStack(spacing: 7) {
             Image(systemName: "checkmark.shield")
-                .font(.system(size: 17, weight: .semibold))
+                .mmFont(17, .semibold)
                 .foregroundStyle(MoveMarkTheme.Light.accent)
             Text("MOVEMARK")
-                .font(.system(size: 14, weight: .semibold))
+                .mmFont(14, .semibold)
                 .tracking(2.0)
                 .foregroundStyle(.white)
         }
@@ -205,19 +215,19 @@ struct ProofHomeView: View {
         Button(action: onOpenRental) {
             HStack(spacing: 10) {
                 Image(systemName: "house")
-                    .font(.system(size: 15, weight: .semibold))
+                    .mmFont(15, .semibold)
                     .foregroundStyle(MoveMarkTheme.Light.accent)
                 VStack(alignment: .leading, spacing: 5) {
                     if model.totalRooms > 0 { segments }
                     Text(model.totalRooms == 0
                          ? "Add rooms to start"
                          : "\(model.documented) of \(model.totalRooms) rooms documented")
-                        .font(.system(size: 13, weight: .medium))
+                        .mmFont(13, .medium)
                         .foregroundStyle(.white)
-                        .lineLimit(1)
+                        .lineLimit(2)
                 }
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .bold))
+                    .mmFont(11, .bold)
                     .foregroundStyle(.white.opacity(0.7))
             }
             .padding(.leading, 14)
@@ -226,7 +236,7 @@ struct ProofHomeView: View {
             .background(Color.black.opacity(0.42), in: Capsule())
             .background(.ultraThinMaterial, in: Capsule())
             .environment(\.colorScheme, .dark)
-            .fixedSize(horizontal: true, vertical: false)
+            .fixedSize(horizontal: false, vertical: true)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(model.documented) of \(model.totalRooms) rooms documented. Open rental.")
@@ -290,20 +300,20 @@ struct ProofHomeView: View {
         if let name = model.nextRoomName {
             Button(action: onPrimary) {
                 HStack(spacing: 14) {
-                    RoomGlyph(name: name)
+                    MMIconCircle(systemName: RoomGlyph.symbol(for: name))
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Next room")
-                            .font(.system(size: 12))
+                            .mmFont(12)
                             .foregroundStyle(MoveMarkTheme.Light.textSecondary)
                         Text(name)
-                            .font(.system(size: 18, weight: .semibold))
+                            .mmFont(18, .semibold)
                             .foregroundStyle(MoveMarkTheme.Light.textPrimary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .lineLimit(isAX ? 3 : 1)
+                            .minimumScaleFactor(isAX ? 1 : 0.8)
                     }
                     Spacer(minLength: 8)
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .semibold))
+                        .mmFont(14, .semibold)
                         .foregroundStyle(MoveMarkTheme.Light.textTertiary)
                 }
                 .frame(minHeight: 60)
@@ -312,17 +322,13 @@ struct ProofHomeView: View {
             .buttonStyle(.plain)
         } else if model.totalRooms > 0 {
             HStack(spacing: 14) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(MoveMarkTheme.Light.accent)
-                    .frame(width: 60, height: 60)
-                    .background(MoveMarkTheme.Light.accentWash, in: Circle())
+                MMIconCircle(systemName: "checkmark", tint: MoveMarkTheme.Light.accent, fill: MoveMarkTheme.Light.accentWash)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Move-in proof")
-                        .font(.system(size: 13))
+                        .mmFont(13)
                         .foregroundStyle(MoveMarkTheme.Light.textSecondary)
                     Text("Every room documented")
-                        .font(.system(size: 18, weight: .semibold))
+                        .mmFont(18, .semibold)
                         .foregroundStyle(MoveMarkTheme.Light.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -336,50 +342,40 @@ struct ProofHomeView: View {
     private var primaryButton: some View {
         Button(action: onPrimary) {
             Label(model.primaryTitle, systemImage: model.nextRoomName != nil ? "camera.fill" : "doc.text.fill")
-                .font(.system(size: 15, weight: .semibold))
+                .mmFont(15, .semibold)
                 .foregroundStyle(MoveMarkTheme.Light.onAccent)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
+                .lineLimit(isAX ? 3 : 1)
+                .minimumScaleFactor(isAX ? 1 : 0.85)
+                .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
-                .frame(height: 46)
-                .background(MoveMarkTheme.Light.cta, in: Capsule())
+                .frame(minHeight: 46)
+                .padding(.vertical, isAX ? 8 : 0)
+                .padding(.horizontal, 12)
+                .background(MoveMarkTheme.Light.cta, in: RoundedRectangle(cornerRadius: 23, style: .continuous))
         }
-        .buttonStyle(ProofPressStyle())
+        .buttonStyle(MMLightPressStyle())
     }
 
+    @ViewBuilder
     private var metrics: some View {
-        HStack(spacing: 0) {
-            metric(icon: "camera", value: model.photos, label: model.photos == 1 ? "Photo" : "Photos")
-            separator
-            metric(icon: "doc.text", value: model.records, label: model.records == 1 ? "Record" : "Records")
-            separator
-            metric(icon: "exclamationmark.triangle", value: model.issues, label: model.issues == 1 ? "Issue" : "Issues",
-                   tint: model.issues > 0 ? MoveMarkTheme.Light.attention : MoveMarkTheme.Light.textPrimary)
+        let align: Alignment = isAX ? .leading : .center
+        let photos = MMMetricItem(icon: "camera", value: model.photos, label: model.photos == 1 ? "Photo" : "Photos", alignment: align)
+        let records = MMMetricItem(icon: "doc.text", value: model.records, label: model.records == 1 ? "Record" : "Records", alignment: align)
+        let issues = MMMetricItem(icon: "exclamationmark.triangle", value: model.issues, label: model.issues == 1 ? "Issue" : "Issues",
+                                  tint: model.issues > 0 ? MoveMarkTheme.Light.attention : MoveMarkTheme.Light.textPrimary,
+                                  alignment: align)
+        if isAX {
+            // Three columns can't hold accessibility sizes; stack them.
+            VStack(alignment: .leading, spacing: 10) { photos; records; issues }
+                .padding(.vertical, 6)
+        } else {
+            HStack(spacing: 0) { photos; separator; records; separator; issues }
+                .frame(minHeight: 42)
         }
-        .frame(height: 42)
     }
 
     private var separator: some View {
-        Rectangle().fill(MoveMarkTheme.Light.hairline).frame(width: 1, height: 30)
-    }
-
-    private func metric(icon: String, value: Int, label: String, tint: Color = MoveMarkTheme.Light.textPrimary) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 19, weight: .light))
-                .foregroundStyle(tint)
-            VStack(alignment: .leading, spacing: -1) {
-                Text("\(value)")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(MoveMarkTheme.Light.textPrimary)
-                    .monospacedDigit()
-                Text(label)
-                    .font(.system(size: 11))
-                    .foregroundStyle(MoveMarkTheme.Light.textSecondary)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
+        Rectangle().fill(MoveMarkTheme.Light.hairline).frame(width: 1, height: 28)
     }
 
     /// Three across, equal width, filling the row (scrolls if there are more).
@@ -391,9 +387,10 @@ struct ProofHomeView: View {
                 HStack(spacing: gap) {
                     ForEach(model.recent) { item in
                         Button { onOpenRoom(item.id) } label: {
-                            RecentTile(item: item, width: w, height: w * 0.88, resolvePhotoURL: resolvePhotoURL)
+                            MMPhotoCard(path: item.photoPath, title: item.roomName, count: item.photoCount,
+                                        size: CGSize(width: w, height: w * 0.88), resolve: resolvePhotoURL)
                         }
-                        .buttonStyle(ProofPressStyle())
+                        .buttonStyle(MMLightPressStyle())
                     }
                 }
             }
@@ -404,10 +401,15 @@ struct ProofHomeView: View {
     }
 
     private var actionGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(), spacing: MoveMarkTheme.Light.Space.tight), count: isAX ? 1 : 2),
+            spacing: MoveMarkTheme.Light.Space.tight
+        ) {
             ForEach(model.actions) { action in
-                Button { onAction(action) } label: { ActionTile(action: action) }
-                    .buttonStyle(ProofPressStyle())
+                Button { onAction(action) } label: {
+                    MMLightActionTile(icon: action.icon, title: action.title, subtitle: action.subtitle, needed: action.needed)
+                }
+                    .buttonStyle(MMLightPressStyle())
             }
         }
     }
@@ -419,11 +421,11 @@ struct ProofHomeView: View {
                 Button { onOpenOtherRental(rental.id) } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(rental.name).font(.system(size: 15, weight: .medium)).foregroundStyle(MoveMarkTheme.Light.textPrimary)
-                            Text(rental.status).font(.system(size: 12)).foregroundStyle(MoveMarkTheme.Light.textSecondary)
+                            Text(rental.name).mmFont(15, .medium).foregroundStyle(MoveMarkTheme.Light.textPrimary)
+                            Text(rental.status).mmFont(12).foregroundStyle(MoveMarkTheme.Light.textSecondary)
                         }
                         Spacer()
-                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(MoveMarkTheme.Light.textTertiary)
+                        Image(systemName: "chevron.right").mmFont(12, .semibold).foregroundStyle(MoveMarkTheme.Light.textTertiary)
                     }
                     .padding(14)
                     .contentShape(Rectangle())
@@ -431,35 +433,19 @@ struct ProofHomeView: View {
                 .buttonStyle(.plain)
             }
         }
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(MoveMarkTheme.Light.hairline))
+        .mmLightSurface()
     }
 
     private func sectionHeader(_ title: String, trailing: String? = nil, action: (() -> Void)? = nil) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(MoveMarkTheme.Light.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-            Spacer()
-            if let trailing, let action {
-                Button(action: action) {
-                    HStack(spacing: 3) {
-                        Text(trailing)
-                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
-                    }
-                    .font(.system(size: 13))
-                    .foregroundStyle(MoveMarkTheme.Light.textSecondary)
-                }
-            }
-        }
+        MMLightSectionHeader(title: title, trailing: trailing, action: action)
     }
 
     private func errorRow(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.circle.fill").foregroundStyle(MoveMarkTheme.Colors.semanticDanger)
-            Text(message).font(.system(size: 15)).foregroundStyle(MoveMarkTheme.Light.textPrimary)
+            Text(message).mmFont(15).foregroundStyle(MoveMarkTheme.Light.textPrimary)
             Spacer(minLength: 8)
-            Button(MMCopy.tryAgain, action: onRetry).font(.system(size: 15, weight: .semibold))
+            Button(MMCopy.tryAgain, action: onRetry).mmFont(15, .semibold)
                 .foregroundStyle(MoveMarkTheme.Light.textPrimary)
         }
         .padding(14)
@@ -469,27 +455,9 @@ struct ProofHomeView: View {
 
 // MARK: - Pieces
 
-private struct HeroPhoto: View {
-    let path: String
-    let resolvePhotoURL: (String) async -> URL?
-    @State private var url: URL?
-
-    var body: some View {
-        MMCachedAsyncImage(path: path, signedURL: url) { phase in
-            switch phase {
-            case .success(let image): image.resizable().scaledToFill()
-            default: Color(red: 0.30, green: 0.33, blue: 0.32)
-            }
-        }
-        .task(id: path) { url = await resolvePhotoURL(path) }
-    }
-}
-
 /// Next room has no photo yet (that's why it's next), so it gets a quiet glyph for its kind.
-private struct RoomGlyph: View {
-    let name: String
-
-    private var symbol: String {
+enum RoomGlyph {
+    static func symbol(for name: String) -> String {
         let n = name.lowercased()
         if n.contains("bed") { return "bed.double" }
         if n.contains("kitchen") || n.contains("dining") { return "fork.knife" }
@@ -499,110 +467,6 @@ private struct RoomGlyph: View {
         if n.contains("laundry") { return "washer" }
         if n.contains("office") || n.contains("study") { return "desktopcomputer" }
         return "door.left.hand.open"
-    }
-
-    var body: some View {
-        Image(systemName: symbol)
-            .font(.system(size: 22))
-            .foregroundStyle(MoveMarkTheme.Light.textPrimary.opacity(0.7))
-            .frame(width: 56, height: 56)
-            .background(MoveMarkTheme.Light.fill, in: Circle())
-            .accessibilityHidden(true)
-    }
-}
-
-private struct RecentTile: View {
-    let item: ProofHomeModel.Recent
-    let width: CGFloat
-    let height: CGFloat
-    let resolvePhotoURL: (String) async -> URL?
-    @State private var url: URL?
-
-    var body: some View {
-        // Fixed frame + overlay so the fill-cropped photo never letterboxes.
-        Color.clear
-            .frame(width: width, height: height)
-            .overlay {
-                MMCachedAsyncImage(path: item.photoPath, signedURL: url) { phase in
-                    switch phase {
-                    case .success(let image): image.resizable().scaledToFill()
-                    default: MoveMarkTheme.Light.fill
-                    }
-                }
-            }
-            .overlay(alignment: .bottom) {
-                ZStack(alignment: .bottom) {
-                    LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
-                        .frame(height: 34)
-                    HStack(spacing: 3) {
-                        Text(item.roomName)
-                            .font(.system(size: 11, weight: .medium))
-                            .lineLimit(1)
-                        Spacer(minLength: 2)
-                        Image(systemName: "photo.on.rectangle").font(.system(size: 9, weight: .medium))
-                        Text("\(item.photoCount)").font(.system(size: 11, weight: .medium)).monospacedDigit()
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 7)
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .task(id: item.photoPath) { url = await resolvePhotoURL(item.photoPath) }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(item.roomName), \(item.photoCount) photos")
-            .accessibilityAddTraits(.isButton)
-    }
-}
-
-private struct ActionTile: View {
-    let action: ProofHomeModel.Action
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: action.icon)
-                .font(.system(size: 18, weight: .light))
-                .foregroundStyle(MoveMarkTheme.Light.textPrimary)
-                .frame(width: 24)
-                .overlay(alignment: .topTrailing) {
-                    if action.needed {
-                        Circle().fill(MoveMarkTheme.Light.attention).frame(width: 6, height: 6)
-                            .offset(x: 3, y: -2)
-                            .accessibilityLabel("Needed")
-                    }
-                }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(action.title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(MoveMarkTheme.Light.textPrimary)
-                    .lineLimit(1)
-                Text(action.subtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(MoveMarkTheme.Light.textSecondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 0)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(MoveMarkTheme.Light.textTertiary)
-        }
-        .padding(.horizontal, 10)
-        .frame(maxWidth: .infinity, minHeight: 52)
-        .background(MoveMarkTheme.Light.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(MoveMarkTheme.Light.hairline, lineWidth: 1)
-        )
-        .contentShape(Rectangle())
-    }
-}
-
-private struct ProofPressStyle: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
-            .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: configuration.isPressed)
     }
 }
 
@@ -621,13 +485,13 @@ struct ProofHomeEmptyView: View {
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     )
                     Image(systemName: "house")
-                        .font(.system(size: 72, weight: .ultraLight))
+                        .mmFont(72, .ultraLight)
                         .foregroundStyle(.white.opacity(0.18))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     HStack(spacing: 8) {
-                        Image(systemName: "checkmark.shield").font(.system(size: 18, weight: .semibold))
+                        Image(systemName: "checkmark.shield").mmFont(18, .semibold)
                             .foregroundStyle(MoveMarkTheme.Light.accent)
-                        Text("MOVEMARK").font(.system(size: 15, weight: .semibold)).tracking(2.2).foregroundStyle(.white)
+                        Text("MOVEMARK").mmFont(15, .semibold).tracking(2.2).foregroundStyle(.white)
                     }
                     .padding(.horizontal, 22)
                     .padding(.top, 70)
@@ -636,22 +500,22 @@ struct ProofHomeEmptyView: View {
 
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Prove what was already there.")
-                        .font(.system(size: 30, weight: .bold))
+                        .mmFont(30, .bold)
                         .foregroundStyle(MoveMarkTheme.Light.textPrimary)
                         .accessibilityAddTraits(.isHeader)
                     Text("Add your rental, then photograph each room before you unpack. MoveMark keeps it as a dated record.")
-                        .font(.system(size: 17))
+                        .mmFont(17)
                         .foregroundStyle(MoveMarkTheme.Light.textSecondary)
                     if let errorMessage {
                         HStack {
-                            Text(errorMessage).font(.system(size: 15)).foregroundStyle(MoveMarkTheme.Colors.semanticDanger)
+                            Text(errorMessage).mmFont(15).foregroundStyle(MoveMarkTheme.Colors.semanticDanger)
                             Spacer()
-                            Button(MMCopy.tryAgain, action: onRetry).font(.system(size: 15, weight: .semibold))
+                            Button(MMCopy.tryAgain, action: onRetry).mmFont(15, .semibold)
                         }
                     }
                     Button(action: onStart) {
                         Label("Add your rental", systemImage: "plus")
-                            .font(.system(size: 17, weight: .semibold))
+                            .mmFont(17, .semibold)
                             .foregroundStyle(MoveMarkTheme.Light.onAccent)
                             .frame(maxWidth: .infinity)
                             .frame(minHeight: 54)

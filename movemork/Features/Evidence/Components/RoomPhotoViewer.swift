@@ -96,26 +96,11 @@ struct RoomPhotoViewer: View {
 private struct ViewerPage: View {
     let photo: EvidencePhoto
     let resolvePhotoURL: (String) async -> URL?
-    @State private var url: URL?
 
     var body: some View {
-        MMCachedAsyncImage(path: photo.filePath, signedURL: url) { phase in
-            switch phase {
-            case .success(let image):
-                image.resizable().scaledToFit()
-            case .empty:
-                ProgressView().tint(.white)
-            case .failure:
-                VStack(spacing: 10) {
-                    Image(systemName: "exclamationmark.triangle").font(.title2)
-                    Text("Couldn’t load this photo").font(MoveMarkTheme.Typography.subheadline)
-                }
-                .foregroundStyle(.white.opacity(0.8))
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task(id: photo.id) { url = await resolvePhotoURL(photo.filePath) }
-        .accessibilityLabel("Evidence photo")
+        MMEvidenceImage(path: photo.filePath, resolve: resolvePhotoURL, placeholder: .black, fit: true)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityLabel("Evidence photo")
     }
 }
 
@@ -123,25 +108,17 @@ private struct ViewerThumb: View {
     let photo: EvidencePhoto
     let isSelected: Bool
     let resolvePhotoURL: (String) async -> URL?
-    @State private var url: URL?
 
     var body: some View {
-        MMCachedAsyncImage(path: photo.thumbnailPath ?? photo.filePath, signedURL: url) { phase in
-            switch phase {
-            case .success(let image): image.resizable().scaledToFill()
-            default: Color.white.opacity(0.08)
-            }
-        }
-        .frame(width: 52, height: 52)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(isSelected ? Color.white : Color.clear, lineWidth: 2)
-        )
-        .opacity(isSelected ? 1 : 0.6)
-        .task(id: photo.id) {
-            if let thumb = photo.thumbnailPath, let u = await resolvePhotoURL(thumb) { url = u } else { url = await resolvePhotoURL(photo.filePath) }
-        }
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        MMEvidenceImage(path: photo.thumbnailPath ?? photo.filePath, resolve: resolvePhotoURL,
+                        size: CGSize(width: 52, height: 52), placeholder: Color.white.opacity(0.08))
+            .frame(width: 52, height: 52)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(isSelected ? Color.white : Color.clear, lineWidth: 2)
+            )
+            .opacity(isSelected ? 1 : 0.6)
+            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }

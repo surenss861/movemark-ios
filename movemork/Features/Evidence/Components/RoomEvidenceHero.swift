@@ -46,7 +46,6 @@ struct RoomEvidenceHero: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selectedPhotoID: UUID?
-    @State private var heroURL: URL?
     @State private var showAddChoice = false
     @State private var showLibrary = false
 
@@ -159,7 +158,6 @@ struct RoomEvidenceHero: View {
             .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
             .padding(.top, 8)
         }
-        .task(id: current.photo.id) { await loadHero(current.photo) }
         .confirmationDialog("Add evidence", isPresented: $showAddChoice, titleVisibility: .hidden) {
             Button("Take photos") { onTakePhotos() }
             Button("Choose from library") { showLibrary = true }
@@ -190,26 +188,11 @@ struct RoomEvidenceHero: View {
         .opacity(isBusy ? 0.5 : 1)
     }
 
-    @ViewBuilder
     private func photoLayer(_ photo: EvidencePhoto) -> some View {
-        MMCachedAsyncImage(path: photo.filePath, signedURL: heroURL) { phase in
-            switch phase {
-            case .success(let image):
-                image.resizable().scaledToFill()
-                    .transition(.opacity)
-            case .empty:
-                MoveMarkTheme.Colors.card
-                    .overlay(ProgressView().tint(.white.opacity(0.7)))
-            case .failure:
-                MoveMarkTheme.Colors.card.overlay(
-                    Label("Photo unavailable", systemImage: "photo")
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                )
-            }
-        }
-        .id(photo.id)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: photo.id)
+        MMEvidenceImage(path: photo.filePath, resolve: resolvePhotoURL, placeholder: MoveMarkTheme.Colors.card)
+            .id(photo.id)
+            .transition(.opacity)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: photo.id)
     }
 
     @ViewBuilder
@@ -362,11 +345,6 @@ struct RoomEvidenceHero: View {
             .foregroundStyle(color)
     }
 
-    private func loadHero(_ photo: EvidencePhoto) async {
-        heroURL = nil
-        heroURL = await resolvePhotoURL(photo.filePath)
-    }
-
     static let recordedFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "MMM d · h:mm a"
@@ -379,33 +357,17 @@ private struct RoomEvidenceThumb: View {
     let photo: EvidencePhoto
     let isSelected: Bool
     let resolvePhotoURL: (String) async -> URL?
-    @State private var url: URL?
 
     var body: some View {
-        MMCachedAsyncImage(path: photo.thumbnailPath ?? photo.filePath, signedURL: url) { phase in
-            switch phase {
-            case .success(let image): image.resizable().scaledToFill()
-            case .empty: MoveMarkTheme.Colors.cardRaised
-            case .failure:
-                MoveMarkTheme.Colors.cardRaised.overlay(
-                    Image(systemName: "photo").foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                )
-            }
-        }
-        .frame(width: 64, height: 64)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(isSelected ? Color.white : Color.white.opacity(0.08), lineWidth: isSelected ? 2 : 1)
-        )
-        .opacity(isSelected ? 1 : 0.72)
-        .task(id: photo.id) {
-            if let thumb = photo.thumbnailPath, let resolved = await resolvePhotoURL(thumb) {
-                url = resolved
-            } else {
-                url = await resolvePhotoURL(photo.filePath)
-            }
-        }
+        MMEvidenceImage(path: photo.thumbnailPath ?? photo.filePath, resolve: resolvePhotoURL,
+                        size: CGSize(width: 64, height: 64), placeholder: MoveMarkTheme.Colors.cardRaised)
+            .frame(width: 64, height: 64)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(isSelected ? Color.white : Color.white.opacity(0.08), lineWidth: isSelected ? 2 : 1)
+            )
+            .opacity(isSelected ? 1 : 0.72)
     }
 }
 

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5A11A0010000000000000001 /* SnapshotTesting in Frameworks */ = {isa = PBXBuildFile; productRef = 5A11A0010000000000000002 /* SnapshotTesting */; };
 		211FDC712F66461000B6FD43 /* NukeUI in Frameworks */ = {isa = PBXBuildFile; productRef = 2152E1052F62230000EDA905 /* NukeUI */; };
 		2152E0F42F62213C00EDA905 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 2152E0F32F62213C00EDA905 /* Auth */; };
 		2152E0F62F62213C00EDA905 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 2152E0F52F62213C00EDA905 /* Functions */; };
@@ -95,6 +96,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5A11A0010000000000000001 /* SnapshotTesting in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -181,6 +183,9 @@
 			fileSystemSynchronizedGroups = (
 				2152E0912F621A5300EDA905 /* movemorkTests */,
 			);
+			packageProductDependencies = (
+				5A11A0010000000000000002 /* SnapshotTesting */,
+			);
 			name = movemorkTests;
 			productName = movemorkTests;
 			productReference = 2152E08E2F621A5300EDA905 /* movemorkTests.xctest */;
@@ -244,6 +249,7 @@
 				2152E1042F62230000EDA905 /* XCRemoteSwiftPackageReference "Nuke" */,
 				2152E1062F62240000EDA905 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
 				21ED60002FF6700000FC0D58 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
+				5A11A0010000000000000003 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2152E07E2F621A5100EDA905 /* Products */;
@@ -701,6 +707,14 @@
 				minimumVersion = 8.0.0;
 			};
 		};
+		5A11A0010000000000000003 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pointfreeco/swift-snapshot-testing";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.17.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -748,6 +762,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 21ED60002FF6700000FC0D58 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
 			productName = Sentry;
+		};
+		5A11A0010000000000000002 /* SnapshotTesting */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A11A0010000000000000003 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */;
+			productName = SnapshotTesting;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
