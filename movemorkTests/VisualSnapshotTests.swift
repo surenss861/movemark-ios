@@ -91,6 +91,12 @@ final class VisualSnapshotTests: XCTestCase {
         case "complete":
             m.documented = 10; m.nextRoomName = nil; m.primaryTitle = "View move-in report"
             m.actions = [actions[3], .init(id: "report", kind: .report, title: "Move-in report", subtitle: "Ready to share", icon: "doc.richtext")]
+        case "one-room":
+            // One documented room: the row keeps its rhythm with honest capture slots.
+            m.documented = 1; m.photos = 2; m.issues = 0
+            m.nextRoomName = "Living Room"; m.primaryTitle = "Capture Living Room"
+            m.recent = [.init(id: UUID(), roomName: "Kitchen", photoCount: 2, photoPath: "fixture/snap-kitchen.jpg")]
+            m.upcoming = [.init(id: UUID(), roomName: "Living Room"), .init(id: UUID(), roomName: "Primary Bedroom")]
         case "no-photos":
             m.documented = 0; m.heroPhotoPath = nil; m.recent = []; m.photos = 0; m.issues = 0
             m.nextRoomName = "Kitchen"; m.primaryTitle = "Capture Kitchen"
@@ -116,6 +122,10 @@ final class VisualSnapshotTests: XCTestCase {
 
     func testProofComplete() {
         assertSnapshot(of: host(proofScreen("complete")), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    func testProofOneRoom() {
+        assertSnapshot(of: host(proofScreen("one-room")), as: Self.strategy(Self.pro), named: "pro")
     }
 
     func testProofNoPhotos() {

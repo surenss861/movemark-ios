@@ -38,11 +38,23 @@ private struct MMScaledFont: ViewModifier {
     let weight: Font.Weight
     let style: UIFont.TextStyle
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.mmLayoutScale) private var layoutScale
 
     func body(content: Content) -> some View {
         let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(dynamicTypeSize))
-        let scaled = UIFontMetrics(forTextStyle: style).scaledValue(for: size, compatibleWith: traits)
+        let scaled = UIFontMetrics(forTextStyle: style).scaledValue(for: size * layoutScale, compatibleWith: traits)
         return content.font(.system(size: scaled, weight: weight))
+    }
+}
+
+/// Screens composed to a reference width (402pt) scale their geometry and type by this, so the
+/// composition holds on larger and smaller phones. 1 everywhere else.
+private struct MMLayoutScaleKey: EnvironmentKey { static let defaultValue: CGFloat = 1 }
+
+extension EnvironmentValues {
+    var mmLayoutScale: CGFloat {
+        get { self[MMLayoutScaleKey.self] }
+        set { self[MMLayoutScaleKey.self] = newValue }
     }
 }
 

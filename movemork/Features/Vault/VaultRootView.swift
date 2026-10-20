@@ -165,10 +165,20 @@ struct VaultRootView: View {
             records: vaultRecordCount ?? 0,
             issues: vaultIssueCount ?? 0,
             recent: Array(recent.prefix(8)),
+            upcoming: upcomingRooms(rooms),
             actions: proofActions(for: prop),
             otherRentals: otherProperties.map { .init(id: $0.id, name: displayName(for: $0), status: otherRentalStatusLine(for: $0)) },
             errorMessage: propertyStore.errorMessage
         )
+    }
+
+    /// Rooms with no move-in proof yet, the next room first (same rule as the capture button).
+    private func upcomingRooms(_ rooms: [RoomRecord]) -> [ProofHomeModel.Upcoming] {
+        let empty = rooms.filter { room in !room.evidence.contains { !$0.photos.isEmpty || $0.photoCount > 0 } }
+        let next = vaultNextRoomName
+        return empty
+            .sorted { a, b in (a.name == next ? 0 : 1) < (b.name == next ? 0 : 1) }
+            .map { .init(id: $0.id, roomName: $0.name) }
     }
 
     /// Same sources and de-duplication as the previous Next actions + records sections.
@@ -197,7 +207,7 @@ struct VaultRootView: View {
         actions.append(.init(
             id: "maintenance", kind: .maintenance,
             title: "Maintenance issue",
-            subtitle: issues > 0 ? (issues == 1 ? "1 open issue" : "\(issues) open issues") : "Log a repair or problem",
+            subtitle: issues > 0 ? (issues == 1 ? "1 open issue" : "\(issues) open issues") : "Report existing issues",
             icon: "wrench.adjustable"
         ))
         if propertyStore.isExportReady(for: prop) {

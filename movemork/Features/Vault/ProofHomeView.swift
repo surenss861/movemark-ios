@@ -21,6 +21,13 @@ struct ProofHomeModel {
         let photoPath: String
     }
 
+    /// A room with no proof yet. Fills the evidence row honestly when fewer than three rooms
+    /// have photos (never fake evidence).
+    struct Upcoming: Identifiable {
+        let id: UUID            // room id
+        let roomName: String
+    }
+
     struct Action: Identifiable {
         enum Kind { case document(VaultDocumentType), maintenance, report, nudge }
         let id: String
@@ -49,6 +56,8 @@ struct ProofHomeModel {
     var records: Int
     var issues: Int
     var recent: [Recent]
+    /// Undocumented rooms, next room first.
+    var upcoming: [Upcoming] = []
     var actions: [Action]
     var otherRentals: [OtherRental]
     var errorMessage: String?
@@ -68,25 +77,29 @@ struct ProofHomeView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private var isAX: Bool { dynamicTypeSize.isAccessibilitySize }
+    /// Reference was composed at 402pt wide; scale with the screen so proportions hold.
+    @State private var k: CGFloat = 1
+    private var spec: Spec { Spec(k: k) }
 
     /// Geometry measured from design-refs/proof.jpg (phone screen 563px ↔ 402pt, 1.40 px/pt).
     /// This screen reproduces that reference; change these only against an overlay comparison.
-    private enum Spec {
-        static let inset: CGFloat = 18
-        static let sheetTop: CGFloat = 251          // from the top of the screen
-        static let sheetRadius: CGFloat = 22
-        static let wordmarkCenterY: CGFloat = 58
-        static let controlSize: CGFloat = 31
-        static let titleTop: CGFloat = 112
-        static let pillHeight: CGFloat = 49
-        static let pillBottomGap: CGFloat = 23      // pill bottom → sheet top
-        static let thumb: CGFloat = 60
-        static let ctaHeight: CGFloat = 40
-        static let tileHeight: CGFloat = 113
-        static let tileGap: CGFloat = 7
-        static let actionHeight: CGFloat = 51
-        static let actionGapH: CGFloat = 11
-        static let actionGapV: CGFloat = 9
+    private struct Spec {
+        let k: CGFloat
+        var inset: CGFloat { 18 * k }
+        var sheetTop: CGFloat { 251 * k }          // from the top of the screen
+        var sheetRadius: CGFloat { 22 * k }
+        var wordmarkCenterY: CGFloat { 58 * k }
+        var controlSize: CGFloat { 31 * k }
+        var titleTop: CGFloat { 112 * k }
+        var pillHeight: CGFloat { 49 * k }
+        var pillBottomGap: CGFloat { 23 * k }      // pill bottom → sheet top
+        var thumb: CGFloat { 60 * k }
+        var ctaHeight: CGFloat { 40 * k }
+        var tileHeight: CGFloat { 113 * k }
+        var tileGap: CGFloat { 7 * k }
+        var actionHeight: CGFloat { 51 * k }
+        var actionGapH: CGFloat { 11 * k }
+        var actionGapV: CGFloat { 9 * k }
     }
 
     private enum Ink {
@@ -106,16 +119,20 @@ struct ProofHomeView: View {
     var body: some View {
         GeometryReader { geo in
             ScrollView {
-                VStack(spacing: 0) {
+                VStack(spacing: 0 * k) {
                     hero(width: geo.size.width, topInset: geo.safeAreaInsets.top)
                     sheet
-                        .padding(.top, -Spec.sheetRadius)
+                        .padding(.top, -spec.sheetRadius)
                 }
             }
             .scrollIndicators(.hidden)
             .ignoresSafeArea(edges: .top)
         }
         .background(Ink.sheet.ignoresSafeArea())
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            k = min(max(width / 402, 0.92), 1.12)
+        }
+        .environment(\.mmLayoutScale, k)
         .task(id: model.recent.map(\.photoPath)) {
             MMEvidenceImages.prefetch(paths: model.recent.map(\.photoPath), resolve: resolvePhotoURL)
         }
@@ -124,7 +141,7 @@ struct ProofHomeView: View {
     // MARK: - Hero (the photograph is the header)
 
     private func hero(width: CGFloat, topInset: CGFloat) -> some View {
-        let height = Spec.sheetTop + Spec.sheetRadius
+        let height = spec.sheetTop + spec.sheetRadius
         return ZStack(alignment: .topLeading) {
             Color.clear
                 .frame(width: width, height: height)
@@ -153,16 +170,16 @@ struct ProofHomeView: View {
             .allowsHitTesting(false)
 
             // Wordmark + control, centred on y = 58.
-            HStack(spacing: 0) {
+            HStack(spacing: 0 * k) {
                 wordmark
                 Spacer()
                 heroControl
             }
-            .frame(height: 44)
-            .padding(.horizontal, Spec.inset)
-            .offset(y: Spec.wordmarkCenterY - 22)
+            .frame(height: 44 * k)
+            .padding(.horizontal, spec.inset)
+            .offset(y: spec.wordmarkCenterY - 22)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 3 * k) {
                 Text("Your proof")
                     .mmFont(25, .semibold)
                     .foregroundStyle(.white)
@@ -173,11 +190,11 @@ struct ProofHomeView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                 coveragePill
-                    .padding(.top, 15)
+                    .padding(.top, 15 * k)
             }
             .shadow(color: .black.opacity(0.18), radius: 6, y: 1)
-            .padding(.horizontal, Spec.inset)
-            .frame(width: width, height: Spec.sheetTop - Spec.pillBottomGap, alignment: .bottomLeading)
+            .padding(.horizontal, spec.inset)
+            .frame(width: width, height: spec.sheetTop - spec.pillBottomGap, alignment: .bottomLeading)
             .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         }
         .frame(width: width, height: height)
@@ -195,7 +212,7 @@ struct ProofHomeView: View {
                     startPoint: .topLeading, endPoint: .bottomTrailing
                 )
                 Image(systemName: "house")
-                    .font(.system(size: 56, weight: .ultraLight))
+                    .font(.system(size: 56 * k, weight: .ultraLight))
                     .foregroundStyle(.white.opacity(0.22))
                     .offset(y: -30)
             }
@@ -203,17 +220,17 @@ struct ProofHomeView: View {
     }
 
     private var wordmark: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 6 * k) {
             ZStack {
                 Image(systemName: "hexagon")
-                    .font(.system(size: 21, weight: .semibold))
+                    .font(.system(size: 21 * k, weight: .semibold))
                 Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .heavy))
+                    .font(.system(size: 9 * k, weight: .heavy))
             }
-            .frame(width: 20)
+            .frame(width: 20 * k)
             .foregroundStyle(Ink.limeMark)
             Text("MOVEMARK")
-                .font(.system(size: 14.6, weight: .semibold))
+                .font(.system(size: 14.6 * k, weight: .semibold))
                 .tracking(1.6)
                 .foregroundStyle(.white)
         }
@@ -235,11 +252,11 @@ struct ProofHomeView: View {
             }
         } label: {
             Image(systemName: model.otherRentals.isEmpty ? "plus" : "ellipsis")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 14 * k, weight: .semibold))
                 .foregroundStyle(Ink.text)
-                .frame(width: Spec.controlSize, height: Spec.controlSize)
+                .frame(width: spec.controlSize, height: spec.controlSize)
                 .background(Color(red: 0.965, green: 0.961, blue: 0.961), in: Circle())
-                .frame(width: 44, height: 44)
+                .frame(width: 44 * k, height: 44 * k)
                 .contentShape(Rectangle())
         }
         .accessibilityLabel(model.otherRentals.isEmpty ? "Add a rental" : "Rentals")
@@ -248,13 +265,13 @@ struct ProofHomeView: View {
 
     private var coveragePill: some View {
         Button(action: onOpenRental) {
-            HStack(spacing: 0) {
+            HStack(spacing: 0 * k) {
                 Image(systemName: "house")
-                    .font(.system(size: 17.5, weight: .regular))
+                    .font(.system(size: 17.5 * k, weight: .regular))
                     .foregroundStyle(Ink.limeMark)
-                    .frame(width: 20)
-                    .padding(.leading, 16)
-                VStack(alignment: .leading, spacing: 9) {
+                    .frame(width: 20 * k)
+                    .padding(.leading, 16 * k)
+                VStack(alignment: .leading, spacing: 9 * k) {
                     if model.totalRooms > 0 { segments }
                     Text(model.totalRooms == 0
                          ? "Add rooms to start"
@@ -263,14 +280,14 @@ struct ProofHomeView: View {
                         .foregroundStyle(.white)
                         .lineLimit(isAX ? 2 : 1)
                 }
-                .padding(.leading, 7)
+                .padding(.leading, 7 * k)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 10 * k, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.85))
-                    .padding(.leading, 11)
-                    .padding(.trailing, 16)
+                    .padding(.leading, 11 * k)
+                    .padding(.trailing, 16 * k)
             }
-            .frame(minHeight: Spec.pillHeight)
+            .frame(minHeight: spec.pillHeight)
             .background(Ink.pill.opacity(0.88), in: Capsule())
             .fixedSize(horizontal: !isAX, vertical: true)
         }
@@ -280,13 +297,14 @@ struct ProofHomeView: View {
 
     /// Five slim segments filled in proportion to rooms documented.
     private var segments: some View {
-        let filled = model.totalRooms == 0 ? 0
-            : Int((Double(model.documented) / Double(model.totalRooms) * 5).rounded(.down))
-        return HStack(spacing: 3) {
+        // Any progress lights at least one segment (1 of 10 used to show none).
+        let filled = model.totalRooms == 0 || model.documented == 0 ? 0
+            : max(1, Int((Double(model.documented) / Double(model.totalRooms) * 5).rounded(.down)))
+        return HStack(spacing: 3 * k) {
             ForEach(0..<5, id: \.self) { i in
                 Capsule()
                     .fill(i < filled ? Ink.limeMark : Color.white.opacity(0.32))
-                    .frame(width: 25, height: 3.5)
+                    .frame(width: 25 * k, height: 3.5 * k)
             }
         }
         .accessibilityHidden(true)
@@ -295,29 +313,29 @@ struct ProofHomeView: View {
     // MARK: - Sheet
 
     private var sheet: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 0 * k) {
             if let error = model.errorMessage {
-                errorRow(error).padding(.bottom, 12)
+                errorRow(error).padding(.bottom, 12 * k)
             }
             nextRoomRow
-            primaryButton.padding(.top, 7)
-            metrics.padding(.top, 30)
+            primaryButton.padding(.top, 7 * k)
+            metrics.padding(.top, 30 * k)
             if !model.recent.isEmpty {
                 sectionHeader("Recent evidence", trailing: "View all", action: onOpenRental)
-                    .padding(.top, 31)
-                recentStrip.padding(.top, 11)
+                    .padding(.top, 31 * k)
+                recentStrip.padding(.top, 11 * k)
             }
             if !model.actions.isEmpty {
-                sectionHeader("Next actions").padding(.top, 24)
-                actionGrid.padding(.top, 10)
+                sectionHeader("Next actions").padding(.top, 24 * k)
+                actionGrid.padding(.top, 10 * k)
             }
             MMSignedInScrollTailSpacer(kind: .rootTab)
         }
-        .padding(.horizontal, Spec.inset)
-        .padding(.top, 15)
+        .padding(.horizontal, spec.inset)
+        .padding(.top, 15 * k)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            UnevenRoundedRectangle(topLeadingRadius: Spec.sheetRadius, topTrailingRadius: Spec.sheetRadius, style: .continuous)
+            UnevenRoundedRectangle(topLeadingRadius: spec.sheetRadius, topTrailingRadius: spec.sheetRadius, style: .continuous)
                 .fill(Ink.sheet)
                 .shadow(color: .black.opacity(0.06), radius: 8, y: -2)
         )
@@ -327,10 +345,10 @@ struct ProofHomeView: View {
     private var nextRoomRow: some View {
         if let name = model.nextRoomName {
             Button(action: onPrimary) {
-                HStack(spacing: 13) {
-                    MMIconCircle(systemName: RoomGlyph.symbol(for: name), size: Spec.thumb,
+                HStack(spacing: 13 * k) {
+                    MMIconCircle(systemName: RoomGlyph.symbol(for: name), size: spec.thumb,
                                  tint: Ink.text.opacity(0.65), fill: Color(red: 0.91, green: 0.91, blue: 0.90))
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 4 * k) {
                         Text("Next room")
                             .mmFont(10.5)
                             .foregroundStyle(Ink.secondary)
@@ -342,17 +360,17 @@ struct ProofHomeView: View {
                     }
                     Spacer(minLength: 8)
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 13 * k, weight: .semibold))
                         .foregroundStyle(Ink.text.opacity(0.75))
-                        .padding(.trailing, 12)
+                        .padding(.trailing, 12 * k)
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         } else if model.totalRooms > 0 {
-            HStack(spacing: 13) {
-                MMIconCircle(systemName: "checkmark", size: Spec.thumb, tint: Ink.onLime, fill: Ink.lime.opacity(0.55))
-                VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 13 * k) {
+                MMIconCircle(systemName: "checkmark", size: spec.thumb, tint: Ink.onLime, fill: Ink.lime.opacity(0.55))
+                VStack(alignment: .leading, spacing: 4 * k) {
                     Text("Move-in proof").mmFont(10.5).foregroundStyle(Ink.secondary)
                     Text("Every room documented").mmFont(15.6, .semibold).foregroundStyle(Ink.text)
                         .lineLimit(isAX ? 3 : 1).minimumScaleFactor(isAX ? 1 : 0.8)
@@ -364,9 +382,9 @@ struct ProofHomeView: View {
     /// The one primary action, in the reference lime (brand tuning after the match is approved).
     private var primaryButton: some View {
         Button(action: onPrimary) {
-            HStack(spacing: 8) {
+            HStack(spacing: 8 * k) {
                 Image(systemName: model.nextRoomName != nil ? "camera.fill" : "doc.text.fill")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 13 * k, weight: .semibold))
                 Text(model.primaryTitle)
                     .mmFont(12.5, .semibold)
                     .lineLimit(isAX ? 3 : 1)
@@ -375,9 +393,9 @@ struct ProofHomeView: View {
             }
             .foregroundStyle(Ink.onLime)
             .frame(maxWidth: .infinity)
-            .frame(minHeight: Spec.ctaHeight)
+            .frame(minHeight: spec.ctaHeight)
             .padding(.vertical, isAX ? 8 : 0)
-            .background(Ink.lime, in: RoundedRectangle(cornerRadius: Spec.ctaHeight / 2, style: .continuous))
+            .background(Ink.lime, in: RoundedRectangle(cornerRadius: spec.ctaHeight / 2, style: .continuous))
             .shadow(color: Ink.lime.opacity(0.35), radius: 6, y: 3)
         }
         .buttonStyle(MMLightPressStyle())
@@ -391,7 +409,7 @@ struct ProofHomeView: View {
             ("exclamationmark.triangle", model.issues, "Issues"),
         ]
         if isAX {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 10 * k) {
                 ForEach(items, id: \.2) { metric($0.0, $0.1, $0.2) }
             }
         } else {
@@ -405,22 +423,22 @@ struct ProofHomeView: View {
                             .offset(x: w * [0.074, 0.426, 0.780][i])
                     }
                     ForEach([0.333, 0.677], id: \.self) { f in
-                        Rectangle().fill(Ink.separator).frame(width: 1, height: 32)
+                        Rectangle().fill(Ink.separator).frame(width: 1 * k, height: 32 * k)
                             .offset(x: w * f)
                     }
                 }
                 .frame(width: w, height: geo.size.height, alignment: .leading)
             }
-            .frame(height: 34)
+            .frame(height: 34 * k)
         }
     }
 
     private func metric(_ icon: String, _ value: Int, _ label: String) -> some View {
-        HStack(alignment: .center, spacing: 8) {
+        HStack(alignment: .center, spacing: 8 * k) {
             Image(systemName: icon)
-                .font(.system(size: 18, weight: .regular))
+                .font(.system(size: 18 * k, weight: .regular))
                 .foregroundStyle(Ink.text)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 2 * k) {
                 Text("\(value)")
                     .mmFont(16, .medium)
                     .foregroundStyle(Ink.text)
@@ -435,11 +453,16 @@ struct ProofHomeView: View {
 
     private var recentStrip: some View {
         GeometryReader { geo in
-            let w = (geo.size.width - Spec.tileGap * 2) / 3
+            let w = (geo.size.width - spec.tileGap * 2) / 3
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Spec.tileGap) {
+                HStack(spacing: spec.tileGap) {
                     ForEach(model.recent) { item in
                         Button { onOpenRoom(item.id) } label: { evidenceTile(item, width: w) }
+                            .buttonStyle(MMLightPressStyle())
+                    }
+                    // Keep the reference's three-across rhythm with rooms still to capture.
+                    ForEach(model.upcoming.prefix(max(0, 3 - model.recent.count))) { room in
+                        Button { onOpenRoom(room.id) } label: { captureSlot(room, width: w) }
                             .buttonStyle(MMLightPressStyle())
                     }
                 }
@@ -447,34 +470,67 @@ struct ProofHomeView: View {
             .scrollClipDisabled()
             .scrollDisabled(model.recent.count <= 3)
         }
-        .frame(height: Spec.tileHeight)
+        .frame(height: spec.tileHeight)
     }
 
     private func evidenceTile(_ item: ProofHomeModel.Recent, width: CGFloat) -> some View {
-        MMEvidenceImage(path: item.photoPath, resolve: resolvePhotoURL, size: CGSize(width: width, height: Spec.tileHeight))
-            .frame(width: width, height: Spec.tileHeight)
+        MMEvidenceImage(path: item.photoPath, resolve: resolvePhotoURL, size: CGSize(width: width, height: spec.tileHeight))
+            .frame(width: width, height: spec.tileHeight)
             .overlay(alignment: .bottom) {
-                HStack(spacing: 3) {
-                    Image(systemName: "camera").font(.system(size: 7.5, weight: .medium))
+                HStack(spacing: 3 * k) {
+                    Image(systemName: "camera").font(.system(size: 7.5 * k, weight: .medium))
                     Text(item.roomName).mmFont(8, .medium).lineLimit(1)
                     Spacer(minLength: 2)
-                    Image(systemName: "camera").font(.system(size: 7.5, weight: .medium))
+                    Image(systemName: "camera").font(.system(size: 7.5 * k, weight: .medium))
                     Text("\(item.photoCount)").mmFont(8, .medium).monospacedDigit()
                 }
                 .foregroundStyle(.white)
-                .padding(.horizontal, 9)
-                .frame(height: 21)
+                .padding(.horizontal, 9 * k)
+                .frame(height: 21 * k)
                 .background(Color.black.opacity(0.55))
             }
-            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 11 * k, style: .continuous))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(item.roomName), \(item.photoCount) photos")
     }
 
+    /// Same frame as an evidence tile: a quiet invitation, clearly not evidence.
+    private func captureSlot(_ room: ProofHomeModel.Upcoming, width: CGFloat) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 11 * k, style: .continuous)
+                .fill(Color(red: 0.925, green: 0.925, blue: 0.918))
+            RoundedRectangle(cornerRadius: 11 * k, style: .continuous)
+                .strokeBorder(Color.black.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            VStack(spacing: 6 * k) {
+                Image(systemName: "camera")
+                    .font(.system(size: 17 * k, weight: .regular))
+                    .foregroundStyle(Ink.text.opacity(0.55))
+                Text("Capture")
+                    .mmFont(9, .medium)
+                    .foregroundStyle(Ink.text.opacity(0.55))
+            }
+            .offset(y: -6)
+            VStack {
+                Spacer()
+                Text(room.roomName)
+                    .mmFont(8, .medium)
+                    .foregroundStyle(Ink.text.opacity(0.7))
+                    .lineLimit(1)
+                    .padding(.horizontal, 9 * k)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: 21 * k)
+            }
+        }
+        .frame(width: width, height: spec.tileHeight)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(room.roomName), no proof yet. Capture.")
+        .accessibilityAddTraits(.isButton)
+    }
+
     private var actionGrid: some View {
         LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: Spec.actionGapH), count: isAX ? 1 : 2),
-            spacing: Spec.actionGapV
+            columns: Array(repeating: GridItem(.flexible(), spacing: spec.actionGapH), count: isAX ? 1 : 2),
+            spacing: spec.actionGapV
         ) {
             ForEach(model.actions) { action in
                 Button { onAction(action) } label: { actionTile(action) }
@@ -484,13 +540,13 @@ struct ProofHomeView: View {
     }
 
     private func actionTile(_ action: ProofHomeModel.Action) -> some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 0 * k) {
             Image(systemName: action.icon)
-                .font(.system(size: 16, weight: .regular))
+                .font(.system(size: 16 * k, weight: .regular))
                 .foregroundStyle(Ink.text)
-                .frame(width: 20)
-                .padding(.leading, 10)
-            VStack(alignment: .leading, spacing: 4) {
+                .frame(width: 20 * k)
+                .padding(.leading, 10 * k)
+            VStack(alignment: .leading, spacing: 4 * k) {
                 Text(action.title)
                     .mmFont(10.8, .medium)
                     .foregroundStyle(Ink.text)
@@ -500,17 +556,17 @@ struct ProofHomeView: View {
                     .foregroundStyle(Ink.secondary)
                     .lineLimit(isAX ? 3 : 1)
             }
-            .padding(.leading, 9)
+            .padding(.leading, 9 * k)
             Spacer(minLength: 4)
             Image(systemName: "chevron.right")
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 10 * k, weight: .medium))
                 .foregroundStyle(Ink.secondary)
-                .padding(.trailing, 12)
+                .padding(.trailing, 12 * k)
         }
-        .frame(maxWidth: .infinity, minHeight: Spec.actionHeight)
+        .frame(maxWidth: .infinity, minHeight: spec.actionHeight)
         .padding(.vertical, isAX ? 8 : 0)
-        .background(Ink.tile, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(Ink.tileStroke, lineWidth: 0.75))
+        .background(Ink.tile, in: RoundedRectangle(cornerRadius: 11 * k, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 11 * k, style: .continuous).strokeBorder(Ink.tileStroke, lineWidth: 0.75))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
@@ -524,27 +580,27 @@ struct ProofHomeView: View {
             Spacer()
             if let trailing, let action {
                 Button(action: action) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 6 * k) {
                         Text(trailing)
-                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
+                        Image(systemName: "chevron.right").font(.system(size: 10 * k, weight: .semibold))
                     }
                     .mmFont(11.6)
                     .foregroundStyle(Ink.secondary)
                 }
-                .padding(.trailing, 12)
+                .padding(.trailing, 12 * k)
             }
         }
     }
 
     private func errorRow(_ message: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: 10 * k) {
             Image(systemName: "exclamationmark.circle.fill").foregroundStyle(MoveMarkTheme.Colors.semanticDanger)
             Text(message).mmFont(14).foregroundStyle(Ink.text)
             Spacer(minLength: 8)
             Button(MMCopy.tryAgain, action: onRetry).mmFont(14, .semibold).foregroundStyle(Ink.text)
         }
         .padding(12)
-        .background(Ink.tile, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .background(Ink.tile, in: RoundedRectangle(cornerRadius: 11 * k, style: .continuous))
     }
 }
 
