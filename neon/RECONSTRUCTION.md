@@ -70,10 +70,10 @@ Columns that existed in Supabase but that no code ever read or wrote **cannot be
 - **move_out_checklist_state:** referenced by RLS and deletion only. Nothing populates it, so it's likely dead.
 - **Legacy tables:** `disputes` and `dispute_evidence_links` are still read by `vault_summary`. A drop migration was drafted but never applied.
 
-## Gate results (local Postgres 17.10, 2026-10-20)
+## Gate results (local Postgres 17.10 and 18.6, 2026-10-20)
 
 - From-zero build of shim + 0000 + 0001 + 25 ported migrations: **all apply, no table skipped**.
-- `neon/tests`: **52 passed**. Covers:
+- `neon/tests`: **52 passed** on both 17.10 and 18.6 (Neon runs 18). Covers:
   - RLS on every public table;
   - no extension functions in `public`;
   - select/update/delete isolation on 8 tables;
@@ -90,3 +90,17 @@ Columns that existed in Supabase but that no code ever read or wrote **cannot be
 - **Mutation check:** disabling RLS on `rooms` and granting `delete_user_owned_data` to users produced 7 targeted failures, so the tests have teeth.
 - **API suite:** 112 passed, 21 skipped (all Redis cache tests, no local Redis).
 - **Export-queue real-Postgres tests against the *ported* queue SQL:** 16 passed.
+
+## Neon project as found (console, 2026-10-20, read-only look)
+
+| Item | State |
+|---|---|
+| Project | `suren` (`shiny-poetry-92207621`), AWS US East 2, **Free plan** |
+| Branches | `production` only (default), created 2026-10-20 |
+| Postgres | **18**, compute 0.25–2 CU, endpoint idle |
+| History retention | **6 hours** (Free). Production evidence needs a paid plan for a longer restore window |
+| Better Auth | Enabled; no users; data goes to `neon_auth` |
+| Data API | Enabled, provider Neon Auth; roles `authenticator`, `authenticated`, `anonymous` exist |
+| Object storage | One private bucket, `uploads` |
+| `public` schema | Empty |
+| AI Gateway | Needs a plan upgrade (MoveMark doesn't use it) |
