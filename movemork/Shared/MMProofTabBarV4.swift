@@ -17,8 +17,12 @@ struct MMProofTabBarV4: View {
     private let dockCornerRadius: CGFloat = 24
     private let iconSize: CGFloat = 19
 
+    /// Proof is the first light screen; the dock goes light with it. Reports and Account switch
+    /// when they're rebuilt (VISUAL_STANDARD rollout).
+    private var isLight: Bool { selectedTab == .vaults }
+
     private var inactiveForeground: Color {
-        MoveMarkTheme.Colors.textSecondary.opacity(0.82)
+        isLight ? MoveMarkTheme.Light.textSecondary : MoveMarkTheme.Colors.textSecondary.opacity(0.82)
     }
 
     var body: some View {
@@ -48,25 +52,33 @@ struct MMProofTabBarV4: View {
             .frame(width: dockWidth, height: dockHeight)
             .background(dockBackground)
             .overlay(dockBorder)
-            .shadow(color: Color.black.opacity(0.28), radius: 12, x: 0, y: 4)
+            .shadow(color: Color.black.opacity(isLight ? 0.10 : 0.28), radius: isLight ? 18 : 12, x: 0, y: 4)
+            .animation(reduceMotion ? nil : MMMotion.tabSwitch, value: isLight)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .padding(.bottom, MoveMarkTheme.Spacing.floatingDockBottomInset)
         }
         .frame(height: dockHeight + MoveMarkTheme.Spacing.floatingDockBottomInset)
     }
 
+    @ViewBuilder
     private var dockBackground: some View {
+        if isLight {
+            RoundedRectangle(cornerRadius: dockCornerRadius, style: .continuous)
+                .fill(.regularMaterial)
+                .environment(\.colorScheme, .light)
+        } else {
         RoundedRectangle(cornerRadius: dockCornerRadius, style: .continuous)
             .fill(MoveMarkTheme.Colors.evidenceCardRaised.opacity(0.96))
             .background(
                 RoundedRectangle(cornerRadius: dockCornerRadius, style: .continuous)
                     .fill(.ultraThinMaterial.opacity(0.18))
             )
+        }
     }
 
     private var dockBorder: some View {
         RoundedRectangle(cornerRadius: dockCornerRadius, style: .continuous)
-            .stroke(
+            .stroke(isLight ? AnyShapeStyle(MoveMarkTheme.Light.hairline) : AnyShapeStyle(
                 LinearGradient(
                     colors: [
                         MoveMarkTheme.Stroke.interactive,
@@ -74,7 +86,7 @@ struct MMProofTabBarV4: View {
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
-                ),
+                )),
                 lineWidth: 1
             )
     }
@@ -99,13 +111,13 @@ struct MMProofTabBarV4: View {
                 Image(systemName: isSelected ? filledImage : outlineImage)
                     .font(.system(size: iconSize, weight: isSelected ? .semibold : .regular))
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(isSelected ? MoveMarkTheme.Colors.primary : inactiveForeground)
+                    .foregroundStyle(isSelected ? (isLight ? MoveMarkTheme.Light.textPrimary : MoveMarkTheme.Colors.primary) : inactiveForeground)
                     .contentTransition(.symbolEffect(.replace))
                     .animation(reduceMotion ? nil : MMMotion.quick, value: isSelected)
 
                 Text(title)
                     .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
-                    .foregroundStyle(isSelected ? MoveMarkTheme.Colors.textPrimary : inactiveForeground)
+                    .foregroundStyle(isSelected ? (isLight ? MoveMarkTheme.Light.textPrimary : MoveMarkTheme.Colors.textPrimary) : inactiveForeground)
                     .opacity(isSelected ? 1 : 0.9)
                     .animation(reduceMotion ? nil : MMMotion.quick, value: isSelected)
             }
@@ -114,8 +126,8 @@ struct MMProofTabBarV4: View {
             .background {
                 if isSelected {
                     Capsule()
-                        .fill(MoveMarkTheme.Colors.primary.opacity(0.16))
-                        .overlay(Capsule().stroke(MoveMarkTheme.Stroke.selected, lineWidth: 0.75))
+                        .fill(isLight ? MoveMarkTheme.Light.accentWash : MoveMarkTheme.Colors.primary.opacity(0.16))
+                        .overlay(Capsule().stroke(isLight ? Color.clear : MoveMarkTheme.Stroke.selected, lineWidth: 0.75))
                         .matchedGeometryEffect(id: "evidenceDockPill", in: tabNamespace)
                 }
             }

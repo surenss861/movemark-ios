@@ -22,6 +22,8 @@ struct MMRichQAGallery: View {
     var body: some View {
         if screen.hasPrefix("room-") {
             RoomQAScreen(screen: screen)
+        } else if screen.hasPrefix("proof-") {
+            ProofQAScreen(screen: screen)
         } else {
             standardGallery
         }
@@ -383,4 +385,65 @@ private struct RoomQAScreen: View {
     }
 }
 
+
+// MARK: - Proof QA (light redesign). Photos: debug-only crops copied into the app's tmp dir by the QA script.
+
+private struct ProofQAScreen: View {
+    let screen: String
+
+    private static func fixture(_ name: String) -> String { "qa-fixture/\(name).jpg" }
+
+    private static func resolve(_ path: String) async -> URL? {
+        let name = (path as NSString).lastPathComponent
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("mm-qa-\(name)")
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    private var model: ProofHomeModel {
+        let actions: [ProofHomeModel.Action] = [
+            .init(id: "lease", kind: .document(.lease), title: "Lease", subtitle: "Add your lease agreement", icon: "doc.text", needed: true),
+            .init(id: "deposit", kind: .document(.depositReceipt), title: "Deposit receipt", subtitle: "Upload proof of deposit", icon: "banknote", needed: true),
+            .init(id: "listing", kind: .document(.listingScreenshot), title: "Listing proof", subtitle: "Save the original listing", icon: "photo", needed: true),
+            .init(id: "maintenance", kind: .maintenance, title: "Maintenance issue", subtitle: "Log a repair or problem", icon: "wrench.adjustable"),
+        ]
+        var m = ProofHomeModel(
+            propertyName: "88 Harbour St",
+            addressLine: "Unit 2304",
+            documented: 9, totalRooms: 10,
+            heroPhotoPath: Self.fixture("proof-hero-v2"),
+            nextRoomName: "Primary Bedroom",
+            primaryTitle: "Capture Primary Bedroom",
+            photos: 12, records: 3, issues: 1,
+            recent: [
+                .init(id: UUID(), roomName: "Living Room", photoCount: 4, photoPath: Self.fixture("proof-living-v2")),
+                .init(id: UUID(), roomName: "Kitchen", photoCount: 3, photoPath: Self.fixture("proof-kitchen-v2")),
+                .init(id: UUID(), roomName: "Bedroom", photoCount: 3, photoPath: Self.fixture("proof-bedroom-v2")),
+            ],
+            actions: actions,
+            otherRentals: []
+        )
+        switch screen {
+        case "proof-done":
+            m.documented = 10; m.nextRoomName = nil; m.primaryTitle = "View move-in report"
+            m.actions = [actions[3], .init(id: "report", kind: .report, title: "Move-in report", subtitle: "Ready to share", icon: "doc.richtext")]
+        case "proof-nophoto":
+            m.documented = 0; m.heroPhotoPath = nil; m.recent = []; m.photos = 0; m.issues = 0
+            m.nextRoomName = "Kitchen"; m.primaryTitle = "Capture Kitchen"
+        default: break
+        }
+        return m
+    }
+
+    var body: some View {
+        if screen == "proof-empty" {
+            ProofHomeEmptyView(onStart: {}, onRetry: {})
+        } else {
+            ProofHomeView(model: model, resolvePhotoURL: { await Self.resolve($0) })
+                .overlay(alignment: .bottom) {
+                    MMProofTabBarV4(selectedTab: .constant(.vaults))
+                }
+                .ignoresSafeArea(edges: .bottom)
+        }
+    }
+}
 #endif

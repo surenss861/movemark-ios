@@ -18,7 +18,6 @@ struct VaultRootView: View {
     @State private var showPaywall = false
     @State private var activePaywallReason: PaywallReason = .extraProperty
     @State private var previewByPropertyId: [UUID: (path: String, url: URL)] = [:]
-    @State private var hasAnimatedIn = false
     @State private var otherRentalSummaries: [UUID: (documented: Int, total: Int)] = [:]
 
     /// Only the featured (recent/first) card is expandable; others are static. Ensures chevron is always on the same card.
@@ -97,64 +96,27 @@ struct VaultRootView: View {
         return propertyStore.properties.first(where: { $0.id == fid })
     }
 
+    private let inspectionRepo = InspectionRepository()
+
+    private func resolvePhotoURL(_ path: String) async -> URL? {
+        try? await inspectionRepo.signedURL(bucket: "inspection-media", path: path)
+    }
+
     private var vaultsDashboard: some View {
-            ScrollView {
-            VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardStack) {
-                MMProofSectionHeader(
-                    title: "Your proof",
-                    subtitle: "Document now. Prove it later."
-                ) {
-                    MMProofHeaderAddButton(action: presentAddProperty)
-                }
-                .opacity(hasAnimatedIn ? 1 : 0)
-                .offset(y: hasAnimatedIn ? 0 : 8)
-                .animation(MMMotion.cardReveal.delay(0.04), value: hasAnimatedIn)
-
-                    if let error = propertyStore.errorMessage {
-                        MMErrorBanner(
-                            message: error,
-                            retryTitle: MMCopy.tryAgain,
-                            onRetry: { Task { await reload() } }
-                        )
-                    }
-
-                if let row = featuredPropertyRow {
-                    primaryVaultCard(for: row)
-                        .mmAppearRise(isVisible: hasAnimatedIn, delay: 0.06, offset: 6)
-                }
-
-                nextActionsSection
-                    .padding(.top, MoveMarkTheme.Spacing.sectionGap - MoveMarkTheme.Spacing.cardStack)
-                    .opacity(hasAnimatedIn ? 1 : 0)
-                    .animation(MMMotion.cardReveal.delay(0.10), value: hasAnimatedIn)
-
-                recordsSection
-                    .padding(.top, MoveMarkTheme.Spacing.sectionGap - MoveMarkTheme.Spacing.cardStack)
-                    .opacity(hasAnimatedIn ? 1 : 0)
-                    .animation(MMMotion.cardReveal.delay(0.14), value: hasAnimatedIn)
-
-                if !otherProperties.isEmpty {
-                    MMSectionLabel("Other rentals")
-                        .padding(.top, MoveMarkTheme.Spacing.sectionGap - MoveMarkTheme.Spacing.cardStack)
-
-                    ForEach(otherProperties) { row in
-                        MMProofListRow(
-                            title: displayName(for: row),
-                            subtitle: otherRentalStatusLine(for: row),
-                            onTap: { openVaultDetail(for: row) }
-                        )
-                    }
-                }
-
-                MMSignedInScrollTailSpacer(kind: .rootTab)
-            }
-            .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-            .padding(.top, 10)
-            .mmScrollContentTopInset(2)
-            .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
-            }
-            .scrollIndicators(.hidden, axes: .vertical)
-        .mmProofShellBackground(heroFocus: true, ctaBloom: false)
+        ProofHomeView(
+            model: proofHomeModel,
+            resolvePhotoURL: resolvePhotoURL,
+            onAddRental: presentAddProperty,
+            onOpenRental: { if let row = featuredPropertyRow { openVaultDetail(for: row) } },
+            onPrimary: { openFeaturedVaultOrContinue() },
+            onOpenRoom: { path.append(.roomDetail(roomID: $0)) },
+            onAction: handleProofAction,
+            onOpenOtherRental: { id in
+                if let row = propertyStore.properties.first(where: { $0.id == id }) { openVaultDetail(for: row) }
+            },
+            onRetry: { Task { await reload() } }
+        )
+        .toolbar(.hidden, for: .navigationBar)
         .task { await loadPreviewURLs() }
         .task(id: featuredPropertyId) { await ensureFeaturedPropertyLoaded() }
         .task(id: otherProperties.map(\.id)) { await loadOtherRentalSummaries() }
@@ -164,45 +126,101 @@ struct VaultRootView: View {
         .onAppear {
             trackFeaturedProofScoreIfNeeded()
         }
-            .onChange(of: scenePhase) { _, phase in
+        .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await loadPreviewURLs() } }
-            }
-            .onAppear {
-                guard !hasAnimatedIn else { return }
-            withAnimation(.easeOut(duration: 0.42)) { hasAnimatedIn = true }
         }
     }
 
-    @ViewBuilder
-    private func primaryVaultCard(for row: PropertyRow) -> some View {
-        MMVaultProofHeroCard(
-            propertyName: displayName(for: row),
-            location: locationText(for: row).isEmpty ? nil : locationText(for: row),
-            coverageLine: vaultCoverageLine,
-            statsLine: vaultProofStatsLine,
+    /// Everything Proof shows, from the same store queries the previous Proof used.
+    private var proofHomeModel: ProofHomeModel {
+        let row = featuredPropertyRow
+        let prop = propertyStore.currentProperty.flatMap { $0.id == featuredPropertyId ? $0 : nil }
+        let rooms = prop?.rooms ?? []
+
+        // Newest saved photo per room, newest room first.
+        let recent: [ProofHomeModel.Recent] = rooms.compactMap { room -> (Date, ProofHomeModel.Recent)? in
+            guard let latest = room.evidence.filter({ !$0.photos.isEmpty }).max(by: { $0.createdAt < $1.createdAt }),
+                  let photo = latest.photos.first else { return nil }
+            let count = room.evidence.reduce(0) { $0 + $1.photoCount }
+            return (latest.createdAt, .init(id: room.id, roomName: room.name, photoCount: count, photoPath: photo.filePath))
+        }
+        .sorted { $0.0 > $1.0 }
+        .map(\.1)
+
+        let heroPath = rooms.flatMap(\.evidence)
+            .filter { !$0.photos.isEmpty }
+            .max(by: { $0.createdAt < $1.createdAt })?
+            .photos.first?.filePath
+            ?? row.flatMap { previewByPropertyId[$0.id]?.path }
+
+        return ProofHomeModel(
+            propertyName: row.map(displayName(for:)) ?? "Your rental",
+            addressLine: row.map(locationText(for:)).flatMap { $0.isEmpty ? nil : $0 },
+            documented: vaultDocumentedCount ?? 0,
+            totalRooms: vaultTotalRooms ?? 0,
+            heroPhotoPath: heroPath,
             nextRoomName: vaultNextRoomName,
-            progress: vaultCoverageProgress,
-            previewPath: previewByPropertyId[row.id]?.path,
-            previewURL: previewByPropertyId[row.id]?.url,
             primaryTitle: featuredContinueProofTitle,
-            onPrimary: { openFeaturedVaultOrContinue() },
-            reportReadyLine: featuredReportReady ? "Move-in report ready" : nil,
-            onViewReport: { path.append(.exports) },
-            documentedCount: vaultDocumentedCount,
-            totalRooms: vaultTotalRooms,
-            photoCount: vaultPhotoCount,
-            recordCount: vaultRecordCount,
-            issueCount: vaultIssueCount,
-            lastProofLine: vaultLastProofLine
+            photos: vaultPhotoCount ?? 0,
+            records: vaultRecordCount ?? 0,
+            issues: vaultIssueCount ?? 0,
+            recent: Array(recent.prefix(8)),
+            actions: proofActions(for: prop),
+            otherRentals: otherProperties.map { .init(id: $0.id, name: displayName(for: $0), status: otherRentalStatusLine(for: $0)) },
+            errorMessage: propertyStore.errorMessage
         )
     }
 
-    private var featuredReportReady: Bool {
-        guard let prop = propertyStore.currentProperty else { return false }
-        return propertyStore.isExportReady(for: prop) && propertyStore.documentedRoomCount(for: prop) > 0
+    /// Same sources and de-duplication as the previous Next actions + records sections.
+    private func proofActions(for prop: PropertyRecord?) -> [ProofHomeModel.Action] {
+        guard let prop else { return [] }
+        var actions: [ProofHomeModel.Action] = []
+        if let nudge = visibleNudge, !nudgeCoversMaintenance, !nudgeCoversDocuments {
+            actions.append(.init(id: "nudge", kind: .nudge, title: nudge.title, subtitle: nudge.reason, icon: "sparkles"))
+        }
+        if propertyStore.missingSupportingRecordCount(for: prop) > 0 {
+            for type in PropertyStore.moveInRequiredDocumentTypes where !DocumentRepository.documentTypeQueryKeys(type.rawValue)
+                .contains(where: { prop.vaultDocuments.contains($0) }) {
+                switch type {
+                case .lease:
+                    actions.append(.init(id: type.rawValue, kind: .document(type), title: "Lease", subtitle: "Add your lease agreement", icon: "doc.text", needed: true))
+                case .depositReceipt:
+                    actions.append(.init(id: type.rawValue, kind: .document(type), title: "Deposit receipt", subtitle: "Upload proof of deposit", icon: "banknote", needed: true))
+                case .listingScreenshot:
+                    actions.append(.init(id: type.rawValue, kind: .document(type), title: "Listing proof", subtitle: "Save the original listing", icon: "photo", needed: true))
+                default:
+                    break
+                }
+            }
+        }
+        let issues = propertyStore.openIssueCount(for: prop)
+        actions.append(.init(
+            id: "maintenance", kind: .maintenance,
+            title: issues > 0 ? "Maintenance" : "Maintenance issue",
+            subtitle: issues > 0 ? (issues == 1 ? "1 open issue" : "\(issues) open issues") : "Log a repair or problem",
+            icon: "wrench.adjustable"
+        ))
+        if propertyStore.isExportReady(for: prop) {
+            actions.append(.init(id: "report", kind: .report, title: "Move-in report", subtitle: "Ready to share", icon: "doc.richtext"))
+        }
+        return actions
     }
 
-    /// Hero already carries "capture the next room", so that nudge is not repeated here.
+    private func handleProofAction(_ action: ProofHomeModel.Action) {
+        switch action.kind {
+        case .document:
+            if let row = featuredPropertyRow { openVaultDetail(for: row) }
+        case .maintenance:
+            path.append(.maintenance)
+        case .report:
+            path.append(.exports)
+        case .nudge:
+            if let nudge = visibleNudge, let prop = propertyStore.currentProperty {
+                handleLifecycleNudge(nudge, property: prop)
+            }
+        }
+    }
+
     private var visibleNudge: PropertyStore.LifecycleNudge? {
         guard let prop = propertyStore.currentProperty,
               let nudge = propertyStore.lifecycleNudge(for: prop) else { return nil }
@@ -221,69 +239,6 @@ struct VaultRootView: View {
 
     /// Genuinely incomplete or timely work only. Maintenance appears exactly once:
     /// "Review" when an issue is open, "Log" when none is.
-    @ViewBuilder
-    private var nextActionsSection: some View {
-        if let prop = propertyStore.currentProperty {
-            VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardGap) {
-                MMSectionLabel("Next actions")
-
-                if let nudge = visibleNudge {
-                    MMLifecycleNudgeCard(nudge: nudge) {
-                        handleLifecycleNudge(nudge, property: prop)
-                    }
-                }
-
-                if !nudgeCoversDocuments {
-                    missingDocsCard
-                }
-
-                if !nudgeCoversMaintenance {
-                    let issues = propertyStore.openIssueCount(for: prop)
-                    ProofTaskCard(
-                        title: issues > 0 ? "Review maintenance issue" : "Log maintenance issue",
-                        reason: issues > 0
-                            ? (issues == 1 ? "1 open issue" : "\(issues) open issues")
-                            : "Timestamp repairs and problems.",
-                        action: { path.append(.maintenance) }
-                    )
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var recordsSection: some View {
-        if let prop = propertyStore.currentProperty {
-            let receipts = propertyStore.leaseAndDepositReceiptCount(for: prop)
-            let reportReady = propertyStore.isExportReady(for: prop)
-            let hasRoomProof = propertyStore.documentedRoomCount(for: prop) > 0
-
-            VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardGap) {
-                MMSectionLabel("Your records")
-
-                ProofTaskCard(
-                    title: "Lease & deposit records",
-                    reason: "\(min(receipts, 2)) of 2 added",
-                    action: {
-                        if let row = featuredPropertyRow { openVaultDetail(for: row) }
-                    }
-                )
-
-                if reportReady || hasRoomProof {
-                    ProofTaskCard(
-                        title: "Move-in report",
-                        reason: reportReady
-                            ? "Shareable PDF from your saved proof"
-                            : "Builds from your documented rooms",
-                        action: { path.append(.exports) },
-                        statusLabel: reportReady ? "Ready" : nil,
-                        statusTone: .success
-                    )
-                }
-            }
-        }
-    }
-
     private func handleLifecycleNudge(_ nudge: PropertyStore.LifecycleNudge, property: PropertyRecord) {
         switch nudge {
         case .finishRoomsBeforeUnpacking:
@@ -304,28 +259,6 @@ struct VaultRootView: View {
                 activePaywallReason = .moveOutExport
                 showPaywall = true
             }
-        }
-    }
-
-    @ViewBuilder
-    private var missingDocsCard: some View {
-        if let prop = propertyStore.currentProperty,
-           propertyStore.missingSupportingRecordCount(for: prop) > 0,
-           let missing = PropertyStore.moveInRequiredDocumentTypes.first(where: { type in
-               !DocumentRepository.documentTypeQueryKeys(type.rawValue)
-                   .contains { prop.vaultDocuments.contains($0) }
-           }) {
-            ProofTaskCard(
-                title: missing.displayTitle,
-                reason: "Add proof of your \(missing.displayTitle.lowercased()).",
-                action: {
-                    if let row = propertyStore.properties.first(where: { $0.id == prop.id }) {
-                        openVaultDetail(for: row)
-                    }
-                },
-                statusLabel: "Needed",
-                statusTone: .warning
-            )
         }
     }
 
@@ -396,32 +329,8 @@ struct VaultRootView: View {
         return propertyStore.openIssueCount(for: prop)
     }
 
-    private var vaultLastProofLine: String? {
-        guard let prop = propertyStore.currentProperty else { return nil }
-        guard let latest = prop.rooms.flatMap(\.evidence).map(\.createdAt).max() else { return nil }
-        let day = latest.formatted(.dateTime.month(.abbreviated).day())
-        let time = latest.formatted(.dateTime.hour().minute())
-        return "\(day) · \(time)"
-    }
 
-    private var vaultCoverageLine: String {
-        guard let prop = propertyStore.currentProperty else {
-            let count = propertyStore.properties.count
-            return count == 1 ? "1 vault" : "\(count) vaults"
-        }
-        let documented = propertyStore.documentedRoomCount(for: prop)
-        let total = propertyStore.totalRoomCount(for: prop)
-        if total == 0 { return "Add rooms to start documenting" }
-        return "\(documented) of \(total) rooms documented"
-    }
 
-    private var vaultProofStatsLine: String? {
-        guard let prop = propertyStore.currentProperty else { return nil }
-        let photos = propertyStore.totalPhotoCount(for: prop)
-        let receipts = min(propertyStore.leaseAndDepositReceiptCount(for: prop), 2)
-        let photoText = photos == 1 ? "1 photo" : "\(photos) photos"
-        return "\(photoText) · \(receipts) of 2 records"
-    }
 
     private var vaultNextRoomName: String? {
         guard let prop = propertyStore.currentProperty,
@@ -429,13 +338,6 @@ struct VaultRootView: View {
         return name
     }
 
-    /// Rooms documented ÷ rooms — the same fact the coverage line states.
-    private var vaultCoverageProgress: Double {
-        guard let prop = propertyStore.currentProperty else { return 0 }
-        let total = propertyStore.totalRoomCount(for: prop)
-        guard total > 0 else { return 0 }
-        return Double(propertyStore.documentedRoomCount(for: prop)) / Double(total)
-    }
 
     private var featuredContinueProofTitle: String {
         guard let fid = featuredPropertyId,
@@ -485,51 +387,21 @@ struct VaultRootView: View {
     // MARK: - Empty / Loading
 
     private var emptyState: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardStack) {
-                MMProofSectionHeader(
-                    title: "Your proof",
-                    subtitle: "Document now. Prove it later."
-                ) {
-                    MMProofHeaderAddButton(action: presentAddProperty)
-                }
-
-                if let error = propertyStore.errorMessage {
-                    MMErrorBanner(
-                        message: error,
-                        retryTitle: MMCopy.tryAgain,
-                        onRetry: { Task { await reload() } }
-                    )
-                } else {
-                    MMEmptyState(
-                        systemImage: "building.columns.fill",
-                        title: "Your first vault",
-                        message: "Add your rental, then document each room before you settle in.",
-                        primaryTitle: "Start move-in proof",
-                        primaryAction: {
-                            if subscriptionManager.canCreateProperty(currentCount: propertyStore.properties.count) {
-                                showAddProperty = true
-                            } else {
-                                activePaywallReason = .extraProperty
-                                showPaywall = true
-                            }
-                        }
-                    )
-                }
-
-                MMSignedInScrollTailSpacer(kind: .rootTab)
-            }
-            .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-            .padding(.top, 18)
-            .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
-        }
-        .mmProofShellBackground(heroFocus: false, ctaBloom: false)
+        ProofHomeEmptyView(
+            errorMessage: propertyStore.errorMessage,
+            onStart: presentAddProperty,
+            onRetry: { Task { await reload() } }
+        )
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     private var loadingState: some View {
-        MMLoadingState(message: MMCopy.loadingProofTrail)
+        ProgressView()
+            .controlSize(.large)
+            .tint(MoveMarkTheme.Light.textSecondary)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .mmProofShellBackground(heroFocus: false, ctaBloom: false)
+            .background(MoveMarkTheme.Light.surface.ignoresSafeArea())
+            .accessibilityLabel(MMCopy.loadingProofTrail)
     }
 
     // MARK: - Helpers
