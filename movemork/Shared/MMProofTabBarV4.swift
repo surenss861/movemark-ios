@@ -41,41 +41,40 @@ struct MMProofTabBarV4: View {
             lightItem(.exports, title: "Reports", outline: "doc.text", filled: "doc.text.fill")
             lightItem(.account, title: "Account", outline: "person", filled: "person.fill")
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 6)
-        .padding(.bottom, 2)
+        .padding(.horizontal, 6)
+        .padding(.top, 1)
         .frame(maxWidth: .infinity)
-        // White, slightly translucent — the reference bar reads white, not system gray.
-        .background(Color.white.opacity(0.92), ignoresSafeAreaEdges: .bottom)
-        .background(.ultraThinMaterial, ignoresSafeAreaEdges: .bottom)
-        .environment(\.colorScheme, .light)
+        // Same surface as the Proof sheet, so the bar reads as part of it (reference treatment).
+        .background(Color(red: 0.973, green: 0.973, blue: 0.973), ignoresSafeAreaEdges: .bottom)
         .overlay(alignment: .top) {
-            Rectangle().fill(MoveMarkTheme.Light.hairline).frame(height: 0.5)
+            Rectangle().fill(Color.black.opacity(0.06)).frame(height: 0.5)
         }
     }
 
     private func lightItem(_ tab: RootTab, title: String, outline: String, filled: String) -> some View {
         let isSelected = selectedTab == tab
+        let ink = Color(red: 0.067, green: 0.110, blue: 0.067)               // #111C11
+        let idle = Color(red: 0.56, green: 0.56, blue: 0.57)
         return Button {
             guard selectedTab != tab else { return }
             MMHaptics.selection()
             withAnimation(reduceMotion ? nil : MMMotion.tabSwitch) { selectedTab = tab }
         } label: {
-            VStack(spacing: 3) {
+            VStack(spacing: -6) {
                 Image(systemName: isSelected ? filled : outline)
-                    .font(.system(size: 17, weight: isSelected ? .semibold : .light))
-                    .foregroundStyle(isSelected ? MoveMarkTheme.Light.onAccent : MoveMarkTheme.Light.textSecondary)
-                    .frame(width: 48, height: 30)
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundStyle(isSelected ? ink : idle)
+                    .frame(width: 33, height: 33)
                     .background {
                         if isSelected {
-                            Capsule()
-                                .fill(MoveMarkTheme.Light.accentWash)
+                            Circle()
+                                .fill(Color(red: 0.914, green: 0.914, blue: 0.914))    // #E9E9E9
                                 .matchedGeometryEffect(id: "lightTabPill", in: tabNamespace)
                         }
                     }
                 Text(title)
-                    .font(.system(size: 10.5, weight: isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? MoveMarkTheme.Light.textPrimary : MoveMarkTheme.Light.textSecondary)
+                    .font(.system(size: 8.5, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? ink : idle)
             }
             .frame(maxWidth: .infinity, minHeight: 50)
             .contentShape(Rectangle())

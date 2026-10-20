@@ -69,41 +69,63 @@ struct ProofHomeView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private var isAX: Bool { dynamicTypeSize.isAccessibilitySize }
 
-    // Proportions measured from design-refs/proof.jpg (560px screen ↔ 393pt).
-    private enum M {
-        static let inset = MoveMarkTheme.Light.Space.inset
-        static let sheetRadius = MoveMarkTheme.Light.Radius.sheet
-        /// The sheet starts at 31% of the screen height and rises this far over the photo.
-        static let sheetTopFraction: CGFloat = 0.29
-        static let overlap: CGFloat = 28
+    /// Geometry measured from design-refs/proof.jpg (phone screen 563px ↔ 402pt, 1.40 px/pt).
+    /// This screen reproduces that reference; change these only against an overlay comparison.
+    private enum Spec {
+        static let inset: CGFloat = 18
+        static let sheetTop: CGFloat = 251          // from the top of the screen
+        static let sheetRadius: CGFloat = 22
+        static let wordmarkCenterY: CGFloat = 58
+        static let controlSize: CGFloat = 31
+        static let titleTop: CGFloat = 112
+        static let pillHeight: CGFloat = 49
+        static let pillBottomGap: CGFloat = 23      // pill bottom → sheet top
+        static let thumb: CGFloat = 60
+        static let ctaHeight: CGFloat = 40
+        static let tileHeight: CGFloat = 113
+        static let tileGap: CGFloat = 7
+        static let actionHeight: CGFloat = 51
+        static let actionGapH: CGFloat = 11
+        static let actionGapV: CGFloat = 9
+    }
+
+    private enum Ink {
+        static let sheet = Color(red: 0.973, green: 0.973, blue: 0.973)          // #F8F8F8
+        static let tile = Color(red: 0.988, green: 0.988, blue: 0.988)           // #FCFCFC
+        static let tileStroke = Color(red: 0.925, green: 0.925, blue: 0.925)     // #ECECEC
+        static let text = Color(red: 0.078, green: 0.078, blue: 0.082)           // #141415
+        static let secondary = Color(red: 0.588, green: 0.592, blue: 0.596)      // #969798
+        static let metricLabel = Color(red: 0.369, green: 0.373, blue: 0.373)    // #5E5F5F
+        static let separator = Color(red: 0.933, green: 0.933, blue: 0.937)      // #EEEEEF
+        static let lime = Color(red: 0.843, green: 0.949, blue: 0.420)           // #D7F26B (reference CTA)
+        static let limeMark = Color(red: 0.757, green: 0.914, blue: 0.298)       // #C1E94C (wordmark, segments)
+        static let onLime = Color(red: 0.067, green: 0.086, blue: 0.035)
+        static let pill = Color(red: 0.137, green: 0.141, blue: 0.141)           // #232424
     }
 
     var body: some View {
         GeometryReader { geo in
-            let fullHeight = geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom
-            let sheetTop = max(fullHeight * M.sheetTopFraction, 250)
             ScrollView {
                 VStack(spacing: 0) {
-                    hero(height: sheetTop + M.overlap, topInset: geo.safeAreaInsets.top, width: geo.size.width)
+                    hero(width: geo.size.width, topInset: geo.safeAreaInsets.top)
                     sheet
-                        .padding(.top, -M.overlap)
+                        .padding(.top, -Spec.sheetRadius)
                 }
             }
             .scrollIndicators(.hidden)
             .ignoresSafeArea(edges: .top)
         }
-        .background(MoveMarkTheme.Light.surface.ignoresSafeArea())
+        .background(Ink.sheet.ignoresSafeArea())
         .task(id: model.recent.map(\.photoPath)) {
-            // Opening a room from here shows its photo full-size immediately.
             MMEvidenceImages.prefetch(paths: model.recent.map(\.photoPath), resolve: resolvePhotoURL)
         }
     }
 
-    // MARK: - Hero
+    // MARK: - Hero (the photograph is the header)
 
-    private func hero(height: CGFloat, topInset: CGFloat, width: CGFloat) -> some View {
-        ZStack(alignment: .topLeading) {
-            // Fixed frame + overlay: a fill-cropped photo can never widen the screen or letterbox.
+    private func hero(width: CGFloat, topInset: CGFloat) -> some View {
+        let height = Spec.sheetTop + Spec.sheetRadius
+        return ZStack(alignment: .topLeading) {
             Color.clear
                 .frame(width: width, height: height)
                 .overlay { heroPhoto }
@@ -116,62 +138,46 @@ struct ProofHomeView: View {
                 }
                 .clipped()
 
-            // Just enough shade for white text: a whisper at the top, a soft floor under the title.
+            // Only where text sits: a light veil at the very top and behind the title block.
             LinearGradient(
                 stops: [
-                    .init(color: .black.opacity(0.28), location: 0),
-                    .init(color: .clear, location: 0.22),
-                    .init(color: .clear, location: 0.42),
-                    .init(color: .black.opacity(0.42), location: 0.92),
+                    .init(color: .black.opacity(0.22), location: 0),
+                    .init(color: .clear, location: 0.25),
+                    .init(color: .black.opacity(0.10), location: 0.45),
+                    .init(color: .black.opacity(0.30), location: 0.75),
+                    .init(color: .black.opacity(0.18), location: 1),
                 ],
                 startPoint: .top, endPoint: .bottom
             )
             .frame(width: width, height: height)
             .allowsHitTesting(false)
 
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .center) {
-                    wordmark
-                    Spacer()
-                    Button(action: onAddRental) {
-                        Image(systemName: "plus")
-                            .mmFont(15, .semibold)
-                            .foregroundStyle(MoveMarkTheme.Light.textPrimary)
-                            .frame(width: 36, height: 36)
-                            // Solid base: renders the same wherever the material can't sample a backdrop.
-                            .background(Color.white.opacity(0.88), in: Circle())
-                            .background(.regularMaterial, in: Circle())
-                            .environment(\.colorScheme, .light)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityLabel("Add a rental")
-                    .padding(.trailing, -4)
-                }
-                .padding(.top, topInset - 4)
-
-                Spacer(minLength: 8)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Your proof")
-                        .mmFont(26, .bold)
-                        .foregroundStyle(.white)
-                        .accessibilityAddTraits(.isHeader)
-                    Text([model.propertyName, model.addressLine].compactMap { $0 }.joined(separator: " · "))
-                        .mmFont(15)
-                        .foregroundStyle(.white.opacity(0.92))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-                }
-                .shadow(color: .black.opacity(0.22), radius: 6, y: 1)
-
-                coveragePill
-                    .padding(.top, 14)
-                    .padding(.bottom, M.overlap + 16)
+            // Wordmark + control, centred on y = 58.
+            HStack(spacing: 0) {
+                wordmark
+                Spacer()
+                heroControl
             }
-            .padding(.horizontal, M.inset)
-            .frame(width: width, height: height, alignment: .topLeading)
-            // The hero is a fixed photo frame: its text grows to AX1, beyond that the sheet carries size.
+            .frame(height: 44)
+            .padding(.horizontal, Spec.inset)
+            .offset(y: Spec.wordmarkCenterY - 22)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Your proof")
+                    .mmFont(25, .semibold)
+                    .foregroundStyle(.white)
+                    .accessibilityAddTraits(.isHeader)
+                Text([model.propertyName, model.addressLine].compactMap { $0 }.joined(separator: " · "))
+                    .mmFont(13.8)
+                    .foregroundStyle(.white.opacity(0.95))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                coveragePill
+                    .padding(.top, 15)
+            }
+            .shadow(color: .black.opacity(0.18), radius: 6, y: 1)
+            .padding(.horizontal, Spec.inset)
+            .frame(width: width, height: Spec.sheetTop - Spec.pillBottomGap, alignment: .bottomLeading)
             .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         }
         .frame(width: width, height: height)
@@ -180,77 +186,107 @@ struct ProofHomeView: View {
     @ViewBuilder
     private var heroPhoto: some View {
         if let path = model.heroPhotoPath {
-            MMEvidenceImage(path: path, resolve: resolvePhotoURL, placeholder: Color(red: 0.30, green: 0.33, blue: 0.32))
+            MMEvidenceImage(path: path, resolve: resolvePhotoURL, placeholder: Color(red: 0.70, green: 0.72, blue: 0.73))
         } else {
             // No evidence yet: a calm designed field, never stock photography.
             ZStack {
                 LinearGradient(
-                    colors: [Color(red: 0.42, green: 0.45, blue: 0.43), Color(red: 0.24, green: 0.27, blue: 0.26)],
+                    colors: [Color(red: 0.62, green: 0.65, blue: 0.66), Color(red: 0.40, green: 0.43, blue: 0.44)],
                     startPoint: .topLeading, endPoint: .bottomTrailing
                 )
                 Image(systemName: "house")
-                    .mmFont(56, .ultraLight)
-                    .foregroundStyle(.white.opacity(0.18))
-                    .offset(y: -24)
+                    .font(.system(size: 56, weight: .ultraLight))
+                    .foregroundStyle(.white.opacity(0.22))
+                    .offset(y: -30)
             }
         }
     }
 
     private var wordmark: some View {
-        HStack(spacing: 7) {
-            Image(systemName: "checkmark.shield")
-                .mmFont(17, .semibold)
-                .foregroundStyle(MoveMarkTheme.Light.accent)
+        HStack(spacing: 6) {
+            ZStack {
+                Image(systemName: "hexagon")
+                    .font(.system(size: 21, weight: .semibold))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .heavy))
+            }
+            .frame(width: 20)
+            .foregroundStyle(Ink.limeMark)
             Text("MOVEMARK")
-                .mmFont(14, .semibold)
-                .tracking(2.0)
+                .font(.system(size: 14.6, weight: .semibold))
+                .tracking(1.6)
                 .foregroundStyle(.white)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("MoveMark")
     }
 
-    /// Compact secondary overlay: small house, slim segments, one line of text, small chevron.
+    /// The reference's round control. Here it holds the rental actions: add a rental, or switch
+    /// to another one (so the screen needs no separate "Other rentals" section).
+    private var heroControl: some View {
+        Menu {
+            Button(action: onAddRental) { Label("Add a rental", systemImage: "plus") }
+            if !model.otherRentals.isEmpty {
+                Section("Your rentals") {
+                    ForEach(model.otherRentals) { rental in
+                        Button { onOpenOtherRental(rental.id) } label: { Text(rental.name); Text(rental.status) }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: model.otherRentals.isEmpty ? "plus" : "ellipsis")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Ink.text)
+                .frame(width: Spec.controlSize, height: Spec.controlSize)
+                .background(Color(red: 0.965, green: 0.961, blue: 0.961), in: Circle())
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(model.otherRentals.isEmpty ? "Add a rental" : "Rentals")
+        .padding(.trailing, -6.5)
+    }
+
     private var coveragePill: some View {
         Button(action: onOpenRental) {
-            HStack(spacing: 10) {
+            HStack(spacing: 0) {
                 Image(systemName: "house")
-                    .mmFont(15, .semibold)
-                    .foregroundStyle(MoveMarkTheme.Light.accent)
-                VStack(alignment: .leading, spacing: 5) {
+                    .font(.system(size: 17.5, weight: .regular))
+                    .foregroundStyle(Ink.limeMark)
+                    .frame(width: 20)
+                    .padding(.leading, 16)
+                VStack(alignment: .leading, spacing: 9) {
                     if model.totalRooms > 0 { segments }
                     Text(model.totalRooms == 0
                          ? "Add rooms to start"
                          : "\(model.documented) of \(model.totalRooms) rooms documented")
-                        .mmFont(13, .medium)
+                        .mmFont(11, .medium)
                         .foregroundStyle(.white)
-                        .lineLimit(2)
+                        .lineLimit(isAX ? 2 : 1)
                 }
+                .padding(.leading, 7)
                 Image(systemName: "chevron.right")
-                    .mmFont(11, .bold)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .padding(.leading, 11)
+                    .padding(.trailing, 16)
             }
-            .padding(.leading, 14)
-            .padding(.trailing, 14)
-            .frame(minHeight: 44)
-            .background(Color.black.opacity(0.42), in: Capsule())
-            .background(.ultraThinMaterial, in: Capsule())
-            .environment(\.colorScheme, .dark)
-            .fixedSize(horizontal: false, vertical: true)
+            .frame(minHeight: Spec.pillHeight)
+            .background(Ink.pill.opacity(0.88), in: Capsule())
+            .fixedSize(horizontal: !isAX, vertical: true)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(model.documented) of \(model.totalRooms) rooms documented. Open rental.")
     }
 
-    /// Five slim segments regardless of room count, filled in proportion (reference treatment).
+    /// Five slim segments filled in proportion to rooms documented.
     private var segments: some View {
         let filled = model.totalRooms == 0 ? 0
             : Int((Double(model.documented) / Double(model.totalRooms) * 5).rounded(.down))
-        return HStack(spacing: 4) {
+        return HStack(spacing: 3) {
             ForEach(0..<5, id: \.self) { i in
                 Capsule()
-                    .fill(i < filled ? MoveMarkTheme.Light.accent : Color.white.opacity(0.3))
-                    .frame(width: 22, height: 4)
+                    .fill(i < filled ? Ink.limeMark : Color.white.opacity(0.32))
+                    .frame(width: 25, height: 3.5)
             }
         }
         .accessibilityHidden(true)
@@ -261,37 +297,29 @@ struct ProofHomeView: View {
     private var sheet: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let error = model.errorMessage {
-                errorRow(error).padding(.bottom, 14)
+                errorRow(error).padding(.bottom, 12)
             }
-
             nextRoomRow
-            primaryButton.padding(.top, 8)
-            metrics.padding(.top, 12)
-
+            primaryButton.padding(.top, 7)
+            metrics.padding(.top, 30)
             if !model.recent.isEmpty {
                 sectionHeader("Recent evidence", trailing: "View all", action: onOpenRental)
-                    .padding(.top, 16)
-                recentStrip.padding(.top, 10)
+                    .padding(.top, 31)
+                recentStrip.padding(.top, 11)
             }
-
             if !model.actions.isEmpty {
-                sectionHeader("Next actions").padding(.top, 18)
+                sectionHeader("Next actions").padding(.top, 24)
                 actionGrid.padding(.top, 10)
             }
-
-            if !model.otherRentals.isEmpty {
-                sectionHeader("Other rentals").padding(.top, 22)
-                otherRentals.padding(.top, 12)
-            }
-
             MMSignedInScrollTailSpacer(kind: .rootTab)
         }
-        .padding(.horizontal, M.inset)
-        .padding(.top, 14)
+        .padding(.horizontal, Spec.inset)
+        .padding(.top, 15)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            UnevenRoundedRectangle(topLeadingRadius: M.sheetRadius, topTrailingRadius: M.sheetRadius, style: .continuous)
-                .fill(MoveMarkTheme.Light.surface)
+            UnevenRoundedRectangle(topLeadingRadius: Spec.sheetRadius, topTrailingRadius: Spec.sheetRadius, style: .continuous)
+                .fill(Ink.sheet)
+                .shadow(color: .black.opacity(0.06), radius: 8, y: -2)
         )
     }
 
@@ -299,157 +327,224 @@ struct ProofHomeView: View {
     private var nextRoomRow: some View {
         if let name = model.nextRoomName {
             Button(action: onPrimary) {
-                HStack(spacing: 14) {
-                    MMIconCircle(systemName: RoomGlyph.symbol(for: name))
-                    VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 13) {
+                    MMIconCircle(systemName: RoomGlyph.symbol(for: name), size: Spec.thumb,
+                                 tint: Ink.text.opacity(0.65), fill: Color(red: 0.91, green: 0.91, blue: 0.90))
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("Next room")
-                            .mmFont(12)
-                            .foregroundStyle(MoveMarkTheme.Light.textSecondary)
+                            .mmFont(10.5)
+                            .foregroundStyle(Ink.secondary)
                         Text(name)
-                            .mmFont(18, .semibold)
-                            .foregroundStyle(MoveMarkTheme.Light.textPrimary)
+                            .mmFont(15.6, .semibold)
+                            .foregroundStyle(Ink.text)
                             .lineLimit(isAX ? 3 : 1)
                             .minimumScaleFactor(isAX ? 1 : 0.8)
                     }
                     Spacer(minLength: 8)
                     Image(systemName: "chevron.right")
-                        .mmFont(14, .semibold)
-                        .foregroundStyle(MoveMarkTheme.Light.textTertiary)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Ink.text.opacity(0.75))
+                        .padding(.trailing, 12)
                 }
-                .frame(minHeight: 60)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         } else if model.totalRooms > 0 {
-            HStack(spacing: 14) {
-                MMIconCircle(systemName: "checkmark", tint: MoveMarkTheme.Light.accent, fill: MoveMarkTheme.Light.accentWash)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Move-in proof")
-                        .mmFont(13)
-                        .foregroundStyle(MoveMarkTheme.Light.textSecondary)
-                    Text("Every room documented")
-                        .mmFont(18, .semibold)
-                        .foregroundStyle(MoveMarkTheme.Light.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+            HStack(spacing: 13) {
+                MMIconCircle(systemName: "checkmark", size: Spec.thumb, tint: Ink.onLime, fill: Ink.lime.opacity(0.55))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Move-in proof").mmFont(10.5).foregroundStyle(Ink.secondary)
+                    Text("Every room documented").mmFont(15.6, .semibold).foregroundStyle(Ink.text)
+                        .lineLimit(isAX ? 3 : 1).minimumScaleFactor(isAX ? 1 : 0.8)
                 }
             }
-            .frame(minHeight: 72)
         }
     }
 
-    /// The one green action. Native proportions, no glow.
+    /// The one primary action, in the reference lime (brand tuning after the match is approved).
     private var primaryButton: some View {
         Button(action: onPrimary) {
-            Label(model.primaryTitle, systemImage: model.nextRoomName != nil ? "camera.fill" : "doc.text.fill")
-                .mmFont(15, .semibold)
-                .foregroundStyle(MoveMarkTheme.Light.onAccent)
-                .lineLimit(isAX ? 3 : 1)
-                .minimumScaleFactor(isAX ? 1 : 0.85)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 46)
-                .padding(.vertical, isAX ? 8 : 0)
-                .padding(.horizontal, 12)
-                .background(MoveMarkTheme.Light.cta, in: RoundedRectangle(cornerRadius: 23, style: .continuous))
+            HStack(spacing: 8) {
+                Image(systemName: model.nextRoomName != nil ? "camera.fill" : "doc.text.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                Text(model.primaryTitle)
+                    .mmFont(12.5, .semibold)
+                    .lineLimit(isAX ? 3 : 1)
+                    .minimumScaleFactor(isAX ? 1 : 0.85)
+                    .multilineTextAlignment(.center)
+            }
+            .foregroundStyle(Ink.onLime)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: Spec.ctaHeight)
+            .padding(.vertical, isAX ? 8 : 0)
+            .background(Ink.lime, in: RoundedRectangle(cornerRadius: Spec.ctaHeight / 2, style: .continuous))
+            .shadow(color: Ink.lime.opacity(0.35), radius: 6, y: 3)
         }
         .buttonStyle(MMLightPressStyle())
     }
 
     @ViewBuilder
     private var metrics: some View {
-        let align: Alignment = isAX ? .leading : .center
-        let photos = MMMetricItem(icon: "camera", value: model.photos, label: model.photos == 1 ? "Photo" : "Photos", alignment: align)
-        let records = MMMetricItem(icon: "doc.text", value: model.records, label: model.records == 1 ? "Record" : "Records", alignment: align)
-        let issues = MMMetricItem(icon: "exclamationmark.triangle", value: model.issues, label: model.issues == 1 ? "Issue" : "Issues",
-                                  tint: model.issues > 0 ? MoveMarkTheme.Light.attention : MoveMarkTheme.Light.textPrimary,
-                                  alignment: align)
+        let items: [(String, Int, String)] = [
+            ("camera", model.photos, "Photos"),
+            ("doc.text", model.records, "Records"),
+            ("exclamationmark.triangle", model.issues, "Issues"),
+        ]
         if isAX {
-            // Three columns can't hold accessibility sizes; stack them.
-            VStack(alignment: .leading, spacing: 10) { photos; records; issues }
-                .padding(.vertical, 6)
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(items, id: \.2) { metric($0.0, $0.1, $0.2) }
+            }
         } else {
-            HStack(spacing: 0) { photos; separator; records; separator; issues }
-                .frame(minHeight: 42)
+            // Positions measured from the reference (fractions of the content width): its three
+            // columns are not equal thirds, so a plain HStack drifts.
+            GeometryReader { geo in
+                let w = geo.size.width
+                ZStack(alignment: .leading) {
+                    ForEach(Array(items.enumerated()), id: \.offset) { i, item in
+                        metric(item.0, item.1, item.2)
+                            .offset(x: w * [0.074, 0.426, 0.780][i])
+                    }
+                    ForEach([0.333, 0.677], id: \.self) { f in
+                        Rectangle().fill(Ink.separator).frame(width: 1, height: 32)
+                            .offset(x: w * f)
+                    }
+                }
+                .frame(width: w, height: geo.size.height, alignment: .leading)
+            }
+            .frame(height: 34)
         }
     }
 
-    private var separator: some View {
-        Rectangle().fill(MoveMarkTheme.Light.hairline).frame(width: 1, height: 28)
+    private func metric(_ icon: String, _ value: Int, _ label: String) -> some View {
+        HStack(alignment: .center, spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(Ink.text)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(value)")
+                    .mmFont(16, .medium)
+                    .foregroundStyle(Ink.text)
+                    .monospacedDigit()
+                Text(label)
+                    .mmFont(8.2)
+                    .foregroundStyle(Ink.metricLabel)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
-    /// Three across, equal width, filling the row (scrolls if there are more).
     private var recentStrip: some View {
         GeometryReader { geo in
-            let gap: CGFloat = 8
-            let w = (geo.size.width - gap * 2) / 3
+            let w = (geo.size.width - Spec.tileGap * 2) / 3
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: gap) {
+                HStack(spacing: Spec.tileGap) {
                     ForEach(model.recent) { item in
-                        Button { onOpenRoom(item.id) } label: {
-                            MMPhotoCard(path: item.photoPath, title: item.roomName, count: item.photoCount,
-                                        size: CGSize(width: w, height: w * 0.88), resolve: resolvePhotoURL)
-                        }
-                        .buttonStyle(MMLightPressStyle())
+                        Button { onOpenRoom(item.id) } label: { evidenceTile(item, width: w) }
+                            .buttonStyle(MMLightPressStyle())
                     }
                 }
             }
             .scrollClipDisabled()
             .scrollDisabled(model.recent.count <= 3)
         }
-        .aspectRatio(3 / 0.88 * 0.98, contentMode: .fit)
+        .frame(height: Spec.tileHeight)
+    }
+
+    private func evidenceTile(_ item: ProofHomeModel.Recent, width: CGFloat) -> some View {
+        MMEvidenceImage(path: item.photoPath, resolve: resolvePhotoURL, size: CGSize(width: width, height: Spec.tileHeight))
+            .frame(width: width, height: Spec.tileHeight)
+            .overlay(alignment: .bottom) {
+                HStack(spacing: 3) {
+                    Image(systemName: "camera").font(.system(size: 7.5, weight: .medium))
+                    Text(item.roomName).mmFont(8, .medium).lineLimit(1)
+                    Spacer(minLength: 2)
+                    Image(systemName: "camera").font(.system(size: 7.5, weight: .medium))
+                    Text("\(item.photoCount)").mmFont(8, .medium).monospacedDigit()
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 9)
+                .frame(height: 21)
+                .background(Color.black.opacity(0.55))
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(item.roomName), \(item.photoCount) photos")
     }
 
     private var actionGrid: some View {
         LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: MoveMarkTheme.Light.Space.tight), count: isAX ? 1 : 2),
-            spacing: MoveMarkTheme.Light.Space.tight
+            columns: Array(repeating: GridItem(.flexible(), spacing: Spec.actionGapH), count: isAX ? 1 : 2),
+            spacing: Spec.actionGapV
         ) {
             ForEach(model.actions) { action in
-                Button { onAction(action) } label: {
-                    MMLightActionTile(icon: action.icon, title: action.title, subtitle: action.subtitle, needed: action.needed)
-                }
+                Button { onAction(action) } label: { actionTile(action) }
                     .buttonStyle(MMLightPressStyle())
             }
         }
     }
 
-    private var otherRentals: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(model.otherRentals.enumerated()), id: \.element.id) { index, rental in
-                if index > 0 { Rectangle().fill(MoveMarkTheme.Light.hairline).frame(height: 1).padding(.leading, 14) }
-                Button { onOpenOtherRental(rental.id) } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(rental.name).mmFont(15, .medium).foregroundStyle(MoveMarkTheme.Light.textPrimary)
-                            Text(rental.status).mmFont(12).foregroundStyle(MoveMarkTheme.Light.textSecondary)
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right").mmFont(12, .semibold).foregroundStyle(MoveMarkTheme.Light.textTertiary)
-                    }
-                    .padding(14)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+    private func actionTile(_ action: ProofHomeModel.Action) -> some View {
+        HStack(spacing: 0) {
+            Image(systemName: action.icon)
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(Ink.text)
+                .frame(width: 20)
+                .padding(.leading, 10)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(action.title)
+                    .mmFont(10.8, .medium)
+                    .foregroundStyle(Ink.text)
+                    .lineLimit(isAX ? 3 : 1)
+                Text(action.subtitle)
+                    .mmFont(8.3)
+                    .foregroundStyle(Ink.secondary)
+                    .lineLimit(isAX ? 3 : 1)
             }
+            .padding(.leading, 9)
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(Ink.secondary)
+                .padding(.trailing, 12)
         }
-        .mmLightSurface()
+        .frame(maxWidth: .infinity, minHeight: Spec.actionHeight)
+        .padding(.vertical, isAX ? 8 : 0)
+        .background(Ink.tile, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(Ink.tileStroke, lineWidth: 0.75))
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 
     private func sectionHeader(_ title: String, trailing: String? = nil, action: (() -> Void)? = nil) -> some View {
-        MMLightSectionHeader(title: title, trailing: trailing, action: action)
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .mmFont(14.4, .semibold)
+                .foregroundStyle(Ink.text)
+                .accessibilityAddTraits(.isHeader)
+            Spacer()
+            if let trailing, let action {
+                Button(action: action) {
+                    HStack(spacing: 6) {
+                        Text(trailing)
+                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
+                    }
+                    .mmFont(11.6)
+                    .foregroundStyle(Ink.secondary)
+                }
+                .padding(.trailing, 12)
+            }
+        }
     }
 
     private func errorRow(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.circle.fill").foregroundStyle(MoveMarkTheme.Colors.semanticDanger)
-            Text(message).mmFont(15).foregroundStyle(MoveMarkTheme.Light.textPrimary)
+            Text(message).mmFont(14).foregroundStyle(Ink.text)
             Spacer(minLength: 8)
-            Button(MMCopy.tryAgain, action: onRetry).mmFont(15, .semibold)
-                .foregroundStyle(MoveMarkTheme.Light.textPrimary)
+            Button(MMCopy.tryAgain, action: onRetry).mmFont(14, .semibold).foregroundStyle(Ink.text)
         }
-        .padding(14)
-        .background(MoveMarkTheme.Light.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(12)
+        .background(Ink.tile, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
     }
 }
 

@@ -401,23 +401,23 @@ private struct ProofQAScreen: View {
 
     private var model: ProofHomeModel {
         let actions: [ProofHomeModel.Action] = [
-            .init(id: "lease", kind: .document(.lease), title: "Lease", subtitle: "Add your lease", icon: "doc.text", needed: true),
-            .init(id: "deposit", kind: .document(.depositReceipt), title: "Deposit receipt", subtitle: "Proof of deposit", icon: "receipt", needed: true),
-            .init(id: "listing", kind: .document(.listingScreenshot), title: "Listing proof", subtitle: "Original listing", icon: "photo", needed: true),
-            .init(id: "maintenance", kind: .maintenance, title: "Maintenance", subtitle: "Report an issue", icon: "wrench.adjustable"),
+            .init(id: "lease", kind: .document(.lease), title: "Lease", subtitle: "Add your lease agreement", icon: "doc.text", needed: true),
+            .init(id: "deposit", kind: .document(.depositReceipt), title: "Deposit receipt", subtitle: "Upload proof of deposit", icon: "receipt", needed: true),
+            .init(id: "listing", kind: .document(.listingScreenshot), title: "Listing proof", subtitle: "Save original listing", icon: "photo", needed: true),
+            .init(id: "maintenance", kind: .maintenance, title: "Maintenance issue", subtitle: "Report existing issues", icon: "wrench.adjustable"),
         ]
         var m = ProofHomeModel(
             propertyName: "88 Harbour St",
             addressLine: "Unit 2304",
             documented: 9, totalRooms: 10,
-            heroPhotoPath: Self.fixture("proof-hero-v3"),
+            heroPhotoPath: Self.fixture("proof-hero-v4"),
             nextRoomName: "Primary Bedroom",
             primaryTitle: "Capture Primary Bedroom",
             photos: 12, records: 3, issues: 1,
             recent: [
-                .init(id: UUID(), roomName: "Living Room", photoCount: 4, photoPath: Self.fixture("proof-living-v2")),
-                .init(id: UUID(), roomName: "Kitchen", photoCount: 3, photoPath: Self.fixture("proof-kitchen-v2")),
-                .init(id: UUID(), roomName: "Bedroom", photoCount: 3, photoPath: Self.fixture("proof-bedroom-v2")),
+                .init(id: UUID(), roomName: "Living Room", photoCount: 4, photoPath: Self.fixture("proof-living-v4")),
+                .init(id: UUID(), roomName: "Kitchen", photoCount: 3, photoPath: Self.fixture("proof-kitchen-v4")),
+                .init(id: UUID(), roomName: "Bedroom", photoCount: 3, photoPath: Self.fixture("proof-bedroom-v4")),
             ],
             actions: actions,
             otherRentals: []

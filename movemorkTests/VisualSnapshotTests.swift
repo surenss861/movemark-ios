@@ -11,6 +11,9 @@
 //
 //  Re-record after an approved change: delete the PNG under __Snapshots__ and run once.
 //
+//  STATUS: Proof snapshots are CANDIDATES recorded from the reference-reproduction pass
+//  (2026-10-20). They become approved goldens only when the user signs off the Proof screen.
+//
 
 import XCTest
 import SwiftUI
@@ -66,10 +69,10 @@ final class VisualSnapshotTests: XCTestCase {
 
     private func proofModel(_ state: String) -> ProofHomeModel {
         let actions: [ProofHomeModel.Action] = [
-            .init(id: "lease", kind: .document(.lease), title: "Lease", subtitle: "Add your lease", icon: "doc.text", needed: true),
-            .init(id: "deposit", kind: .document(.depositReceipt), title: "Deposit receipt", subtitle: "Proof of deposit", icon: "receipt", needed: true),
-            .init(id: "listing", kind: .document(.listingScreenshot), title: "Listing proof", subtitle: "Original listing", icon: "photo", needed: true),
-            .init(id: "maintenance", kind: .maintenance, title: "Maintenance", subtitle: "Report an issue", icon: "wrench.adjustable"),
+            .init(id: "lease", kind: .document(.lease), title: "Lease", subtitle: "Add your lease agreement", icon: "doc.text", needed: true),
+            .init(id: "deposit", kind: .document(.depositReceipt), title: "Deposit receipt", subtitle: "Upload proof of deposit", icon: "receipt", needed: true),
+            .init(id: "listing", kind: .document(.listingScreenshot), title: "Listing proof", subtitle: "Save original listing", icon: "photo", needed: true),
+            .init(id: "maintenance", kind: .maintenance, title: "Maintenance issue", subtitle: "Report existing issues", icon: "wrench.adjustable"),
         ]
         var m = ProofHomeModel(
             propertyName: "88 Harbour St", addressLine: "Unit 2304",

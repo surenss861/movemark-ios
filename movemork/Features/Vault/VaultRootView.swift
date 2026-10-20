@@ -183,11 +183,11 @@ struct VaultRootView: View {
                 .contains(where: { prop.vaultDocuments.contains($0) }) {
                 switch type {
                 case .lease:
-                    actions.append(.init(id: type.rawValue, kind: .document(type), title: "Lease", subtitle: "Add your lease", icon: "doc.text", needed: true))
+                    actions.append(.init(id: type.rawValue, kind: .document(type), title: "Lease", subtitle: "Add your lease agreement", icon: "doc.text", needed: true))
                 case .depositReceipt:
-                    actions.append(.init(id: type.rawValue, kind: .document(type), title: "Deposit receipt", subtitle: "Proof of deposit", icon: "receipt", needed: true))
+                    actions.append(.init(id: type.rawValue, kind: .document(type), title: "Deposit receipt", subtitle: "Upload proof of deposit", icon: "receipt", needed: true))
                 case .listingScreenshot:
-                    actions.append(.init(id: type.rawValue, kind: .document(type), title: "Listing proof", subtitle: "Original listing", icon: "photo", needed: true))
+                    actions.append(.init(id: type.rawValue, kind: .document(type), title: "Listing proof", subtitle: "Save original listing", icon: "photo", needed: true))
                 default:
                     break
                 }
@@ -196,7 +196,7 @@ struct VaultRootView: View {
         let issues = propertyStore.openIssueCount(for: prop)
         actions.append(.init(
             id: "maintenance", kind: .maintenance,
-            title: "Maintenance",
+            title: "Maintenance issue",
             subtitle: issues > 0 ? (issues == 1 ? "1 open issue" : "\(issues) open issues") : "Log a repair or problem",
             icon: "wrench.adjustable"
         ))
