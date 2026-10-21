@@ -1,7 +1,6 @@
 -- PORTED for Neon by neon/port_migrations.py — do not edit by hand.
 -- source: supabase/migrations/20260719000001_property_snapshot_thumbnails_realtime.sql (sha256 2502dfc3bae9457f)
 -- change: removed supabase_realtime publication block x1
--- change: auth.uid() -> (auth.user_id())::uuid x1
 
 -- Three independent pieces bundled because they all land together for the same
 -- scaling pass; each is safe to apply even if the others are skipped.
@@ -108,11 +107,5 @@ BEGIN
 END
 $property_documents_thumb$;
 
--- ------------------------------------------------------------
--- 3. Realtime on exports (replaces client poll loop)
--- ------------------------------------------------------------
--- exports already has RLS enabled with "exports_select_own" (user_id =
--- (auth.user_id())::uuid), so Realtime's postgres_changes broadcast is scoped per-user
--- the same way direct reads are -- adding the table to the publication does
--- not widen who can see which rows.
--- [neon] supabase_realtime publication removed (clients poll)
+-- 3. [neon] Supabase-only Realtime on exports — not ported. There is no supabase_realtime
+-- publication on Neon; clients poll export status (iOS since S7; Android's Realtime watcher is replaced in S8).

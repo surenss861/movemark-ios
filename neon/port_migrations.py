@@ -31,12 +31,20 @@ SUPERSEDED = {
     "20260329100000_storage_policies_uuid_case_insensitive.sql": "repair of the Supabase Storage policies above",
 }
 
-REALTIME_BLOCK = re.compile(r"DO \$exports_realtime\$.*?\$exports_realtime\$;\s*", re.S)
+# The whole "Realtime on exports" section (its header comment claims Realtime replaces polling;
+# on Neon it doesn't exist) becomes one accurate line.
+REALTIME_BLOCK = re.compile(
+    r"-- -+\n-- 3\. Realtime on exports.*?\$exports_realtime\$;\s*", re.S
+)
 
 
 def port(sql: str) -> tuple[str, list[str]]:
     applied: list[str] = []
-    new, n = REALTIME_BLOCK.subn("-- [neon] supabase_realtime publication removed (clients poll)\n", sql)
+    new, n = REALTIME_BLOCK.subn(
+        "-- 3. [neon] Supabase-only Realtime on exports — not ported. There is no supabase_realtime\n"
+        "-- publication on Neon; clients poll export status (iOS since S7; Android's Realtime watcher is replaced in S8).\n",
+        sql,
+    )
     if n:
         applied.append(f"removed supabase_realtime publication block x{n}")
     for pattern, repl, label in [

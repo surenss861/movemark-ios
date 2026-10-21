@@ -300,3 +300,189 @@ def test_delete_user_owned_data_removes_only_that_user(dsn: str, owner: Any) -> 
     assert one(owner, "SELECT count(*) FROM issue_tags")[0] >= 6  # global tags kept
     # Deleting the auth user afterwards succeeds (no rows still reference it).
     owner.execute("DELETE FROM neon_auth.\"user\" WHERE id = %s", (c_user,))
+
+
+# --- 0930: Data API write integrity ----------------------------------------------
+# Every case runs as the attacker X against a fresh victim Y (and X's own second
+# rental X2 for same-user, cross-property mismatches). The product outcome that
+# matters is checked last: Y can always be deleted, and nothing of X points at Y.
+
+def _fresh_user(owner: Any) -> str:
+    uid = str(uuid.uuid4())
+    owner.execute("INSERT INTO neon_auth.\"user\" (id, email) VALUES (%s, %s)", (uid, f"{uid[:8]}@qa.test"))
+    return uid
+
+
+def _second_rental(dsn: str, user: str) -> dict[str, str]:
+    with as_user(dsn, user) as c:
+        ids = {"property": str(one(c, """INSERT INTO properties (user_id, title, address_line_1, city, province_state, postal_code, country)
+            VALUES (%s, 'QA ONLY 2', '1 Other St', 'Toronto', 'ON', 'M5J', 'CA') RETURNING id""", (user,))[0])}
+        ids["room"] = str(one(c, "INSERT INTO rooms (property_id, name) VALUES (%s, 'Bath') RETURNING id", (ids["property"],))[0])
+        ids["inspection"] = str(one(c, "INSERT INTO inspections (property_id, user_id, inspection_type) VALUES (%s, %s, 'move_in') RETURNING id", (ids["property"], user))[0])
+        ids["item"] = str(one(c, "INSERT INTO inspection_items (inspection_id, room_id) VALUES (%s, %s) RETURNING id", (ids["inspection"], ids["room"]))[0])
+        ids["evidence"] = str(one(c, "INSERT INTO evidence_files (property_id, inspection_item_id, file_path, file_type) VALUES (%s, %s, %s, 'image') RETURNING id",
+                                  (ids["property"], ids["item"], f"{user}/{ids['property']}/move-in/{ids['room']}/2.jpg"))[0])
+        ids["maintenance"] = str(one(c, "INSERT INTO maintenance_issues (property_id, user_id, title) VALUES (%s, %s, 'Crack') RETURNING id", (ids["property"], user))[0])
+        ids["document"] = str(one(c, "INSERT INTO property_documents (property_id, user_id, document_type, file_path, file_name) VALUES (%s, %s, 'other', %s, 'o.pdf') RETURNING id",
+                                  (ids["property"], user, f"{user}/{ids['property']}/other/o.pdf"))[0])
+        c.commit()
+    return ids
+
+
+def _with_dispute(dsn: str, user: str, rental: dict[str, str]) -> str:
+    with as_user(dsn, user) as c:
+        did = str(one(c, "INSERT INTO disputes (property_id, user_id, dispute_type) VALUES (%s, %s, 'other') RETURNING id", (rental["property"], user))[0])
+        c.commit()
+    return did
+
+
+@pytest.fixture
+def graph(dsn: str, owner: Any) -> dict[str, Any]:
+    x, y = _fresh_user(owner), _fresh_user(owner)
+    g = {"X": x, "Y": y, "x": seed_rental(dsn, x), "x2": _second_rental(dsn, x), "y": seed_rental(dsn, y)}
+    g["x_dispute"] = _with_dispute(dsn, x, g["x"])
+    g["y_dispute"] = _with_dispute(dsn, y, g["y"])
+    with as_user(dsn, x) as c:  # an existing link X may later try to repoint
+        g["x_link"] = str(one(c, "INSERT INTO dispute_evidence_links (dispute_id, evidence_file_id) VALUES (%s, %s) RETURNING id",
+                              (g["x_dispute"], g["x"]["evidence"]))[0])
+        c.commit()
+    return g
+
+
+# (name, SQL with {placeholders}) — each must be refused for X.
+CROSS_REFERENCE_ATTACKS = {
+    # exports are read-only for clients (the API queues; the worker mutates)
+    "insert own queued export": "INSERT INTO exports (user_id, property_id, export_type, status) VALUES ('{X}', '{xp}', 'dispute_packet', 'queued')",
+    # cross-tenant moves and attachments
+    "move inspection to Y's property": "UPDATE inspections SET property_id = '{yp}' WHERE id = '{xi}'",
+    "move maintenance to Y's property": "UPDATE maintenance_issues SET property_id = '{yp}' WHERE id = '{xm}'",
+    "move document to Y's property": "UPDATE property_documents SET property_id = '{yp}' WHERE id = '{xd}'",
+    "move checklist to Y's property": "UPDATE move_out_checklists SET property_id = '{yp}' WHERE id = '{xc}'",
+    "move dispute to Y's property": "UPDATE disputes SET property_id = '{yp}' WHERE id = '{xdisp}'",
+    "checklist_state on Y's property": "INSERT INTO move_out_checklist_state (property_id, user_id) VALUES ('{yp}', '{X}')",
+    "move room to Y's property": "UPDATE rooms SET property_id = '{yp}' WHERE id = '{xr}'",
+    "item in own inspection on Y's room": "INSERT INTO inspection_items (inspection_id, room_id) VALUES ('{xi}', '{yr}')",
+    "repoint own item to Y's room": "UPDATE inspection_items SET room_id = '{yr}' WHERE id = '{xitem}'",
+    "repoint own evidence to Y's item": "UPDATE evidence_files SET inspection_item_id = '{yitem}' WHERE id = '{xe}'",
+    "repoint own evidence to Y's maintenance": "UPDATE evidence_files SET inspection_item_id = NULL, maintenance_issue_id = '{ym}' WHERE id = '{xe}'",
+    "link own dispute to Y's evidence": "INSERT INTO dispute_evidence_links (dispute_id, evidence_file_id) VALUES ('{xdisp}', '{ye}')",
+    "link own dispute to Y's maintenance": "INSERT INTO dispute_evidence_links (dispute_id, maintenance_issue_id) VALUES ('{xdisp}', '{ym}')",
+    "link own dispute to Y's document": "INSERT INTO dispute_evidence_links (dispute_id, property_document_id) VALUES ('{xdisp}', '{yd}')",
+    "repoint own link to Y's evidence": "UPDATE dispute_evidence_links SET evidence_file_id = '{ye}' WHERE id = '{xlink}'",
+    # same user, different property: the graph must stay on one property
+    "item: rental A1 inspection with A2 room": "INSERT INTO inspection_items (inspection_id, room_id) VALUES ('{xi}', '{x2r}')",
+    "repoint own item to own other rental's room": "UPDATE inspection_items SET room_id = '{x2r}' WHERE id = '{xitem}'",
+    "evidence: property disagrees with parent item": "UPDATE evidence_files SET property_id = '{x2p}' WHERE id = '{xe}'",
+    "evidence: parent item on other own rental": "UPDATE evidence_files SET inspection_item_id = '{x2item}' WHERE id = '{xe}'",
+    "evidence: maintenance on other own rental": "UPDATE evidence_files SET inspection_item_id = NULL, maintenance_issue_id = '{x2m}' WHERE id = '{xe}'",
+    "link A1 dispute to own A2 evidence": "INSERT INTO dispute_evidence_links (dispute_id, evidence_file_id) VALUES ('{xdisp}', '{x2e}')",
+    "link A1 dispute to own A2 maintenance": "INSERT INTO dispute_evidence_links (dispute_id, maintenance_issue_id) VALUES ('{xdisp}', '{x2m}')",
+    "link A1 dispute to own A2 document": "INSERT INTO dispute_evidence_links (dispute_id, property_document_id) VALUES ('{xdisp}', '{x2d}')",
+    "move own inspection away from its items": "UPDATE inspections SET property_id = '{x2p}' WHERE id = '{xi}'",
+    "move own room away from its items": "UPDATE rooms SET property_id = '{x2p}' WHERE id = '{xr}'",
+    "move own dispute away from its links": "UPDATE disputes SET property_id = '{x2p}' WHERE id = '{xdisp}'",
+}
+
+
+def _fill(sql: str, g: dict[str, Any]) -> str:
+    x, x2, y = g["x"], g["x2"], g["y"]
+    return sql.format(X=g["X"], xp=x["property"], xr=x["room"], xi=x["inspection"], xitem=x["item"], xe=x["evidence"],
+                      xm=x["maintenance"], xd=x["document"], xc=x["checklist"], xdisp=g["x_dispute"], xlink=g["x_link"],
+                      x2p=x2["property"], x2r=x2["room"], x2item=x2["item"], x2e=x2["evidence"], x2m=x2["maintenance"], x2d=x2["document"],
+                      yp=y["property"], yr=y["room"], yitem=y["item"], ye=y["evidence"], ym=y["maintenance"], yd=y["document"])
+
+
+def _refused(dsn: str, user: str, sql: str) -> bool:
+    """True when the Data API role is refused (RLS error) or the statement changes nothing."""
+    with as_user(dsn, user) as c:
+        try:
+            with c.cursor() as cur:
+                cur.execute(sql)
+                return cur.rowcount == 0
+        except (errors.InsufficientPrivilege, errors.ForeignKeyViolation):
+            return True
+
+
+@pytest.mark.parametrize("name", sorted(CROSS_REFERENCE_ATTACKS))
+def test_cross_reference_writes_refused(dsn: str, graph: dict[str, Any], name: str) -> None:
+    assert _refused(dsn, graph["X"], _fill(CROSS_REFERENCE_ATTACKS[name], graph)), name
+
+
+def test_poisoning_never_makes_another_account_undeletable(dsn: str, owner: Any, graph: dict[str, Any]) -> None:
+    for name, sql in CROSS_REFERENCE_ATTACKS.items():  # every attack, each in its own committed attempt
+        with as_user(dsn, graph["X"]) as c:
+            try:
+                c.execute(_fill(sql, graph)); c.commit()
+            except Exception:  # noqa: BLE001
+                c.rollback()
+    x, y = graph["X"], graph["Y"]
+    # Nothing of X's references anything of Y's.
+    assert one(owner, """SELECT count(*) FROM inspection_items ii JOIN inspections i ON i.id = ii.inspection_id
+                         JOIN rooms r ON r.id = ii.room_id JOIN properties p ON p.id = r.property_id
+                         WHERE i.user_id = %s AND p.user_id = %s""", (x, y))[0] == 0
+    for table in ("inspections", "maintenance_issues", "property_documents", "move_out_checklists", "move_out_checklist_state", "disputes", "exports"):
+        assert one(owner, f"SELECT count(*) FROM {table} t JOIN properties p ON p.id = t.property_id WHERE t.user_id = %s AND p.user_id = %s", (x, y))[0] == 0, table
+    assert one(owner, """SELECT count(*) FROM dispute_evidence_links l JOIN disputes d ON d.id = l.dispute_id
+                         LEFT JOIN evidence_files ef ON ef.id = l.evidence_file_id
+                         LEFT JOIN maintenance_issues mi ON mi.id = l.maintenance_issue_id
+                         LEFT JOIN property_documents pd ON pd.id = l.property_document_id
+                         WHERE d.user_id = %s AND coalesce(ef.property_id, mi.property_id, pd.property_id) <> d.property_id""", (x,))[0] == 0
+    # The outcome that matters: Y's account deletes cleanly, X keeps everything X owns.
+    owner.execute("SELECT delete_user_owned_data(%s)", (y,))
+    owner.execute("DELETE FROM neon_auth.\"user\" WHERE id = %s", (y,))
+    assert one(owner, "SELECT count(*) FROM properties WHERE user_id = %s", (x,))[0] == 2
+    owner.execute("SELECT delete_user_owned_data(%s)", (x,))  # and X's own graph is still consistent enough to delete
+
+
+def test_legitimate_writes_still_work(dsn: str, graph: dict[str, Any]) -> None:
+    x, x2 = graph["x"], graph["x2"]
+    with as_user(dsn, graph["X"]) as c:
+        assert rows(c, "UPDATE inspections SET overall_notes = 'ok' WHERE id = %s RETURNING id", (x["inspection"],))
+        assert rows(c, "UPDATE inspection_items SET notes = 'ok' WHERE id = %s RETURNING id", (x["item"],))
+        assert rows(c, "UPDATE evidence_files SET captured_at = now() WHERE id = %s RETURNING id", (x["evidence"],))
+        assert rows(c, "UPDATE maintenance_issues SET status = 'resolved' WHERE id = %s RETURNING id", (x["maintenance"],))
+        assert rows(c, "UPDATE property_documents SET file_name = 'lease-v2.pdf' WHERE id = %s RETURNING id", (x["document"],))
+        assert rows(c, "UPDATE move_out_checklists SET keys_returned = true WHERE id = %s RETURNING id", (x["checklist"],))
+        assert rows(c, "UPDATE disputes SET title = 'Deposit' WHERE id = %s RETURNING id", (graph["x_dispute"],))
+        assert rows(c, "UPDATE rooms SET name = 'Kitchen 2' WHERE id = %s RETURNING id", (x["room"],))
+        assert rows(c, "INSERT INTO move_out_checklist_state (property_id, user_id) VALUES (%s, %s) RETURNING property_id", (x["property"], graph["X"]))
+        # Same-property links and a room move with nothing attached are fine.
+        assert rows(c, "INSERT INTO dispute_evidence_links (dispute_id, maintenance_issue_id) VALUES (%s, %s) RETURNING id", (graph["x_dispute"], x["maintenance"]))
+        assert rows(c, "INSERT INTO dispute_evidence_links (dispute_id, property_document_id) VALUES (%s, %s) RETURNING id", (graph["x_dispute"], x["document"]))
+        spare = one(c, "INSERT INTO rooms (property_id, name) VALUES (%s, 'Spare') RETURNING id", (x["property"],))[0]
+        assert rows(c, "UPDATE rooms SET property_id = %s WHERE id = %s RETURNING id", (x2["property"], spare))
+        # Upsert shape the apps use (insert … on conflict do update) still passes.
+        assert rows(c, """INSERT INTO move_out_checklists (property_id, user_id, keys_returned) VALUES (%s, %s, true)
+                          ON CONFLICT (property_id, user_id) DO UPDATE SET keys_returned = EXCLUDED.keys_returned RETURNING id""",
+                    (x["property"], graph["X"]))
+        c.commit()
+
+
+def test_exports_are_read_only_for_clients_and_scoped(dsn: str, owner: Any, graph: dict[str, Any]) -> None:
+    x, y = graph["x"], graph["y"]
+    owner.execute("INSERT INTO exports (user_id, property_id, export_type, status, file_path) VALUES (%s, %s, 'move_in_report', 'completed', 'x.pdf')", (graph["X"], x["property"]))
+    owner.execute("INSERT INTO exports (user_id, property_id, export_type, status, file_path) VALUES (%s, %s, 'move_in_report', 'completed', 'y.pdf')", (graph["Y"], y["property"]))
+    with as_user(dsn, graph["X"]) as c:
+        assert {str(r[0]) for r in rows(c, "SELECT property_id FROM exports")} == {x["property"]}
+    for sql in ("INSERT INTO exports (user_id, property_id, export_type) VALUES ('{X}', '{xp}', 'move_in_report')",
+                "UPDATE exports SET status = 'queued', attempts = 0 WHERE user_id = '{X}'",
+                "DELETE FROM exports WHERE user_id = '{X}'"):
+        with as_user(dsn, graph["X"]) as c, pytest.raises(errors.InsufficientPrivilege):
+            c.execute(_fill(sql, graph))
+
+
+def test_backend_still_runs_the_export_lifecycle(owner: Any, graph: dict[str, Any]) -> None:
+    x = graph["x"]
+    # The worker claims the oldest queued job globally; start from an empty queue.
+    owner.execute("DELETE FROM exports WHERE status IN ('queued', 'processing') OR user_id = %s", (graph["X"],))
+    job = one(owner, "INSERT INTO exports (user_id, property_id, export_type, status) VALUES (%s, %s, 'move_out_report', 'queued') RETURNING id", (graph["X"], x["property"]))[0]
+    claimed = [r for r in rows(owner, "SELECT id, status, attempts FROM claim_next_export_job()") if r[0] == job]
+    assert claimed and claimed[0][1] == "processing" and claimed[0][2] == 1
+    owner.execute("UPDATE exports SET status = 'failed', error_message = 'boom', locked_at = NULL WHERE id = %s", (job,))
+    owner.execute("UPDATE exports SET status = 'queued', error_message = NULL WHERE id = %s", (job,))  # retry
+    rows(owner, "SELECT id FROM claim_next_export_job()")
+    owner.execute("UPDATE exports SET status = 'completed', file_path = %s, completed_at = now(), locked_at = NULL WHERE id = %s",
+                  (f"{graph['X']}/{job}.pdf", job))
+    assert one(owner, "SELECT status, attempts FROM exports WHERE id = %s", (job,)) == ("completed", 2)
+    owner.execute("UPDATE exports SET status = 'processing', locked_at = now() - interval '10 minutes' WHERE id = %s", (job,))
+    assert one(owner, "SELECT reap_stuck_export_jobs()")[0] >= 1

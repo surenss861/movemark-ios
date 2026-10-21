@@ -65,12 +65,14 @@ def api(token: str | None) -> httpx.Client:
 
 def cleanup(ids: list[str]) -> None:
     with psycopg.connect(OWNER_DSN, autocommit=True) as conn:
-        for uid in ids:
+        # Leftover QA accounts (e.g. from an interrupted run) lose their rows too, never just the identity.
+        leftover = [str(r[0]) for r in conn.execute('SELECT id FROM neon_auth."user" WHERE email IN (%s, %s)', tuple(EMAILS.values()))]
+        for uid in dict.fromkeys([*ids, *leftover]):
             conn.execute("SELECT public.delete_user_owned_data(%s)", (uid,))
+            conn.execute("DELETE FROM public.storage_upload_tickets WHERE user_id = %s", (uid,))
             conn.execute('DELETE FROM neon_auth.session WHERE "userId" = %s', (uid,))
             conn.execute('DELETE FROM neon_auth.account WHERE "userId" = %s', (uid,))
             conn.execute('DELETE FROM neon_auth."user" WHERE id = %s', (uid,))
-        conn.execute("DELETE FROM neon_auth.\"user\" WHERE email IN (%s, %s)", tuple(EMAILS.values()))
 
 
 def seed(c: httpx.Client, uid: str, label: str) -> dict[str, str]:
@@ -176,6 +178,14 @@ def main() -> None:
                 record(f"A cannot call {fn}", r.status_code in (401, 403, 404), r)
             r2 = b.get(f"/properties?id=eq.{rb['property']}&select=id")
             record("B's data intact after A's delete_user_owned_data attempt", len(r2.json()) == 1, r2)
+
+            # Write integrity (0930): no client-written exports, no cross-tenant references.
+            r = a.post("/exports", json={"user_id": a_id, "property_id": ra["property"], "export_type": "dispute_packet", "status": "queued"})
+            record("A cannot queue an export on own property (0930)", r.status_code in (401, 403), r)
+            r = a.post("/inspection_items", json={"inspection_id": ra["inspection"], "room_id": rb["room"]})
+            record("A cannot attach own inspection item to B's room (0930)", r.status_code in (401, 403), r)
+            r = a.patch(f"/inspections?id=eq.{ra['inspection']}", json={"property_id": rb["property"]})
+            record("A cannot move own inspection onto B's property (0930)", r.status_code in (401, 403), r)
 
             # Upload tickets are backend-only (0920).
             r = a.get("/storage_upload_tickets?select=id")
