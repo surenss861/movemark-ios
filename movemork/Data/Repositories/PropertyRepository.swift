@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import Supabase
+import PostgREST
 
 struct PropertyRow: Codable, Identifiable {
     let id: UUID
@@ -69,7 +69,7 @@ struct RoomRow: Codable, Identifiable {
 struct PropertyRepository {
 
     func fetchProperties(userId: UUID) async throws -> [PropertyRow] {
-        try await supabase
+        try await dataAPI
             .from("properties")
             .select()
             .eq("user_id", value: userId)
@@ -87,7 +87,7 @@ struct PropertyRepository {
         }
         #endif
         do {
-            let created: PropertyRow = try await supabase
+            let created: PropertyRow = try await dataAPI
                 .from("properties")
                 .insert(row)
                 .select()
@@ -161,7 +161,7 @@ struct PropertyRepository {
             leaseEnd: row.leaseEnd
         )
 
-        try await supabase
+        try await dataAPI
             .from("properties")
             .update(patch)
             .eq("id", value: row.id)
@@ -169,7 +169,7 @@ struct PropertyRepository {
     }
 
     func fetchRooms(propertyId: UUID) async throws -> [RoomRow] {
-        try await supabase
+        try await dataAPI
             .from("rooms")
             .select()
             .eq("property_id", value: propertyId)
@@ -179,7 +179,7 @@ struct PropertyRepository {
     }
 
     func insertRoom(_ row: RoomRow) async throws -> RoomRow {
-        try await supabase
+        try await dataAPI
             .from("rooms")
             .insert(row)
             .select()
@@ -204,7 +204,7 @@ struct PropertyRepository {
             )
         }
 
-        try await supabase
+        try await dataAPI
             .from("rooms")
             .insert(rooms)
             .execute()

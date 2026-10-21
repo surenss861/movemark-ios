@@ -7,7 +7,6 @@
 
 import SwiftUI
 import PhotosUI
-import Supabase
 
 private struct VaultDocumentQuickLookItem: Identifiable {
     let id = UUID()
@@ -922,17 +921,14 @@ struct PropertyVaultView: View {
     /// Fetches server-side vault summary (rooms, docs, maintenance, readiness, exports/dispute flags). Fails silently and keeps local store UI when the API is unavailable.
     private func loadVaultSummary() async {
         guard
-            let base = Bundle.main.object(forInfoDictionaryKey: "MoveMarkAPIBaseURL") as? String,
-            !base.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let base = MoveMarkBackendConfig.apiBaseURLString
         else {
             return
         }
         do {
-            let session = try await supabase.auth.session
             let client = try ExportAPIClient(baseURLString: base)
             let summary = try await client.fetchVaultSummary(
                 propertyId: property.id,
-                accessToken: session.accessToken,
                 includeExports: true,
                 includeDispute: true
             )
@@ -1080,27 +1076,25 @@ struct PropertyVaultView: View {
                 compressed = data
             }
             let fileName = "\(UUID()).jpg"
-            let path = "\(userId)/\(property.id)/\(canonicalType)/\(fileName)"
-            let targetBucket = DocumentRepository.storageBucket(forDocumentType: canonicalType)
 
+            // The thumbnail rides on the same upload and is best-effort: previews fall back to `filePath`.
+            let upload: MoveMarkUpload
             do {
-                _ = try await documentRepo.uploadDocument(data: compressed, bucket: targetBucket, path: path)
+                upload = try await documentRepo.uploadDocument(
+                    compressed,
+                    fileName: fileName,
+                    thumbnail: MMImageThumbnail.make(from: compressed),
+                    propertyId: property.id,
+                    documentType: canonicalType
+                )
                 if canonicalType == VaultDocumentType.lease.rawValue {
                     MoveMarkAnalytics.track(.leaseAdded)
                 } else if canonicalType == VaultDocumentType.depositReceipt.rawValue {
                     MoveMarkAnalytics.track(.receiptAdded)
                 }
             } catch {
-                await documentRepo.removeStaleUpload(documentType: canonicalType, path: path)
                 uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
                 return
-            }
-
-            // Thumbnail upload is best-effort; a failure here just means this document falls back to `filePath` for previews.
-            var thumbnailPath: String?
-            if let thumbData = MMImageThumbnail.make(from: compressed) {
-                let thumbPath = MMImageThumbnail.thumbnailPath(for: path)
-                thumbnailPath = (try? await documentRepo.uploadDocument(data: thumbData, bucket: targetBucket, path: thumbPath)) != nil ? thumbPath : nil
             }
 
             let row = PropertyDocumentRow(
@@ -1108,8 +1102,8 @@ struct PropertyVaultView: View {
                 propertyId: property.id,
                 userId: userId,
                 documentType: canonicalType,
-                filePath: path,
-                thumbnailPath: thumbnailPath,
+                filePath: upload.path,
+                thumbnailPath: upload.thumbnailPath,
                 fileName: fileName,
                 uploadedAt: nil,
                 metadata: nil
@@ -1117,7 +1111,7 @@ struct PropertyVaultView: View {
             do {
                 try await documentRepo.insertDocumentRecord(row)
             } catch {
-                await documentRepo.removeStaleUpload(documentType: canonicalType, path: path)
+                await documentRepo.abandonUpload(upload)
                 uploadError = MoveMarkFlowMessage.documentRecordCreateFailed(error)
                 return
             }
@@ -1193,18 +1187,22 @@ struct PropertyVaultView: View {
             }
 
             let fileName = url.lastPathComponent
-            let path = "\(userId)/\(property.id)/\(canonicalType)/\(UUID().uuidString)-\(fileName)"
-            let targetBucket = DocumentRepository.storageBucket(forDocumentType: canonicalType)
 
+            let upload: MoveMarkUpload
             do {
-                _ = try await documentRepo.uploadDocument(data: data, bucket: targetBucket, path: path)
+                upload = try await documentRepo.uploadDocument(
+                    data,
+                    fileName: fileName,
+                    thumbnail: nil,
+                    propertyId: property.id,
+                    documentType: canonicalType
+                )
                 if canonicalType == VaultDocumentType.lease.rawValue {
                     MoveMarkAnalytics.track(.leaseAdded)
                 } else if canonicalType == VaultDocumentType.depositReceipt.rawValue {
                     MoveMarkAnalytics.track(.receiptAdded)
                 }
             } catch {
-                await documentRepo.removeStaleUpload(documentType: canonicalType, path: path)
                 uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
                 lastFailedFileDocType = docType
                 return
@@ -1215,7 +1213,7 @@ struct PropertyVaultView: View {
                 propertyId: property.id,
                 userId: userId,
                 documentType: canonicalType,
-                filePath: path,
+                filePath: upload.path,
                 fileName: fileName,
                 uploadedAt: nil,
                 metadata: nil
@@ -1223,7 +1221,7 @@ struct PropertyVaultView: View {
             do {
                 try await documentRepo.insertDocumentRecord(row)
             } catch {
-                await documentRepo.removeStaleUpload(documentType: canonicalType, path: path)
+                await documentRepo.abandonUpload(upload)
                 uploadError = MoveMarkFlowMessage.documentRecordCreateFailed(error)
                 lastFailedFileDocType = docType
                 return

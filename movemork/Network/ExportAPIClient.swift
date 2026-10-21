@@ -90,8 +90,9 @@ enum APIClientError: LocalizedError {
     }
 }
 
+/// MoveMark API calls. Authentication (token, refresh, one retry on 401) is ``MoveMarkAuthenticatedTransport``'s job.
 final class ExportAPIClient {
-    private let session: URLSession
+    private let transport: MoveMarkAuthenticatedTransport
     private let baseURL: URL
 
     /// Single decoder for all export API responses; tolerates snake_case payloads from the server.
@@ -101,12 +102,12 @@ final class ExportAPIClient {
         return d
     }()
 
-    init(baseURLString: String, session: URLSession = .shared) throws {
+    init(baseURLString: String, transport: MoveMarkAuthenticatedTransport = .shared) throws {
         guard let url = URL(string: baseURLString) else {
             throw APIClientError.invalidBaseURL
         }
         self.baseURL = url
-        self.session = session
+        self.transport = transport
     }
 
     /// Parses `{ "error": "...", "code": "..." }` from API error responses when present.
@@ -123,33 +124,29 @@ final class ExportAPIClient {
         return String(data: data, encoding: .utf8) ?? "Server error"
     }
 
-    func requestMoveInExport(propertyId: UUID, accessToken: String) async throws -> MoveInExportResponse {
-        try await requestExport(path: "api/exports/move-in", propertyId: propertyId, accessToken: accessToken)
+    func requestMoveInExport(propertyId: UUID) async throws -> MoveInExportResponse {
+        try await requestExport(path: "api/exports/move-in", propertyId: propertyId)
     }
 
-    func requestMoveOutExport(propertyId: UUID, accessToken: String) async throws -> MoveInExportResponse {
-        try await requestExport(path: "api/exports/move-out", propertyId: propertyId, accessToken: accessToken)
+    func requestMoveOutExport(propertyId: UUID) async throws -> MoveInExportResponse {
+        try await requestExport(path: "api/exports/move-out", propertyId: propertyId)
     }
 
-    func requestDisputePacketExport(propertyId: UUID, accessToken: String) async throws -> MoveInExportResponse {
-        try await requestExport(path: "api/exports/dispute-packet", propertyId: propertyId, accessToken: accessToken)
+    func requestDisputePacketExport(propertyId: UUID) async throws -> MoveInExportResponse {
+        try await requestExport(path: "api/exports/dispute-packet", propertyId: propertyId)
     }
 
-    private func requestExport(path: String, propertyId: UUID, accessToken: String) async throws -> MoveInExportResponse {
-        guard !accessToken.isEmpty else {
-            throw APIClientError.missingAuthToken
-        }
+    private func requestExport(path: String, propertyId: UUID) async throws -> MoveInExportResponse {
 
         let endpoint = baseURL.appendingPathComponent(path)
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
         let body = MoveInExportRequest(propertyId: propertyId.uuidString, format: .pdf)
         request.httpBody = try JSONEncoder().encode(body)
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await transport.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidResponse
@@ -166,10 +163,7 @@ final class ExportAPIClient {
         }
     }
 
-    func fetchExports(accessToken: String, propertyId: UUID) async throws -> [ExportListItem] {
-        guard !accessToken.isEmpty else {
-            throw APIClientError.missingAuthToken
-        }
+    func fetchExports(propertyId: UUID) async throws -> [ExportListItem] {
 
         var url = baseURL.appendingPathComponent("api/exports")
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
@@ -180,16 +174,15 @@ final class ExportAPIClient {
         url = resolved
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await transport.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidResponse
         }
 
         let bodyPreview = String(data: data, encoding: .utf8).map { String($0.prefix(800)) } ?? "<binary>"
         exportAPILog.notice(
-            "GET exports url=\(url.absoluteString, privacy: .public) hasToken=\(!accessToken.isEmpty, privacy: .public) status=\(httpResponse.statusCode, privacy: .public)"
+            "GET exports url=\(url.absoluteString, privacy: .public) status=\(httpResponse.statusCode, privacy: .public)"
         )
 
         guard 200..<300 ~= httpResponse.statusCode else {
@@ -205,17 +198,13 @@ final class ExportAPIClient {
         }
     }
 
-    func fetchDownloadURL(exportId: String, accessToken: String) async throws -> ExportDownloadResponse {
-        guard !accessToken.isEmpty else {
-            throw APIClientError.missingAuthToken
-        }
+    func fetchDownloadURL(exportId: String) async throws -> ExportDownloadResponse {
 
         let endpoint = baseURL.appendingPathComponent("api/exports/\(exportId)/download")
         var request = URLRequest(url: endpoint)
         request.httpMethod = "GET"
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await transport.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidResponse
         }
@@ -248,13 +237,11 @@ final class ExportAPIClient {
 
     func fetchVaultSummary(
         propertyId: UUID,
-        accessToken: String,
         includeExports: Bool = true,
         includeDispute: Bool = true
     ) async throws -> VaultSummaryResponse {
         try await getJSON(
             path: "api/vaults/\(propertyId.uuidString)/summary",
-            accessToken: accessToken,
             queryItems: [
                 URLQueryItem(name: "includeExports", value: includeExports ? "true" : "false"),
                 URLQueryItem(name: "includeDispute", value: includeDispute ? "true" : "false"),
@@ -264,12 +251,10 @@ final class ExportAPIClient {
     }
 
     func fetchPropertyCapabilities(
-        propertyId: UUID,
-        accessToken: String
+        propertyId: UUID
     ) async throws -> PropertyCapabilitiesResponse {
         try await getJSON(
             path: "api/properties/\(propertyId.uuidString)/capabilities",
-            accessToken: accessToken,
             queryItems: [],
             as: PropertyCapabilitiesResponse.self
         )
@@ -277,12 +262,10 @@ final class ExportAPIClient {
 
     func fetchDisputeEvidenceCatalog(
         propertyId: UUID,
-        accessToken: String,
         includeSignedUrls: Bool = false
     ) async throws -> DisputeEvidenceCatalogResponse {
         try await getJSON(
             path: "api/disputes/\(propertyId.uuidString)/evidence-catalog",
-            accessToken: accessToken,
             queryItems: [
                 URLQueryItem(name: "includeSignedUrls", value: includeSignedUrls ? "true" : "false"),
             ],
@@ -292,13 +275,9 @@ final class ExportAPIClient {
 
     private func getJSON<T: Decodable>(
         path: String,
-        accessToken: String,
         queryItems: [URLQueryItem],
         as type: T.Type
     ) async throws -> T {
-        guard !accessToken.isEmpty else {
-            throw APIClientError.missingAuthToken
-        }
 
         var base = baseURL
         for component in path.split(separator: "/") where !component.isEmpty {
@@ -315,9 +294,8 @@ final class ExportAPIClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await transport.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidResponse
         }
@@ -338,10 +316,7 @@ final class ExportAPIClient {
     }
 
     /// Permanently deletes the authenticated account and owned cloud data.
-    func deleteAccount(accessToken: String) async throws {
-        guard !accessToken.isEmpty else {
-            throw APIClientError.missingAuthToken
-        }
+    func deleteAccount() async throws {
 
         var url = baseURL
         for component in ["api", "account"] {
@@ -350,9 +325,8 @@ final class ExportAPIClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await transport.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidResponse
         }

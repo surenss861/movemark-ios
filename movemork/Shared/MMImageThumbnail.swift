@@ -17,7 +17,11 @@ enum MMImageThumbnail {
         guard size.width > 0, size.height > 0 else { return nil }
         let scale = min(maxDimension / max(size.width, size.height), 1.0)
         let targetSize = CGSize(width: size.width * scale, height: size.height * scale)
-        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        // Pixel-exact: the renderer otherwise multiplies by the screen scale (3× on recent iPhones), which
+        // made a "320px" thumbnail 960px — larger than many originals.
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
         let resized = renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: targetSize))
         }

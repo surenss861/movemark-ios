@@ -3,11 +3,11 @@
 //  movemork
 //
 //  MoveMark — Maintenance issue data access.
-//  Attachment paths use `{userId}/{propertyId}/{issueId}/...` for `maintenance-media` RLS.
+//  Attachments go to `maintenance-media` under keys the MoveMark API builds (`{userId}/{propertyId}/{issueId}/{uuid}.jpg`).
 //
 
 import Foundation
-import Supabase
+import PostgREST
 
 /// Fixed categories for maintenance issues; raw values match DB.
 enum MaintenanceCategory: String, CaseIterable {
@@ -57,7 +57,7 @@ struct MaintenanceRepository {
 
     /// Capped so a long-tenured account (years of logged issues) can't grow this into an unbounded fetch; ordered so the cap keeps the most recent issues.
     func fetchIssues(propertyId: UUID) async throws -> [MaintenanceIssueRow] {
-        try await supabase
+        try await dataAPI
             .from("maintenance_issues")
             .select()
             .eq("property_id", value: propertyId)
@@ -69,7 +69,7 @@ struct MaintenanceRepository {
 
     /// Single-row lookup by id (e.g. deep link / path-based navigation) — avoids fetching the whole issue list just to find one.
     func fetchIssue(id: UUID) async throws -> MaintenanceIssueRow? {
-        let rows: [MaintenanceIssueRow] = try await supabase
+        let rows: [MaintenanceIssueRow] = try await dataAPI
             .from("maintenance_issues")
             .select()
             .eq("id", value: id)
@@ -80,7 +80,7 @@ struct MaintenanceRepository {
     }
 
     func insertIssue(_ row: MaintenanceIssueRow) async throws -> MaintenanceIssueRow {
-        try await supabase
+        try await dataAPI
             .from("maintenance_issues")
             .insert(row)
             .select()
@@ -91,7 +91,7 @@ struct MaintenanceRepository {
 
     func markResolved(id: UUID) async throws {
         let now = ISO8601DateFormatter().string(from: Date())
-        try await supabase
+        try await dataAPI
             .from("maintenance_issues")
             .update(["status": "resolved", "updated_at": now])
             .eq("id", value: id)
@@ -100,7 +100,7 @@ struct MaintenanceRepository {
 
     func updateFollowUp(id: UUID, note: String) async throws {
         let now = ISO8601DateFormatter().string(from: Date())
-        try await supabase
+        try await dataAPI
             .from("maintenance_issues")
             .update([
                 "landlord_response": note,
@@ -111,29 +111,23 @@ struct MaintenanceRepository {
             .execute()
     }
 
-    func uploadAttachment(data: Data, path: String) async throws -> String {
-        try await supabase.storage
-            .from("maintenance-media")
-            .upload(path, data: data, options: FileOptions(contentType: "image/jpeg"))
-
-        let parts = path.split(separator: "/")
-        if parts.count >= 2 {
-            await MoveMarkSignedURLCache.shared.invalidateKeys(containing: String(parts[1]))
-        }
-        return path
+    /// Uploads one maintenance photo (and its thumbnail, best-effort) for an issue the caller owns.
+    func uploadAttachment(_ data: Data, thumbnail: Data?, propertyId: UUID, issueId: UUID) async throws -> MoveMarkUpload {
+        let upload = try await MoveMarkStorageService.shared.uploadMaintenancePhoto(
+            data, thumbnail: thumbnail, propertyId: propertyId, issueId: issueId
+        )
+        await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
+        return upload
     }
 
-    /// Best-effort removal when storage upload succeeded but `evidence_files` insert failed (avoids orphan objects in `maintenance-media`).
-    func removeOrphanUploadedAttachment(path: String) async {
-        guard !path.isEmpty else { return }
-        _ = try? await supabase.storage
-            .from("maintenance-media")
-            .remove(paths: [path])
+    /// Releases an upload whose `evidence_files` insert failed (keeps it if a row references it after all).
+    func abandonUpload(_ upload: MoveMarkUpload) async {
+        await MoveMarkStorageService.shared.abandon(upload)
     }
 
     /// Deletes a maintenance issue row (e.g. when photo pipeline produced zero linked evidence after user attached photos).
     func deleteIssue(id: UUID) async throws {
-        try await supabase
+        try await dataAPI
             .from("maintenance_issues")
             .delete()
             .eq("id", value: id)

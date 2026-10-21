@@ -7,7 +7,6 @@
 
 import SwiftUI
 import PhotosUI
-import Supabase
 
 struct MoveOutFoundationView: View {
     @Binding var path: [AppRoute]
@@ -36,13 +35,7 @@ struct MoveOutFoundationView: View {
         rooms.filter { room in room.moveOutEvidence.contains { $0.photoCount > 0 } }.count
     }
 
-    private var apiBaseURL: String? {
-        guard
-            let value = Bundle.main.object(forInfoDictionaryKey: "MoveMarkAPIBaseURL") as? String,
-            !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else { return nil }
-        return value.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
+    private var apiBaseURL: String? { MoveMarkBackendConfig.apiBaseURLString }
 
     var body: some View {
         ZStack {
@@ -455,12 +448,8 @@ struct MoveOutFoundationView: View {
             defer { isExporting = false }
 
             do {
-                let session = try await supabase.auth.session
                 let apiClient = try ExportAPIClient(baseURLString: baseURL)
-                _ = try await apiClient.requestMoveOutExport(
-                    propertyId: property.id,
-                    accessToken: session.accessToken
-                )
+                _ = try await apiClient.requestMoveOutExport(propertyId: property.id)
                 lastErrorFromExport = false
                 queuedNotice = "Report queued — it will appear in Reports when ready"
                 NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)

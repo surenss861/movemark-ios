@@ -45,7 +45,7 @@ extension PropertyStore {
         var hadAnyFailure: Bool { failedCount > 0 }
     }
 
-    /// Uploads each JPEG and inserts `evidence_files`; continues on per-photo failure. Orphan storage is removed when insert fails after upload.
+    /// Uploads each JPEG and inserts `evidence_files`; continues on per-photo failure. The upload is abandoned when the insert fails after it.
     private func saveInspectionPhotos(
         photos: [Data],
         userId: UUID,
@@ -62,37 +62,28 @@ extension PropertyStore {
             "Pipeline start property=\(propertyId.uuidString, privacy: .public) room=\(roomId.uuidString, privacy: .public) item=\(inspectionItemId.uuidString, privacy: .public) folder=\(folder, privacy: .public) photoCount=\(photos.count)"
         )
         for (index, photoData) in photos.enumerated() {
-            let path = "\(userId)/\(propertyId)/\(folder)/\(roomId)/\(UUID()).jpg"
-            inspectionPhotoPipelineLog.debug(
-                "Photo \(index + 1)/\(photos.count) bytes=\(photoData.count) path=\(path, privacy: .public)"
-            )
+            inspectionPhotoPipelineLog.debug("Photo \(index + 1)/\(photos.count) bytes=\(photoData.count)")
+            // The thumbnail rides on the same upload and is best-effort: grids fall back to `filePath`
+            // when it's missing (same as pre-existing rows).
+            let upload: MoveMarkUpload
             do {
-                _ = try await inspectionRepo.uploadPhoto(data: photoData, path: path)
-                inspectionPhotoPipelineLog.debug("uploadPhoto OK path=\(path, privacy: .public)")
+                upload = try await inspectionRepo.uploadEvidencePhoto(
+                    photoData,
+                    thumbnail: MMImageThumbnail.make(from: photoData),
+                    propertyId: propertyId,
+                    roomId: roomId,
+                    isMoveOut: folder == "move-out"
+                )
+                inspectionPhotoPipelineLog.debug("upload OK path=\(upload.path, privacy: .public)")
             } catch {
                 failedCount += 1
                 inspectionPhotoPipelineLog.error(
-                    "uploadPhoto FAILED path=\(path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                    "upload FAILED error=\(error.localizedDescription, privacy: .public)"
                 )
                 #if DEBUG
-                print("MoveMark: uploadPhoto failed", path, error)
+                print("MoveMark: evidence upload failed", error)
                 #endif
                 continue
-            }
-
-            // Thumbnail upload is best-effort: the full-size photo above already saved, so a thumbnail
-            // failure just means this photo falls back to `filePath` in grids (same as pre-existing rows).
-            var thumbnailPath: String?
-            if let thumbData = MMImageThumbnail.make(from: photoData) {
-                let thumbPath = MMImageThumbnail.thumbnailPath(for: path)
-                do {
-                    _ = try await inspectionRepo.uploadPhoto(data: thumbData, path: thumbPath)
-                    thumbnailPath = thumbPath
-                } catch {
-                    inspectionPhotoPipelineLog.error(
-                        "thumbnail uploadPhoto FAILED path=\(thumbPath, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
-                    )
-                }
             }
 
             do {
@@ -100,24 +91,24 @@ extension PropertyStore {
                     propertyId: propertyId,
                     inspectionItemId: inspectionItemId,
                     maintenanceIssueId: nil,
-                    filePath: path,
-                    thumbnailPath: thumbnailPath,
+                    filePath: upload.path,
+                    thumbnailPath: upload.thumbnailPath,
                     fileType: "image",
                     capturedAt: Date()
                 )
-                savedPhotos.append(EvidencePhoto(id: fileId, filePath: path, thumbnailPath: thumbnailPath))
+                savedPhotos.append(EvidencePhoto(id: fileId, filePath: upload.path, thumbnailPath: upload.thumbnailPath))
                 inspectionPhotoPipelineLog.debug(
-                    "insertEvidenceFile OK fileId=\(fileId.uuidString, privacy: .public) path=\(path, privacy: .public)"
+                    "insertEvidenceFile OK fileId=\(fileId.uuidString, privacy: .public) path=\(upload.path, privacy: .public)"
                 )
             } catch {
                 failedCount += 1
                 insertFailedAfterUploadCount += 1
-                await inspectionRepo.removeOrphanInspectionUpload(path: path)
+                await inspectionRepo.abandonUpload(upload)
                 inspectionPhotoPipelineLog.error(
-                    "insertEvidenceFile FAILED path=\(path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                    "insertEvidenceFile FAILED path=\(upload.path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
                 )
                 #if DEBUG
-                print("MoveMark: insertEvidenceFile failed after upload", path, error)
+                print("MoveMark: insertEvidenceFile failed after upload", upload.path, error)
                 #endif
             }
         }
@@ -131,7 +122,7 @@ extension PropertyStore {
         )
     }
 
-    /// Uploads maintenance JPEGs to `maintenance-media` and inserts `evidence_files` with `maintenance_issue_id`. Mirrors ``saveInspectionPhotos`` orphan cleanup.
+    /// Uploads maintenance JPEGs to `maintenance-media` and inserts `evidence_files` with `maintenance_issue_id`. Mirrors ``saveInspectionPhotos`` (abandons the upload when the insert fails).
     private func saveMaintenancePhotos(
         photos: [Data],
         userId: UUID,
@@ -146,36 +137,26 @@ extension PropertyStore {
             "Pipeline start property=\(propertyId.uuidString, privacy: .public) issue=\(issueId.uuidString, privacy: .public) photoCount=\(photos.count)"
         )
         for (index, photoData) in photos.enumerated() {
-            let path = "\(userId)/\(propertyId)/\(issueId)/\(UUID()).jpg"
-            maintenancePhotoPipelineLog.debug(
-                "Photo \(index + 1)/\(photos.count) bytes=\(photoData.count) path=\(path, privacy: .public)"
-            )
+            maintenancePhotoPipelineLog.debug("Photo \(index + 1)/\(photos.count) bytes=\(photoData.count)")
+            // The thumbnail rides on the same upload and is best-effort: grids fall back to `filePath`.
+            let upload: MoveMarkUpload
             do {
-                _ = try await maintenanceRepo.uploadAttachment(data: photoData, path: path)
-                maintenancePhotoPipelineLog.debug("uploadAttachment OK path=\(path, privacy: .public)")
+                upload = try await maintenanceRepo.uploadAttachment(
+                    photoData,
+                    thumbnail: MMImageThumbnail.make(from: photoData),
+                    propertyId: propertyId,
+                    issueId: issueId
+                )
+                maintenancePhotoPipelineLog.debug("uploadAttachment OK path=\(upload.path, privacy: .public)")
             } catch {
                 failedCount += 1
                 maintenancePhotoPipelineLog.error(
-                    "uploadAttachment FAILED path=\(path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                    "uploadAttachment FAILED error=\(error.localizedDescription, privacy: .public)"
                 )
                 #if DEBUG
-                print("MoveMark: maintenance uploadAttachment failed", path, error)
+                print("MoveMark: maintenance uploadAttachment failed", error)
                 #endif
                 continue
-            }
-
-            // Thumbnail upload is best-effort; a failure here just means this photo falls back to `filePath` in grids.
-            var thumbnailPath: String?
-            if let thumbData = MMImageThumbnail.make(from: photoData) {
-                let thumbPath = MMImageThumbnail.thumbnailPath(for: path)
-                do {
-                    _ = try await maintenanceRepo.uploadAttachment(data: thumbData, path: thumbPath)
-                    thumbnailPath = thumbPath
-                } catch {
-                    maintenancePhotoPipelineLog.error(
-                        "thumbnail uploadAttachment FAILED path=\(thumbPath, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
-                    )
-                }
             }
 
             do {
@@ -183,24 +164,24 @@ extension PropertyStore {
                     propertyId: propertyId,
                     inspectionItemId: nil,
                     maintenanceIssueId: issueId,
-                    filePath: path,
-                    thumbnailPath: thumbnailPath,
+                    filePath: upload.path,
+                    thumbnailPath: upload.thumbnailPath,
                     fileType: "image",
                     capturedAt: Date()
                 )
-                savedPhotos.append(EvidencePhoto(id: fileId, filePath: path, thumbnailPath: thumbnailPath))
+                savedPhotos.append(EvidencePhoto(id: fileId, filePath: upload.path, thumbnailPath: upload.thumbnailPath))
                 maintenancePhotoPipelineLog.debug(
-                    "insertEvidenceFile OK fileId=\(fileId.uuidString, privacy: .public) path=\(path, privacy: .public)"
+                    "insertEvidenceFile OK fileId=\(fileId.uuidString, privacy: .public) path=\(upload.path, privacy: .public)"
                 )
             } catch {
                 failedCount += 1
                 insertFailedAfterUploadCount += 1
-                await maintenanceRepo.removeOrphanUploadedAttachment(path: path)
+                await maintenanceRepo.abandonUpload(upload)
                 maintenancePhotoPipelineLog.error(
-                    "insertEvidenceFile FAILED path=\(path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                    "insertEvidenceFile FAILED path=\(upload.path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
                 )
                 #if DEBUG
-                print("MoveMark: maintenance insertEvidenceFile failed after upload", path, error)
+                print("MoveMark: maintenance insertEvidenceFile failed after upload", upload.path, error)
                 #endif
             }
         }

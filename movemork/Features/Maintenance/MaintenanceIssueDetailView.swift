@@ -342,20 +342,19 @@ struct MaintenanceIssueDetailView: View {
 
             for item in items {
                 guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-                let path = "\(issue.userId)/\(issue.propertyId)/\(issue.id)/\(UUID().uuidString).jpg"
+                // The thumbnail rides on the same upload and is best-effort: the grid falls back to `filePath`.
+                let upload: MoveMarkUpload
                 do {
-                    _ = try await maintenanceRepo.uploadAttachment(data: data, path: path)
+                    upload = try await maintenanceRepo.uploadAttachment(
+                        data,
+                        thumbnail: MMImageThumbnail.make(from: data),
+                        propertyId: issue.propertyId,
+                        issueId: issue.id
+                    )
                 } catch {
                     errorMessage = MoveMarkFlowMessage.maintenancePhotoUploadFailed(error)
                     retryAction = { uploadPhotos(items) }
                     return
-                }
-
-                // Thumbnail upload is best-effort; a failure here just means this photo falls back to `filePath` in the grid.
-                var thumbnailPath: String?
-                if let thumbData = MMImageThumbnail.make(from: data) {
-                    let thumbPath = MMImageThumbnail.thumbnailPath(for: path)
-                    thumbnailPath = (try? await maintenanceRepo.uploadAttachment(data: thumbData, path: thumbPath)) != nil ? thumbPath : nil
                 }
 
                 do {
@@ -363,13 +362,13 @@ struct MaintenanceIssueDetailView: View {
                         propertyId: issue.propertyId,
                         inspectionItemId: nil,
                         maintenanceIssueId: issue.id,
-                        filePath: path,
-                        thumbnailPath: thumbnailPath,
+                        filePath: upload.path,
+                        thumbnailPath: upload.thumbnailPath,
                         fileType: "image",
                         capturedAt: Date()
                     )
                 } catch {
-                    await maintenanceRepo.removeOrphanUploadedAttachment(path: path)
+                    await maintenanceRepo.abandonUpload(upload)
                     errorMessage = MoveMarkFlowMessage.maintenancePhotoRecordFailed(error)
                     retryAction = { uploadPhotos(items) }
                     return

@@ -7,7 +7,7 @@
 
 import Foundation
 import OSLog
-import Supabase
+import PostgREST
 
 /// Decoded shape of `public.get_property_snapshot(p_property_id)` — one round trip replacing the
 /// ~11 sequential/parallel `.select()` calls `hydrateProperty` used to make. Every array element reuses
@@ -68,7 +68,7 @@ extension PropertyStore {
 
     /// Fetches the full property snapshot (rooms, inspections, items, evidence, tags, documents, maintenance) in one round trip via `get_property_snapshot`.
     func fetchPropertySnapshot(propertyId: UUID) async throws -> PropertySnapshot {
-        try await supabase
+        try await dataAPI
             .rpc("get_property_snapshot", params: ["p_property_id": propertyId])
             .execute()
             .value

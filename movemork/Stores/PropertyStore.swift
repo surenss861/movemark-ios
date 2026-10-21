@@ -7,7 +7,6 @@
 
 import Foundation
 import Observation
-import Supabase
 
 @MainActor
 @Observable

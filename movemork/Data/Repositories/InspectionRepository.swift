@@ -3,13 +3,14 @@
 //  movemork
 //
 //  MoveMark — Inspection, evidence, and photo data access.
-//  Evidence uploads use `{userId}/{propertyId}/move-in|move-out/{roomId}/...` under `inspection-media`.
-//  Storage RLS matches `auth.uid()` to the first path segment **case-insensitively** (Swift UUID strings are often uppercase).
+//  Evidence files live in `inspection-media` under keys the MoveMark API builds
+//  (`{userId}/{propertyId}/move-in|move-out/{roomId}/{uuid}.jpg`, lowercase); the app records the returned
+//  path in `evidence_files` and never chooses or deletes keys itself. Older rows may hold uppercase ids.
 //
 
 import Foundation
 import os
-import Supabase
+import PostgREST
 import UIKit
 
 private let inspectionRepoPhotoLog = Logger(
@@ -128,7 +129,7 @@ struct InspectionRepository {
     }
 
     private func findInspection(propertyId: UUID, userId: UUID, normalizedType: String) async throws -> InspectionRow? {
-        let existing: [InspectionRow] = try await supabase
+        let existing: [InspectionRow] = try await dataAPI
             .from("inspections")
             .select()
             .eq("property_id", value: propertyId)
@@ -158,7 +159,7 @@ struct InspectionRepository {
 
         let newId = UUID()
         do {
-            let inserted: InspectionRow = try await supabase
+            let inserted: InspectionRow = try await dataAPI
                 .from("inspections")
                 .insert(
                     InspectionInsertRow(
@@ -202,7 +203,7 @@ struct InspectionRepository {
             conditionRating: conditionRating
         )
 
-        let result: InspectionItemRow = try await supabase
+        let result: InspectionItemRow = try await dataAPI
             .from("inspection_items")
             .insert(row)
             .select()
@@ -226,7 +227,7 @@ struct InspectionRepository {
             capturedAt: ISO8601DateFormatter().string(from: capturedAt)
         )
 
-        let inserted: EvidenceFileRow = try await supabase
+        let inserted: EvidenceFileRow = try await dataAPI
             .from("evidence_files")
             .insert(row)
             .select()
@@ -237,7 +238,7 @@ struct InspectionRepository {
     }
 
     func fetchEvidenceFiles(propertyId: UUID) async throws -> [EvidenceFileRow] {
-        try await supabase
+        try await dataAPI
             .from("evidence_files")
             .select()
             .eq("property_id", value: propertyId)
@@ -247,7 +248,7 @@ struct InspectionRepository {
 
     /// Single most-recent evidence file for a property (e.g. vault card hero preview) — avoids fetching every evidence row just to use `.first`.
     func fetchFirstEvidenceFile(propertyId: UUID) async throws -> EvidenceFileRow? {
-        let rows: [EvidenceFileRow] = try await supabase
+        let rows: [EvidenceFileRow] = try await dataAPI
             .from("evidence_files")
             .select()
             .eq("property_id", value: propertyId)
@@ -261,7 +262,7 @@ struct InspectionRepository {
     func insertItemTags(inspectionItemId: UUID, tagNames: [String]) async throws {
         guard !tagNames.isEmpty else { return }
 
-        let tags: [IssueTagRow] = try await supabase
+        let tags: [IssueTagRow] = try await dataAPI
             .from("issue_tags")
             .select()
             .in("name", values: tagNames)
@@ -273,7 +274,7 @@ struct InspectionRepository {
         }
 
         if !links.isEmpty {
-            try await supabase
+            try await dataAPI
                 .from("inspection_item_tags")
                 .insert(links)
                 .execute()
@@ -281,54 +282,34 @@ struct InspectionRepository {
     }
 
     func deleteItemTagsForInspectionItem(inspectionItemId: UUID) async throws {
-        try await supabase
+        try await dataAPI
             .from("inspection_item_tags")
             .delete()
             .eq("inspection_item_id", value: inspectionItemId)
             .execute()
     }
 
-    /// Bucket used for inspection/evidence photos (move-in and move-out).
-    private static let evidenceStorageBucket = "inspection-media"
-
-    /// Removes a file from evidence storage. No-op if path is empty.
-    private func removeEvidenceFileFromStorage(path: String) async throws {
-        guard !path.isEmpty else { return }
-        try await supabase.storage
-            .from(Self.evidenceStorageBucket)
-            .remove(paths: [path])
+    /// Releases an upload whose `evidence_files` insert failed. Safe even if the insert actually committed:
+    /// the API keeps any object a row references.
+    func abandonUpload(_ upload: MoveMarkUpload) async {
+        await MoveMarkStorageService.shared.abandon(upload)
     }
 
-    /// Best-effort removal when storage upload succeeded but `evidence_files` insert failed (avoids orphan objects).
-    func removeOrphanInspectionUpload(path: String) async {
-        guard !path.isEmpty else { return }
-        _ = try? await supabase.storage
-            .from(Self.evidenceStorageBucket)
-            .remove(paths: [path])
-    }
-
-    /// Deletes evidence file rows for an inspection item and removes each file from storage first.
+    /// Deletes evidence rows for an inspection item together with their files (server-side, by row id).
     func deleteEvidenceFilesForInspectionItem(inspectionItemId: UUID) async throws {
-        let rows: [EvidenceFileRow] = try await supabase
+        let rows: [EvidenceFileRow] = try await dataAPI
             .from("evidence_files")
             .select()
             .eq("inspection_item_id", value: inspectionItemId)
             .execute()
             .value
-        for row in rows {
-            try? await removeEvidenceFileFromStorage(path: row.filePath)
-        }
-        try await supabase
-            .from("evidence_files")
-            .delete()
-            .eq("inspection_item_id", value: inspectionItemId)
-            .execute()
+        try await MoveMarkStorageService.shared.deleteEvidence(ids: rows.map(\.id))
     }
 
     func deleteInspectionItem(id: UUID) async throws {
         try await deleteEvidenceFilesForInspectionItem(inspectionItemId: id)
         try await deleteItemTagsForInspectionItem(inspectionItemId: id)
-        try await supabase
+        try await dataAPI
             .from("inspection_items")
             .delete()
             .eq("id", value: id)
@@ -342,7 +323,7 @@ struct InspectionRepository {
             enum CodingKeys: String, CodingKey { case notes; case condition_rating }
         }
         let patch = Patch(notes: notes, condition_rating: conditionRating)
-        try await supabase
+        try await dataAPI
             .from("inspection_items")
             .update(patch)
             .eq("id", value: id)
@@ -350,7 +331,7 @@ struct InspectionRepository {
     }
 
     func fetchInspections(propertyId: UUID) async throws -> [InspectionRow] {
-        try await supabase
+        try await dataAPI
             .from("inspections")
             .select()
             .eq("property_id", value: propertyId)
@@ -360,7 +341,7 @@ struct InspectionRepository {
 
     func fetchAllInspectionItems(inspectionIds: [UUID]) async throws -> [InspectionItemRow] {
         guard !inspectionIds.isEmpty else { return [] }
-        return try await supabase
+        return try await dataAPI
             .from("inspection_items")
             .select()
             .in("inspection_id", values: inspectionIds)
@@ -370,7 +351,7 @@ struct InspectionRepository {
 
     func fetchEvidenceFilesByItems(itemIds: [UUID]) async throws -> [EvidenceFileRow] {
         guard !itemIds.isEmpty else { return [] }
-        return try await supabase
+        return try await dataAPI
             .from("evidence_files")
             .select()
             .in("inspection_item_id", values: itemIds)
@@ -381,7 +362,7 @@ struct InspectionRepository {
     /// Returns tag names per inspection item id for building evidence entries.
     func fetchItemTagNames(inspectionItemIds: [UUID]) async throws -> [UUID: [String]] {
         guard !inspectionItemIds.isEmpty else { return [:] }
-        let links: [InspectionItemTagRow] = try await supabase
+        let links: [InspectionItemTagRow] = try await dataAPI
             .from("inspection_item_tags")
             .select()
             .in("inspection_item_id", values: inspectionItemIds)
@@ -389,7 +370,7 @@ struct InspectionRepository {
             .value
         let tagIds = Set(links.map(\.issueTagId))
         guard !tagIds.isEmpty else { return [:] }
-        let tags: [IssueTagRow] = try await supabase
+        let tags: [IssueTagRow] = try await dataAPI
             .from("issue_tags")
             .select()
             .in("id", values: Array(tagIds))
@@ -406,7 +387,7 @@ struct InspectionRepository {
     }
 
     func fetchEvidenceFilesByMaintenanceIssue(issueId: UUID) async throws -> [EvidenceFileRow] {
-        try await supabase
+        try await dataAPI
             .from("evidence_files")
             .select()
             .eq("maintenance_issue_id", value: issueId)
@@ -414,20 +395,16 @@ struct InspectionRepository {
             .value
     }
 
-    func uploadPhoto(data: Data, path: String) async throws -> String {
-        try await supabase.storage
-            .from("inspection-media")
-            .upload(path, data: data, options: FileOptions(contentType: "image/jpeg"))
-
-        return path
+    /// Uploads one evidence photo (and its thumbnail, best-effort) under a key the API builds for this room.
+    func uploadEvidencePhoto(_ data: Data, thumbnail: Data?, propertyId: UUID, roomId: UUID, isMoveOut: Bool) async throws -> MoveMarkUpload {
+        try await MoveMarkStorageService.shared.uploadEvidencePhoto(
+            data, thumbnail: thumbnail, propertyId: propertyId, roomId: roomId, isMoveOut: isMoveOut
+        )
     }
 
+    /// Temporary download URL for a stored evidence path (original or thumbnail).
     func signedURL(bucket: String, path: String) async throws -> URL {
-        try await MoveMarkSignedURLCache.shared.url(bucket: bucket, path: path) {
-            try await supabase.storage
-                .from(bucket)
-                .createSignedURL(path: path, expiresIn: 86400)
-        }
+        try await MoveMarkStoredFileURLs.evidenceURL(bucket: bucket, path: path)
     }
 
     /// Appends photos to an existing inspection item (move-in or move-out). Uploads to storage and inserts evidence_files.
@@ -439,31 +416,22 @@ struct InspectionRepository {
             "appendPhotos start item=\(inspectionItemId.uuidString, privacy: .public) room=\(roomId.uuidString, privacy: .public) count=\(photos.count) folder=\(folder, privacy: .public)"
         )
         for (index, photoData) in photos.enumerated() {
-            let path = "\(userId)/\(propertyId)/\(folder)/\(roomId)/\(UUID()).jpg"
-            inspectionRepoPhotoLog.debug("append \(index + 1)/\(photos.count) bytes=\(photoData.count) path=\(path, privacy: .public)")
+            inspectionRepoPhotoLog.debug("append \(index + 1)/\(photos.count) bytes=\(photoData.count)")
+            let upload: MoveMarkUpload
             do {
-                _ = try await uploadPhoto(data: photoData, path: path)
-                inspectionRepoPhotoLog.debug("append upload OK path=\(path, privacy: .public)")
+                upload = try await uploadEvidencePhoto(
+                    photoData,
+                    thumbnail: MMImageThumbnail.make(from: photoData),
+                    propertyId: propertyId,
+                    roomId: roomId,
+                    isMoveOut: isMoveOut
+                )
+                inspectionRepoPhotoLog.debug("append upload OK path=\(upload.path, privacy: .public)")
             } catch {
                 inspectionRepoPhotoLog.error(
-                    "append uploadPhoto FAILED path=\(path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                    "append upload FAILED error=\(error.localizedDescription, privacy: .public)"
                 )
                 throw error
-            }
-
-            // Thumbnail upload is best-effort: the full-size photo above already saved, so a failure here
-            // just means this photo falls back to `filePath` in grids (same as pre-existing rows).
-            var thumbnailPath: String?
-            if let thumbData = MMImageThumbnail.make(from: photoData) {
-                let thumbPath = MMImageThumbnail.thumbnailPath(for: path)
-                do {
-                    _ = try await uploadPhoto(data: thumbData, path: thumbPath)
-                    thumbnailPath = thumbPath
-                } catch {
-                    inspectionRepoPhotoLog.error(
-                        "append thumbnail uploadPhoto FAILED path=\(thumbPath, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
-                    )
-                }
             }
 
             do {
@@ -471,17 +439,17 @@ struct InspectionRepository {
                     propertyId: propertyId,
                     inspectionItemId: inspectionItemId,
                     maintenanceIssueId: nil,
-                    filePath: path,
-                    thumbnailPath: thumbnailPath,
+                    filePath: upload.path,
+                    thumbnailPath: upload.thumbnailPath,
                     fileType: "image",
                     capturedAt: Date()
                 )
-                added.append(EvidencePhoto(id: fileId, filePath: path, thumbnailPath: thumbnailPath))
+                added.append(EvidencePhoto(id: fileId, filePath: upload.path, thumbnailPath: upload.thumbnailPath))
                 inspectionRepoPhotoLog.debug("append insertEvidenceFile OK fileId=\(fileId.uuidString, privacy: .public)")
             } catch {
-                await removeOrphanInspectionUpload(path: path)
+                await abandonUpload(upload)
                 inspectionRepoPhotoLog.error(
-                    "append insertEvidenceFile FAILED path=\(path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                    "append insertEvidenceFile FAILED path=\(upload.path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
                 )
                 throw error
             }

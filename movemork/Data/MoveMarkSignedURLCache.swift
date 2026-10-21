@@ -2,8 +2,9 @@
 //  MoveMarkSignedURLCache.swift
 //  movemork
 //
-//  In-memory signed URL cache (Supabase createSignedURL ~1h). Refreshes entries before expiry to avoid
-//  silent 403s; supports targeted invalidation after uploads or on image load failure.
+//  In-memory cache of presigned download URLs (signed by the MoveMark API for 1h). Entries expire well
+//  before the signature so a URL is never handed out close to dying; supports targeted invalidation
+//  after uploads or on image load failure. URLs are transport only — never persist them.
 //
 
 import Foundation
@@ -38,13 +39,20 @@ actor MoveMarkSignedURLCache {
         return u
     }
 
+    /// Records a URL minted alongside another one (an original and its thumbnail are signed together).
+    func store(bucket: String, path: String, url: URL) {
+        entries[storageKey(bucket: bucket, path: path)] = Entry(url: url, expiresAt: Date().addingTimeInterval(ttlSeconds))
+    }
+
     func invalidate(bucket: String, path: String) {
         entries.removeValue(forKey: storageKey(bucket: bucket, path: path))
     }
 
     /// Invalidates any cached row whose storage path contains `fragment` (e.g. property UUID after uploads).
+    /// Case-insensitive: callers pass `uuidString` (uppercase) while new keys are lowercase.
     func invalidateKeys(containing fragment: String) {
-        for key in entries.keys where key.contains(fragment) {
+        let needle = fragment.lowercased()
+        for key in entries.keys where key.lowercased().contains(needle) {
             entries.removeValue(forKey: key)
         }
     }

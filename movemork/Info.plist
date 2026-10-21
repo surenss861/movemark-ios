@@ -45,9 +45,16 @@
 	<string>$(REVENUECAT_TEST_STORE_PUBLIC_KEY)</string>
 	<key>MoveMarkAPIBaseURL</key>
 	<string>$(MoveMarkAPIBaseURL)</string>
-	<key>SupabaseURL</key>
-	<string>$(SUPABASE_URL)</string>
-	<key>SupabaseAnonKey</key>
-	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>MoveMarkAPIBaseURLOverride</key>
+	<string>$(MOVEMARK_API_BASE_URL_OVERRIDE)</string>
+	<key>NeonAuthURL</key>
+	<string>$(NEON_AUTH_URL)</string>
+	<key>NeonDataAPIURL</key>
+	<string>$(NEON_DATA_API_URL)</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>

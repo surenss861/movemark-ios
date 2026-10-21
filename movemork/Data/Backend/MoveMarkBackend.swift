@@ -1,59 +1,57 @@
 //
-//  SupabaseConfig.swift
+//  MoveMarkBackend.swift
 //  movemork
 //
-//  MoveMark — Supabase singleton client.
+//  MoveMark — backend endpoints and the Data API client (Neon).
 //
-//  Configure via `Config/Secrets.xcconfig` (gitignored; copy from Secrets.xcconfig.example),
-//  which sets `SUPABASE_URL` and `SUPABASE_ANON_KEY` for Info.plist substitution.
-//  In .xcconfig, `https://…` is truncated at `//` (comment) unless split — see example file.
-//  Do not commit production secrets in Swift source or project.pbxproj.
-//
-//  OAuth: add `movemark://auth-callback` in Supabase Dashboard → Auth → Redirect URLs.
+//  Configure via `Config/Secrets.xcconfig` (gitignored; copy from Secrets.xcconfig.example), which sets
+//  `NEON_AUTH_URL`, `NEON_DATA_API_URL` and (for non-production builds) `MOVEMARK_API_BASE_URL_OVERRIDE`
+//  for Info.plist substitution. In .xcconfig, `https://…` is truncated at `//` (comment) unless split —
+//  see the example file. The app never holds database or storage credentials: rows go through the Neon
+//  Data API under row-level security with the user's own token, files through the MoveMark API.
 //
 
 import Foundation
-import Supabase
+import PostgREST
 
-let supabaseOAuthRedirectURL = URL(string: "movemark://auth-callback")!
+enum MoveMarkBackendConfig {
+    private static func plistURL(_ key: String) -> URL? {
+        let raw = (Bundle.main.object(forInfoDictionaryKey: key) as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !raw.isEmpty, let url = URL(string: raw),
+              let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http",
+              let host = url.host, !host.isEmpty
+        else { return nil }
+        return url
+    }
 
-private struct SupabaseAppConfig {
-    let url: URL
-    let anonKey: String
-    let isValid: Bool
+    /// Neon Auth base, e.g. `https://ep-….neonauth.<region>.aws.neon.tech/neondb/auth`.
+    static let neonAuthURL: URL? = plistURL("NeonAuthURL")
+
+    /// Neon Data API (PostgREST-compatible), e.g. `https://ep-….apirest.<region>.aws.neon.tech/neondb/rest/v1`.
+    static let dataAPIURL: URL? = plistURL("NeonDataAPIURL")
+
+    /// MoveMark API base. A non-empty override (dev builds pointing at a dev API) wins over the target setting.
+    static let apiBaseURLString: String? = {
+        for key in ["MoveMarkAPIBaseURLOverride", "MoveMarkAPIBaseURL"] {
+            if let url = plistURL(key) { return url.absoluteString }
+        }
+        return nil
+    }()
+
+    static var apiBaseURL: URL? { apiBaseURLString.flatMap(URL.init(string:)) }
+
+    /// `false` when any endpoint is missing, empty, or not a usable HTTP(S) URL with a host
+    /// (catches a truncated `https:` from .xcconfig). UI gates on this instead of crashing at launch.
+    static var isConfigured: Bool { neonAuthURL != nil && dataAPIURL != nil && apiBaseURL != nil }
 }
 
-/// Placeholder client when plist keys are missing or unusable (e.g. empty or truncated xcconfig `https:`). Avoids launch-time `fatalError`; UI should gate on `isSupabaseConfigured`.
-private let supabasePlaceholderURL = URL(string: "https://invalid.movemark.app")!
-private let supabasePlaceholderAnonKey = "invalid"
+/// Placeholder when unconfigured; every request is gated on `MoveMarkBackendConfig.isConfigured` first.
+private let dataAPIPlaceholderURL = URL(string: "https://invalid.movemark.app")!
 
-private let supabaseAppConfig: SupabaseAppConfig = {
-    let urlString = (Bundle.main.object(forInfoDictionaryKey: "SupabaseURL") as? String)?
-        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    let key = (Bundle.main.object(forInfoDictionaryKey: "SupabaseAnonKey") as? String)?
-        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-    guard !key.isEmpty, let url = URL(string: urlString) else {
-        return SupabaseAppConfig(url: supabasePlaceholderURL, anonKey: supabasePlaceholderAnonKey, isValid: false)
-    }
-    let scheme = url.scheme?.lowercased()
-    guard scheme == "https" || scheme == "http", let host = url.host, !host.isEmpty else {
-        return SupabaseAppConfig(url: supabasePlaceholderURL, anonKey: supabasePlaceholderAnonKey, isValid: false)
-    }
-
-    return SupabaseAppConfig(url: url, anonKey: key, isValid: true)
-}()
-
-/// `false` when `SupabaseURL` / `SupabaseAnonKey` are missing, empty, or not a usable HTTP(S) URL with a host (catches truncated `https:` from .xcconfig).
-var isSupabaseConfigured: Bool { supabaseAppConfig.isValid }
-
-let supabase = SupabaseClient(
-    supabaseURL: supabaseAppConfig.url,
-    supabaseKey: supabaseAppConfig.anonKey,
-    options: SupabaseClientOptions(
-        auth: .init(
-            redirectToURL: supabaseOAuthRedirectURL,
-            emitLocalSessionAsInitialSession: true
-        )
-    )
+/// Row access for every repository. Requests carry the signed-in user's Neon Auth token (refreshed and
+/// retried centrally by ``MoveMarkAuthenticatedTransport``); RLS decides which rows they can touch.
+let dataAPI = PostgrestClient(
+    url: MoveMarkBackendConfig.dataAPIURL ?? dataAPIPlaceholderURL,
+    fetch: { request in try await MoveMarkAuthenticatedTransport.shared.data(for: request) }
 )

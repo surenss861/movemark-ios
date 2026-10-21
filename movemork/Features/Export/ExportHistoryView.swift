@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import Supabase
 
 struct ExportHistoryView: View {
     @Environment(PropertyStore.self) private var propertyStore
@@ -47,19 +46,9 @@ struct ExportHistoryView: View {
     @State private var reportsContentAppeared = false
     @State private var showAllExports = false
 
-    // MARK: - Realtime export status (falls back to polling below when unavailable)
-    @State private var exportsChannel: RealtimeChannelV2?
-    @State private var exportsRealtimeTask: Task<Void, Never>?
+    // MARK: - Export status (polled while a report is queued or processing)
 
-    private var apiBaseURL: String? {
-        guard
-            let value = Bundle.main.object(forInfoDictionaryKey: "MoveMarkAPIBaseURL") as? String,
-            !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else {
-            return nil
-        }
-        return value
-    }
+    private var apiBaseURL: String? { MoveMarkBackendConfig.apiBaseURLString }
 
     /// Prefer hydrated `currentProperty`; fall back to persisted `activePropertyId` so Exports matches Vault when hydration lags or the vault tab is not mounted.
     private var resolvedExportPropertyId: UUID? {
@@ -222,7 +211,6 @@ struct ExportHistoryView: View {
         }
         .task(id: resolvedExportPropertyId) {
             await loadExports()
-            await subscribeExportsRealtime()
             await pollActiveExportsWhileNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: .moveMarkExportsShouldRefresh)) { _ in
@@ -231,59 +219,13 @@ struct ExportHistoryView: View {
                 await pollActiveExportsWhileNeeded()
             }
         }
-        .onDisappear {
-            teardownExportsRealtime()
-        }
     }
 
-    /// Subscribes to `postgres_changes` on `public.exports` for the active property so completed/failed
-    /// exports update immediately instead of waiting on the poll loop below. RLS (`exports_select_own`)
-    /// still scopes what this can see — the added `supabase_realtime` publication membership only changes
-    /// how the client is notified, not who can read which rows.
-    private func subscribeExportsRealtime() async {
-        teardownExportsRealtime()
-        guard let propertyId = resolvedExportPropertyId else { return }
-
-        let channel = supabase.channel("exports-property-\(propertyId.uuidString)")
-        let changes = channel.postgresChange(
-            AnyAction.self,
-            schema: "public",
-            table: "exports",
-            filter: .eq("property_id", value: propertyId)
-        )
-
-        do {
-            try await channel.subscribeWithError()
-        } catch {
-            // Realtime unavailable (e.g. offline, socket blocked) — `pollActiveExportsWhileNeeded` below
-            // is the fallback and will run at its normal cadence since `exportsChannel` stays nil.
-            return
-        }
-
-        exportsChannel = channel
-        exportsRealtimeTask = Task {
-            for await _ in changes {
-                if Task.isCancelled { return }
-                await loadExportsQuietly()
-            }
-        }
-    }
-
-    private func teardownExportsRealtime() {
-        exportsRealtimeTask?.cancel()
-        exportsRealtimeTask = nil
-        if let exportsChannel {
-            Task { await supabase.removeChannel(exportsChannel) }
-            self.exportsChannel = nil
-        }
-    }
-
-    /// Fallback when Realtime is unavailable (or as a safety net against a silently-dropped connection):
-    /// poll while any export is queued/processing. Once Realtime is connected, the interval is stretched
-    /// out significantly since Realtime — not this loop — is doing the real-time work.
+    /// Polls while any export is queued/processing, so a finished or failed report shows up without a
+    /// manual refresh. (There is no push channel on the Neon backend; the worker usually finishes within
+    /// seconds.)
     private func pollActiveExportsWhileNeeded() async {
-        let quickIntervalNanos: UInt64 = 2_500_000_000
-        let realtimeBackstopIntervalNanos: UInt64 = 15_000_000_000
+        let intervalNanos: UInt64 = 2_500_000_000
 
         for _ in 0..<40 {
             let hasActive = verificationStatus.values.contains { status in
@@ -295,8 +237,7 @@ struct ExportHistoryView: View {
                 }
             }
             guard hasActive else { return }
-            let interval = exportsChannel != nil ? realtimeBackstopIntervalNanos : quickIntervalNanos
-            try? await Task.sleep(nanoseconds: interval)
+            try? await Task.sleep(nanoseconds: intervalNanos)
             await loadExportsQuietly()
         }
     }
@@ -305,8 +246,7 @@ struct ExportHistoryView: View {
         guard let apiClient = try? makeAPIClient() else { return }
         guard let currentPropertyId = resolvedExportPropertyId else { return }
         do {
-            let token = try await currentAccessToken()
-            let items = try await apiClient.fetchExports(accessToken: token, propertyId: currentPropertyId)
+            let items = try await apiClient.fetchExports(propertyId: currentPropertyId)
             var nextVerification: [UUID: ExportVerificationStatus] = [:]
             for item in items {
                 switch item.status {
@@ -1128,12 +1068,8 @@ struct ExportHistoryView: View {
         Task { @MainActor in
             defer { isMoveOutExporting = false }
             do {
-                let session = try await supabase.auth.session
                 let apiClient = try ExportAPIClient(baseURLString: baseURL)
-                _ = try await apiClient.requestMoveOutExport(
-                    propertyId: property.id,
-                    accessToken: session.accessToken
-                )
+                _ = try await apiClient.requestMoveOutExport(propertyId: property.id)
                 MMProofToastPresenter.show(.reportQueued(), message: $proofToast, isVisible: $proofToastVisible)
                 NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
                 await loadExports()
@@ -1167,12 +1103,8 @@ struct ExportHistoryView: View {
         Task { @MainActor in
             defer { isDisputeExporting = false }
             do {
-                let session = try await supabase.auth.session
                 let apiClient = try ExportAPIClient(baseURLString: baseURL)
-                _ = try await apiClient.requestDisputePacketExport(
-                    propertyId: property.id,
-                    accessToken: session.accessToken
-                )
+                _ = try await apiClient.requestDisputePacketExport(propertyId: property.id)
                 MMProofToastPresenter.show(.reportQueued(), message: $proofToast, isVisible: $proofToastVisible)
                 NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
                 await loadExports()
@@ -1483,9 +1415,8 @@ struct ExportHistoryView: View {
         verificationStatus[row.id] = .verifying
         Task { @MainActor in
             do {
-                let accessToken = try await currentAccessToken()
                 let client = try makeAPIClient()
-                _ = try await client.fetchDownloadURL(exportId: row.id.uuidString, accessToken: accessToken)
+                _ = try await client.fetchDownloadURL(exportId: row.id.uuidString)
                 verificationStatus[row.id] = .ready
                 MMHaptics.success()
             } catch let api as APIClientError {
@@ -1585,8 +1516,7 @@ struct ExportHistoryView: View {
         }
 
         do {
-            let token = try await currentAccessToken()
-            let items = try await apiClient.fetchExports(accessToken: token, propertyId: currentPropertyId)
+            let items = try await apiClient.fetchExports(propertyId: currentPropertyId)
 
             var nextVerification: [UUID: ExportVerificationStatus] = [:]
             for item in items {
@@ -1643,9 +1573,8 @@ struct ExportHistoryView: View {
     }
 
     private func prepareLocalReportFile(for row: ExportRow) async throws -> URL {
-        let accessToken = try await currentAccessToken()
         let client = try makeAPIClient()
-        let response = try await client.fetchDownloadURL(exportId: row.id.uuidString, accessToken: accessToken)
+        let response = try await client.fetchDownloadURL(exportId: row.id.uuidString)
         guard let signedURL = URL(string: response.downloadUrl) else {
             throw APIClientError.invalidResponse
         }
@@ -1806,12 +1735,8 @@ struct ExportHistoryView: View {
             defer { isExporting = false }
 
             do {
-                let session = try await supabase.auth.session
                 let apiClient = try ExportAPIClient(baseURLString: baseURL)
-                _ = try await apiClient.requestMoveInExport(
-                    propertyId: property.id,
-                    accessToken: session.accessToken
-                )
+                _ = try await apiClient.requestMoveInExport(propertyId: property.id)
 
                 if !subscriptionManager.hasPro, let uid = sessionManager.userId {
                     subscriptionManager.incrementFreeMoveInExportCount(forUser: uid)
@@ -1843,10 +1768,6 @@ struct ExportHistoryView: View {
         return try ExportAPIClient(baseURLString: apiBaseURL)
     }
 
-    private func currentAccessToken() async throws -> String {
-        let session = try await supabase.auth.session
-        return session.accessToken
-    }
 }
 
 extension Notification.Name {

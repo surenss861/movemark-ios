@@ -5,7 +5,6 @@
 //  In-app account deletion for App Store Guideline 5.1.1(v).
 //
 
-import Supabase
 import SwiftUI
 
 struct DeleteAccountView: View {
@@ -21,9 +20,7 @@ struct DeleteAccountView: View {
     private static let appleSubscriptionsURL = URL(string: "https://apps.apple.com/account/subscriptions")!
 
     private var apiBaseURL: String? {
-        let value = Bundle.main.object(forInfoDictionaryKey: "MoveMarkAPIBaseURL") as? String
-        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return trimmed.isEmpty ? nil : trimmed
+        MoveMarkBackendConfig.apiBaseURLString
     }
 
     var body: some View {
@@ -142,9 +139,10 @@ struct DeleteAccountView: View {
             guard let apiBaseURL else {
                 throw APIClientError.invalidBaseURL
             }
-            let session = try await supabase.auth.session
             let client = try ExportAPIClient(baseURLString: apiBaseURL)
-            try await client.deleteAccount(accessToken: session.accessToken)
+            try await client.deleteAccount()
+            // The account (and its Neon Auth identity) is gone; drop the session without a server round trip.
+            await NeonAuthClient.shared.endSessionLocally(notify: false)
 
             propertyStore.clear()
             await sessionManager.signOut()

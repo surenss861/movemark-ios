@@ -3,11 +3,12 @@
 //  movemork
 //
 //  MoveMark — Property document data access.
-//  Storage paths must stay under `{userId}/{propertyId}/...` so `storage.objects` RLS (auth.uid() prefix) matches uploads.
+//  Files go through the MoveMark API, which picks the bucket from the document type and builds the key
+//  (`{userId}/{propertyId}/{documentType}/{uuid}.{pdf|jpg|png}`); the app records the returned path.
 //
 
 import Foundation
-import Supabase
+import PostgREST
 
 /// Supporting document types; raw values match `property_documents.document_type` CHECK / DB enums (snake_case).
 enum VaultDocumentType: String, CaseIterable {
@@ -66,8 +67,9 @@ struct DocumentRepository {
     // MARK: - Pipeline notes
     //
     // Supporting docs are three steps: (1) storage upload, (2) `property_documents` insert, (3) property snapshot / row refresh.
-    // Callers should map failures per step (upload vs record vs refresh). Preview uses signed URLs only — not an upload failure.
-    // Replace: delete existing rows + storage for that slot, then upload + insert again.
+    // Callers should map failures per step (upload vs record vs refresh); a failed insert abandons the upload.
+    // Preview uses temporary download URLs only — not an upload failure.
+    // Replace: upload + insert the new copy, then retire the old rows (and their files) server-side.
 
     /// Canonical `document_type` for DB + storage path segments (legacy app builds used kebab-case for two types).
     static func normalizedDocumentType(_ raw: String) -> String {
@@ -104,13 +106,6 @@ struct DocumentRepository {
         }
     }
 
-    /// Support older/newer storage layouts by falling back to `documents` when type-specific bucket is absent.
-    private static func bucketCandidates(for documentType: String) -> [String] {
-        let primary = bucket(for: documentType)
-        if primary == "documents" { return ["documents"] }
-        return [primary, "documents"]
-    }
-
     private static func storageContentType(forPath path: String) -> String {
         let lower = path.lowercased()
         if lower.hasSuffix(".pdf") { return "application/pdf" }
@@ -120,17 +115,9 @@ struct DocumentRepository {
         return "application/octet-stream"
     }
 
-    /// Removes a file from storage. No-op if path is empty. Call before deleting DB row.
-    private func removeFromStorage(bucket: String, path: String) async throws {
-        guard !path.isEmpty else { return }
-        try await supabase.storage
-            .from(bucket)
-            .remove(paths: [path])
-    }
-
     /// Capped so a long-tenured account can't grow this into an unbounded fetch; ordered so the cap keeps the most recent documents.
     func fetchDocuments(propertyId: UUID) async throws -> [PropertyDocumentRow] {
-        try await supabase
+        try await dataAPI
             .from("property_documents")
             .select()
             .eq("property_id", value: propertyId)
@@ -142,7 +129,7 @@ struct DocumentRepository {
 
     /// Fetch documents for a property and optional document type filter (includes legacy type spellings).
     func fetchDocuments(propertyId: UUID, documentType: String) async throws -> [PropertyDocumentRow] {
-        var query = supabase
+        var query = dataAPI
             .from("property_documents")
             .select()
             .eq("property_id", value: propertyId)
@@ -161,123 +148,67 @@ struct DocumentRepository {
             .value
     }
 
-    func uploadDocument(data: Data, bucket: String, path: String) async throws -> String {
-        let contentType = Self.storageContentType(forPath: path)
-        let candidates = bucket == "documents" ? [bucket] : [bucket, "documents"]
-        var lastError: Error?
-        for candidate in candidates {
-            do {
-                try await supabase.storage
-                    .from(candidate)
-                    .upload(path, data: data, options: FileOptions(contentType: contentType))
-                let segments = path.split(separator: "/")
-                if segments.count >= 2 {
-                    await MoveMarkSignedURLCache.shared.invalidateKeys(containing: String(segments[1]))
-                }
-                return path
-            } catch let error as CancellationError {
-                throw error
-            } catch {
-                lastError = error
-            }
-        }
-        throw lastError ?? NSError(domain: "MoveMark.DocumentRepository", code: 1)
+    /// Uploads a document (type from `fileName`'s extension; the API accepts PDF, JPEG and PNG) and an
+    /// optional thumbnail under a key the API builds for this property and document type.
+    func uploadDocument(_ data: Data, fileName: String, thumbnail: Data?, propertyId: UUID, documentType: String) async throws -> MoveMarkUpload {
+        let upload = try await MoveMarkStorageService.shared.uploadDocument(
+            data,
+            contentType: Self.storageContentType(forPath: fileName),
+            thumbnail: thumbnail,
+            propertyId: propertyId,
+            documentType: Self.normalizedDocumentType(documentType)
+        )
+        await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
+        return upload
     }
 
     func insertDocumentRecord(_ row: PropertyDocumentRow) async throws {
-        try await supabase
+        try await dataAPI
             .from("property_documents")
             .insert(row)
             .execute()
     }
 
-    /// After a successful storage upload, if the DB insert fails, remove the bytes from every bucket that might hold them (upload may have landed in a fallback bucket).
-    func removeStaleUpload(documentType: String, path: String) async {
-        guard !path.isEmpty else { return }
-        for bucketName in Self.bucketCandidates(for: documentType) {
-            try? await removeFromStorage(bucket: bucketName, path: path)
-        }
+    /// Releases an upload whose `property_documents` insert failed. Safe even if the insert actually
+    /// committed: the API keeps any object a row references.
+    func abandonUpload(_ upload: MoveMarkUpload) async {
+        await MoveMarkStorageService.shared.abandon(upload)
     }
 
-    /// Deletes one document: removes file from storage then DB row.
+    /// Deletes one document: the API removes its file(s) and its row together.
     func deleteDocument(id: UUID) async throws {
-        let rows: [PropertyDocumentRow] = try await supabase
+        let rows: [PropertyDocumentRow] = try await dataAPI
             .from("property_documents")
             .select()
             .eq("id", value: id)
             .execute()
             .value
-        for row in rows {
-            for bucketName in Self.bucketCandidates(for: row.documentType) {
-                try? await removeFromStorage(bucket: bucketName, path: row.filePath)
-            }
-        }
+        try await MoveMarkStorageService.shared.deleteDocuments(ids: [id])
         if let pid = rows.first?.propertyId {
             await MoveMarkSignedURLCache.shared.invalidateKeys(containing: pid.uuidString)
         }
-        try await supabase
-            .from("property_documents")
-            .delete()
-            .eq("id", value: id)
-            .execute()
     }
 
-    /// Retires a replaced document after its successor is saved: row first, then the file, so a
-    /// failure can leave an unreferenced file but never a row pointing at a missing one.
+    /// Retires a replaced document after its successor is saved. Best-effort: a failure leaves the old
+    /// copy in place (and visible), never a row pointing at a missing file.
     func retireDocument(_ row: PropertyDocumentRow) async {
         do {
-            try await supabase
-                .from("property_documents")
-                .delete()
-                .eq("id", value: row.id)
-                .execute()
+            try await MoveMarkStorageService.shared.deleteDocuments(ids: [row.id])
         } catch {
             return
-        }
-        for bucketName in Self.bucketCandidates(for: row.documentType) {
-            try? await removeFromStorage(bucket: bucketName, path: row.filePath)
         }
         await MoveMarkSignedURLCache.shared.invalidateKeys(containing: row.propertyId.uuidString)
     }
 
-    /// Deletes all document rows for the given property and type (canonical or legacy spelling).
+    /// Deletes all document rows for the given property and type (canonical or legacy spelling), with their files.
     func deleteDocuments(propertyId: UUID, documentType: String) async throws {
-        let keys = Self.documentTypeQueryKeys(documentType)
         let rows = try await fetchDocuments(propertyId: propertyId, documentType: documentType)
-        var seen = Set<UUID>()
-        for row in rows where seen.insert(row.id).inserted {
-            for bucketName in Self.bucketCandidates(for: row.documentType) {
-                try? await removeFromStorage(bucket: bucketName, path: row.filePath)
-            }
-        }
+        try await MoveMarkStorageService.shared.deleteDocuments(ids: rows.map(\.id))
         await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
-        var del = supabase
-            .from("property_documents")
-            .delete()
-            .eq("property_id", value: propertyId)
-        if keys.count == 1 {
-            del = del.eq("document_type", value: keys[0])
-        } else {
-            del = del.in("document_type", values: keys)
-        }
-        try await del.execute()
     }
 
+    /// Temporary download URL for a stored document path (original or thumbnail).
     func signedURL(bucket: String, path: String) async throws -> URL {
-        let candidates = bucket == "documents" ? [bucket] : [bucket, "documents"]
-        var lastError: Error?
-        for candidate in candidates {
-            do {
-                return try await MoveMarkSignedURLCache.shared.url(bucket: candidate, path: path) {
-                    try await supabase.storage
-                        .from(candidate)
-                        .createSignedURL(path: path, expiresIn: 3600)
-                }
-            } catch {
-                lastError = error
-                await MoveMarkSignedURLCache.shared.invalidate(bucket: candidate, path: path)
-            }
-        }
-        throw lastError ?? NSError(domain: "MoveMark.DocumentRepository", code: 2)
+        try await MoveMarkStoredFileURLs.documentURL(bucket: bucket, path: path)
     }
 }
