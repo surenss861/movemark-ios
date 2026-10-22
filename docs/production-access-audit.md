@@ -59,3 +59,23 @@ password on production until the cutover.
    logging) so a future change is attributable to a user, application and address.
 6. **Neon plan features** worth enabling when available: a protected production branch and an IP allow list
    (restricting the owner to known hosts).
+
+## Second incident — 0990 + 1000, 2026-10-22 (after the PITR repair)
+
+Found by the runner's drift check before applying (nothing was applied; production was not changed).
+
+- Production holds every 0990/1000 object: the 3 new indexes (and the 2 old ones dropped), the 5 functions
+  with bodies byte-identical to dev, and their EXECUTE grants to `authenticated`. The ledger still ends at
+  0980, so `check` exits 1.
+- Catalog xids 11319–11338 are later than the runner's 0980 ledger row (11274, 09:22:40Z).
+  `pg_stat_statements` (reset 09:24:12Z) shows each statement run **once, as `neondb_owner`**, with no
+  ledger insert. It also shows only 1000's text for `get_vault_summaries`: 0990's own definition never
+  ran. So it happened **after 10:10Z**, when 1000 was written. Someone assembled the end state rather
+  than running the files in order. The repository's commits reached GitHub at 10:49:17Z; the drift was
+  seen at ~11:05Z.
+- Not from this Mac's recorded surfaces: no Claude Code session ran production SQL in the window, and
+  OpenClaw logged only iMessage restarts. No Neon operations exist after 09:24Z, as expected with
+  scale-to-zero off.
+- Same signature as the first incident: the repository's migration SQL, applied minutes after it appears,
+  as the owner, bypassing the runner. The actor evidently reads this project's progress (local files,
+  pushed commits or session reports) and holds owner access to production.
