@@ -515,25 +515,91 @@ def test_backend_still_runs_the_export_lifecycle(owner: Any, graph: dict[str, An
 
 # --- 0960 role hardening ------------------------------------------------------------
 
-@pytest.mark.parametrize("role", ["movemark_api", "movemark_worker"])
-def test_runtime_roles_have_dml_but_no_ddl_or_ownership(owner: Any, role: str) -> None:
-    attrs = one(owner, "SELECT rolcanlogin, rolbypassrls, rolsuper, rolcreaterole, rolcreatedb FROM pg_roles WHERE rolname = %s", (role,))
-    assert attrs == (True, True, False, False, False)
-    assert one(owner, "SELECT pg_has_role(%s, 'movemark_backend', 'USAGE')", (role,))[0]
+RUNTIME_TABLES = {  # 0970: exactly these, per process
+    "movemark_api": {
+        "SELECT": {"properties", "rooms", "inspections", "inspection_items", "inspection_item_tags", "issue_tags",
+                   "maintenance_issues", "disputes", "user_report_credits", "evidence_files", "property_documents",
+                   "dispute_evidence_links", "exports", "user_entitlements", "storage_upload_tickets"},
+        "INSERT": {"exports", "user_entitlements", "storage_upload_tickets"},
+        "UPDATE": {"user_entitlements", "storage_upload_tickets"},
+        "DELETE": {"evidence_files", "property_documents", "dispute_evidence_links", "storage_upload_tickets"},
+    },
+    "movemark_worker": {
+        "SELECT": {"properties", "rooms", "inspections", "inspection_items", "inspection_item_tags", "issue_tags",
+                   "evidence_files", "property_documents", "maintenance_issues", "exports", "storage_upload_tickets"},
+        "INSERT": set(),
+        "UPDATE": {"exports", "storage_upload_tickets"},
+        "DELETE": set(),
+    },
+}
+
+
+@pytest.mark.parametrize("role", sorted(RUNTIME_TABLES))
+def test_runtime_roles_hold_exactly_their_process_grants(owner: Any, role: str) -> None:
+    attrs = one(owner, "SELECT rolcanlogin, rolbypassrls, rolsuper, rolcreaterole, rolcreatedb, rolreplication FROM pg_roles WHERE rolname = %s", (role,))
+    assert attrs == (True, False, False, False, False, False)
+    tables = [r[0] for r in rows(owner, "SELECT relname FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r'")]
+    for privilege, allowed in RUNTIME_TABLES[role].items():
+        held = {t for t in tables if one(owner, "SELECT has_table_privilege(%s, %s, %s)", (role, f"public.{t}", privilege))[0]}
+        assert held == allowed, (role, privilege, held ^ allowed)
+    for privilege in ("TRUNCATE", "REFERENCES", "TRIGGER"):
+        assert not any(one(owner, "SELECT has_table_privilege(%s, %s, %s)", (role, f"public.{t}", privilege))[0] for t in tables)
+    # Row access on its tables comes from explicit, named policies (no BYPASSRLS).
+    policy_tables = {r[0] for r in rows(owner, "SELECT polrelid::regclass::text FROM pg_policy WHERE %s::regrole = ANY(polroles)", (role,))}
+    assert policy_tables == {f"public.{t}" if "." not in t else t for t in RUNTIME_TABLES[role]["SELECT"]} or \
+        policy_tables == RUNTIME_TABLES[role]["SELECT"]
     assert one(owner, "SELECT count(*) FROM pg_class WHERE relowner = %s::regrole", (role,))[0] == 0
-    assert not one(owner, "SELECT has_schema_privilege(%s, 'public', 'CREATE')", (role,))[0]
-    for table in ("properties", "evidence_files", "exports", "storage_upload_tickets", "user_report_credits"):
-        assert one(owner, "SELECT has_table_privilege(%s, %s, 'SELECT,INSERT,UPDATE,DELETE')", (role, f"public.{table}"))[0], table
-    owner.execute(f"SET ROLE {role}")
-    try:
+    assert one(owner, "SELECT count(*) FROM pg_proc WHERE proowner = %s::regrole", (role,))[0] == 0
+
+
+def _login_as(dsn: str, role: str) -> str:
+    return f"{dsn}{'&' if '?' in dsn else '?'}user={role}"
+
+
+COMPROMISED_RUNTIME_ATTEMPTS = {
+    "create table": "CREATE TABLE public.pwn (id int)",
+    "create function": "CREATE FUNCTION public.pwn() RETURNS int LANGUAGE sql AS 'select 1'",
+    "create schema": "CREATE SCHEMA pwn",
+    "alter table": "ALTER TABLE public.properties ADD COLUMN pwn int",
+    "drop table": "DROP TABLE public.issue_tags",
+    "disable rls": "ALTER TABLE public.properties DISABLE ROW LEVEL SECURITY",
+    "create policy": "CREATE POLICY pwn ON public.properties FOR ALL TO anonymous USING (true)",
+    "become owner": "SET ROLE {owner}",
+    "truncate": "TRUNCATE public.exports",
+    "replace privileged function": "CREATE OR REPLACE FUNCTION public.delete_auth_user(target_user_id uuid) RETURNS void LANGUAGE sql AS 'select'",
+    "read auth identities": 'SELECT * FROM neon_auth."user"',
+    "write billing": "UPDATE public.user_report_credits SET balance = 99",
+    "insert credit event": "INSERT INTO public.report_credit_events (event_key, user_id, delta) VALUES ('x', gen_random_uuid(), 1)",
+    "edit evidence": "UPDATE public.evidence_files SET file_path = 'x'",
+}
+
+
+@pytest.mark.parametrize("role", sorted(RUNTIME_TABLES))
+@pytest.mark.parametrize("name", sorted(COMPROMISED_RUNTIME_ATTEMPTS))
+def test_compromised_runtime_credentials_cannot_change_schema_grants_or_billing(dsn: str, owner: Any, role: str, name: str) -> None:
+    table_owner = one(owner, "SELECT tableowner FROM pg_tables WHERE schemaname = 'public' AND tablename = 'properties'")[0]
+    with psycopg.connect(_login_as(dsn, role)) as conn:  # what a stolen password gives: a session *as* the role
+        with pytest.raises((errors.InsufficientPrivilege, errors.UndefinedObject)):
+            conn.execute(COMPROMISED_RUNTIME_ATTEMPTS[name].format(owner=table_owner))
+        conn.rollback()
+
+
+@pytest.mark.parametrize("role", sorted(RUNTIME_TABLES))
+def test_compromised_runtime_credentials_cannot_grant_anything(dsn: str, owner: Any, role: str) -> None:
+    # A GRANT the role has no right to make only warns and changes nothing; prove that nothing changed.
+    with psycopg.connect(_login_as(dsn, role), autocommit=True) as conn:
+        for sql in ("GRANT SELECT ON public.properties TO anonymous", "GRANT SELECT ON public.exports TO PUBLIC",
+                    "GRANT EXECUTE ON FUNCTION public.delete_auth_user(uuid) TO authenticated"):
+            try:
+                conn.execute(sql)
+            except errors.InsufficientPrivilege:
+                pass
         with pytest.raises(errors.InsufficientPrivilege):
-            owner.execute("CREATE TABLE public.ddl_probe (id int)")
-        with pytest.raises(errors.InsufficientPrivilege):
-            owner.execute("ALTER TABLE public.properties ADD COLUMN ddl_probe int")
-        assert not one(owner, "SELECT has_schema_privilege('movemark_meta', 'USAGE')")[0] if one(
-            owner, "SELECT to_regnamespace('movemark_meta') IS NOT NULL")[0] else True
-    finally:
-        owner.execute("RESET ROLE")
+            conn.execute("GRANT movemark_backend TO anonymous")
+    assert not one(owner, "SELECT has_table_privilege('anonymous', 'public.properties', 'SELECT')")[0]
+    assert not one(owner, "SELECT has_table_privilege('anonymous', 'public.exports', 'SELECT')")[0]
+    assert not one(owner, "SELECT has_function_privilege('authenticated', 'public.delete_auth_user(uuid)', 'EXECUTE')")[0]
+    assert not one(owner, "SELECT pg_has_role('anonymous', 'movemark_backend', 'MEMBER')")[0]
 
 
 def test_runtime_role_timeouts(owner: Any) -> None:
@@ -544,13 +610,17 @@ def test_runtime_role_timeouts(owner: Any) -> None:
             assert key in settings[role], (role, key)
 
 
-def test_new_tables_are_private_by_default(owner: Any, dsn: str) -> None:
+def test_new_tables_and_functions_are_private_by_default(owner: Any) -> None:
+    # Created by the migration (owner) role, as a future migration would — nobody gets anything implicitly.
     owner.execute("CREATE TABLE public.default_acl_probe (id int)")
+    owner.execute("CREATE FUNCTION public.default_acl_probe_fn() RETURNS int LANGUAGE sql AS 'select 1'")
     try:
-        assert not one(owner, "SELECT has_table_privilege('authenticated', 'public.default_acl_probe', 'SELECT')")[0]
-        assert not one(owner, "SELECT has_table_privilege('anonymous', 'public.default_acl_probe', 'SELECT')")[0]
-        assert one(owner, "SELECT has_table_privilege('movemark_backend', 'public.default_acl_probe', 'SELECT')")[0]
+        for role in ("authenticated", "anonymous", "movemark_backend", "movemark_api", "movemark_worker"):
+            for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE"):
+                assert not one(owner, "SELECT has_table_privilege(%s, 'public.default_acl_probe', %s)", (role, privilege))[0], (role, privilege)
+            assert not one(owner, "SELECT has_function_privilege(%s, 'public.default_acl_probe_fn()', 'EXECUTE')", (role,))[0], role
     finally:
+        owner.execute("DROP FUNCTION public.default_acl_probe_fn()")
         owner.execute("DROP TABLE public.default_acl_probe")
 
 
