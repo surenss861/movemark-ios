@@ -192,11 +192,11 @@ private struct MMCasePressStyle: ButtonStyle {
 
 enum MMRoomProofMetrics {
     static func photoCount(for room: RoomRecord) -> Int {
-        room.evidence.reduce(0) { $0 + $1.photoCount }
+        room.moveInPhotoTotal
     }
 
     static func issueCount(for room: RoomRecord) -> Int {
-        room.evidence.flatMap(\.issueTags).count
+        room.moveInIssueTagTotal
     }
 
     static func isDocumented(_ room: RoomRecord) -> Bool {

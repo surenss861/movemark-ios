@@ -46,6 +46,94 @@ struct PropertySnapshot: Decodable {
     }
 }
 
+/// Decoded shape of `public.get_property_snapshot_v2` (migration 0990): all rooms with true per-stage totals,
+/// the newest entries per room and stage with their true photo counts and first photos, newest documents and
+/// maintenance with totals. Older entries and remaining photos load through the page functions.
+struct PropertySnapshotV2: Decodable {
+    struct StageStats: Decodable {
+        let entries: Int
+        let photos: Int
+        let entriesWithNotes: Int
+        let issueTags: Int
+        let latestAt: String?
+
+        enum CodingKeys: String, CodingKey {
+            case entries, photos
+            case entriesWithNotes = "entries_with_notes"
+            case issueTags = "issue_tags"
+            case latestAt = "latest_at"
+        }
+    }
+
+    /// A `rooms` row plus its `stats` object (keyed by inspection type).
+    struct RoomWithStats: Decodable {
+        let row: RoomRow
+        let stats: [String: StageStats]
+
+        private enum Keys: String, CodingKey { case stats }
+
+        init(from decoder: Decoder) throws {
+            row = try RoomRow(from: decoder)
+            stats = try decoder.container(keyedBy: Keys.self).decodeIfPresent([String: StageStats].self, forKey: .stats) ?? [:]
+        }
+    }
+
+    /// The entries payload shared by the snapshot and `get_room_entries_page`.
+    struct Entries: Decodable {
+        let photoCounts: [String: Int]
+        let evidenceFiles: [EvidenceFileRow]
+        let itemTags: [PropertySnapshot.ItemTagEntry]
+
+        enum CodingKeys: String, CodingKey {
+            case photoCounts = "photo_counts"
+            case evidenceFiles = "evidence_files"
+            case itemTags = "item_tags"
+        }
+    }
+
+    let property: PropertyRow?
+    let rooms: [RoomWithStats]
+    let inspections: [InspectionRow]
+    let inspectionItems: [InspectionItemRow]
+    let entries: Entries
+    let documents: [PropertyDocumentRow]
+    let documentTypes: [String]
+    let maintenanceIssues: [MaintenanceIssueRow]
+    let maintenancePhotoCounts: [String: Int]
+
+    enum CodingKeys: String, CodingKey {
+        case property, rooms, inspections, entries, documents
+        case inspectionItems = "inspection_items"
+        case documentTypes = "document_types"
+        case maintenanceIssues = "maintenance_issues"
+        case maintenancePhotoCounts = "maintenance_photo_counts"
+    }
+}
+
+/// One page of `get_room_entries_page`.
+struct RoomEntriesPage: Decodable {
+    let inspectionItems: [InspectionItemRow]
+    let entries: PropertySnapshotV2.Entries
+    let hasMore: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case entries
+        case inspectionItems = "inspection_items"
+        case hasMore = "has_more"
+    }
+}
+
+/// One page of `get_entry_photos_page`.
+struct EntryPhotosPage: Decodable {
+    let evidenceFiles: [EvidenceFileRow]
+    let hasMore: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case evidenceFiles = "evidence_files"
+        case hasMore = "has_more"
+    }
+}
+
 extension PropertyStore {
     fileprivate static let hydrationSignposter = OSSignposter(
         subsystem: Bundle.main.bundleIdentifier ?? "MoveMark",
@@ -66,10 +154,11 @@ extension PropertyStore {
         return f
     }()
 
-    /// Fetches the full property snapshot (rooms, inspections, items, evidence, tags, documents, maintenance) in one round trip via `get_property_snapshot`.
-    func fetchPropertySnapshot(propertyId: UUID) async throws -> PropertySnapshot {
+    /// Fetches the bounded property snapshot (rooms with totals, newest entries and their first photos,
+    /// documents, maintenance) in one round trip via `get_property_snapshot_v2`.
+    func fetchPropertySnapshot(propertyId: UUID) async throws -> PropertySnapshotV2 {
         try await dataAPI
-            .rpc("get_property_snapshot", params: ["p_property_id": propertyId])
+            .rpc("get_property_snapshot_v2", params: ["p_property_id": propertyId])
             .execute()
             .value
     }
@@ -92,16 +181,7 @@ extension PropertyStore {
 
         let rooms = snapshot.rooms
         let inspections = snapshot.inspections
-        let docRows = snapshot.documents
         let issues = snapshot.maintenanceIssues
-        let propertyEvidenceFiles = snapshot.evidenceFiles
-
-        var maintenancePhotoCountByIssue: [UUID: Int] = [:]
-        for file in propertyEvidenceFiles {
-            if let mid = file.maintenanceIssueId {
-                maintenancePhotoCountByIssue[mid, default: 0] += 1
-            }
-        }
 
         // Support both legacy kebab-case and current snake_case values.
         let moveInIds = Set(inspections.filter {
@@ -116,89 +196,32 @@ extension PropertyStore {
         let moveInItems = snapshot.inspectionItems.filter { moveInIds.contains($0.inspectionId) }
         let moveOutItems = snapshot.inspectionItems.filter { moveOutIds.contains($0.inspectionId) }
 
-        let moveInItemIds = Set(moveInItems.map(\.id))
-        let moveOutItemIds = Set(moveOutItems.map(\.id))
-
-        let moveInFiles = snapshot.evidenceFiles.filter { file in
-            guard let itemId = file.inspectionItemId else { return false }
-            return moveInItemIds.contains(itemId)
-        }
-        let moveOutFiles = snapshot.evidenceFiles.filter { file in
-            guard let itemId = file.inspectionItemId else { return false }
-            return moveOutItemIds.contains(itemId)
+        let entryParts = Self.entryParts(snapshot.entries)
+        for document in snapshot.documents {
+            MoveMarkStoredFileURLs.remember(rowId: document.id, filePath: document.filePath, thumbnailPath: document.thumbnailPath)
         }
 
-        // Tags are flattened across the whole property; indexing by move-in/move-out item ids below
-        // naturally scopes each side since item id sets don't overlap.
-        var tagNamesByItem: [UUID: [String]] = [:]
-        for entry in snapshot.itemTags {
-            tagNamesByItem[entry.inspectionItemId, default: []].append(entry.name)
-        }
-
-        let moveInFilesSorted = moveInFiles.sorted {
-            ($0.createdAt ?? $0.capturedAt ?? "") < ($1.createdAt ?? $1.capturedAt ?? "")
-        }
-        let moveOutFilesSorted = moveOutFiles.sorted {
-            ($0.createdAt ?? $0.capturedAt ?? "") < ($1.createdAt ?? $1.capturedAt ?? "")
-        }
-
-        var moveInPhotosByItem: [UUID: [EvidencePhoto]] = [:]
-        for file in moveInFilesSorted {
-            guard let itemId = file.inspectionItemId else { continue }
-            moveInPhotosByItem[itemId, default: []].append(EvidencePhoto(id: file.id, filePath: file.filePath, thumbnailPath: file.thumbnailPath))
-        }
-        var moveOutPhotosByItem: [UUID: [EvidencePhoto]] = [:]
-        for file in moveOutFilesSorted {
-            guard let itemId = file.inspectionItemId else { continue }
-            moveOutPhotosByItem[itemId, default: []].append(EvidencePhoto(id: file.id, filePath: file.filePath, thumbnailPath: file.thumbnailPath))
-        }
-
-        let isoDate = ISO8601DateFormatter()
         let roomRecords = rooms.map { roomRow -> RoomRecord in
-            var record = RoomRecord(id: roomRow.id, name: roomRow.name)
-            let moveInForRoom = moveInItems.filter { $0.roomId == roomRow.id }
+            var record = RoomRecord(id: roomRow.row.id, name: roomRow.row.name)
+            let moveInForRoom = moveInItems.filter { $0.roomId == roomRow.row.id }
                 .sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
             record.evidence = PropertyStore.dedupeEvidenceEntriesPreservingOrder(
-                moveInForRoom.map { item in
-                    let (title, notes) = Self.parseInspectionNotes(item.notes, defaultTitle: "Move-in capture")
-                    let photos = moveInPhotosByItem[item.id] ?? []
-                    return EvidenceRecord(
-                        id: item.id,
-                        title: title,
-                        notes: notes,
-                        issueTags: tagNamesByItem[item.id] ?? [],
-                        condition: Self.conditionFromInt(item.conditionRating),
-                        createdAt: isoDate.date(from: item.createdAt ?? "") ?? Date(),
-                        photoCount: photos.count,
-                        photos: photos,
-                        stage: .moveIn
-                    )
-                }
+                moveInForRoom.map { Self.evidenceRecord($0, parts: entryParts, stage: .moveIn) }
             )
-            let moveOutForRoom = moveOutItems.filter { $0.roomId == roomRow.id }
+            let moveOutForRoom = moveOutItems.filter { $0.roomId == roomRow.row.id }
                 .sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
             record.moveOutEvidence = PropertyStore.dedupeEvidenceEntriesPreservingOrder(
-                moveOutForRoom.map { item in
-                    let (title, notes) = Self.parseInspectionNotes(item.notes, defaultTitle: "Move-out capture")
-                    let photos = moveOutPhotosByItem[item.id] ?? []
-                    return EvidenceRecord(
-                        id: item.id,
-                        title: title,
-                        notes: notes,
-                        issueTags: tagNamesByItem[item.id] ?? [],
-                        condition: Self.conditionFromInt(item.conditionRating),
-                        createdAt: isoDate.date(from: item.createdAt ?? "") ?? Date(),
-                        photoCount: photos.count,
-                        photos: photos,
-                        stage: .moveOut
-                    )
-                }
+                moveOutForRoom.map { Self.evidenceRecord($0, parts: entryParts, stage: .moveOut) }
             )
+            // Server totals minus what is loaded = what loads on demand.
+            record.moveInUnloaded = Self.unloaded(roomRow.stats["move_in"], loaded: record.evidence)
+            record.moveOutUnloaded = Self.unloaded(roomRow.stats["move_out"], loaded: record.moveOutEvidence)
             return record
         }
 
         let dateFormatter = ISO8601DateFormatter()
-        let vaultDocTypes = Array(Set(docRows.map(\.documentType)))
+        // All document types present (the document rows themselves are bounded to the newest 100).
+        let vaultDocTypes = snapshot.documentTypes
 
         let moveInParsed = row.moveInDate.flatMap { Self.dbDateFormatter.date(from: $0) }
             ?? row.moveInDate.flatMap { dateFormatter.date(from: $0) }
@@ -235,10 +258,85 @@ extension PropertyStore {
                 details: issueRow.description ?? "",
                 status: issueRow.status == "resolved" ? .resolved : (issueRow.status == "follow_up" ? .followUp : .open),
                 landlordResponse: issueRow.landlordResponse ?? "",
-                photoCount: maintenancePhotoCountByIssue[issueRow.id] ?? 0
+                photoCount: snapshot.maintenancePhotoCounts[issueRow.id.uuidString.lowercased()] ?? 0
             )
         }
         return (record, maintenance)
+    }
+
+    /// Photos (capture order) and tags of the loaded entries, plus each entry's true photo count.
+    struct EntryParts {
+        var photosByItem: [UUID: [EvidencePhoto]] = [:]
+        var tagsByItem: [UUID: [String]] = [:]
+        var photoCountByItem: [String: Int] = [:]
+    }
+
+    static func entryParts(_ entries: PropertySnapshotV2.Entries) -> EntryParts {
+        var parts = EntryParts(photoCountByItem: entries.photoCounts)
+        for file in entries.evidenceFiles {  // already in capture order (created_at, id)
+            guard let itemId = file.inspectionItemId else { continue }
+            parts.photosByItem[itemId, default: []].append(Self.evidencePhoto(file))
+        }
+        MoveMarkStoredFileURLs.remember(parts.photosByItem.values.flatMap { $0 })
+        for tag in entries.itemTags {
+            parts.tagsByItem[tag.inspectionItemId, default: []].append(tag.name)
+        }
+        return parts
+    }
+
+    static func evidencePhoto(_ file: EvidenceFileRow) -> EvidencePhoto {
+        EvidencePhoto(id: file.id, filePath: file.filePath, thumbnailPath: file.thumbnailPath, serverCreatedAt: file.createdAt)
+    }
+
+    static func evidenceRecord(_ item: InspectionItemRow, parts: EntryParts, stage: EvidenceRecord.Stage) -> EvidenceRecord {
+        let (title, notes) = parseInspectionNotes(item.notes, defaultTitle: stage == .moveOut ? "Move-out capture" : "Move-in capture")
+        let photos = parts.photosByItem[item.id] ?? []
+        var record = EvidenceRecord(
+            id: item.id,
+            title: title,
+            notes: notes,
+            issueTags: parts.tagsByItem[item.id] ?? [],
+            condition: conditionFromInt(item.conditionRating),
+            createdAt: serverDate(item.createdAt) ?? Date(),
+            photoCount: parts.photoCountByItem[item.id.uuidString.lowercased()] ?? photos.count,
+            photos: photos,
+            stage: stage
+        )
+        record.serverCreatedAt = item.createdAt
+        return record
+    }
+
+    private static let isoFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoPlain = ISO8601DateFormatter()
+
+    /// Postgres timestamptz as JSON (`2026-10-22T09:15:01.24133+00:00`). A plain ISO8601DateFormatter can't
+    /// read the fraction, so the fraction is normalized to milliseconds first.
+    static func serverDate(_ raw: String?) -> Date? {
+        guard var text = raw, !text.isEmpty else { return nil }
+        if let dot = text.firstIndex(of: "."),
+           let zone = text[dot...].firstIndex(where: { $0 == "+" || $0 == "-" || $0 == "Z" }) {
+            let fraction = text[text.index(after: dot)..<zone]
+            text = String(text[..<dot]) + "." + String((fraction + "000").prefix(3)) + String(text[zone...])
+        }
+        return isoFractional.date(from: text) ?? isoPlain.date(from: text)
+    }
+
+    /// What the server counted for a room/stage beyond the loaded entries; nil when everything is loaded.
+    static func unloaded(_ stats: PropertySnapshotV2.StageStats?, loaded: [EvidenceRecord]) -> RoomRecord.StageTotals? {
+        guard let stats else { return nil }
+        let have = RoomRecord(name: "", evidence: loaded).moveInTotals
+        let rest = RoomRecord.StageTotals(
+            entries: max(stats.entries - have.entries, 0),
+            photos: max(stats.photos - have.photos, 0),
+            notedEntries: max(stats.entriesWithNotes - have.notedEntries, 0),
+            issueTags: max(stats.issueTags - have.issueTags, 0),
+            latestAt: nil  // the newest entries are always the loaded ones
+        )
+        return rest.entries == 0 ? nil : rest
     }
 
     private static func conditionFromInt(_ value: Int?) -> RoomRecord.ConditionRating {

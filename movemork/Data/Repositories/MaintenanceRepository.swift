@@ -62,6 +62,8 @@ struct MaintenanceRepository {
             .select()
             .eq("property_id", value: propertyId)
             .order("date_reported", ascending: false)
+            .order("created_at", ascending: false)
+            .order("id", ascending: false)
             .limit(200)
             .execute()
             .value

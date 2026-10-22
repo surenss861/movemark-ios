@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import PostgREST
 
 extension PropertyStore {
 
@@ -19,7 +20,8 @@ extension PropertyStore {
         return currentProperty
     }
 
-    /// Move-in room counts for list rows without switching the active property.
+    /// Move-in room counts for list rows without switching the active property: one aggregate query for every
+    /// rental (`get_vault_summaries`), never a snapshot per rental.
     func moveInProofCounts(for propertyId: UUID, userId: UUID) async -> (documented: Int, total: Int) {
         if let record = currentProperty, record.id == propertyId {
             return (
@@ -27,13 +29,8 @@ extension PropertyStore {
                 totalRoomCount(for: record)
             )
         }
-        guard let row = properties.first(where: { $0.id == propertyId }) else {
-            return (0, 0)
-        }
-        guard let (record, _) = try? await hydrateProperty(row, userId: userId) else {
-            return (0, 0)
-        }
-        return (documentedRoomCount(for: record), totalRoomCount(for: record))
+        guard let summary = await vaultSummary(for: propertyId) else { return (0, 0) }
+        return (summary.roomsDocumented, summary.roomsTotal)
     }
 
     /// Most recent evidence image URL for a property (inspection or maintenance). Use for vault card hero.
@@ -42,13 +39,27 @@ extension PropertyStore {
     }
 
     /// Same as ``previewImageURL(for:)`` but also returns the stable storage path, so callers can key
-    /// ``MMCachedAsyncImage`` by path instead of by the (re-mintable) signed URL.
+    /// ``MMCachedAsyncImage`` by path instead of by the (re-mintable) signed URL. Signed by the evidence row id.
     func previewImage(for propertyId: UUID) async -> (path: String, url: URL)? {
-        guard let first = try? await inspectionRepo.fetchFirstEvidenceFile(propertyId: propertyId) else { return nil }
-        let bucket = first.maintenanceIssueId != nil ? "maintenance-media" : "inspection-media"
-        let thumbPath = first.thumbnailPath ?? first.filePath
+        guard let latest = await vaultSummary(for: propertyId)?.latestEvidence else { return nil }
+        let bucket = latest.maintenanceIssueId != nil ? "maintenance-media" : "inspection-media"
+        let thumbPath = latest.thumbnailPath ?? latest.filePath
+        MoveMarkStoredFileURLs.remember(rowId: latest.id, filePath: latest.filePath, thumbnailPath: latest.thumbnailPath)
         guard let url = try? await inspectionRepo.signedURL(bucket: bucket, path: thumbPath) else { return nil }
         return (thumbPath, url)
+    }
+
+    /// One summary per rental, refreshed at most every 30 s (vault rows call this once per card).
+    private func vaultSummary(for propertyId: UUID) async -> VaultSummary? {
+        if let cached = vaultSummaries, Date().timeIntervalSince(cached.fetchedAt) < 30 {
+            return cached.byProperty[propertyId]
+        }
+        guard let rows: [VaultSummary] = try? await dataAPI.rpc("get_vault_summaries", params: [String: String]()).execute().value else {
+            return vaultSummaries?.byProperty[propertyId]
+        }
+        let byProperty = Dictionary(rows.map { ($0.propertyId, $0) }, uniquingKeysWith: { first, _ in first })
+        vaultSummaries = (Date(), byProperty)
+        return byProperty[propertyId]
     }
 
     /// In-memory reset only — synchronous, and honestly so.

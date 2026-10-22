@@ -246,26 +246,25 @@ struct InspectionRepository {
         return inserted.id
     }
 
-    func fetchEvidenceFiles(propertyId: UUID) async throws -> [EvidenceFileRow] {
-        try await dataAPI
+    /// Photo count per maintenance issue of a property, grouped by the server (Data API aggregate) — the
+    /// photo rows themselves are not downloaded.
+    func maintenancePhotoCounts(propertyId: UUID) async throws -> [UUID: Int] {
+        struct Row: Decodable {
+            let maintenanceIssueId: UUID
+            let count: Int
+            enum CodingKeys: String, CodingKey {
+                case maintenanceIssueId = "maintenance_issue_id"
+                case count
+            }
+        }
+        let rows: [Row] = try await dataAPI
             .from("evidence_files")
-            .select()
+            .select("maintenance_issue_id,count()")
             .eq("property_id", value: propertyId)
+            .not("maintenance_issue_id", operator: .is, value: "null")
             .execute()
             .value
-    }
-
-    /// Single most-recent evidence file for a property (e.g. vault card hero preview) — avoids fetching every evidence row just to use `.first`.
-    func fetchFirstEvidenceFile(propertyId: UUID) async throws -> EvidenceFileRow? {
-        let rows: [EvidenceFileRow] = try await dataAPI
-            .from("evidence_files")
-            .select()
-            .eq("property_id", value: propertyId)
-            .order("created_at", ascending: false)
-            .limit(1)
-            .execute()
-            .value
-        return rows.first
+        return Dictionary(rows.map { ($0.maintenanceIssueId, $0.count) }, uniquingKeysWith: +)
     }
 
     func insertItemTags(inspectionItemId: UUID, tagNames: [String]) async throws {
@@ -306,9 +305,11 @@ struct InspectionRepository {
 
     /// Deletes evidence rows for an inspection item together with their files (server-side, by row id).
     func deleteEvidenceFilesForInspectionItem(inspectionItemId: UUID) async throws {
-        let rows: [EvidenceFileRow] = try await dataAPI
+        // Every photo of the entry must go (ids only; the API deletes in batches by row id).
+        struct IdRow: Decodable { let id: UUID }
+        let rows: [IdRow] = try await dataAPI
             .from("evidence_files")
-            .select()
+            .select("id")
             .eq("inspection_item_id", value: inspectionItemId)
             .execute()
             .value
@@ -400,6 +401,9 @@ struct InspectionRepository {
             .from("evidence_files")
             .select()
             .eq("maintenance_issue_id", value: issueId)
+            .order("created_at")
+            .order("id")
+            .limit(200)
             .execute()
             .value
     }

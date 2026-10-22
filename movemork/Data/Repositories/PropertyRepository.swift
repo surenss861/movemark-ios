@@ -73,6 +73,9 @@ struct PropertyRepository {
             .from("properties")
             .select()
             .eq("user_id", value: userId)
+            .order("created_at")
+            .order("id")
+            .limit(100)
             .execute()
             .value
     }
@@ -174,6 +177,8 @@ struct PropertyRepository {
             .select()
             .eq("property_id", value: propertyId)
             .order("sort_order")
+            .order("id")
+            .limit(200)
             .execute()
             .value
     }

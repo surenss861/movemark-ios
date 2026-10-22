@@ -32,7 +32,7 @@ struct MoveOutFoundationView: View {
     /// Mirrors the server's `not_enough_move_out_proof` guard: a room counts only once a move-out
     /// entry carries at least one photo. An entry without photos does not make a report possible.
     private var roomsWithMoveOutPhotos: Int {
-        rooms.filter { room in room.moveOutEvidence.contains { $0.photoCount > 0 } }.count
+        rooms.filter { $0.moveOutPhotoTotal > 0 }.count
     }
 
     private var apiBaseURL: String? { MoveMarkBackendConfig.apiBaseURLString }
@@ -203,10 +203,10 @@ struct MoveOutFoundationView: View {
     private func beforeAfterRoomCard(room: RoomRecord) -> some View {
         let latestMoveIn = room.evidence.first
         let latestMoveOut = room.moveOutEvidence.first
-        let moveInEntries = room.evidence.count
-        let moveInPhotos = room.evidence.reduce(0) { $0 + $1.photoCount }
-        let moveOutEntries = room.moveOutEvidence.count
-        let moveOutPhotos = room.moveOutEvidence.reduce(0) { $0 + $1.photoCount }
+        let moveInEntries = room.moveInEntryTotal
+        let moveInPhotos = room.moveInPhotoTotal
+        let moveOutEntries = room.moveOutEntryTotal
+        let moveOutPhotos = room.moveOutPhotoTotal
         let hasMoveIn = !room.evidence.isEmpty
         let hasMoveOut = !room.moveOutEvidence.isEmpty
         let conditionDeltaText = conditionDelta(latestMoveIn: latestMoveIn, latestMoveOut: latestMoveOut)

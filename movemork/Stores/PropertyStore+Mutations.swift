@@ -524,13 +524,7 @@ extension PropertyStore {
         guard activePropertyId == propertyId else { return true }
         do {
             let rows = try await maintenanceRepo.fetchIssues(propertyId: propertyId)
-            let evidenceFiles = try await inspectionRepo.fetchEvidenceFiles(propertyId: propertyId)
-            var photoCountByIssue: [UUID: Int] = [:]
-            for file in evidenceFiles {
-                if let mid = file.maintenanceIssueId {
-                    photoCountByIssue[mid, default: 0] += 1
-                }
-            }
+            let photoCountByIssue = try await inspectionRepo.maintenancePhotoCounts(propertyId: propertyId)
             maintenanceLog = rows.map { row in
                 MaintenanceRecord(
                     id: row.id,

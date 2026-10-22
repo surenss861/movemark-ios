@@ -17,6 +17,7 @@ import Foundation
 import ImageIO
 import RevenueCat
 import StoreKitTest
+import PostgREST
 import Testing
 import UIKit
 @testable import MoveMark
@@ -76,6 +77,20 @@ struct NeonDevLifecycleTests {
     private func download(_ url: URL) async throws -> (Int, Data) {
         let (data, response) = try await URLSession.shared.data(from: url)
         return ((response as? HTTPURLResponse)?.statusCode ?? 0, data)
+    }
+
+    /// Test verification only: every evidence row of a property as the signed-in user sees it (the app itself
+    /// reads through the bounded snapshot and pages).
+    private func evidenceRows(_ propertyId: UUID) async throws -> [EvidenceFileRow] {
+        try await dataAPI
+            .from("evidence_files")
+            .select()
+            .eq("property_id", value: propertyId)
+            .order("created_at")
+            .order("id")
+            .limit(1000)
+            .execute()
+            .value
     }
 
     private func api() throws -> ExportAPIClient {
@@ -152,17 +167,21 @@ struct NeonDevLifecycleTests {
         let kept = try #require(saved.saved.first)
         let expectedPrefix = "\(userA.uuidString.lowercased())/\(property.id.uuidString.lowercased())/move-in/\(room.id.uuidString.lowercased())/"
         #expect(kept.filePath.hasPrefix(expectedPrefix) && kept.thumbnailPath == String(kept.filePath.dropLast(4)) + "_thumb.jpg")
-        let keptRow = try #require(try await inspections.fetchEvidenceFiles(propertyId: property.id).first)
+        let keptRow = try #require(try await evidenceRows(property.id).first)
         #expect(keptRow.sourcePath == String(kept.filePath.dropLast(4)) + "_source.jpg")
         #expect(keptRow.sourceSha256 == source.sha256Hex)  // storage-enforced hash, copied from the ticket by the database
         log("5 upload evidence", "\(kept.filePath) + source sha256 \(source.sha256Hex.prefix(12))… verified")
 
-        // 6. Reload evidence (table read and the snapshot RPC).
-        let rows = try await inspections.fetchEvidenceFiles(propertyId: property.id)
-        #expect(rows.map(\.id) == [kept.id])
+        // 6. Reload evidence (bounded snapshot v2 and the entry's photo page).
         let snapshot = try await PropertyStore().fetchPropertySnapshot(propertyId: property.id)
-        #expect(snapshot.evidenceFiles.map(\.id) == [kept.id])
-        log("6 reload evidence", "evidence_files + get_property_snapshot both return the row")
+        #expect(snapshot.entries.evidenceFiles.map(\.id) == [kept.id])
+        #expect(snapshot.entries.photoCounts[item.uuidString.lowercased()] == 1)
+        let photoPage: EntryPhotosPage = try await dataAPI
+            .rpc("get_entry_photos_page", params: ["p_inspection_item_id": item])
+            .execute()
+            .value
+        #expect(photoPage.evidenceFiles.map(\.id) == [kept.id] && photoPage.hasMore == false)
+        log("6 reload evidence", "get_property_snapshot_v2 and get_entry_photos_page both return the row")
 
         // 7. Open original: a fresh URL by row id, byte-identical; the thumbnail too.
         // The app opens the working derivative (the source is private and never signed for clients):
@@ -202,12 +221,12 @@ struct NeonDevLifecycleTests {
         #expect(((claims["exp"] as? NSNumber)?.doubleValue ?? 0) > Date().timeIntervalSince1970)
         log("8.5 refreshed token validated", "new token, sub matches, lifetime \(Int(lifetime))s, not expired")
         log("8.6 authenticated request started", "Data API evidence_files")
-        let afterRefresh = try await inspections.fetchEvidenceFiles(propertyId: property.id)
+        let afterRefresh = try await evidenceRows(property.id)
         #expect(afterRefresh.count == 1)
         log("8.7 authenticated request completed", "\(afterRefresh.count) row")
         await NeonAuthClient.shared.debugCacheAccessToken(firstToken) // expired: server answers 401
         log("8.8 expired token presented", "transport must refresh on the auth rejection and retry once")
-        #expect(try await inspections.fetchEvidenceFiles(propertyId: property.id).count == 1)
+        #expect(try await evidenceRows(property.id).count == 1)
         _ = try await api().fetchVaultSummary(propertyId: property.id)
         let retried = try #require(await NeonAuthClient.shared.debugCachedAccessToken())
         #expect(retried != firstToken)
@@ -221,7 +240,7 @@ struct NeonDevLifecycleTests {
         let doomedURL = try await inspections.signedURL(bucket: "inspection-media", path: doomed.filePath)
         #expect(try await download(doomedURL).0 == 200)
         try await inspections.deleteInspectionItem(id: item2)
-        #expect(try await inspections.fetchEvidenceFiles(propertyId: property.id).map(\.id) == [kept.id])
+        #expect(try await evidenceRows(property.id).map(\.id) == [kept.id])
         #expect(try await download(doomedURL).0 == 404)
         log("9 delete evidence", "row gone; object gone (presigned GET now 404); kept evidence untouched")
 
@@ -316,7 +335,7 @@ struct NeonDevLifecycleTests {
         let userB = try #require(session.userId)
         #expect(userB != userA)
         #expect(try await properties.fetchProperties(userId: userA).isEmpty)
-        #expect(try await inspections.fetchEvidenceFiles(propertyId: property.id).isEmpty)
+        #expect(try await evidenceRows(property.id).isEmpty)
         #expect(try await documents.fetchDocuments(propertyId: property.id).isEmpty)
         await MoveMarkSignedURLCache.shared.removeAll()
         await #expect(throws: (any Error).self) { _ = try await inspections.signedURL(bucket: "inspection-media", path: kept.filePath) }
@@ -337,7 +356,7 @@ struct NeonDevLifecycleTests {
 
         // 15. Sign back in as A: everything B tried to delete is still there.
         try await session.signIn(email: emailA, password: passwordA)
-        #expect(try await inspections.fetchEvidenceFiles(propertyId: property.id).map(\.id) == [kept.id])
+        #expect(try await evidenceRows(property.id).map(\.id) == [kept.id])
         #expect(try await documents.fetchDocuments(propertyId: property.id).map(\.id) == [leaseRow.id])
         #expect(try await download(try await inspections.signedURL(bucket: "inspection-media", path: kept.filePath)).0 == 200)
         log("15 sign out/in", "A intact after B's attempts")

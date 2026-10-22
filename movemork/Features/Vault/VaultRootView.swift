@@ -141,7 +141,7 @@ struct VaultRootView: View {
         let recent: [ProofHomeModel.Recent] = rooms.compactMap { room -> (Date, ProofHomeModel.Recent)? in
             guard let latest = room.evidence.filter({ !$0.photos.isEmpty }).max(by: { $0.createdAt < $1.createdAt }),
                   let photo = latest.photos.first else { return nil }
-            let count = room.evidence.reduce(0) { $0 + $1.photoCount }
+            let count = room.moveInPhotoTotal
             return (latest.createdAt, .init(id: room.id, roomName: room.name, photoCount: count, photoPath: photo.filePath))
         }
         .sorted { $0.0 > $1.0 }

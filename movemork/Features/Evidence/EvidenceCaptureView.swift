@@ -41,6 +41,7 @@ struct EvidenceCaptureView: View {
     @State var loadedSources: [MMEvidenceSource] = []
     @State var isUploading = false
     static let newEntryAnchor = "evidence.newEntry"
+    @State var isLoadingHistory = false
     /// Set after a save where not every photo made it; cleared once the rest are saved.
     @State var pendingRetry: EvidenceRetryState? = nil
     @State var errorMessage: String? = nil
@@ -81,8 +82,8 @@ struct EvidenceCaptureView: View {
     /// Room-level comparison when both phases have photos (shown under the hero).
     private var compareLine: String? {
         guard let room else { return nil }
-        let moveIn = room.evidence.reduce(0) { $0 + $1.photoCount }
-        let moveOut = room.moveOutEvidence.reduce(0) { $0 + $1.photoCount }
+        let moveIn = room.moveInPhotoTotal
+        let moveOut = room.moveOutPhotoTotal
         guard moveIn > 0, moveOut > 0 else { return nil }
         return "MOVE-IN \(moveIn) · MOVE-OUT \(moveOut) PHOTOS"
     }
@@ -128,7 +129,14 @@ struct EvidenceCaptureView: View {
                                 isBusy: isUploading,
                                 onEdit: { editingEntry = $0 },
                                 onAddPhotos: { appendPhotosEntry = $0 },
-                                onDelete: { deleteConfirmEntry = $0 }
+                                onDelete: { deleteConfirmEntry = $0 },
+                                totalEntries: moveOutMode ? room?.moveOutEntryTotal : room?.moveInEntryTotal,
+                                hasOlderEntries: room?.hasOlderEntries(moveOut: moveOutMode) ?? false,
+                                isLoadingOlder: isLoadingHistory,
+                                onLoadOlder: { loadHistory { try await propertyStore.loadOlderEntries(roomID: roomID, moveOut: moveOutMode) } },
+                                onShowAllPhotos: { entry in
+                                    loadHistory { try await propertyStore.loadAllPhotos(entryId: entry.id, roomID: roomID, moveOut: moveOutMode) }
+                                }
                             )
                             .padding(.top, 10)
                         }
@@ -323,6 +331,16 @@ struct EvidenceCaptureView: View {
             )
         }
         .padding(.vertical, 18)
+    }
+
+    /// Older entries / remaining photos, loaded on demand (snapshot v2 loads the newest first).
+    private func loadHistory(_ load: @escaping () async throws -> Void) {
+        guard !isLoadingHistory else { return }
+        isLoadingHistory = true
+        Task { @MainActor in
+            defer { isLoadingHistory = false }
+            do { try await load() } catch { errorMessage = MoveMarkFlowMessage.proofHistoryLoadFailed(error) }
+        }
     }
 
     private func presentCameraIfAllowed() {

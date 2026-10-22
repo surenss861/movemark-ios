@@ -185,21 +185,21 @@ enum MMProofTimelineBuilder {
 
         let documentedRooms = property.rooms.filter { MMRoomProofMetrics.isDocumented($0) }
         let recentRooms = documentedRooms.sorted { lhs, rhs in
-            let left = lhs.evidence.map(\.createdAt).max() ?? .distantPast
-            let right = rhs.evidence.map(\.createdAt).max() ?? .distantPast
+            let left = lhs.moveInLatestAt ?? .distantPast
+            let right = rhs.moveInLatestAt ?? .distantPast
             return left > right
         }
 
         for room in recentRooms.prefix(3) {
-            let photos = room.evidence.reduce(0) { $0 + $1.photoCount }
-            let issues = room.evidence.flatMap(\.issueTags).count
+            let photos = room.moveInPhotoTotal
+            let issues = room.moveInIssueTagTotal
             rows.append(
                 MMProofTimelineRow(
                     id: "room-\(room.id.uuidString)",
                     iconName: "checkmark.circle.fill",
                     title: "\(room.name) proof saved",
                     message: photoIssueLine(photos: photos, issues: issues),
-                    timestamp: formatTimestamp(room.evidence.map(\.createdAt).max()),
+                    timestamp: formatTimestamp(room.moveInLatestAt),
                     status: .done
                 )
             )
@@ -281,8 +281,8 @@ enum MMProofTimelineBuilder {
         }
 
         return rooms.map { room in
-            let photos = room.evidence.reduce(0) { $0 + $1.photoCount }
-            let issues = room.evidence.flatMap(\.issueTags).count
+            let photos = room.moveInPhotoTotal
+            let issues = room.moveInIssueTagTotal
             let isDone = photos > 0
             let isNext = nextRoom?.id == room.id && !isDone
 
@@ -292,7 +292,7 @@ enum MMProofTimelineBuilder {
                     iconName: "checkmark.circle.fill",
                     title: "\(room.name) proof saved",
                     message: photoIssueLine(photos: photos, issues: issues),
-                    timestamp: formatTimestamp(room.evidence.map(\.createdAt).max()),
+                    timestamp: formatTimestamp(room.moveInLatestAt),
                     status: .done
                 )
             }

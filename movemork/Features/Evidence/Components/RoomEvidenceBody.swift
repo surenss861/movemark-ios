@@ -19,6 +19,12 @@ struct RoomEvidenceBody: View {
     let onEdit: (EvidenceRecord) -> Void
     let onAddPhotos: (EvidenceRecord) -> Void
     let onDelete: (EvidenceRecord) -> Void
+    /// The room's true number of entries for this stage (older ones may not be loaded yet).
+    var totalEntries: Int? = nil
+    var hasOlderEntries = false
+    var isLoadingOlder = false
+    var onLoadOlder: () -> Void = {}
+    var onShowAllPhotos: (EvidenceRecord) -> Void = { _ in }
 
     private var ordered: [EvidenceRecord] { entries.sorted { $0.createdAt > $1.createdAt } }
     private var latest: EvidenceRecord? { ordered.first }
@@ -120,7 +126,7 @@ struct RoomEvidenceBody: View {
             HStack {
                 sectionLabel(moveOutMode ? "Move-out entries" : "Entries")
                 Spacer()
-                Text("\(ordered.count)")
+                Text("\(totalEntries ?? ordered.count)")
                     .font(MoveMarkTheme.Typography.monoMeta)
                     .foregroundStyle(MoveMarkTheme.Colors.textMuted)
             }
@@ -131,6 +137,23 @@ struct RoomEvidenceBody: View {
                     Rectangle().fill(MoveMarkTheme.Colors.divider.opacity(0.5)).frame(height: 0.5)
                 }
                 entryRow(entry)
+            }
+
+            if hasOlderEntries {
+                Rectangle().fill(MoveMarkTheme.Colors.divider.opacity(0.5)).frame(height: 0.5)
+                Button(action: onLoadOlder) {
+                    HStack(spacing: 8) {
+                        if isLoadingOlder { ProgressView().controlSize(.small) }
+                        Text(isLoadingOlder ? "Loading older entries…" : "Show older entries (\((totalEntries ?? ordered.count) - ordered.count) more)")
+                            .font(MoveMarkTheme.Typography.subheadlineMedium)
+                            .foregroundStyle(MoveMarkTheme.Colors.primary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(isLoadingOlder || isBusy)
+                .accessibilityIdentifier("room.loadOlderEntries")
             }
         }
         .padding(.vertical, 18)
@@ -154,6 +177,11 @@ struct RoomEvidenceBody: View {
             Menu {
                 Button { onEdit(entry) } label: { Label("Edit details", systemImage: "pencil") }
                 Button { onAddPhotos(entry) } label: { Label("Add photos", systemImage: "plus.viewfinder") }
+                if entry.photoCount > entry.photos.count {
+                    Button { onShowAllPhotos(entry) } label: {
+                        Label("Show all \(entry.photoCount) photos", systemImage: "photo.stack")
+                    }
+                }
                 Divider()
                 Button(role: .destructive) { onDelete(entry) } label: { Label("Delete entry", systemImage: "trash") }
             } label: {

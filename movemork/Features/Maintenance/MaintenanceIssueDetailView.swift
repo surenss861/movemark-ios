@@ -292,6 +292,7 @@ struct MaintenanceIssueDetailView: View {
         var previews: [MaintenanceEvidencePreview] = []
         var lastError: Error?
         for file in files {
+            MoveMarkStoredFileURLs.remember(rowId: file.id, filePath: file.filePath, thumbnailPath: file.thumbnailPath)
             do {
                 let fullURL = try await inspectionRepo.signedURL(bucket: "maintenance-media", path: file.filePath)
                 var thumbURL = fullURL

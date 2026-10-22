@@ -60,6 +60,9 @@ enum ProofSaveZeroLinksError: LocalizedError {
 }
 
 enum MoveMarkFlowMessage {
+    static func proofHistoryLoadFailed(_ error: Error) -> String {
+        "Couldn’t load older proof. Check your connection and try again."
+    }
 
     // MARK: - Local validation / missing state (not from `Error`)
 

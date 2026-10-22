@@ -60,15 +60,15 @@ extension PropertyStore {
 
     var totalEvidenceCount: Int {
         currentProperty?.rooms.reduce(0) { partial, room in
-            partial + room.evidence.count + room.moveOutEvidence.count
+            partial + room.moveInEntryTotal + room.moveOutEntryTotal
         } ?? 0
     }
 
     var totalPhotoCount: Int {
         currentProperty?.rooms.reduce(0) { partial, room in
             partial
-            + room.evidence.reduce(0) { $0 + $1.photoCount }
-            + room.moveOutEvidence.reduce(0) { $0 + $1.photoCount }
+            + room.moveInPhotoTotal
+            + room.moveOutPhotoTotal
         } ?? 0
     }
 
@@ -96,14 +96,12 @@ extension PropertyStore {
     }
 
     private func roomHasMoveInPhotos(_ room: RoomRecord) -> Bool {
-        room.evidence.contains { $0.photoCount > 0 }
+        room.moveInPhotoTotal > 0
     }
 
     func totalNoteCount(for property: PropertyRecord) -> Int {
         property.rooms.reduce(0) { partial, room in
-            partial + room.evidence.filter {
-                !$0.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            }.count
+            partial + room.moveInTotals.notedEntries
         }
     }
 
@@ -118,25 +116,25 @@ extension PropertyStore {
 
     func totalPhotoCount(for property: PropertyRecord) -> Int {
         property.rooms.reduce(0) { partial, room in
-            partial + room.evidence.reduce(0) { $0 + $1.photoCount }
+            partial + room.moveInPhotoTotal
         }
     }
 
     func moveOutPhotoCount(for property: PropertyRecord) -> Int {
         property.rooms.reduce(0) { partial, room in
-            partial + room.moveOutEvidence.reduce(0) { $0 + $1.photoCount }
+            partial + room.moveOutPhotoTotal
         }
     }
 
     func moveOutDocumentedRoomCount(for property: PropertyRecord) -> Int {
         property.rooms.filter { room in
-            room.moveOutEvidence.contains { $0.photoCount > 0 }
+            room.moveOutPhotoTotal > 0
         }.count
     }
 
     func totalIssueTagCount(for property: PropertyRecord) -> Int {
         property.rooms.reduce(0) { partial, room in
-            partial + room.evidence.flatMap(\.issueTags).count
+            partial + room.moveInIssueTagTotal
         }
     }
 

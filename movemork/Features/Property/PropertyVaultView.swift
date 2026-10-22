@@ -967,6 +967,7 @@ struct PropertyVaultView: View {
         }
         await MainActor.run { isPreparingDocumentPreview = true }
         do {
+            MoveMarkStoredFileURLs.remember(rowId: row.id, filePath: row.filePath, thumbnailPath: row.thumbnailPath)
             let remoteURL = try await documentRepo.signedURL(
                 bucket: DocumentRepository.storageBucket(forDocumentType: row.documentType),
                 path: row.filePath
