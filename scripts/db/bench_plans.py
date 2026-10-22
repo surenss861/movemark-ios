@@ -35,6 +35,14 @@ def pick(conn: psycopg.Connection) -> dict[str, str]:
     }
     ids["I"] = q(f"SELECT id FROM inspection_items WHERE inspection_id = '{ids['INSP']}' ORDER BY id LIMIT 1")
     ids["PATH"] = q(f"SELECT thumbnail_path FROM evidence_files WHERE inspection_item_id = '{ids['I']}' LIMIT 1")
+    ids["BR"] = q(f"SELECT ii.room_id FROM inspection_items ii JOIN inspections i ON i.id = ii.inspection_id "
+                  f"WHERE i.property_id = '{big}' GROUP BY 1 ORDER BY count(*) DESC LIMIT 1")
+    deep = conn.execute(f"SELECT ii.created_at, ii.id FROM inspection_items ii JOIN inspections i ON i.id = ii.inspection_id "
+                        f"WHERE ii.room_id = '{ids['BR']}' AND i.inspection_type = 'move_in' "
+                        f"ORDER BY ii.created_at DESC, ii.id DESC OFFSET 12000 LIMIT 1").fetchone()
+    ids["DEEP_AT"], ids["DEEP_ID"] = deep[0].isoformat(), deep[1]
+    ids["BIGITEM"] = q(f"SELECT inspection_item_id FROM evidence_files WHERE property_id = '{big}' AND inspection_item_id IS NOT NULL "
+                       f"GROUP BY 1 ORDER BY count(*) DESC LIMIT 1")
     ids["NOPE"] = f"{ids['U']}/{typical}/move-in/{ids['R']}/never-referenced.jpg"
     ids["EIDS"] = "{" + ",".join(r[0].__str__() for r in conn.execute(
         f"SELECT id FROM evidence_files WHERE property_id = '{typical}' LIMIT 20").fetchall()) + "}"
@@ -47,6 +55,14 @@ QUERIES: list[tuple[str, str, str]] = [
     ("app.rooms_by_property", "app", "SELECT * FROM rooms WHERE property_id = '{P}' ORDER BY sort_order"),
     ("app.snapshot", "app", "SELECT get_property_snapshot('{P}')"),
     ("app.snapshot_big", "app_big", "SELECT get_property_snapshot('{B}')"),
+    ("app.snapshot_v2", "app", "SELECT get_property_snapshot_v2('{P}')"),
+    ("app.snapshot_v2_big", "app_big", "SELECT get_property_snapshot_v2('{B}')"),
+    ("app.room_entries_first_page_big", "app_big", "SELECT get_room_entries_page('{BR}', 'move_in')"),
+    ("app.room_entries_deep_page_big", "app_big",
+     "SELECT get_room_entries_page('{BR}', 'move_in', '{DEEP_AT}'::timestamptz, '{DEEP_ID}'::uuid)"),
+    ("app.entry_photos_page", "app_big", "SELECT get_entry_photos_page('{BIGITEM}')"),
+    ("app.vault_summaries", "app", "SELECT get_vault_summaries()"),
+    ("app.vault_summaries_big_user", "app_big", "SELECT get_vault_summaries()"),
     ("app.evidence_by_property", "app", "SELECT * FROM evidence_files WHERE property_id = '{P}'"),
     ("app.evidence_by_property_big", "app_big", "SELECT * FROM evidence_files WHERE property_id = '{B}'"),
     ("app.evidence_by_item", "app", "SELECT * FROM evidence_files WHERE inspection_item_id = '{I}'"),

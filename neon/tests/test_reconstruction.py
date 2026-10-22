@@ -676,3 +676,88 @@ def test_privileged_functions_are_executable_only_by_their_process(owner: Any, f
 def test_reaper_refuses_windows_that_would_requeue_live_jobs(owner: Any, args: str) -> None:
     with pytest.raises(errors.InvalidParameterValue):
         owner.execute(f"SELECT public.reap_stuck_export_jobs({args})")
+
+
+# --- 0990 bounded snapshot v2 ---------------------------------------------------------
+
+V2_FUNCTIONS = ["public.get_property_snapshot_v2(uuid, integer, integer)",
+                "public.get_room_entries_page(uuid, text, timestamp with time zone, uuid, integer, integer)",
+                "public.get_entry_photos_page(uuid, timestamp with time zone, uuid, integer)",
+                "public.get_vault_summaries()", "public._entry_payload(uuid[], integer)"]
+
+
+@pytest.mark.parametrize("fn", V2_FUNCTIONS)
+def test_v2_functions_are_invoker_app_only_with_pinned_search_path(owner: Any, fn: str) -> None:
+    secdef, config = one(owner, "SELECT prosecdef, array_to_string(proconfig, ' ') FROM pg_proc WHERE oid = %s::regprocedure", (fn,))
+    assert secdef is False and "search_path=pg_catalog, public, pg_temp" in config  # RLS applies to the caller
+    for role, allowed in (("authenticated", True), ("anonymous", False), ("public", False), ("movemark_api", False), ("movemark_worker", False)):
+        assert one(owner, "SELECT has_function_privilege(%s, %s, 'EXECUTE')", (role, fn))[0] is allowed, (role, fn)
+
+
+@pytest.fixture
+def busy_room(dsn: str, owner: Any) -> dict[str, Any]:
+    """One rental of a fresh user with 23 move-in entries in one room, 7 photos on the newest entry."""
+    user = _fresh_user(owner)
+    r = seed_rental(dsn, user)
+    with as_user(dsn, user) as c:
+        items = [str(one(c, "INSERT INTO inspection_items (inspection_id, room_id, notes, created_at) VALUES (%s, %s, %s, now() - %s * interval '1 minute') RETURNING id",
+                         (r["inspection"], r["room"], f"Entry {k}\nnote {k}" if k % 2 else f"Entry {k}", k))[0]) for k in range(1, 23)]
+        newest = items[0]
+        for k in range(7):
+            c.execute("INSERT INTO evidence_files (property_id, inspection_item_id, file_path, file_type) VALUES (%s, %s, %s, 'image')",
+                      (r["property"], newest, f"{user}/{r['property']}/move-in/{r['room']}/p{k}.jpg"))
+        c.commit()
+    return {"user": user, "rental": r, "newest": newest, "items": set(items) | {r["item"]}}
+
+
+def test_snapshot_v2_bounds_the_load_but_keeps_true_totals(dsn: str, busy_room: Any) -> None:
+    r = busy_room["rental"]
+    with as_user(dsn, busy_room["user"]) as c:
+        snap = one(c, "SELECT get_property_snapshot_v2(%s, 5, 3)", (r["property"],))[0]
+        room = next(x for x in snap["rooms"] if x["id"] == r["room"])
+        assert room["stats"]["move_in"]["entries"] == 23 and room["stats"]["move_in"]["photos"] == 8  # 7 + the seeded one
+        assert room["stats"]["move_in"]["entries_with_notes"] >= 11
+        assert len(snap["inspection_items"]) == 5  # newest five, not all 23
+        assert snap["entries"]["photo_counts"][busy_room["newest"]] == 7  # true count …
+        assert len([e for e in snap["entries"]["evidence_files"] if e["inspection_item_id"] == busy_room["newest"]]) == 3  # … bounded rows
+        assert one(c, "SELECT get_property_snapshot_v2(%s, 100000, 100000)", (r["property"],))[0]["limits"] == {"entries_per_room": 100, "photos_per_entry": 50}
+
+
+def test_entry_and_photo_pages_walk_the_whole_history_exactly_once(dsn: str, busy_room: Any) -> None:
+    r = busy_room["rental"]
+    with as_user(dsn, busy_room["user"]) as c:
+        seen, cursor = [], (None, None)
+        while True:
+            page = one(c, "SELECT get_room_entries_page(%s, 'move_in', %s, %s, 4, 1)", (r["room"], *cursor))[0]
+            items = page["inspection_items"]
+            seen += [i["id"] for i in items]
+            assert items == sorted(items, key=lambda i: (i["created_at"], i["id"]), reverse=True)  # newest first
+            if not page["has_more"]:
+                break
+            cursor = (items[-1]["created_at"], items[-1]["id"])
+        assert len(seen) == len(set(seen)) and set(seen) == busy_room["items"]
+        photos, cursor = [], (None, None)
+        while True:
+            page = one(c, "SELECT get_entry_photos_page(%s, %s, %s, 2)", (busy_room["newest"], *cursor))[0]
+            photos += [p["id"] for p in page["evidence_files"]]
+            if not page["has_more"]:
+                break
+            cursor = (page["evidence_files"][-1]["created_at"], page["evidence_files"][-1]["id"])
+        assert len(photos) == 7 == len(set(photos))
+        with pytest.raises(errors.InvalidParameterValue):  # half a cursor is refused, not guessed
+            c.execute("SELECT get_room_entries_page(%s, 'move_in', now(), NULL)", (r["room"],))
+
+
+def test_v2_and_vault_summary_show_nothing_of_another_account(dsn: str, busy_room: Any, owner: Any) -> None:
+    r = busy_room["rental"]
+    stranger = _fresh_user(owner)
+    seed_rental(dsn, stranger)
+    with as_user(dsn, stranger) as c:
+        snap = one(c, "SELECT get_property_snapshot_v2(%s)", (r["property"],))[0]
+        assert snap["property"] is None and snap["rooms"] == [] and snap["inspection_items"] == []
+        assert one(c, "SELECT get_room_entries_page(%s, 'move_in')", (r["room"],))[0]["inspection_items"] == []
+        assert one(c, "SELECT get_entry_photos_page(%s)", (busy_room["newest"],))[0]["evidence_files"] == []
+        assert r["property"] not in {s["property_id"] for s in one(c, "SELECT get_vault_summaries()")[0]}
+    with as_user(dsn, busy_room["user"]) as c:
+        mine = {s["property_id"]: s for s in one(c, "SELECT get_vault_summaries()")[0]}
+        assert mine[r["property"]]["rooms_documented"] == 1 and mine[r["property"]]["latest_evidence"] is not None
