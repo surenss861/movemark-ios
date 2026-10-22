@@ -22,6 +22,29 @@ step.
 5. Production Neon settings: scale-to-zero off, 0.5–4 CU, history retention 7 days.
 6. The Production Security & Abuse-Resistance gate (rate limits, adversarial suite) passes.
 
+## Production promotion record (2026-10-22)
+
+| Step | Result |
+|---|---|
+| Pre-apply (09:14Z) | `status` 32 applied / 4 pending (0950–0980); `check` passed, but before the fix it did not compare the live schema while migrations were pending |
+| First apply | 0950 and 0960 applied; **0970 failed**, because its policies already existed |
+| Finding | 0950–0980 had been executed on the production database **outside the runner**, within minutes of each file being written or committed (compute woke at 07:38–07:44 and 08:26–08:31). Catalog transaction IDs prove the objects predate the runner's ledger rows. No credential, environment variable or hook on the development machine targets production |
+| Runner fix | `check` now always compares the live schema with a from-zero build of its recorded migrations before anything pending is considered (regression test in `neon/tests/test_migrate.py`) |
+| Repair | Neon point-in-time restore of production to 07:35:00Z (09:21:56Z). The out-of-band state is preserved as branch `production-out-of-band-2026-10-22` (`br-quiet-dust-b5dxh8dp`). Endpoint and buckets unchanged. The restore reverted the auth changes, so they were re-applied |
+| Re-apply | `status` 32/4, `check` with no drift, then the runner applied 0950 → 0960 → 0970 → 0980; post-check: 36 applied, live schema equals the from-zero build |
+| Verification | Role/grant audit matches the tested per-process sets exactly. Runtime roles: no BYPASSRLS, ownership, CREATE, `neon_auth` or group membership. Each privileged function is callable only by its process. New tables and functions are private (global function default revoked). Production fingerprint `6ea7f35f…` (435 facts) is **identical to dev**. External smoke: anonymous and forged-token Data API requests refused, anonymous privileged RPC refused, all buckets 403 to anonymous |
+
+Neon production settings (approved, applied 2026-10-22):
+
+| Setting | Before | After |
+|---|---|---|
+| Autoscaling | 0.25 – 8 CU | 0.5 – 4 CU |
+| Scale-to-zero (`suspend_timeout_seconds`) | 0 (default: suspend after 5 min) | −1 (never suspends) |
+| History retention (project-wide) | 21,600 s (6 h) | 604,800 s (7 days) |
+
+Production auth: `allow_localhost` off, shared Google OAuth removed; email and password only. The shared email
+sender remains until Postmark is configured.
+
 ## What changed
 
 | | |
