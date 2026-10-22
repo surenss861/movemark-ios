@@ -160,11 +160,20 @@ def test_select_isolation(dsn: str, two_rentals: Any, table: str) -> None:
     assert a[ID_OF[table]] in seen and b[ID_OF[table]] not in seen
 
 
+def granted(c: Any, table: str, privilege: str) -> bool:
+    """Whether the current (app) role holds `privilege` on `table`."""
+    return c.execute("SELECT has_table_privilege(%s, %s)", (f"public.{table}", privilege)).fetchone()[0]
+
+
 @pytest.mark.parametrize("table", sorted(USER_TABLES))
 def test_update_isolation(dsn: str, two_rentals: Any, table: str) -> None:
     a, b = two_rentals
     col = USER_TABLES[table][1]
     with as_user(dsn, A) as c:
+        if not granted(c, table, "UPDATE"):  # 0960: the apps never update this table, so nobody may
+            with pytest.raises(errors.InsufficientPrivilege):
+                rows(c, f"UPDATE {table} SET {col} = %s WHERE id = %s RETURNING id", (VALUE[col], b[ID_OF[table]]))
+            return
         mine = rows(c, f"UPDATE {table} SET {col} = %s WHERE id = %s RETURNING id", (VALUE[col], a[ID_OF[table]]))
         theirs = rows(c, f"UPDATE {table} SET {col} = %s WHERE id = %s RETURNING id", (VALUE[col], b[ID_OF[table]]))
     assert len(mine) == 1 and theirs == []
@@ -174,6 +183,10 @@ def test_update_isolation(dsn: str, two_rentals: Any, table: str) -> None:
 def test_delete_isolation(dsn: str, two_rentals: Any, table: str) -> None:
     _, b = two_rentals
     with as_user(dsn, A) as c:
+        if not granted(c, table, "DELETE"):
+            with pytest.raises(errors.InsufficientPrivilege):
+                rows(c, f"DELETE FROM {table} WHERE id = %s RETURNING id", (b[ID_OF[table]],))
+            return
         gone = rows(c, f"DELETE FROM {table} WHERE id = %s RETURNING id", (b[ID_OF[table]],))
     assert gone == []
 
@@ -252,13 +265,13 @@ def test_report_credits_idempotent_and_never_negative(owner: Any) -> None:
     assert one(owner, "SELECT consume_report_credit(%s, 'export:2')", (u,))[0] is False
 
 
-def test_users_can_read_only_their_own_credits(dsn: str, owner: Any) -> None:
+def test_apps_have_no_access_to_credits_or_entitlements(dsn: str, owner: Any) -> None:
     owner.execute("SELECT grant_report_credit(%s, 'rc:b-1', NULL)", (B,))
-    with as_user(dsn, A) as c:
-        assert all(str(r[0]) == A for r in rows(c, "SELECT user_id FROM user_report_credits"))
-        with pytest.raises(errors.InsufficientPrivilege):
-            c.execute("UPDATE user_report_credits SET balance = 99")
-            c.execute("INSERT INTO user_report_credits (user_id, balance) VALUES (%s, 99)", (A,))
+    # 0960: the apps read credits through the API only; the Data API role has no access at all.
+    for sql in ("SELECT user_id FROM user_report_credits", "UPDATE user_report_credits SET balance = 99",
+                "SELECT * FROM report_credit_events", "SELECT * FROM user_entitlements"):
+        with as_user(dsn, A) as c, pytest.raises(errors.InsufficientPrivilege):
+            c.execute(sql)
 
 
 def test_export_queue_one_active_job_and_claim(owner: Any, two_rentals: Any) -> None:
@@ -329,23 +342,20 @@ def _second_rental(dsn: str, user: str) -> dict[str, str]:
     return ids
 
 
-def _with_dispute(dsn: str, user: str, rental: dict[str, str]) -> str:
-    with as_user(dsn, user) as c:
-        did = str(one(c, "INSERT INTO disputes (property_id, user_id, dispute_type) VALUES (%s, %s, 'other') RETURNING id", (rental["property"], user))[0])
-        c.commit()
-    return did
+def _with_dispute(owner: Any, user: str, rental: dict[str, str]) -> str:
+    """Disputes are created by the backend (0960: the apps have no access to disputes or their links)."""
+    return str(one(owner, "INSERT INTO disputes (property_id, user_id, dispute_type) VALUES (%s, %s, 'other') RETURNING id", (rental["property"], user))[0])
 
 
 @pytest.fixture
 def graph(dsn: str, owner: Any) -> dict[str, Any]:
     x, y = _fresh_user(owner), _fresh_user(owner)
     g = {"X": x, "Y": y, "x": seed_rental(dsn, x), "x2": _second_rental(dsn, x), "y": seed_rental(dsn, y)}
-    g["x_dispute"] = _with_dispute(dsn, x, g["x"])
-    g["y_dispute"] = _with_dispute(dsn, y, g["y"])
-    with as_user(dsn, x) as c:  # an existing link X may later try to repoint
-        g["x_link"] = str(one(c, "INSERT INTO dispute_evidence_links (dispute_id, evidence_file_id) VALUES (%s, %s) RETURNING id",
-                              (g["x_dispute"], g["x"]["evidence"]))[0])
-        c.commit()
+    g["x_dispute"] = _with_dispute(owner, x, g["x"])
+    g["y_dispute"] = _with_dispute(owner, y, g["y"])
+    # An existing link X may later try to repoint.
+    g["x_link"] = str(one(owner, "INSERT INTO dispute_evidence_links (dispute_id, evidence_file_id) VALUES (%s, %s) RETURNING id",
+                          (g["x_dispute"], g["x"]["evidence"]))[0])
     return g
 
 
@@ -435,26 +445,41 @@ def test_poisoning_never_makes_another_account_undeletable(dsn: str, owner: Any,
 
 
 def test_legitimate_writes_still_work(dsn: str, graph: dict[str, Any]) -> None:
-    x, x2 = graph["x"], graph["x2"]
+    """Every write the apps actually perform (0960 grants exactly these) still passes RLS."""
+    x = graph["x"]
     with as_user(dsn, graph["X"]) as c:
-        assert rows(c, "UPDATE inspections SET overall_notes = 'ok' WHERE id = %s RETURNING id", (x["inspection"],))
         assert rows(c, "UPDATE inspection_items SET notes = 'ok' WHERE id = %s RETURNING id", (x["item"],))
-        assert rows(c, "UPDATE evidence_files SET captured_at = now() WHERE id = %s RETURNING id", (x["evidence"],))
         assert rows(c, "UPDATE maintenance_issues SET status = 'resolved' WHERE id = %s RETURNING id", (x["maintenance"],))
-        assert rows(c, "UPDATE property_documents SET file_name = 'lease-v2.pdf' WHERE id = %s RETURNING id", (x["document"],))
         assert rows(c, "UPDATE move_out_checklists SET keys_returned = true WHERE id = %s RETURNING id", (x["checklist"],))
-        assert rows(c, "UPDATE disputes SET title = 'Deposit' WHERE id = %s RETURNING id", (graph["x_dispute"],))
-        assert rows(c, "UPDATE rooms SET name = 'Kitchen 2' WHERE id = %s RETURNING id", (x["room"],))
-        assert rows(c, "INSERT INTO move_out_checklist_state (property_id, user_id) VALUES (%s, %s) RETURNING property_id", (x["property"], graph["X"]))
-        # Same-property links and a room move with nothing attached are fine.
-        assert rows(c, "INSERT INTO dispute_evidence_links (dispute_id, maintenance_issue_id) VALUES (%s, %s) RETURNING id", (graph["x_dispute"], x["maintenance"]))
-        assert rows(c, "INSERT INTO dispute_evidence_links (dispute_id, property_document_id) VALUES (%s, %s) RETURNING id", (graph["x_dispute"], x["document"]))
-        spare = one(c, "INSERT INTO rooms (property_id, name) VALUES (%s, 'Spare') RETURNING id", (x["property"],))[0]
-        assert rows(c, "UPDATE rooms SET property_id = %s WHERE id = %s RETURNING id", (x2["property"], spare))
+        assert rows(c, "UPDATE properties SET title = 'Renamed' WHERE id = %s RETURNING id", (x["property"],))
+        assert rows(c, "INSERT INTO rooms (property_id, name) VALUES (%s, 'Spare') RETURNING id", (x["property"],))
         # Upsert shape the apps use (insert … on conflict do update) still passes.
         assert rows(c, """INSERT INTO move_out_checklists (property_id, user_id, keys_returned) VALUES (%s, %s, true)
                           ON CONFLICT (property_id, user_id) DO UPDATE SET keys_returned = EXCLUDED.keys_returned RETURNING id""",
                     (x["property"], graph["X"]))
+
+
+# Writes no app performs (0960 revoked them): refused outright for the Data API role, whatever the row.
+APP_WRITES_NOT_GRANTED = {
+    "update inspection": "UPDATE inspections SET overall_notes = 'ok' WHERE id = '{xi}'",
+    "update evidence": "UPDATE evidence_files SET captured_at = now() WHERE id = '{xe}'",
+    "update document": "UPDATE property_documents SET file_name = 'x.pdf' WHERE id = '{xd}'",
+    "update room": "UPDATE rooms SET name = 'Kitchen 2' WHERE id = '{xr}'",
+    "update dispute": "UPDATE disputes SET title = 'Deposit' WHERE id = '{xdisp}'",
+    "insert dispute": "INSERT INTO disputes (property_id, user_id, dispute_type) VALUES ('{xp}', '{X}', 'other')",
+    "insert dispute link": "INSERT INTO dispute_evidence_links (dispute_id, maintenance_issue_id) VALUES ('{xdisp}', '{xm}')",
+    "insert checklist state": "INSERT INTO move_out_checklist_state (property_id, user_id) VALUES ('{xp}', '{X}')",
+    "insert own credits": "INSERT INTO user_report_credits (user_id, balance) VALUES ('{X}', 99)",
+    "insert own entitlement": "INSERT INTO user_entitlements (user_id, status) VALUES ('{X}', 'active')",
+    "insert issue tag": "INSERT INTO issue_tags (name) VALUES ('Free Pro')",
+}
+
+
+@pytest.mark.parametrize("name", sorted(APP_WRITES_NOT_GRANTED))
+def test_writes_no_app_performs_are_not_granted(dsn: str, graph: dict[str, Any], name: str) -> None:
+    with as_user(dsn, graph["X"]) as c:
+        with pytest.raises(errors.InsufficientPrivilege):
+            c.execute(_fill(APP_WRITES_NOT_GRANTED[name], graph))
         c.commit()
 
 
@@ -486,3 +511,70 @@ def test_backend_still_runs_the_export_lifecycle(owner: Any, graph: dict[str, An
     assert one(owner, "SELECT status, attempts FROM exports WHERE id = %s", (job,)) == ("completed", 2)
     owner.execute("UPDATE exports SET status = 'processing', locked_at = now() - interval '10 minutes' WHERE id = %s", (job,))
     assert one(owner, "SELECT reap_stuck_export_jobs()")[0] >= 1
+
+
+# --- 0960 role hardening ------------------------------------------------------------
+
+@pytest.mark.parametrize("role", ["movemark_api", "movemark_worker"])
+def test_runtime_roles_have_dml_but_no_ddl_or_ownership(owner: Any, role: str) -> None:
+    attrs = one(owner, "SELECT rolcanlogin, rolbypassrls, rolsuper, rolcreaterole, rolcreatedb FROM pg_roles WHERE rolname = %s", (role,))
+    assert attrs == (True, True, False, False, False)
+    assert one(owner, "SELECT pg_has_role(%s, 'movemark_backend', 'USAGE')", (role,))[0]
+    assert one(owner, "SELECT count(*) FROM pg_class WHERE relowner = %s::regrole", (role,))[0] == 0
+    assert not one(owner, "SELECT has_schema_privilege(%s, 'public', 'CREATE')", (role,))[0]
+    for table in ("properties", "evidence_files", "exports", "storage_upload_tickets", "user_report_credits"):
+        assert one(owner, "SELECT has_table_privilege(%s, %s, 'SELECT,INSERT,UPDATE,DELETE')", (role, f"public.{table}"))[0], table
+    owner.execute(f"SET ROLE {role}")
+    try:
+        with pytest.raises(errors.InsufficientPrivilege):
+            owner.execute("CREATE TABLE public.ddl_probe (id int)")
+        with pytest.raises(errors.InsufficientPrivilege):
+            owner.execute("ALTER TABLE public.properties ADD COLUMN ddl_probe int")
+        assert not one(owner, "SELECT has_schema_privilege('movemark_meta', 'USAGE')")[0] if one(
+            owner, "SELECT to_regnamespace('movemark_meta') IS NOT NULL")[0] else True
+    finally:
+        owner.execute("RESET ROLE")
+
+
+def test_runtime_role_timeouts(owner: Any) -> None:
+    settings = dict(rows(owner, """SELECT r.rolname, array_to_string(s.setconfig, ' ') FROM pg_db_role_setting s
+                                   JOIN pg_roles r ON r.oid = s.setrole WHERE r.rolname IN ('movemark_api', 'movemark_worker')"""))
+    for role in ("movemark_api", "movemark_worker"):
+        for key in ("statement_timeout=", "lock_timeout=", "idle_in_transaction_session_timeout="):
+            assert key in settings[role], (role, key)
+
+
+def test_new_tables_are_private_by_default(owner: Any, dsn: str) -> None:
+    owner.execute("CREATE TABLE public.default_acl_probe (id int)")
+    try:
+        assert not one(owner, "SELECT has_table_privilege('authenticated', 'public.default_acl_probe', 'SELECT')")[0]
+        assert not one(owner, "SELECT has_table_privilege('anonymous', 'public.default_acl_probe', 'SELECT')")[0]
+        assert one(owner, "SELECT has_table_privilege('movemark_backend', 'public.default_acl_probe', 'SELECT')")[0]
+    finally:
+        owner.execute("DROP TABLE public.default_acl_probe")
+
+
+def test_query_statistics_are_not_reachable_by_app_roles(owner: Any) -> None:
+    for role in ("authenticated", "anonymous"):
+        assert not one(owner, "SELECT has_schema_privilege(%s, 'monitoring', 'USAGE')", (role,))[0]
+    assert one(owner, "SELECT extnamespace::regnamespace::text FROM pg_extension WHERE extname = 'pg_stat_statements'")[0] == "monitoring"
+
+
+def test_auth_user_deletion_is_a_backend_only_function(owner: Any) -> None:
+    assert one(owner, "SELECT has_function_privilege('movemark_backend', 'public.delete_auth_user(uuid)', 'EXECUTE')")[0]
+    for role in ("authenticated", "anonymous", "public"):
+        assert not one(owner, "SELECT has_function_privilege(%s, 'public.delete_auth_user(uuid)', 'EXECUTE')", (role,))[0]
+    victim = str(uuid.uuid4())
+    owner.execute("INSERT INTO neon_auth.\"user\" (id, email, name) VALUES (%s, %s, 'QA')", (victim, f"{victim[:6]}@qa.test"))
+    owner.execute("SET ROLE movemark_api")
+    try:
+        owner.execute("SELECT public.delete_auth_user(%s)", (victim,))
+    finally:
+        owner.execute("RESET ROLE")
+    assert one(owner, "SELECT count(*) FROM neon_auth.\"user\" WHERE id = %s", (victim,))[0] == 0
+
+
+def test_privileged_functions_pin_search_path(owner: Any) -> None:
+    loose = rows(owner, """SELECT p.proname FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.prosecdef
+                           AND NOT EXISTS (SELECT 1 FROM unnest(p.proconfig) c WHERE c LIKE 'search_path=%%pg_temp')""")
+    assert loose == []
