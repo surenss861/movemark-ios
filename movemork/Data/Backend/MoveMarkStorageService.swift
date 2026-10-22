@@ -37,6 +37,24 @@ struct MoveMarkUpload: Sendable, Equatable {
     var capturedAt: Date? = nil
 }
 
+/// What ``MoveMarkStorageService/abandon(_:)`` established about an upload.
+enum MoveMarkAbandonResult: Sendable, Equatable {
+    /// No row references it; its objects are gone.
+    case deleted
+    /// A row references it: the insert committed even though the app didn't see the response.
+    case kept
+    /// The request didn't get through; the outcome is still unknown. Abandon again later.
+    case failed
+}
+
+/// An evidence upload that failed after its ticket was issued, and whose ticket couldn't be released.
+/// `unreleased` must be abandoned later, or its objects stay behind unreferenced.
+struct MoveMarkUploadFailure: LocalizedError {
+    let underlying: Error
+    let unreleased: MoveMarkUpload?
+    var errorDescription: String? { underlying.localizedDescription }
+}
+
 struct MoveMarkDownloadURLs: Sendable {
     let url: URL
     let thumbnailURL: URL?
@@ -69,13 +87,32 @@ struct MoveMarkStorageService: Sendable {
     enum DownloadKind: String { case evidence, document }
 
     /// Presigned URLs carry their own signature: no cookies, no auth header.
-    private static let objectSession: URLSession = {
+    private static let defaultObjectSession: URLSession = {
         let config = URLSessionConfiguration.default
         config.httpCookieStorage = nil
         config.httpShouldSetCookies = false
         config.timeoutIntervalForRequest = 120
         return URLSession(configuration: config)
     }()
+
+    /// `@concurrent`: an explicit calling convention, so callers from targets with other default isolation agree on it.
+    typealias APITransport = @concurrent @Sendable (URLRequest) async throws -> (Data, URLResponse)
+
+    private let apiTransport: APITransport
+    private let objectSession: URLSession
+    private let apiBaseURL: @Sendable () -> URL?
+
+    /// Defaults are the app's: the signed-in transport, the presigned-URL session and the configured API.
+    /// Tests pass stubs to drive the real upload sequence against a fake backend.
+    init(
+        apiTransport: @escaping APITransport = { try await MoveMarkAuthenticatedTransport.shared.data(for: $0) },
+        objectSession: URLSession = Self.defaultObjectSession,
+        apiBaseURL: @escaping @Sendable () -> URL? = { MoveMarkBackendConfig.apiBaseURL }
+    ) {
+        self.apiTransport = apiTransport
+        self.objectSession = objectSession
+        self.apiBaseURL = apiBaseURL
+    }
 
     // MARK: Upload
 
@@ -140,8 +177,7 @@ struct MoveMarkStorageService: Sendable {
             try await put(source.data, to: sourcePart.url, headers: sourcePart.headers)
             try await put(derivative, to: ticket.url, headers: ticket.headers)
         } catch {
-            await abandon(released)  // nothing references a half-finished upload yet
-            throw error
+            throw await release(released, after: error)  // nothing references a half-finished upload yet
         }
         // The thumbnail is best-effort: grids fall back to the derivative when it's missing.
         if let thumbnail, let part = ticket.thumbnail {
@@ -154,8 +190,7 @@ struct MoveMarkStorageService: Sendable {
         do {
             finalized = try await api("POST", "api/storage/uploads/\(ticket.uploadTicketId)/finalize", json: nil)
         } catch {
-            await abandon(released)
-            throw error
+            throw await release(released, after: error)
         }
         return MoveMarkUpload(
             ticketId: ticket.uploadTicketId,
@@ -200,22 +235,31 @@ struct MoveMarkStorageService: Sendable {
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
         for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
-        let (_, response) = try await Self.objectSession.upload(for: request, from: data)
+        let (_, response) = try await objectSession.upload(for: request, from: data)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else { throw MoveMarkStorageError.uploadFailed(status: status) }
     }
 
     /// Call when the row insert for `upload` failed. Safe to call when unsure whether it committed:
-    /// the API keeps any object a row references. Best-effort — a failure only leaves an unreferenced
-    /// object, which account deletion still removes.
-    func abandon(_ upload: MoveMarkUpload) async {
+    /// the API keeps any object a row references (`.kept`). Idempotent, so a `.failed` abandon can be
+    /// repeated later (within the ticket's 24 h lifetime) to settle the upload either way.
+    @discardableResult
+    func abandon(_ upload: MoveMarkUpload) async -> MoveMarkAbandonResult {
         struct Result: Decodable { let status: String }
         do {
             let result: Result = try await api("POST", "api/storage/uploads/\(upload.ticketId)/abandon", json: nil)
             storageLog.info("abandoned upload ticket status=\(result.status, privacy: .public)")
+            return result.status == "kept" ? .kept : .deleted
         } catch {
             storageLog.error("abandon failed: \(error.localizedDescription, privacy: .public)")
+            return .failed
         }
+    }
+
+    /// Releases a half-finished evidence upload; the error says whether its ticket is still outstanding.
+    private func release(_ upload: MoveMarkUpload, after error: Error) async -> MoveMarkUploadFailure {
+        let result = await abandon(upload)
+        return MoveMarkUploadFailure(underlying: error, unreleased: result == .failed ? upload : nil)
     }
 
     // MARK: Download
@@ -270,7 +314,7 @@ struct MoveMarkStorageService: Sendable {
     }
 
     private func request(_ method: String, _ path: String, json: Any?) throws -> URLRequest {
-        guard let base = MoveMarkBackendConfig.apiBaseURL else { throw MoveMarkStorageError.notConfigured }
+        guard let base = apiBaseURL() else { throw MoveMarkStorageError.notConfigured }
         var url = base
         for component in path.split(separator: "/") { url.appendPathComponent(String(component)) }
         var request = URLRequest(url: url)
@@ -283,7 +327,7 @@ struct MoveMarkStorageService: Sendable {
     }
 
     private func send(_ method: String, _ path: String, json: Any?) async throws -> Data {
-        let (data, response) = try await MoveMarkAuthenticatedTransport.shared.data(for: try request(method, path, json: json))
+        let (data, response) = try await apiTransport(try request(method, path, json: json))
         guard let http = response as? HTTPURLResponse else { throw MoveMarkStorageError.invalidResponse }
         if http.statusCode == 404 { throw MoveMarkStorageError.notFound }
         guard (200..<300).contains(http.statusCode) else {

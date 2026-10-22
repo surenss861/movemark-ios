@@ -51,8 +51,9 @@ final class DeviceEvidenceGateUITests: XCTestCase {
         app.buttons["auth.primaryAction"].tap()
     }
 
-    func testDeviceEvidenceGate() throws {
-        XCTAssertFalse(qaPassword.isEmpty, "MM_QA_PASSWORD not set")
+    /// Signs in, creates the rental and first room, and leaves one library photo and (on devices) one
+    /// in-app camera photo pending in the room, ready for "Save proof".
+    private func startRoomWithLibraryAndCameraPhoto() {
         app.launch()
         signIn()
         dismissSavePassword()
@@ -81,6 +82,41 @@ final class DeviceEvidenceGateUITests: XCTestCase {
         #if !targetEnvironment(simulator)
         captureCameraPhoto()
         #endif
+    }
+
+    /// Run with scripts/qa/fault_proxy.py armed (`outage-second-finalize`): the second photo hits an API
+    /// outage at finalize. The app must report the partial save, never the success receipt, and a retry after
+    /// the outage must save that photo alone.
+    func testPartialSaveIsReportedAndRetried() throws {
+        XCTAssertFalse(qaPassword.isEmpty, "MM_QA_PASSWORD not set")
+        startRoomWithLibraryAndCameraPhoto()
+        tapButton(containing: "Save proof")
+        let partial = app.staticTexts.matching(NSPredicate(format: "label CONTAINS '1 of 2 photos saved. 1 photo needs retry.'")).firstMatch
+        XCTAssertTrue(partial.waitForExistence(timeout: 90), "no partial-save warning")
+        // On screen, not just in the accessibility tree: the user has to actually see it.
+        sleep(2)
+        XCTAssertTrue(app.windows.firstMatch.frame.contains(partial.frame), "partial-save warning is off screen")
+        let retryButton = app.buttons.matching(NSPredicate(format: "label == 'Try again'")).firstMatch
+        XCTAssertTrue(retryButton.isHittable, "retry button is off screen")
+        let receipt = app.staticTexts["Saved to your vault"]
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = "partial-save-warning"; shot.lifetime = .keepAlways; add(shot)
+        // Stay on the warning until the outage is over; full success must not appear meanwhile.
+        for _ in 0..<15 {
+            XCTAssertFalse(receipt.exists, "success shown while a photo was still unsaved")
+            sleep(2)
+        }
+        retryButton.tap()
+        XCTAssertTrue(receipt.waitForExistence(timeout: 90), "retry did not complete the save")
+        let both = app.staticTexts.matching(NSPredicate(format: "label CONTAINS '2 photos saved'")).firstMatch
+        XCTAssertTrue(both.exists, "receipt does not report both photos")
+        let done = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        done.name = "after-retry"; done.lifetime = .keepAlways; add(done)
+    }
+
+    func testDeviceEvidenceGate() throws {
+        XCTAssertFalse(qaPassword.isEmpty, "MM_QA_PASSWORD not set")
+        startRoomWithLibraryAndCameraPhoto()
         tapButton(containing: "Save proof")
         XCTAssertTrue(app.staticTexts["Saved to your vault"].waitForExistence(timeout: 60))
         #if !targetEnvironment(simulator)
@@ -118,6 +154,10 @@ final class DeviceEvidenceGateUITests: XCTestCase {
         app.launch()
         signIn()
         let accountTab = app.buttons["Account"].firstMatch
+        // A run that stopped on the first-run receipt resumes there, before the tab bar exists.
+        if !accountTab.waitForExistence(timeout: 10) {
+            tapButton(containing: "View proof vault")
+        }
         XCTAssertTrue(accountTab.waitForExistence(timeout: 20))
         accountTab.tap()
         let deletion = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Account & Data Deletion'")).firstMatch

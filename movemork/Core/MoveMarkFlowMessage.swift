@@ -13,6 +13,9 @@ struct PropertyMutationOutcome: Sendable {
     var hydrationRefreshFailed: Bool
     /// When true, the evidence/photos saved but tag insertion failed (RLS/network); tags may be missing.
     var tagInsertFailed: Bool = false
+    /// Evidence saves: the entry the photos belong to, and which photos are confirmed saved vs. still pending.
+    var entryId: UUID? = nil
+    var photoResult: MMEvidenceSaveResult? = nil
 }
 
 /// After creating a maintenance issue and refreshing the list.

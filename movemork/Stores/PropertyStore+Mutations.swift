@@ -45,80 +45,25 @@ extension PropertyStore {
         var hadAnyFailure: Bool { failedCount > 0 }
     }
 
-    /// Uploads each JPEG and inserts `evidence_files`; continues on per-photo failure. The upload is abandoned when the insert fails after it.
+    /// Saves each photo (upload → row) for a new inspection item; continues on per-photo failure and
+    /// reports exactly which photos are committed and which need a retry.
     private func saveInspectionPhotos(
-        photos: [MMEvidenceSource],
-        userId: UUID,
+        photos: [MMPendingEvidence],
         propertyId: UUID,
         roomId: UUID,
         inspectionItemId: UUID,
-        folder: String
-    ) async -> PhotoPipelineResult {
-        var savedPhotos: [EvidencePhoto] = []
-        savedPhotos.reserveCapacity(photos.count)
-        var failedCount = 0
-        var insertFailedAfterUploadCount = 0
+        isMoveOut: Bool
+    ) async -> MMEvidenceSaveResult {
         inspectionPhotoPipelineLog.info(
-            "Pipeline start property=\(propertyId.uuidString, privacy: .public) room=\(roomId.uuidString, privacy: .public) item=\(inspectionItemId.uuidString, privacy: .public) folder=\(folder, privacy: .public) photoCount=\(photos.count)"
+            "Pipeline start property=\(propertyId.uuidString, privacy: .public) room=\(roomId.uuidString, privacy: .public) item=\(inspectionItemId.uuidString, privacy: .public) moveOut=\(isMoveOut) photoCount=\(photos.count)"
         )
-        for (index, source) in photos.enumerated() {
-            inspectionPhotoPipelineLog.debug("Photo \(index + 1)/\(photos.count) source=\(source.mimeType, privacy: .public) bytes=\(source.data.count)")
-            // Immutable source + working derivative + thumbnail (best-effort), verified and finalized.
-            let upload: MoveMarkUpload
-            do {
-                upload = try await inspectionRepo.uploadEvidence(
-                    source,
-                    propertyId: propertyId,
-                    roomId: roomId,
-                    isMoveOut: folder == "move-out"
-                )
-                inspectionPhotoPipelineLog.debug("upload OK path=\(upload.path, privacy: .public)")
-            } catch {
-                failedCount += 1
-                inspectionPhotoPipelineLog.error(
-                    "upload FAILED error=\(error.localizedDescription, privacy: .public)"
-                )
-                #if DEBUG
-                print("MoveMark: evidence upload failed", error)
-                #endif
-                continue
-            }
-
-            do {
-                let fileId = try await inspectionRepo.insertEvidenceFile(
-                    propertyId: propertyId,
-                    inspectionItemId: inspectionItemId,
-                    maintenanceIssueId: nil,
-                    filePath: upload.path,
-                    thumbnailPath: upload.thumbnailPath,
-                    sourcePath: upload.sourcePath,
-                    fileType: "image",
-                    capturedAt: upload.capturedAt ?? Date()
-                )
-                savedPhotos.append(EvidencePhoto(id: fileId, filePath: upload.path, thumbnailPath: upload.thumbnailPath))
-                inspectionPhotoPipelineLog.debug(
-                    "insertEvidenceFile OK fileId=\(fileId.uuidString, privacy: .public) path=\(upload.path, privacy: .public)"
-                )
-            } catch {
-                failedCount += 1
-                insertFailedAfterUploadCount += 1
-                await inspectionRepo.abandonUpload(upload)
-                inspectionPhotoPipelineLog.error(
-                    "insertEvidenceFile FAILED path=\(upload.path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
-                )
-                #if DEBUG
-                print("MoveMark: insertEvidenceFile failed after upload", upload.path, error)
-                #endif
-            }
-        }
+        let result = await inspectionRepo
+            .evidenceSaver(inspectionItemId: inspectionItemId, roomId: roomId, propertyId: propertyId, isMoveOut: isMoveOut)
+            .save(photos)
         inspectionPhotoPipelineLog.info(
-            "Pipeline end item=\(inspectionItemId.uuidString, privacy: .public) savedCount=\(savedPhotos.count) failedAttempts=\(failedCount) insertFailAfterUpload=\(insertFailedAfterUploadCount)"
+            "Pipeline end item=\(inspectionItemId.uuidString, privacy: .public) saved=\(result.saved.count) pending=\(result.pending.count) insertFailures=\(result.insertFailures) unresolved=\(result.pending.filter { $0.unresolved != nil }.count)"
         )
-        return PhotoPipelineResult(
-            savedPhotos: savedPhotos,
-            failedCount: failedCount,
-            insertFailedAfterUploadCount: insertFailedAfterUploadCount
-        )
+        return result
     }
 
     /// Uploads maintenance JPEGs to `maintenance-media` and inserts `evidence_files` with `maintenance_issue_id`. Mirrors ``saveInspectionPhotos`` (abandons the upload when the insert fails).
@@ -291,7 +236,7 @@ extension PropertyStore {
         await fetchAll(userId: userId)
     }
 
-    func addEvidence(to roomID: UUID, evidence: EvidenceRecord, photos: [MMEvidenceSource], propertyId: UUID, userId: UUID) async throws -> PropertyMutationOutcome {
+    func addEvidence(to roomID: UUID, evidence: EvidenceRecord, photos: [MMPendingEvidence], propertyId: UUID, userId: UUID) async throws -> PropertyMutationOutcome {
         let inspectionId = try await inspectionRepo.upsertInspection(
             propertyId: propertyId,
             userId: userId,
@@ -316,19 +261,20 @@ extension PropertyStore {
 
         let pipeline = await saveInspectionPhotos(
             photos: photos,
-            userId: userId,
             propertyId: propertyId,
             roomId: roomID,
             inspectionItemId: itemId,
-            folder: "move-in"
+            isMoveOut: false
         )
 
-        guard pipeline.hasAnySuccess else {
+        // Nothing saved and nothing outstanding: drop the empty entry so the user can simply try again.
+        // (With an outstanding upload the entry stays: that upload may still turn out to be saved.)
+        if pipeline.saved.isEmpty, pipeline.pending.allSatisfy({ $0.unresolved == nil }) {
             inspectionPhotoPipelineLog.warning(
-                "Zero evidence_files linked — deleting inspection_item=\(itemId.uuidString, privacy: .public) room=\(roomID.uuidString, privacy: .public) property=\(propertyId.uuidString, privacy: .public) moveIn insertFailAfterUpload=\(pipeline.insertFailedAfterUploadCount)"
+                "Zero evidence_files linked — deleting inspection_item=\(itemId.uuidString, privacy: .public) room=\(roomID.uuidString, privacy: .public) property=\(propertyId.uuidString, privacy: .public) moveIn insertFailures=\(pipeline.insertFailures)"
             )
             try? await inspectionRepo.deleteInspectionItem(id: itemId)
-            throw pipeline.insertFailedAfterUploadCount > 0
+            throw pipeline.insertFailures > 0
                 ? ProofSaveZeroLinksError.moveInDatabase
                 : ProofSaveZeroLinksError.moveInStorage
         }
@@ -352,7 +298,7 @@ extension PropertyStore {
             roomID: roomID,
             itemId: itemId,
             evidence: evidence,
-            savedPhotos: pipeline.savedPhotos,
+            savedPhotos: pipeline.saved,
             propertyId: propertyId
         )
         let ok = await refreshActivePropertyHydration(userId: userId)
@@ -361,18 +307,13 @@ extension PropertyStore {
             roomID: roomID,
             propertyId: propertyId,
             isMoveOut: false,
-            fallbackPhotos: pipeline.savedPhotos,
-            minimumPhotoCount: pipeline.savedPhotos.count
+            fallbackPhotos: pipeline.saved,
+            minimumPhotoCount: pipeline.saved.count
         )
-        #if DEBUG
-        if pipeline.hadAnyFailure {
-            print("MoveMark: addEvidence partially succeeded — some photos failed, but proof was saved.")
-        }
-        #endif
-        return PropertyMutationOutcome(hydrationRefreshFailed: !ok, tagInsertFailed: tagInsertFailed)
+        return PropertyMutationOutcome(hydrationRefreshFailed: !ok, tagInsertFailed: tagInsertFailed, entryId: itemId, photoResult: pipeline)
     }
 
-    func addMoveOutEvidence(to roomID: UUID, evidence: EvidenceRecord, photos: [MMEvidenceSource], propertyId: UUID, userId: UUID) async throws -> PropertyMutationOutcome {
+    func addMoveOutEvidence(to roomID: UUID, evidence: EvidenceRecord, photos: [MMPendingEvidence], propertyId: UUID, userId: UUID) async throws -> PropertyMutationOutcome {
         let inspectionId = try await inspectionRepo.upsertInspection(
             propertyId: propertyId,
             userId: userId,
@@ -397,19 +338,20 @@ extension PropertyStore {
 
         let pipeline = await saveInspectionPhotos(
             photos: photos,
-            userId: userId,
             propertyId: propertyId,
             roomId: roomID,
             inspectionItemId: itemId,
-            folder: "move-out"
+            isMoveOut: true
         )
 
-        guard pipeline.hasAnySuccess else {
+        // Nothing saved and nothing outstanding: drop the empty entry so the user can simply try again.
+        // (With an outstanding upload the entry stays: that upload may still turn out to be saved.)
+        if pipeline.saved.isEmpty, pipeline.pending.allSatisfy({ $0.unresolved == nil }) {
             inspectionPhotoPipelineLog.warning(
-                "Zero evidence_files linked — deleting inspection_item=\(itemId.uuidString, privacy: .public) room=\(roomID.uuidString, privacy: .public) property=\(propertyId.uuidString, privacy: .public) moveOut insertFailAfterUpload=\(pipeline.insertFailedAfterUploadCount)"
+                "Zero evidence_files linked — deleting inspection_item=\(itemId.uuidString, privacy: .public) room=\(roomID.uuidString, privacy: .public) property=\(propertyId.uuidString, privacy: .public) moveOut insertFailures=\(pipeline.insertFailures)"
             )
             try? await inspectionRepo.deleteInspectionItem(id: itemId)
-            throw pipeline.insertFailedAfterUploadCount > 0
+            throw pipeline.insertFailures > 0
                 ? ProofSaveZeroLinksError.moveOutDatabase
                 : ProofSaveZeroLinksError.moveOutStorage
         }
@@ -432,7 +374,7 @@ extension PropertyStore {
             roomID: roomID,
             itemId: itemId,
             evidence: evidence,
-            savedPhotos: pipeline.savedPhotos,
+            savedPhotos: pipeline.saved,
             propertyId: propertyId
         )
         let ok = await refreshActivePropertyHydration(userId: userId)
@@ -441,15 +383,10 @@ extension PropertyStore {
             roomID: roomID,
             propertyId: propertyId,
             isMoveOut: true,
-            fallbackPhotos: pipeline.savedPhotos,
-            minimumPhotoCount: pipeline.savedPhotos.count
+            fallbackPhotos: pipeline.saved,
+            minimumPhotoCount: pipeline.saved.count
         )
-        #if DEBUG
-        if pipeline.hadAnyFailure {
-            print("MoveMark: addMoveOutEvidence partially succeeded — some photos failed, but proof was saved.")
-        }
-        #endif
-        return PropertyMutationOutcome(hydrationRefreshFailed: !ok, tagInsertFailed: tagInsertFailed)
+        return PropertyMutationOutcome(hydrationRefreshFailed: !ok, tagInsertFailed: tagInsertFailed, entryId: itemId, photoResult: pipeline)
     }
 
     func deleteEvidence(entryId: UUID, propertyId: UUID, userId: UUID) async throws -> PropertyMutationOutcome {
@@ -479,27 +416,30 @@ extension PropertyStore {
         return PropertyMutationOutcome(hydrationRefreshFailed: !ok)
     }
 
-    func appendPhotosToEvidence(entryId: UUID, roomId: UUID, photos: [MMEvidenceSource], propertyId: UUID, userId: UUID, isMoveOut: Bool) async throws -> PropertyMutationOutcome {
+    /// Adds photos to an existing entry. Never throws for photo failures: the outcome's `photoResult` says
+    /// which photos are committed and which still need a retry (retry those only).
+    func appendPhotosToEvidence(entryId: UUID, roomId: UUID, photos: [MMPendingEvidence], propertyId: UUID, userId: UUID, isMoveOut: Bool) async -> PropertyMutationOutcome {
         let priorTotal: Int = {
             guard let prop = currentProperty, prop.id == propertyId,
                   let room = prop.rooms.first(where: { $0.id == roomId }) else { return 0 }
             let list = isMoveOut ? room.moveOutEvidence : room.evidence
             return list.first(where: { $0.id == entryId })?.photoCount ?? 0
         }()
-        let expectedTotal = priorTotal + photos.count
 
-        let addedPhotos = try await inspectionRepo.appendPhotosToInspectionItem(
+        let result = await inspectionRepo.appendPhotosToInspectionItem(
             inspectionItemId: entryId,
             roomId: roomId,
             propertyId: propertyId,
-            userId: userId,
             isMoveOut: isMoveOut,
             photos: photos
         )
+        guard !result.saved.isEmpty else {
+            return PropertyMutationOutcome(hydrationRefreshFailed: false, entryId: entryId, photoResult: result)
+        }
         applyOptimisticAppendPhotos(
             entryId: entryId,
             roomId: roomId,
-            addedCount: photos.count,
+            addedCount: result.saved.count,
             propertyId: propertyId
         )
         let ok = await refreshActivePropertyHydration(userId: userId)
@@ -508,10 +448,10 @@ extension PropertyStore {
             roomID: roomId,
             propertyId: propertyId,
             isMoveOut: isMoveOut,
-            fallbackPhotos: addedPhotos,
-            minimumPhotoCount: expectedTotal
+            fallbackPhotos: result.saved,
+            minimumPhotoCount: priorTotal + result.saved.count
         )
-        return PropertyMutationOutcome(hydrationRefreshFailed: !ok)
+        return PropertyMutationOutcome(hydrationRefreshFailed: !ok, entryId: entryId, photoResult: result)
     }
 
     @discardableResult

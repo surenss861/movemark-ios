@@ -223,9 +223,9 @@ struct InspectionRepository {
     }
 
     @discardableResult
-    func insertEvidenceFile(propertyId: UUID, inspectionItemId: UUID?, maintenanceIssueId: UUID?, filePath: String, thumbnailPath: String? = nil, sourcePath: String? = nil, fileType: String, capturedAt: Date) async throws -> UUID {
+    func insertEvidenceFile(id: UUID = UUID(), propertyId: UUID, inspectionItemId: UUID?, maintenanceIssueId: UUID?, filePath: String, thumbnailPath: String? = nil, sourcePath: String? = nil, fileType: String, capturedAt: Date) async throws -> UUID {
         let row = EvidenceFileRow(
-            id: UUID(),
+            id: id,
             propertyId: propertyId,
             inspectionItemId: inspectionItemId,
             maintenanceIssueId: maintenanceIssueId,
@@ -415,29 +415,15 @@ struct InspectionRepository {
         try await MoveMarkStoredFileURLs.evidenceURL(bucket: bucket, path: path)
     }
 
-    /// Appends photos to an existing inspection item (move-in or move-out). Uploads to storage and inserts evidence_files.
-    func appendPhotosToInspectionItem(inspectionItemId: UUID, roomId: UUID, propertyId: UUID, userId: UUID, isMoveOut: Bool, photos: [MMEvidenceSource]) async throws -> [EvidencePhoto] {
-        let folder = isMoveOut ? "move-out" : "move-in"
-        var added: [EvidencePhoto] = []
-        added.reserveCapacity(photos.count)
-        inspectionRepoPhotoLog.info(
-            "appendPhotos start item=\(inspectionItemId.uuidString, privacy: .public) room=\(roomId.uuidString, privacy: .public) count=\(photos.count) folder=\(folder, privacy: .public)"
-        )
-        for (index, source) in photos.enumerated() {
-            inspectionRepoPhotoLog.debug("append \(index + 1)/\(photos.count) source=\(source.mimeType, privacy: .public) bytes=\(source.data.count)")
-            let upload: MoveMarkUpload
-            do {
-                upload = try await uploadEvidence(source, propertyId: propertyId, roomId: roomId, isMoveOut: isMoveOut)
-                inspectionRepoPhotoLog.debug("append upload OK path=\(upload.path, privacy: .public)")
-            } catch {
-                inspectionRepoPhotoLog.error(
-                    "append upload FAILED error=\(error.localizedDescription, privacy: .public)"
-                )
-                throw error
-            }
-
-            do {
-                let fileId = try await insertEvidenceFile(
+    /// Upload → row pipeline for photos of one inspection item (new entry or append). See ``MMEvidenceSaver``.
+    func evidenceSaver(inspectionItemId: UUID, roomId: UUID, propertyId: UUID, isMoveOut: Bool) -> MMEvidenceSaver {
+        MMEvidenceSaver(
+            upload: { source in
+                try await MoveMarkStorageService.shared.uploadEvidence(source, propertyId: propertyId, roomId: roomId, isMoveOut: isMoveOut)
+            },
+            insert: { rowId, upload in
+                try await InspectionRepository().insertEvidenceFile(
+                    id: rowId,
                     propertyId: propertyId,
                     inspectionItemId: inspectionItemId,
                     maintenanceIssueId: nil,
@@ -447,18 +433,25 @@ struct InspectionRepository {
                     fileType: "image",
                     capturedAt: upload.capturedAt ?? Date()
                 )
-                added.append(EvidencePhoto(id: fileId, filePath: upload.path, thumbnailPath: upload.thumbnailPath))
-                inspectionRepoPhotoLog.debug("append insertEvidenceFile OK fileId=\(fileId.uuidString, privacy: .public)")
-            } catch {
-                await abandonUpload(upload)
-                inspectionRepoPhotoLog.error(
-                    "append insertEvidenceFile FAILED path=\(upload.path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
-                )
-                throw error
-            }
+            },
+            abandon: { await MoveMarkStorageService.shared.abandon($0) }
+        )
+    }
+
+    /// Adds photos to an existing inspection item (move-in or move-out), photo by photo. Photos that
+    /// didn't make it come back as `pending`; the ones that did are never re-sent.
+    func appendPhotosToInspectionItem(inspectionItemId: UUID, roomId: UUID, propertyId: UUID, isMoveOut: Bool, photos: [MMPendingEvidence]) async -> MMEvidenceSaveResult {
+        inspectionRepoPhotoLog.info(
+            "appendPhotos start item=\(inspectionItemId.uuidString, privacy: .public) room=\(roomId.uuidString, privacy: .public) count=\(photos.count)"
+        )
+        let result = await evidenceSaver(inspectionItemId: inspectionItemId, roomId: roomId, propertyId: propertyId, isMoveOut: isMoveOut)
+            .save(photos)
+        inspectionRepoPhotoLog.info(
+            "appendPhotos done item=\(inspectionItemId.uuidString, privacy: .public) saved=\(result.saved.count) pending=\(result.pending.count) unresolved=\(result.pending.filter { $0.unresolved != nil }.count)"
+        )
+        if !result.saved.isEmpty {
+            await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
         }
-        inspectionRepoPhotoLog.info("appendPhotos done item=\(inspectionItemId.uuidString, privacy: .public) added=\(added.count)")
-        await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
-        return added
+        return result
     }
 }

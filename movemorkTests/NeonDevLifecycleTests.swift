@@ -145,10 +145,11 @@ struct NeonDevLifecycleTests {
         //    finalize → row; provenance is filled in by the database from the verified ticket.
         let inspection = try await inspections.upsertInspection(propertyId: property.id, userId: userA, type: "move_in")
         let item = try await inspections.insertInspectionItem(inspectionId: inspection, roomId: room.id, notes: "Kitchen\nCounters clean", conditionRating: 4)
-        let saved = try await inspections.appendPhotosToInspectionItem(
-            inspectionItemId: item, roomId: room.id, propertyId: property.id, userId: userA, isMoveOut: false, photos: [source]
+        let saved = await inspections.appendPhotosToInspectionItem(
+            inspectionItemId: item, roomId: room.id, propertyId: property.id, isMoveOut: false, photos: [MMPendingEvidence(source: source)]
         )
-        let kept = try #require(saved.first)
+        #expect(saved.isComplete)
+        let kept = try #require(saved.saved.first)
         let expectedPrefix = "\(userA.uuidString.lowercased())/\(property.id.uuidString.lowercased())/move-in/\(room.id.uuidString.lowercased())/"
         #expect(kept.filePath.hasPrefix(expectedPrefix) && kept.thumbnailPath == String(kept.filePath.dropLast(4)) + "_thumb.jpg")
         let keptRow = try #require(try await inspections.fetchEvidenceFiles(propertyId: property.id).first)
@@ -214,9 +215,9 @@ struct NeonDevLifecycleTests {
 
         // 9. Delete evidence (the app deletes an evidence entry by inspection item; files go server-side).
         let item2 = try await inspections.insertInspectionItem(inspectionId: inspection, roomId: room.id, notes: "Kitchen\nScuff by door", conditionRating: 3)
-        let doomed = try #require(try await inspections.appendPhotosToInspectionItem(
-            inspectionItemId: item2, roomId: room.id, propertyId: property.id, userId: userA, isMoveOut: false, photos: [source2]
-        ).first)
+        let doomed = try #require(await inspections.appendPhotosToInspectionItem(
+            inspectionItemId: item2, roomId: room.id, propertyId: property.id, isMoveOut: false, photos: [MMPendingEvidence(source: source2)]
+        ).saved.first)
         let doomedURL = try await inspections.signedURL(bucket: "inspection-media", path: doomed.filePath)
         #expect(try await download(doomedURL).0 == 200)
         try await inspections.deleteInspectionItem(id: item2)

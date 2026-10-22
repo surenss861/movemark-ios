@@ -40,6 +40,9 @@ struct EvidenceCaptureView: View {
     /// Source evidence for each pending photo (index-aligned with `loadedImages`, which are previews only).
     @State var loadedSources: [MMEvidenceSource] = []
     @State var isUploading = false
+    static let newEntryAnchor = "evidence.newEntry"
+    /// Set after a save where not every photo made it; cleared once the rest are saved.
+    @State var pendingRetry: EvidenceRetryState? = nil
     @State var errorMessage: String? = nil
     @State var successMessage: String? = nil
     @State var showCamera = false
@@ -99,6 +102,7 @@ struct EvidenceCaptureView: View {
 
     var body: some View {
         GeometryReader { geo in
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     RoomEvidenceHero(
@@ -129,8 +133,9 @@ struct EvidenceCaptureView: View {
                             .padding(.top, 10)
                         }
 
-                        if !loadedImages.isEmpty || errorMessage != nil || successMessage != nil {
+                        if !loadedImages.isEmpty || errorMessage != nil || successMessage != nil || pendingRetry != nil {
                             newEntrySection
+                                .id(Self.newEntryAnchor)
                                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                         }
                     }
@@ -148,6 +153,12 @@ struct EvidenceCaptureView: View {
                 return g.contentOffset.y + g.contentInsets.top > threshold
             } action: { _, past in
                 withAnimation(.easeInOut(duration: 0.2)) { heroScrolledAway = past }
+            }
+            // A partial save must be seen: bring its warning and retry button on screen.
+            .onChange(of: pendingRetry?.statusLine) { _, line in
+                guard line != nil else { return }
+                withAnimation(MMMotion.cardReveal) { proxy.scrollTo(Self.newEntryAnchor, anchor: .bottom) }
+            }
             }
         }
         .background(MoveMarkTheme.Colors.appBackground.ignoresSafeArea())
@@ -207,8 +218,8 @@ struct EvidenceCaptureView: View {
         .sheet(item: $appendPhotosEntry) { entry in
             AppendPhotosSheet(
                 entry: entry,
-                onAdd: { sources in
-                    await appendPhotos(to: entry.id, sources: sources)
+                onAdd: { photos in
+                    await appendPhotos(to: entry.id, photos: photos)
                 },
                 onDismiss: { appendPhotosEntry = nil }
             )
@@ -292,6 +303,8 @@ struct EvidenceCaptureView: View {
             if !loadedImages.isEmpty {
                 ProofPhotoGridView(images: loadedImages, isUploading: isUploading)
                     .mmScanline(trigger: proofScanlineTrigger, intensity: 0.1)
+            } else if let pendingRetry {
+                ProofPhotoGridView(images: pendingRetry.pendingPreviews, isUploading: isUploading)
             }
             EvidenceCaptureForm(
                 title: $title,
@@ -301,7 +314,8 @@ struct EvidenceCaptureView: View {
                 selectedItems: $selectedItems,
                 loadedImages: loadedImages,
                 isUploading: isUploading,
-                errorMessage: errorMessage,
+                // A partial save stays visible until its remaining photos are saved.
+                errorMessage: errorMessage ?? pendingRetry?.statusLine,
                 successMessage: successMessage,
                 moveOutMode: moveOutMode,
                 fixedIssueTags: fixedIssueTags,
@@ -588,7 +602,8 @@ private struct EditEvidenceSheet: View {
 // MARK: - Append photos sheet
 private struct AppendPhotosSheet: View {
     let entry: EvidenceRecord
-    let onAdd: ([MMEvidenceSource]) async -> String?
+    /// Returns the photos still needing a retry and a message; empty when everything was added.
+    let onAdd: ([MMPendingEvidence]) async -> (pending: [MMPendingEvidence], message: String?)
     let onDismiss: () -> Void
 
     @State private var selectedItems: [PhotosPickerItem] = []
@@ -596,6 +611,9 @@ private struct AppendPhotosSheet: View {
     @State private var loadedSources: [MMEvidenceSource] = []
     @State private var isUploading = false
     @State private var localError: String?
+    /// After a partial append: exactly the photos that didn't make it. Picker changes are ignored until
+    /// they're saved, so photos already added can't be picked up and sent again.
+    @State private var retryPending: [MMPendingEvidence]? = nil
 
     var body: some View {
         NavigationStack {
@@ -650,7 +668,7 @@ private struct AppendPhotosSheet: View {
                                 )
                                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                             }
-                            .disabled(isUploading)
+                            .disabled(isUploading || retryPending != nil)
                             .onChange(of: selectedItems) { _, new in
                                 loadItems(new)
                             }
@@ -775,25 +793,32 @@ private struct AppendPhotosSheet: View {
     private func commitAppend() async {
         guard !isUploading else { return }
         localError = nil
-        let data = loadedSources
-        guard !data.isEmpty else {
+        let photos = retryPending ?? loadedSources.map { MMPendingEvidence(source: $0) }
+        guard !photos.isEmpty else {
             MMHaptics.warning()
             localError = "Choose at least one photo to add."
             return
         }
+        let previews = Dictionary(uniqueKeysWithValues: zip(photos.map(\.id), loadedImages))
 
         isUploading = true
-        let err = await onAdd(data)
+        let (pending, message) = await onAdd(photos)
         isUploading = false
 
-        if let err {
-            localError = err
-        } else {
+        if pending.isEmpty, message == nil {
             onDismiss()
+            return
+        }
+        localError = message
+        if !pending.isEmpty {
+            retryPending = pending
+            loadedImages = pending.compactMap { previews[$0.id] }
+            loadedSources = pending.map(\.source)
         }
     }
 
     private func loadItems(_ items: [PhotosPickerItem]) {
+        guard retryPending == nil else { return }
         Task { @MainActor in
             let selection = await MMEvidencePicker.load(items)
             loadedSources = selection.sources
