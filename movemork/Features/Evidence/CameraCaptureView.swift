@@ -83,16 +83,25 @@ final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptur
     // MARK: Session
 
     private func configureSession(position: AVCaptureDevice.Position) {
+        guard let camera = applyConfiguration(position: position) else {
+            DispatchQueue.main.async { self.showUnavailable() }
+            return
+        }
+        device = camera
+        DispatchQueue.main.async { self.attachRotation(to: camera) }
+        // Only after commitConfiguration(): startRunning() inside a configuration block raises an exception.
+        if !session.isRunning { session.startRunning() }
+    }
+
+    /// One configuration transaction: input for `position`, photo output at the format's full resolution.
+    private func applyConfiguration(position: AVCaptureDevice.Position) -> AVCaptureDevice? {
         session.beginConfiguration()
         defer { session.commitConfiguration() }
         session.sessionPreset = .photo
         session.inputs.forEach { session.removeInput($0) }
         guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position),
               let input = try? AVCaptureDeviceInput(device: camera), session.canAddInput(input)
-        else {
-            DispatchQueue.main.async { self.showUnavailable() }
-            return
-        }
+        else { return nil }
         session.addInput(input)
         if !session.outputs.contains(output), session.canAddOutput(output) {
             session.addOutput(output)
@@ -101,9 +110,7 @@ final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptur
         if let largest = camera.activeFormat.supportedMaxPhotoDimensions.max(by: { $0.width * $0.height < $1.width * $1.height }) {
             output.maxPhotoDimensions = largest  // the format's full resolution; never reduced
         }
-        device = camera
-        DispatchQueue.main.async { self.attachRotation(to: camera) }
-        if !session.isRunning { session.startRunning() }
+        return camera
     }
 
     private func attachRotation(to camera: AVCaptureDevice) {
@@ -150,6 +157,9 @@ final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptur
 
     nonisolated func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
         let data = error == nil ? photo.fileDataRepresentation() : nil
+        #if DEBUG
+        if let data { MMEvidenceAuditLog.record("camera.fileDataRepresentation", data) }
+        #endif
         DispatchQueue.main.async {
             self.shutterButton.isEnabled = true
             guard let data, let preview = UIImage(data: data) else { return }

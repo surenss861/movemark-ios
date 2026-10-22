@@ -28,6 +28,9 @@ enum MMEvidencePicker {
                 selection.rejectionMessage = MMEvidenceImportError.unreadable.errorDescription
                 continue
             }
+            #if DEBUG
+            MMEvidenceAuditLog.record("library.picker", data)
+            #endif
             do {
                 selection.append(try MMEvidenceImport.source(from: data, captureSource: .library))
             } catch {

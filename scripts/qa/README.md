@@ -12,3 +12,15 @@ never committed); every script refuses production endpoints. Logs and run output
 
 Schema changes never go through this folder: use `neon/migrate.py` (ledger, checksums, production guard).
 Nothing in `neon/tests/` may ever run against a Neon branch.
+
+## Physical-device evidence gate (Neon dev only)
+
+Needs the dev API on 127.0.0.1:8787 (`run_dev_api.sh` with `API_DOCS=off`), a temporary Cloudflare Quick Tunnel to it
+whose URL is set only in the gitignored `Config/Secrets.xcconfig` (never committed), and the paired iPhone unlocked.
+
+1. `scripts/qa/device_evidence_gate.sh` — resets the QA account, runs `DeviceEvidenceGateUITests/testDeviceEvidenceGate`
+   (library photo + in-app camera photo + listing record + move-in report), copies `Documents/evidence-audit.log`.
+2. `device_evidence_verify.py qa-neon-a@movemark.test ~/.movemark-qa/dev/device-audit.log <out>` — hash chains
+   (platform bytes → row → storage checksum → download), metadata, report; requires one library and one camera row.
+3. `testDeleteAccountThroughApp` on the device, then `dev_zero_state.py --count-only`.
+4. Stop cloudflared, confirm the URL no longer serves, restore `Secrets.xcconfig`, stop the API.

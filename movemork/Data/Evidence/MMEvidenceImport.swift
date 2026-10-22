@@ -193,3 +193,23 @@ enum MMEvidenceImport {
         return out as Data
     }
 }
+
+#if DEBUG
+/// DEBUG builds only: an append-only record of the SHA-256 of bytes exactly as the platform handed them
+/// over (camera `fileDataRepresentation()`, picker file data), so a device test can prove the hash chain
+/// platform bytes → uploaded source → stored object. Written to Documents/evidence-audit.log.
+enum MMEvidenceAuditLog {
+    static func record(_ origin: String, _ data: Data) {
+        let hex = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        let type = CGImageSourceCreateWithData(data as CFData, nil).flatMap { CGImageSourceGetType($0) as String? } ?? "?"
+        let line = "\(ISO8601DateFormatter().string(from: Date())) \(origin) bytes=\(data.count) type=\(type) sha256=\(hex)\n"
+        guard let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+        let file = dir.appendingPathComponent("evidence-audit.log")
+        if let handle = try? FileHandle(forWritingTo: file) {
+            handle.seekToEndOfFile(); handle.write(Data(line.utf8)); try? handle.close()
+        } else {
+            try? Data(line.utf8).write(to: file)
+        }
+    }
+}
+#endif
