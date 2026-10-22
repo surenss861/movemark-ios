@@ -9,7 +9,9 @@ END $$;
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE OR REPLACE FUNCTION auth.user_id() RETURNS text LANGUAGE sql STABLE AS
 $$ SELECT nullif(current_setting('request.jwt.claims', true), '')::json ->> 'sub' $$;
-GRANT USAGE ON SCHEMA auth TO authenticated, anonymous;
+-- As on Neon: the app roles may EXECUTE auth.user_id() (RLS policies, resolved when the policy is created)
+-- but hold no USAGE on schema auth, so a function body that names auth.* fails when they call it.
+REVOKE USAGE ON SCHEMA auth FROM authenticated, anonymous;
 GRANT EXECUTE ON FUNCTION auth.user_id() TO authenticated, anonymous;
 CREATE SCHEMA IF NOT EXISTS neon_auth;
 CREATE TABLE IF NOT EXISTS neon_auth."user" (
