@@ -281,6 +281,25 @@ final class SessionManager {
         hasResolvedInitialAuthState = true
     }
 
+    /// Records onboarding as complete on the profile without changing `authPhase`, so the current
+    /// first-run screen (the saved-proof receipt) stays up. Called as soon as the first proof is saved:
+    /// if the app is closed on the receipt, the next launch must open the app, not first-run onboarding.
+    func recordOnboardingCompleted(firstName name: String) async throws {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard MoveMarkBackendConfig.isConfigured, !trimmed.isEmpty, let uid = userId else { return }
+        try await dataAPI
+            .from("profiles")
+            .update(
+                OnboardingUpdate(
+                    fullName: trimmed,
+                    onboardingCompletedAt: ISO8601DateFormatter().string(from: Date())
+                )
+            )
+            .eq("id", value: uid)
+            .execute()
+        self.firstName = trimmed
+    }
+
     func completeOnboarding(firstName name: String) async throws {
         guard MoveMarkBackendConfig.isConfigured else {
             throw AuthError.validation("This build is not configured to reach MoveMark’s servers.")

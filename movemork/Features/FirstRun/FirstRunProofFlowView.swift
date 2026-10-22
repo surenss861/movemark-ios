@@ -66,6 +66,10 @@ struct FirstRunProofFlowView: View {
                         moveOutMode: selectedMoment.capturesMoveOutEvidence,
                         onFirstProofSaved: { summary in
                             propertyStore.firstRunAwaitingReceiptDismissal = true
+                            // Proof exists now: onboarding is done even if the app closes on the receipt.
+                            if requiresOnboarding {
+                                Task { try? await sessionManager.recordOnboardingCompleted(firstName: onboardingName) }
+                            }
                             let saved = FirstRunSavedSummary(
                                 propertyId: propertyId,
                                 roomName: summary.roomName,

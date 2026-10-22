@@ -114,6 +114,21 @@ final class DeviceEvidenceGateUITests: XCTestCase {
         done.name = "after-retry"; done.lifetime = .keepAlways; add(done)
     }
 
+    /// Closing the app on the first-run receipt must not send an onboarded account back to first-run
+    /// onboarding on the next launch.
+    func testClosingOnTheReceiptDoesNotRestartOnboarding() throws {
+        XCTAssertFalse(qaPassword.isEmpty, "MM_QA_PASSWORD not set")
+        startRoomWithLibraryAndCameraPhoto()
+        tapButton(containing: "Save proof")
+        XCTAssertTrue(app.staticTexts["Saved to your vault"].waitForExistence(timeout: 60))
+        sleep(2)  // the profile write is fire-and-forget; give it a moment, as a user would
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["Account"].firstMatch.waitForExistence(timeout: 30), "relaunch did not open the app")
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS 'I just moved in'")).firstMatch.exists,
+                       "relaunch went back to first-run onboarding")
+    }
+
     func testDeviceEvidenceGate() throws {
         XCTAssertFalse(qaPassword.isEmpty, "MM_QA_PASSWORD not set")
         startRoomWithLibraryAndCameraPhoto()
