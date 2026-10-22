@@ -11,6 +11,7 @@ verified session JWT instead). Writes run inside a transaction that is rolled ba
 from __future__ import annotations
 
 import json
+import os
 import statistics
 import sys
 
@@ -109,7 +110,9 @@ def run(dsn: str, label: str) -> None:
             times, buffers, scans = [], 0, set()
             for _ in range(RUNS):
                 with conn.transaction(force_rollback=True):
-                    if who.startswith("app"):
+                    # BENCH_NO_RLS=1: on Neon, auth.user_id() needs a verified session JWT (pg_session_jwt), so
+                    # app queries run as the owner there; their RLS plans are measured on the local shim build.
+                    if who.startswith("app") and not os.getenv("BENCH_NO_RLS"):
                         user = ids["UB"] if who == "app_big" else ids["U"]
                         conn.execute("SELECT set_config('request.jwt.claims', %s, true)", (json.dumps({"sub": user, "role": "authenticated"}),))
                         conn.execute("SET LOCAL ROLE authenticated")

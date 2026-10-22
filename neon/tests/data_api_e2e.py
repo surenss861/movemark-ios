@@ -21,6 +21,13 @@ import uuid
 import httpx
 import psycopg
 
+def refused(r: httpx.Response) -> bool:
+    """RLS matched nothing (200 []), or the apps' role does not hold the privilege at all (0960: 403 42501)."""
+    if r.status_code == 200:
+        return r.json() == []
+    return r.status_code == 403 and r.json().get("code") == "42501"
+
+
 AUTH = os.environ["MM_NEON_AUTH_URL"].rstrip("/")
 API = os.environ["MM_NEON_DATA_API_URL"].rstrip("/")
 OWNER_DSN = open(os.environ["MM_NEON_OWNER_DSN_FILE"]).read().strip()
@@ -121,13 +128,13 @@ def main() -> None:
                 col = {"properties": "title", "rooms": "name", "inspections": "overall_notes",
                        "inspection_items": "notes", "evidence_files": "file_path"}[table]
                 r = a.patch(f"/{table}?id=eq.{rb[key]}", json={col: "hijacked"})
-                record(f"A cannot UPDATE B's {table}", r.status_code == 200 and r.json() == [], r)
+                record(f"A cannot UPDATE B's {table}", refused(r), r)
             r2 = b.get(f"/properties?id=eq.{rb['property']}&select=title")
             record("B's property title unchanged after A's attempts", r2.json()[0]["title"] == "QA ONLY B", r2)
             r = a.delete(f"/evidence_files?id=eq.{rb['evidence']}")
             record("A cannot DELETE B's evidence row", r.status_code == 200 and r.json() == [], r)
             r = a.delete(f"/properties?id=eq.{rb['property']}")
-            record("A cannot DELETE B's property", r.status_code == 200 and r.json() == [], r)
+            record("A cannot DELETE B's property", refused(r), r)
             r2 = b.get(f"/evidence_files?id=eq.{rb['evidence']}&select=id")
             record("B's evidence still exists", r2.status_code == 200 and len(r2.json()) == 1, r2)
 

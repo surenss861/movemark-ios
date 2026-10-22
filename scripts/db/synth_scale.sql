@@ -31,7 +31,6 @@ BEGIN
   END IF;
 END $$;
 
-SET session_replication_role = default;
 SET synchronous_commit = off;
 
 CREATE TEMP TABLE synth_params AS SELECT (:scale)::numeric AS s;
