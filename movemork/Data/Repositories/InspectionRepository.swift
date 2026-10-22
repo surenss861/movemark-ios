@@ -83,8 +83,14 @@ struct EvidenceFileRow: Codable, Identifiable {
     /// Small (~320px) JPEG uploaded alongside `filePath` at capture time; `nil` for rows captured before this existed (fall back to `filePath`).
     var thumbnailPath: String? = nil
     var fileType: String
+    /// From the source's own metadata when it has any (declared, not verified); else upload time.
     var capturedAt: String?
+    /// When MoveMark received it — set by the database, never by the app.
     var createdAt: String?
+    /// The immutable source object. Its hash, size, type and dimensions are filled in by the database
+    /// from the finalized upload ticket; the app never sends them.
+    var sourcePath: String? = nil
+    var sourceSha256: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -96,6 +102,8 @@ struct EvidenceFileRow: Codable, Identifiable {
         case fileType = "file_type"
         case capturedAt = "captured_at"
         case createdAt = "created_at"
+        case sourcePath = "source_path"
+        case sourceSha256 = "source_sha256"
     }
 }
 
@@ -215,7 +223,7 @@ struct InspectionRepository {
     }
 
     @discardableResult
-    func insertEvidenceFile(propertyId: UUID, inspectionItemId: UUID?, maintenanceIssueId: UUID?, filePath: String, thumbnailPath: String? = nil, fileType: String, capturedAt: Date) async throws -> UUID {
+    func insertEvidenceFile(propertyId: UUID, inspectionItemId: UUID?, maintenanceIssueId: UUID?, filePath: String, thumbnailPath: String? = nil, sourcePath: String? = nil, fileType: String, capturedAt: Date) async throws -> UUID {
         let row = EvidenceFileRow(
             id: UUID(),
             propertyId: propertyId,
@@ -224,7 +232,8 @@ struct InspectionRepository {
             filePath: filePath,
             thumbnailPath: thumbnailPath,
             fileType: fileType,
-            capturedAt: ISO8601DateFormatter().string(from: capturedAt)
+            capturedAt: ISO8601DateFormatter().string(from: capturedAt),
+            sourcePath: sourcePath
         )
 
         let inserted: EvidenceFileRow = try await dataAPI
@@ -395,11 +404,10 @@ struct InspectionRepository {
             .value
     }
 
-    /// Uploads one evidence photo (and its thumbnail, best-effort) under a key the API builds for this room.
-    func uploadEvidencePhoto(_ data: Data, thumbnail: Data?, propertyId: UUID, roomId: UUID, isMoveOut: Bool) async throws -> MoveMarkUpload {
-        try await MoveMarkStorageService.shared.uploadEvidencePhoto(
-            data, thumbnail: thumbnail, propertyId: propertyId, roomId: roomId, isMoveOut: isMoveOut
-        )
+    /// Uploads one piece of room evidence: the immutable source, its working derivative and thumbnail,
+    /// verified and finalized by the API. Insert the row with the returned paths.
+    func uploadEvidence(_ source: MMEvidenceSource, propertyId: UUID, roomId: UUID, isMoveOut: Bool) async throws -> MoveMarkUpload {
+        try await MoveMarkStorageService.shared.uploadEvidence(source, propertyId: propertyId, roomId: roomId, isMoveOut: isMoveOut)
     }
 
     /// Temporary download URL for a stored evidence path (original or thumbnail).
@@ -408,24 +416,18 @@ struct InspectionRepository {
     }
 
     /// Appends photos to an existing inspection item (move-in or move-out). Uploads to storage and inserts evidence_files.
-    func appendPhotosToInspectionItem(inspectionItemId: UUID, roomId: UUID, propertyId: UUID, userId: UUID, isMoveOut: Bool, photos: [Data]) async throws -> [EvidencePhoto] {
+    func appendPhotosToInspectionItem(inspectionItemId: UUID, roomId: UUID, propertyId: UUID, userId: UUID, isMoveOut: Bool, photos: [MMEvidenceSource]) async throws -> [EvidencePhoto] {
         let folder = isMoveOut ? "move-out" : "move-in"
         var added: [EvidencePhoto] = []
         added.reserveCapacity(photos.count)
         inspectionRepoPhotoLog.info(
             "appendPhotos start item=\(inspectionItemId.uuidString, privacy: .public) room=\(roomId.uuidString, privacy: .public) count=\(photos.count) folder=\(folder, privacy: .public)"
         )
-        for (index, photoData) in photos.enumerated() {
-            inspectionRepoPhotoLog.debug("append \(index + 1)/\(photos.count) bytes=\(photoData.count)")
+        for (index, source) in photos.enumerated() {
+            inspectionRepoPhotoLog.debug("append \(index + 1)/\(photos.count) source=\(source.mimeType, privacy: .public) bytes=\(source.data.count)")
             let upload: MoveMarkUpload
             do {
-                upload = try await uploadEvidencePhoto(
-                    photoData,
-                    thumbnail: MMImageThumbnail.make(from: photoData),
-                    propertyId: propertyId,
-                    roomId: roomId,
-                    isMoveOut: isMoveOut
-                )
+                upload = try await uploadEvidence(source, propertyId: propertyId, roomId: roomId, isMoveOut: isMoveOut)
                 inspectionRepoPhotoLog.debug("append upload OK path=\(upload.path, privacy: .public)")
             } catch {
                 inspectionRepoPhotoLog.error(
@@ -441,8 +443,9 @@ struct InspectionRepository {
                     maintenanceIssueId: nil,
                     filePath: upload.path,
                     thumbnailPath: upload.thumbnailPath,
+                    sourcePath: upload.sourcePath,
                     fileType: "image",
-                    capturedAt: Date()
+                    capturedAt: upload.capturedAt ?? Date()
                 )
                 added.append(EvidencePhoto(id: fileId, filePath: upload.path, thumbnailPath: upload.thumbnailPath))
                 inspectionRepoPhotoLog.debug("append insertEvidenceFile OK fileId=\(fileId.uuidString, privacy: .public)")

@@ -189,7 +189,8 @@ struct MaintenanceIssueDetailView: View {
                 PhotosPicker(
                     selection: $selectedPhotos,
                     maxSelectionCount: 10,
-                    matching: .images
+                    matching: .images,
+                    preferredItemEncoding: .current
                 ) {
                     HStack {
                         Image(systemName: "paperclip")
@@ -342,15 +343,12 @@ struct MaintenanceIssueDetailView: View {
 
             for item in items {
                 guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-                // The thumbnail rides on the same upload and is best-effort: the grid falls back to `filePath`.
+                // The picked file is the source evidence (its real type, never relabelled); the derivative
+                // and thumbnail are made from it and the whole set is verified before the row is written.
                 let upload: MoveMarkUpload
                 do {
-                    upload = try await maintenanceRepo.uploadAttachment(
-                        data,
-                        thumbnail: MMImageThumbnail.make(from: data),
-                        propertyId: issue.propertyId,
-                        issueId: issue.id
-                    )
+                    let source = try MMEvidenceImport.source(from: data, captureSource: .library)
+                    upload = try await maintenanceRepo.uploadAttachment(source, propertyId: issue.propertyId, issueId: issue.id)
                 } catch {
                     errorMessage = MoveMarkFlowMessage.maintenancePhotoUploadFailed(error)
                     retryAction = { uploadPhotos(items) }
@@ -364,8 +362,9 @@ struct MaintenanceIssueDetailView: View {
                         maintenanceIssueId: issue.id,
                         filePath: upload.path,
                         thumbnailPath: upload.thumbnailPath,
+                        sourcePath: upload.sourcePath,
                         fileType: "image",
-                        capturedAt: Date()
+                        capturedAt: upload.capturedAt ?? Date()
                     )
                 } catch {
                     await maintenanceRepo.abandonUpload(upload)

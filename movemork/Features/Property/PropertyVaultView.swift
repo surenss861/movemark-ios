@@ -1069,21 +1069,29 @@ struct PropertyVaultView: View {
                 uploadError = MoveMarkFlowMessage.documentImageReadFailed
                 return
             }
-            let compressed: Data
-            if let image = UIImage(data: data) {
-                compressed = image.jpegData(compressionQuality: 0.82) ?? data
-            } else {
-                compressed = data
+            // JPEG and PNG documents keep their bytes. HEIC/HEIF (not accepted for documents) is the one
+            // conversion: a JPEG of the full image via ImageIO, never upscaled. The thumbnail is derived.
+            let image: MMEvidenceSource
+            do {
+                image = try MMEvidenceImport.source(from: data, captureSource: .library)
+            } catch {
+                uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
+                return
             }
-            let fileName = "\(UUID()).jpg"
+            let keepsBytes = image.mimeType == "image/jpeg" || image.mimeType == "image/png"
+            guard let fileBytes = keepsBytes ? image.data : MMEvidenceImport.derivative(from: image) else {
+                uploadError = MoveMarkFlowMessage.documentImageReadFailed
+                return
+            }
+            let fileName = "\(UUID()).\(keepsBytes ? image.fileExtension : "jpg")"
 
             // The thumbnail rides on the same upload and is best-effort: previews fall back to `filePath`.
             let upload: MoveMarkUpload
             do {
                 upload = try await documentRepo.uploadDocument(
-                    compressed,
+                    fileBytes,
                     fileName: fileName,
-                    thumbnail: MMImageThumbnail.make(from: compressed),
+                    thumbnail: MMEvidenceImport.thumbnail(from: image),
                     propertyId: property.id,
                     documentType: canonicalType
                 )
@@ -1263,7 +1271,7 @@ private struct ReplacePhotoSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {
-                PhotosPicker(selection: $selection, matching: .images) {
+                PhotosPicker(selection: $selection, matching: .images, preferredItemEncoding: .current) {
                     Label("Choose photo", systemImage: "photo.on.rectangle.angled")
                         .font(MoveMarkTheme.Typography.button)
                         .foregroundStyle(MoveMarkTheme.Colors.primary)

@@ -37,6 +37,8 @@ struct EvidenceCaptureView: View {
     @State var selectedCondition: RoomRecord.ConditionRating = .good
     @State var selectedItems: [PhotosPickerItem] = []
     @State var loadedImages: [UIImage] = []
+    /// Source evidence for each pending photo (index-aligned with `loadedImages`, which are previews only).
+    @State var loadedSources: [MMEvidenceSource] = []
     @State var isUploading = false
     @State var errorMessage: String? = nil
     @State var successMessage: String? = nil
@@ -177,8 +179,16 @@ struct EvidenceCaptureView: View {
         }
         .fullScreenCover(isPresented: $showCamera) {
             CameraCaptureView(
-                onCapture: { image in
-                    loadedImages.append(downsample(image, maxDimension: 1200))
+                onCapture: { fileData in
+                    // The camera's encoded capture file is the source evidence, untouched.
+                    do {
+                        var selection = MMEvidenceSelection(sources: loadedSources, previews: loadedImages)
+                        selection.append(try MMEvidenceImport.source(from: fileData, captureSource: .camera))
+                        loadedSources = selection.sources
+                        loadedImages = selection.previews
+                    } catch {
+                        errorMessage = error.localizedDescription
+                    }
                     showCamera = false
                 },
                 onCancel: { showCamera = false }
@@ -197,8 +207,8 @@ struct EvidenceCaptureView: View {
         .sheet(item: $appendPhotosEntry) { entry in
             AppendPhotosSheet(
                 entry: entry,
-                onAdd: { photoData in
-                    await appendPhotos(to: entry.id, photoData: photoData)
+                onAdd: { sources in
+                    await appendPhotos(to: entry.id, sources: sources)
                 },
                 onDismiss: { appendPhotosEntry = nil }
             )
@@ -578,11 +588,12 @@ private struct EditEvidenceSheet: View {
 // MARK: - Append photos sheet
 private struct AppendPhotosSheet: View {
     let entry: EvidenceRecord
-    let onAdd: ([Data]) async -> String?
+    let onAdd: ([MMEvidenceSource]) async -> String?
     let onDismiss: () -> Void
 
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var loadedImages: [UIImage] = []
+    @State private var loadedSources: [MMEvidenceSource] = []
     @State private var isUploading = false
     @State private var localError: String?
 
@@ -622,7 +633,7 @@ private struct AppendPhotosSheet: View {
                                 }
                             }
 
-                            PhotosPicker(selection: $selectedItems, maxSelectionCount: 20, matching: .images) {
+                            PhotosPicker(selection: $selectedItems, maxSelectionCount: 20, matching: .images, preferredItemEncoding: .current) {
                                 HStack(spacing: 10) {
                                     Image(systemName: "photo.on.rectangle.angled")
                                         .font(MoveMarkTheme.Typography.bodySmallEmphasis)
@@ -764,7 +775,7 @@ private struct AppendPhotosSheet: View {
     private func commitAppend() async {
         guard !isUploading else { return }
         localError = nil
-        let data = loadedImages.compactMap { $0.jpegData(compressionQuality: 0.82) }
+        let data = loadedSources
         guard !data.isEmpty else {
             MMHaptics.warning()
             localError = "Choose at least one photo to add."
@@ -784,23 +795,10 @@ private struct AppendPhotosSheet: View {
 
     private func loadItems(_ items: [PhotosPickerItem]) {
         Task { @MainActor in
-            var images: [UIImage] = []
-            for item in items {
-                if let data = try? await item.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
-                    let maxDim: CGFloat = 1200
-                    let scale = min(maxDim / max(image.size.width, image.size.height), 1.0)
-                    if scale < 1.0 {
-                        let newSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-                        let renderer = UIGraphicsImageRenderer(size: newSize)
-                        images.append(renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: newSize)) })
-                    } else {
-                        images.append(image)
-                    }
-                }
-            }
-            loadedImages = images
-            localError = nil
+            let selection = await MMEvidencePicker.load(items)
+            loadedSources = selection.sources
+            loadedImages = selection.previews
+            localError = selection.rejectionMessage
         }
     }
 }

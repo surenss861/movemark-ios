@@ -111,11 +111,9 @@ struct MaintenanceRepository {
             .execute()
     }
 
-    /// Uploads one maintenance photo (and its thumbnail, best-effort) for an issue the caller owns.
-    func uploadAttachment(_ data: Data, thumbnail: Data?, propertyId: UUID, issueId: UUID) async throws -> MoveMarkUpload {
-        let upload = try await MoveMarkStorageService.shared.uploadMaintenancePhoto(
-            data, thumbnail: thumbnail, propertyId: propertyId, issueId: issueId
-        )
+    /// Uploads one piece of maintenance evidence (immutable source + derivative + thumbnail), verified and finalized.
+    func uploadAttachment(_ source: MMEvidenceSource, propertyId: UUID, issueId: UUID) async throws -> MoveMarkUpload {
+        let upload = try await MoveMarkStorageService.shared.uploadMaintenanceEvidence(source, propertyId: propertyId, issueId: issueId)
         await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
         return upload
     }

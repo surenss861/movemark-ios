@@ -5,8 +5,11 @@
 //  MoveMark — evidence, maintenance and document files through the MoveMark API (Neon Object Storage).
 //
 //  The app never chooses a bucket or object key and never deletes an object directly:
-//  - upload: ask the API for a ticket (it checks ownership and builds the key) → PUT the bytes to the
-//    presigned URL with the signed headers → the caller records the returned path in its row.
+//  - evidence upload: ask the API for a ticket (it checks ownership and builds the keys) → PUT the
+//    immutable source (its SHA-256 is signed; storage enforces it), the working derivative and the
+//    thumbnail → finalize (the API verifies the stored source) → the caller records the returned
+//    paths in its row; the database copies provenance from the finalized ticket and consumes it.
+//  - document upload: ticket → PUT → the caller records the returned path.
 //    If that row insert fails, the caller abandons the ticket; the API deletes the object only when no
 //    row references it, so a row that committed behind a lost response keeps its file.
 //  - download: presigned URLs are requested by **row id** and are temporary transport (1 hour). The
@@ -24,9 +27,14 @@ private let storageLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "move
 struct MoveMarkUpload: Sendable, Equatable {
     let ticketId: String
     let bucket: String
+    /// Working derivative (evidence) or the file itself (documents) — what the row's `file_path` holds.
     let path: String
     /// Nil when no thumbnail was requested or its (best-effort) upload failed.
     let thumbnailPath: String?
+    /// The immutable source evidence object, for the row's `source_path`; nil for documents.
+    var sourcePath: String? = nil
+    /// The source's own capture time, for the row's `captured_at`.
+    var capturedAt: Date? = nil
 }
 
 struct MoveMarkDownloadURLs: Sendable {
@@ -71,21 +79,23 @@ struct MoveMarkStorageService: Sendable {
 
     // MARK: Upload
 
-    func uploadEvidencePhoto(_ data: Data, thumbnail: Data?, propertyId: UUID, roomId: UUID, isMoveOut: Bool) async throws -> MoveMarkUpload {
-        try await upload(fields: [
+    /// Room evidence: immutable source + working derivative + thumbnail, verified and finalized.
+    func uploadEvidence(_ source: MMEvidenceSource, propertyId: UUID, roomId: UUID, isMoveOut: Bool) async throws -> MoveMarkUpload {
+        try await uploadSourced(source, fields: [
             "kind": "evidence",
             "propertyId": propertyId.uuidString.lowercased(),
             "roomId": roomId.uuidString.lowercased(),
             "phase": isMoveOut ? "move_out" : "move_in",
-        ], data: data, contentType: "image/jpeg", thumbnail: thumbnail)
+        ])
     }
 
-    func uploadMaintenancePhoto(_ data: Data, thumbnail: Data?, propertyId: UUID, issueId: UUID) async throws -> MoveMarkUpload {
-        try await upload(fields: [
+    /// Maintenance evidence, same three objects as room evidence.
+    func uploadMaintenanceEvidence(_ source: MMEvidenceSource, propertyId: UUID, issueId: UUID) async throws -> MoveMarkUpload {
+        try await uploadSourced(source, fields: [
             "kind": "maintenance",
             "propertyId": propertyId.uuidString.lowercased(),
             "issueId": issueId.uuidString.lowercased(),
-        ], data: data, contentType: "image/jpeg", thumbnail: thumbnail)
+        ])
     }
 
     func uploadDocument(_ data: Data, contentType: String, thumbnail: Data?, propertyId: UUID, documentType: String) async throws -> MoveMarkUpload {
@@ -108,6 +118,53 @@ struct MoveMarkStorageService: Sendable {
         let url: String
         let headers: [String: String]
         let thumbnail: Part?
+        let source: Part?
+    }
+
+    private func uploadSourced(_ source: MMEvidenceSource, fields: [String: String]) async throws -> MoveMarkUpload {
+        guard let derivative = MMEvidenceImport.derivative(from: source) else { throw MMEvidenceImportError.unreadable }
+        let thumbnail = MMEvidenceImport.thumbnail(from: source)
+        var body: [String: Any] = fields
+        body["contentType"] = "image/jpeg"
+        body["size"] = derivative.count
+        if let thumbnail { body["thumbnailSize"] = thumbnail.count }
+        body["source"] = [
+            "contentType": source.mimeType, "size": source.data.count, "sha256": source.sha256Hex,
+            "width": source.pixelWidth, "height": source.pixelHeight, "captureSource": source.captureSource.rawValue,
+        ] as [String: Any]
+        let ticket: Ticket = try await api("POST", "api/storage/uploads", json: body)
+        guard let sourcePart = ticket.source else { throw MoveMarkStorageError.invalidResponse }
+        let released = MoveMarkUpload(ticketId: ticket.uploadTicketId, bucket: ticket.bucket, path: ticket.path, thumbnailPath: nil)
+
+        do {
+            try await put(source.data, to: sourcePart.url, headers: sourcePart.headers)
+            try await put(derivative, to: ticket.url, headers: ticket.headers)
+        } catch {
+            await abandon(released)  // nothing references a half-finished upload yet
+            throw error
+        }
+        // The thumbnail is best-effort: grids fall back to the derivative when it's missing.
+        if let thumbnail, let part = ticket.thumbnail {
+            do { try await put(thumbnail, to: part.url, headers: part.headers) }
+            catch { storageLog.error("thumbnail PUT failed: \(error.localizedDescription, privacy: .public)") }
+        }
+
+        struct Finalized: Decodable { let status: String; let thumbnail: Bool? }
+        let finalized: Finalized
+        do {
+            finalized = try await api("POST", "api/storage/uploads/\(ticket.uploadTicketId)/finalize", json: nil)
+        } catch {
+            await abandon(released)
+            throw error
+        }
+        return MoveMarkUpload(
+            ticketId: ticket.uploadTicketId,
+            bucket: ticket.bucket,
+            path: ticket.path,
+            thumbnailPath: finalized.thumbnail == true ? ticket.thumbnail?.path : nil,
+            sourcePath: sourcePart.path,
+            capturedAt: source.capturedAt
+        )
     }
 
     private func upload(fields: [String: String], data: Data, contentType: String, thumbnail: Data?) async throws -> MoveMarkUpload {

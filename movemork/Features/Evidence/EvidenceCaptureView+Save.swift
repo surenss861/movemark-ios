@@ -41,7 +41,7 @@ extension EvidenceCaptureView {
             stage: moveOutMode ? .moveOut : .moveIn
         )
 
-        let photoData = loadedImages.compactMap { $0.jpegData(compressionQuality: 0.82) }
+        let photoData = loadedSources
 
         Task { @MainActor in
             defer { isUploading = false }
@@ -116,6 +116,7 @@ extension EvidenceCaptureView {
                 selectedCondition = .good
                 selectedItems = []
                 loadedImages = []
+                loadedSources = []
                 var msg = moveOutMode
                     ? "Move-out proof saved. Thumbnails may take a moment to appear."
                     : "Proof saved. Thumbnails may take a moment to appear."
@@ -233,7 +234,7 @@ extension EvidenceCaptureView {
 
     /// - Returns: `nil` if photos were appended; otherwise a user-facing message (also assigned to `errorMessage` for the capture screen).
     @discardableResult
-    func appendPhotos(to entryId: UUID, photoData: [Data]) async -> String? {
+    func appendPhotos(to entryId: UUID, sources photoData: [MMEvidenceSource]) async -> String? {
         guard !photoData.isEmpty else {
             let msg = "Choose at least one photo to add."
             errorMessage = msg

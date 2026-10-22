@@ -18,6 +18,8 @@ struct MaintenanceLogView: View {
     @State private var details = ""
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var loadedImages: [UIImage] = []
+    /// Source evidence for each pending photo (index-aligned with the `loadedImages` previews).
+    @State private var loadedSources: [MMEvidenceSource] = []
     @State private var isLoading = false
     @State private var isSubmitting = false
     @State private var errorMessage: String? = nil
@@ -138,7 +140,8 @@ struct MaintenanceLogView: View {
                 PhotosPicker(
                     selection: $selectedPhotos,
                     maxSelectionCount: 10,
-                    matching: .images
+                    matching: .images,
+                    preferredItemEncoding: .current
                 ) {
                     HStack {
                         Image(systemName: "camera.fill")
@@ -288,27 +291,12 @@ struct MaintenanceLogView: View {
 
     private func loadPhotos(_ items: [PhotosPickerItem]) {
         Task { @MainActor in
-            var images: [UIImage] = []
-
-            for item in items {
-                if let data = try? await item.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
-                    let size = image.size
-                    let scale = min(1200 / max(size.width, size.height), 1.0)
-
-                    if scale < 1.0 {
-                        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
-                        let renderer = UIGraphicsImageRenderer(size: newSize)
-                        images.append(renderer.image { _ in
-                            image.draw(in: CGRect(origin: .zero, size: newSize))
-                        })
-                    } else {
-                        images.append(image)
-                    }
-                }
+            let selection = await MMEvidencePicker.load(items)
+            loadedSources = selection.sources
+            loadedImages = selection.previews
+            if let message = selection.rejectionMessage {
+                errorMessage = message
             }
-
-            loadedImages = images
         }
     }
 
@@ -340,7 +328,7 @@ struct MaintenanceLogView: View {
             photoCount: loadedImages.count
         )
 
-        let photoData = loadedImages.compactMap { $0.jpegData(compressionQuality: 0.82) }
+        let photoData = loadedSources
 
         Task { @MainActor in
             defer { isSubmitting = false }
@@ -358,6 +346,7 @@ struct MaintenanceLogView: View {
                 details = ""
                 selectedPhotos = []
                 loadedImages = []
+                loadedSources = []
 
                 if outcome.hadPartialPhotoLoss && outcome.listRefreshFailed {
                     softNotice =

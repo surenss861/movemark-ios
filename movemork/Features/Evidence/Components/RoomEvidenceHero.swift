@@ -378,7 +378,7 @@ struct RoomGalleryPicker: View {
     var compact: Bool = false
 
     var body: some View {
-        PhotosPicker(selection: selection, maxSelectionCount: 20, matching: .images) {
+        PhotosPicker(selection: selection, maxSelectionCount: 20, matching: .images, preferredItemEncoding: .current) {
             Label(compact ? "Gallery" : "Choose from gallery", systemImage: "photo.on.rectangle.angled")
                 .font(MoveMarkTheme.Typography.subheadlineMedium)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)

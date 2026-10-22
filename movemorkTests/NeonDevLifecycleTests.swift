@@ -14,6 +14,7 @@
 //
 
 import Foundation
+import ImageIO
 import RevenueCat
 import StoreKitTest
 import Testing
@@ -103,7 +104,9 @@ struct NeonDevLifecycleTests {
         #expect(dataHost.hasPrefix("ep-quiet-salad-b55aeba0.") && authHost.hasPrefix("ep-quiet-salad-b55aeba0."))
         #expect(!dataHost.contains("ep-steep-wind") && MoveMarkBackendConfig.apiBaseURL?.host == "127.0.0.1")
         let photo = try Data(contentsOf: URL(fileURLWithPath: try #require(env["MM_E2E_PHOTO"])))
-        let photo2 = try #require(UIImage(data: photo)?.jpegData(compressionQuality: 0.7))
+        let photo2 = try #require(UIImage(data: photo)?.jpegData(compressionQuality: 0.7))  // a second, different file
+        let source = try MMEvidenceImport.source(from: photo, captureSource: .library)
+        let source2 = try MMEvidenceImport.source(from: photo2, captureSource: .camera)
         let passwordA = "Qa-\(UUID().uuidString)"
         let passwordB = "Qa-\(UUID().uuidString)"
 
@@ -138,16 +141,20 @@ struct NeonDevLifecycleTests {
         #expect(try await properties.fetchProperties(userId: userA).map(\.id) == [property.id])
         log("3-4 create rental + room", "property \(property.id) room \(room.id)")
 
-        // 5. Capture/upload evidence: ticket → PUT → row with the server's path (the store's own pipeline).
+        // 5. Capture/upload evidence: ticket → PUT source (checksum-signed) + derivative + thumbnail →
+        //    finalize → row; provenance is filled in by the database from the verified ticket.
         let inspection = try await inspections.upsertInspection(propertyId: property.id, userId: userA, type: "move_in")
         let item = try await inspections.insertInspectionItem(inspectionId: inspection, roomId: room.id, notes: "Kitchen\nCounters clean", conditionRating: 4)
         let saved = try await inspections.appendPhotosToInspectionItem(
-            inspectionItemId: item, roomId: room.id, propertyId: property.id, userId: userA, isMoveOut: false, photos: [photo]
+            inspectionItemId: item, roomId: room.id, propertyId: property.id, userId: userA, isMoveOut: false, photos: [source]
         )
         let kept = try #require(saved.first)
         let expectedPrefix = "\(userA.uuidString.lowercased())/\(property.id.uuidString.lowercased())/move-in/\(room.id.uuidString.lowercased())/"
         #expect(kept.filePath.hasPrefix(expectedPrefix) && kept.thumbnailPath == String(kept.filePath.dropLast(4)) + "_thumb.jpg")
-        log("5 upload evidence", kept.filePath)
+        let keptRow = try #require(try await inspections.fetchEvidenceFiles(propertyId: property.id).first)
+        #expect(keptRow.sourcePath == String(kept.filePath.dropLast(4)) + "_source.jpg")
+        #expect(keptRow.sourceSha256 == source.sha256Hex)  // storage-enforced hash, copied from the ticket by the database
+        log("5 upload evidence", "\(kept.filePath) + source sha256 \(source.sha256Hex.prefix(12))… verified")
 
         // 6. Reload evidence (table read and the snapshot RPC).
         let rows = try await inspections.fetchEvidenceFiles(propertyId: property.id)
@@ -157,19 +164,23 @@ struct NeonDevLifecycleTests {
         log("6 reload evidence", "evidence_files + get_property_snapshot both return the row")
 
         // 7. Open original: a fresh URL by row id, byte-identical; the thumbnail too.
+        // The app opens the working derivative (the source is private and never signed for clients):
+        // a JPEG of the full frame, upright, never upscaled, without GPS.
         let originalURL = try await inspections.signedURL(bucket: "inspection-media", path: kept.filePath)
         let (originalStatus, originalBytes) = try await download(originalURL)
-        #expect(originalStatus == 200 && originalBytes == photo)
+        let derived = try #require(UIImage(data: originalBytes)?.cgImage)
+        #expect(originalStatus == 200 && derived.width == source.pixelWidth && derived.height == source.pixelHeight)
+        #expect(EvidenceFixture.properties(originalBytes)[kCGImagePropertyGPSDictionary] == nil)
         let thumbURL = try await inspections.signedURL(bucket: "inspection-media", path: try #require(kept.thumbnailPath))
         let (thumbStatus, thumbBytes) = try await download(thumbURL)
         // The contract is pixel size, not byte size (JPEG bytes vary with content): ≤ 320px on the long side,
-        // never larger than the original, and the original's bytes untouched (checked above).
+        // never larger than the original.
         let original = try #require(UIImage(data: photo)?.cgImage)
         let thumbnail = try #require(UIImage(data: thumbBytes)?.cgImage)
         #expect(thumbStatus == 200)
         #expect(max(thumbnail.width, thumbnail.height) <= 320)
         #expect(thumbnail.width <= original.width && thumbnail.height <= original.height)
-        log("7 open original", "\(originalBytes.count) bytes identical; thumbnail \(thumbnail.width)×\(thumbnail.height) from \(original.width)×\(original.height)")
+        log("7 open original", "derivative \(derived.width)×\(derived.height) = source, no GPS; thumbnail \(thumbnail.width)×\(thumbnail.height) from \(original.width)×\(original.height)")
 
         // 8. Survive token refresh: really wait out the 15-minute token, then also present the expired one.
         //    Boundaries are logged from the test side only; the app's auth code runs unchanged.
@@ -194,17 +205,17 @@ struct NeonDevLifecycleTests {
         #expect(afterRefresh.count == 1)
         log("8.7 authenticated request completed", "\(afterRefresh.count) row")
         await NeonAuthClient.shared.debugCacheAccessToken(firstToken) // expired: server answers 401
-        log("8.8 expired token presented", "transport must refresh on 401 and retry once")
+        log("8.8 expired token presented", "transport must refresh on the auth rejection and retry once")
         #expect(try await inspections.fetchEvidenceFiles(propertyId: property.id).count == 1)
         _ = try await api().fetchVaultSummary(propertyId: property.id)
         let retried = try #require(await NeonAuthClient.shared.debugCachedAccessToken())
         #expect(retried != firstToken)
-        log("8 token refresh passed", "proactive refresh after \(wait)s; expired token → 401 → refresh → retry succeeded (Data API + MoveMark API)")
+        log("8 token refresh passed", "proactive refresh after \(wait)s; expired token → auth rejection → refresh → retry succeeded (Data API + MoveMark API)")
 
         // 9. Delete evidence (the app deletes an evidence entry by inspection item; files go server-side).
         let item2 = try await inspections.insertInspectionItem(inspectionId: inspection, roomId: room.id, notes: "Kitchen\nScuff by door", conditionRating: 3)
         let doomed = try #require(try await inspections.appendPhotosToInspectionItem(
-            inspectionItemId: item2, roomId: room.id, propertyId: property.id, userId: userA, isMoveOut: false, photos: [photo2]
+            inspectionItemId: item2, roomId: room.id, propertyId: property.id, userId: userA, isMoveOut: false, photos: [source2]
         ).first)
         let doomedURL = try await inspections.signedURL(bucket: "inspection-media", path: doomed.filePath)
         #expect(try await download(doomedURL).0 == 200)
@@ -214,18 +225,19 @@ struct NeonDevLifecycleTests {
         log("9 delete evidence", "row gone; object gone (presigned GET now 404); kept evidence untouched")
 
         // 9b. Abandon: the insert really fails → object released; the insert committed but "looked failed" → kept.
-        let orphan = try await inspections.uploadEvidencePhoto(photo2, thumbnail: nil, propertyId: property.id, roomId: room.id, isMoveOut: false)
+        let orphan = try await inspections.uploadEvidence(source2, propertyId: property.id, roomId: room.id, isMoveOut: false)
         await #expect(throws: (any Error).self) {
             _ = try await inspections.insertEvidenceFile(propertyId: property.id, inspectionItemId: UUID(), maintenanceIssueId: nil,
                                                          filePath: orphan.path, fileType: "image", capturedAt: Date())
         }
         await inspections.abandonUpload(orphan)
-        let lost = try await inspections.uploadEvidencePhoto(photo2, thumbnail: nil, propertyId: property.id, roomId: room.id, isMoveOut: false)
+        let lost = try await inspections.uploadEvidence(source2, propertyId: property.id, roomId: room.id, isMoveOut: false)
         let lostRow = try await inspections.insertEvidenceFile(propertyId: property.id, inspectionItemId: item, maintenanceIssueId: nil,
-                                                               filePath: lost.path, fileType: "image", capturedAt: Date())
+                                                               filePath: lost.path, thumbnailPath: lost.thumbnailPath, sourcePath: lost.sourcePath,
+                                                               fileType: "image", capturedAt: Date())
         await inspections.abandonUpload(lost) // as if the insert response never arrived
         let lostURL = try await inspections.signedURL(bucket: "inspection-media", path: lost.path)
-        #expect(try await download(lostURL) == (200, photo2))
+        #expect(try await download(lostURL).0 == 200)
         try await storage.deleteEvidence(ids: [lostRow])
         log("9b abandon", "failed insert → abandoned; committed insert + abandon → evidence kept and downloadable")
 
@@ -235,7 +247,7 @@ struct NeonDevLifecycleTests {
         let leaseRow = PropertyDocumentRow(id: UUID(), propertyId: property.id, userId: userA, documentType: "lease",
                                            filePath: lease.path, fileName: "lease.pdf", uploadedAt: nil, metadata: nil)
         try await documents.insertDocumentRecord(leaseRow)
-        let shot = try await documents.uploadDocument(photo2, fileName: "listing.jpg", thumbnail: MMImageThumbnail.make(from: photo2),
+        let shot = try await documents.uploadDocument(photo2, fileName: "listing.jpg", thumbnail: MMEvidenceImport.thumbnail(from: source2),
                                                       propertyId: property.id, documentType: "listing_screenshot")
         let shotRow = PropertyDocumentRow(id: UUID(), propertyId: property.id, userId: userA, documentType: "listing_screenshot",
                                           filePath: shot.path, thumbnailPath: shot.thumbnailPath, fileName: "listing.jpg", uploadedAt: nil, metadata: nil)
@@ -309,7 +321,7 @@ struct NeonDevLifecycleTests {
         await #expect(throws: (any Error).self) { _ = try await inspections.signedURL(bucket: "inspection-media", path: kept.filePath) }
         await #expect(throws: (any Error).self) { _ = try await storage.downloadURLs(.evidence, ids: [kept.id]) }
         await #expect(throws: (any Error).self) {
-            _ = try await inspections.uploadEvidencePhoto(photo2, thumbnail: nil, propertyId: property.id, roomId: room.id, isMoveOut: false)
+            _ = try await inspections.uploadEvidence(source2, propertyId: property.id, roomId: room.id, isMoveOut: false)
         }
         try? await storage.deleteEvidence(ids: [kept.id])
         try? await storage.deleteDocuments(ids: [leaseRow.id])
