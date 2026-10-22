@@ -132,3 +132,20 @@ def test_writes_require_committed_runner_and_migrations(monkeypatch: pytest.Monk
         migrate.runner_commit()
     monkeypatch.setattr(migrate.subprocess, "run", lambda cmd, **k: Proc("" if "status" in cmd else "b" * 40))
     assert migrate.runner_commit() == "b" * 40
+
+
+def test_out_of_band_changes_block_apply_even_with_pending_migrations(migrations: pathlib.Path, target: Any, capsys: Any) -> None:
+    # Production 2026-10-22: migrations were executed outside the runner while later ones were pending; check
+    # only compared the live schema when nothing was pending, so apply went ahead. Now it must refuse.
+    files = sorted(migrations.glob("*.sql"))
+    for path in files[:-1]:
+        target.execute(path.read_text())
+    newest_applied = files[-2].name[:4]
+    assert migrate.cmd_baseline(target, newest_applied) == 0
+    (migrations / "9990_pending.sql").write_text("CREATE INDEX IF NOT EXISTS pending_probe ON public.rooms (name);\n")
+    target.execute("CREATE POLICY out_of_band ON public.rooms FOR SELECT TO anonymous USING (false)")  # not in any migration
+    capsys.readouterr()
+    assert migrate.cmd_check(target) == 1
+    assert "drifts from its ledger" in capsys.readouterr().out
+    assert migrate.cmd_apply(target) == 1
+    assert target.execute("SELECT count(*) FROM movemark_meta.schema_migrations WHERE version = '9990'").fetchone()[0] == 0

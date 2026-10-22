@@ -270,6 +270,15 @@ def cmd_check(conn: psycopg.Connection) -> int:
             print(f"PROBLEM: {p}")
         return 1
     applied_paths = [p for v, p, _ in files if v not in {x[0] for x in pending}]
+    # The live schema must equal a from-zero build of exactly the migrations its ledger records — checked
+    # before anything pending is considered, so objects created outside the runner (SQL editor, another
+    # tool) stop an apply instead of being silently built on.
+    with scratch_db(applied_paths) as prefix:
+        drift = diff(fingerprint(prefix), fingerprint(conn), "ledger build", "target")
+    if drift:
+        print("  target schema drifts from its ledger (changes made outside the runner):\n" + "\n".join(drift[:40]))
+        return 1
+    print(f"  target schema matches its ledger ({len(applied_paths)} migrations, no drift)")
     with scratch_db([p for _, p, _ in files]) as full:
         reference = fingerprint(full)
         print(f"  from-zero build of {len(files)} migrations: ok ({len(reference)} schema facts)")
@@ -281,12 +290,6 @@ def cmd_check(conn: psycopg.Connection) -> int:
             print("  upgrade path differs from the from-zero build:\n" + "\n".join(gaps[:40]))
             return 1
         print(f"  upgrade path ({len(applied_paths)} applied + {len(pending)} pending): identical to from-zero")
-        if not pending:
-            drift = diff(reference, fingerprint(conn), "from-zero", "target")
-            if drift:
-                print("  target schema drifts from its ledger:\n" + "\n".join(drift[:40]))
-                return 1
-            print("  target schema matches the from-zero build (no drift)")
     return 0
 
 
