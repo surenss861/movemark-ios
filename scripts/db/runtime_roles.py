@@ -3,17 +3,15 @@
     ../movemark-api-py/.venv/bin/python scripts/db/runtime_roles.py --project shiny-poetry-92207621 --branch dev
     ... --branch production --production --confirm br-solitary-glade-b5nc31al   (at the Railway cutover only)
 
-Generates a fresh random password per role, sends Postgres only its SCRAM-SHA-256 verifier (the plaintext
-never reaches the server or its logs), and writes `<role>.dsn` (pooled endpoint, mode 0600) to
-~/.movemark-qa/<branch>/. Those DSNs are what the API (`movemark_api`) and worker (`movemark_worker`) use
+Generates a random password per role and sets it with ALTER ROLE over the owner's TLS connection — the
+only way Neon accepts for roles created in SQL (its control plane intercepts the statement and takes only
+plaintext; its reset-password API refuses roles that never had a password). Writes `<role>.dsn` (pooled
+endpoint, mode 0600) to ~/.movemark-qa/<branch>/; the password is never printed. Those DSNs are what the API (`movemark_api`) and worker (`movemark_worker`) use
 as DATABASE_URL; the owner credential stays with neon/migrate.py. Rerunning rotates both passwords.
 """
 from __future__ import annotations
 
 import argparse
-import base64
-import hashlib
-import hmac
 import importlib.util
 import os
 import pathlib
@@ -22,6 +20,7 @@ import sys
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import psycopg
+from psycopg import sql
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("migrate", ROOT / "neon" / "migrate.py")
@@ -29,15 +28,6 @@ migrate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(migrate)
 
 ROLES = ("movemark_api", "movemark_worker")
-
-
-def scram_verifier(password: str, iterations: int = 4096) -> str:
-    salt = secrets.token_bytes(16)
-    salted = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iterations)
-    client_key = hmac.new(salted, b"Client Key", hashlib.sha256).digest()
-    server_key = hmac.new(salted, b"Server Key", hashlib.sha256).digest()
-    b64 = lambda b: base64.b64encode(b).decode()  # noqa: E731
-    return f"SCRAM-SHA-256${iterations}:{b64(salt)}${b64(hashlib.sha256(client_key).digest())}:{b64(server_key)}"
 
 
 def pooled(owner_dsn: str, role: str, password: str) -> str:
@@ -69,7 +59,7 @@ def main() -> int:
             if not conn.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (role,)).fetchone():
                 sys.exit(f"{role} does not exist on {args.branch}: apply migration 0960 first")
             password = secrets.token_urlsafe(32)
-            conn.execute(f"ALTER ROLE {role} PASSWORD '{scram_verifier(password)}'")
+            conn.execute(sql.SQL("ALTER ROLE {} PASSWORD {}").format(sql.Identifier(role), sql.Literal(password)))
             target = out / f"{role}.dsn"
             fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(fd, "w") as fh:
