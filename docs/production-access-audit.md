@@ -79,3 +79,19 @@ Found by the runner's drift check before applying (nothing was applied; producti
 - Same signature as the first incident: the repository's migration SQL, applied minutes after it appears,
   as the owner, bypassing the runner. The actor evidently reads this project's progress (local files,
   pushed commits or session reports) and holds owner access to production.
+
+### Source channel identified (11:23Z read-only check)
+
+- Production had a live session: `neondb_owner`, `application_name = neon-internal-sql-editor`, client
+  `10.70.71.69` (Neon-internal), opened **11:14:56Z**. Its last statement, at 11:14:57Z, was 1000's
+  `CREATE OR REPLACE FUNCTION public.get_vault_summaries()`, which bumped that function's xmin to 11452
+  after the 11:08Z check. `pg_stat_statements` also holds 0990's own `auth.user_id()` version, run once.
+- That application name is the **Neon console SQL editor**, which runs as the owner from inside Neon's
+  network. That fits both incidents: no local trace, no Neon API keys, no CLI history. Whoever or whatever
+  drives it is signed in to the Neon console as the account owner: a person, a browser agent operating
+  the console, or Neon's in-console assistant.
+- On this Mac, Chrome is the only browser running (since 2026-10-21 20:51 local); ChatGPT Atlas is not running.
+- Inventory: Neon user/org API keys — none; org members — the owner only; Claude Code `Neon` MCP —
+  configured but unauthenticated; Cursor MCP — Vercel only; no Neon editor extension; Codex inactive since
+  2026-10-07; no crontab; GitHub repos have no repository secrets, and their environment secrets
+  (`MoveMark`, `production`) aren't listable with this token; no file on disk holds a production password.
