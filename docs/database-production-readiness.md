@@ -1,21 +1,26 @@
 # MoveMark database — production-readiness report
 
-Production Database Hardening gate, 2026-10-22. Everything below was proven on Neon `dev`, a disposable Neon
+Production Database Hardening gate, 2026-10-22. Everything below was proven on Neon `dev` (0950–0980 applied there through the runner), a disposable Neon
 benchmark branch (deleted afterwards) and local builds of the same migrations. **Production was not changed
 by this gate** except for creating its 7 private storage buckets, which happened in the earlier promotion
 step.
 
 ## Verdict
 
-**GO** to promote migrations 0950 and 0960 to production through `neon/migrate.py`. They are schema-only,
-production holds no rows, and both migrations passed every gate on dev.
+**GO**, after your review, to promote migrations 0950, 0960, 0970 and 0980 to production through
+`neon/migrate.py`. They are schema-only, production holds no rows, and all four passed every gate on dev.
 
-**NO-GO** for real users until these four things are done:
+**NO-GO** for pointing Railway production at Neon, or for real users, until all of these are done:
 
-1. Production Neon settings: scale-to-zero off, minimum compute raised, history retention ≥ 7 days.
-2. The independent backup has a destination, a schedule and key custody.
-3. The API and worker use the runtime roles' DSNs on Railway. This happens at the cutover.
-4. A decision on large-property pagination (see Remaining risks).
+1. Migrations 0950–0980 are applied to production by the runner, and the runtime roles' DSNs are set on Railway.
+2. Production auth has its own email provider (SMTP and sender domain) and an HTTPS password-reset link
+   domain with trusted origins. `allow_localhost` and the shared OAuth provider are already gone.
+3. Unbounded reads are fixed: snapshot v2 (summary plus on-demand pages), an aggregated vault summary,
+   signed URLs by row id, and paginated lists.
+4. The Backblaze B2 backup is running and a B2-only restore drill passes: blank database plus blank storage,
+   and the API boots against them.
+5. Production Neon settings: scale-to-zero off, 0.5–4 CU, history retention 7 days.
+6. The Production Security & Abuse-Resistance gate (rate limits, adversarial suite) passes.
 
 ## What changed
 
@@ -52,17 +57,40 @@ Proof on dev after applying both migrations, with the API as `movemark_api` and 
   - account deletion goes through the API, so a user removed only in Neon Auth would leave rows behind;
   - per your rule, the reconstructed tables (`disputes`, `move_out_checklist_state`) are kept even though nothing writes them today.
 
-## Role / grant matrix (after 0960)
+## Role / grant matrix (after 0970 + 0980)
 
-| Role | Login | public tables | Functions | Other |
+| Role | Login | Tables (S/I/U/D) | Row access | Functions |
 |---|---|---|---|---|
-| `anonymous` | no | none | none | — |
-| `authenticated` | via Data API | properties SIU · rooms SI · inspections SI · inspection_items SIUD · inspection_item_tags SID · evidence_files SID · maintenance_issues SIUD · property_documents SID · profiles SIU · move_out_checklists SIU · issue_tags S · exports S · disputes S · dispute_evidence_links S; nothing on billing, ticket or checklist-state tables | `get_property_snapshot` | RLS on all rows. `disputes`/links are SELECT-only because 0930's maintenance update policy reads them |
-| `movemark_backend` | no (group) | SIUD on all | the 6 privileged functions | no ownership, no CREATE |
-| `movemark_api` / `movemark_worker` | yes | via `movemark_backend`; BYPASSRLS | via group | role settings: UTC; API 15 s statement / 5 s lock / 15 s idle-in-txn; worker 60 s / 5 s / 60 s |
-| `neondb_owner` | yes | owner | owner | migrations only (`neon/migrate.py`), never Railway |
+| `anonymous` | no | none | — | none |
+| `authenticated` (Data API) | via JWT | properties SIU · rooms SI · inspections SI · inspection_items SIUD · inspection_item_tags SID · evidence_files SID · maintenance_issues SIUD · property_documents SID · profiles SIU · move_out_checklists SIU · issue_tags S · exports S · disputes S · dispute_evidence_links S | own rows (RLS); `disputes`/links SELECT only because 0930's maintenance update policy reads them | `get_property_snapshot` |
+| `movemark_api` | yes | S: properties, rooms, inspections, inspection_items, inspection_item_tags, issue_tags, maintenance_issues, disputes, user_report_credits · SD: evidence_files, property_documents, dispute_evidence_links · SI: exports · SIU: user_entitlements · SIUD: storage_upload_tickets | named policy per table for this role only, **no BYPASSRLS** | consume/grant_report_credit, delete_user_owned_data, delete_auth_user |
+| `movemark_worker` | yes | S: properties, rooms, inspections, inspection_items, inspection_item_tags, issue_tags, evidence_files, property_documents, maintenance_issues · SU: exports, storage_upload_tickets | named policy per table for this role only, **no BYPASSRLS** | claim_next_export_job, reap_stuck_export_jobs |
+| `movemark_backend` | no | none (kept as an empty group) | — | none |
+| `neondb_owner` | yes | owner | — | owner; migrations only (`neon/migrate.py`), never Railway |
 
-The privileged functions are all SECURITY DEFINER, with `search_path = pg_catalog, public, pg_temp`. EXECUTE is granted only to `movemark_backend`.
+Neither runtime role:
+- owns anything;
+- holds a grant option;
+- can create in the database or a schema;
+- can truncate;
+- can switch to the owner;
+- can read `neon_auth`.
+
+Proven by logging in with each runtime credential (`neon/tests/test_reconstruction.py`). The API suite runs as `movemark_api` and the worker suites as `movemark_worker`. Each uncertain grant was revoked in turn and the suites rerun; unused grants were dropped.
+
+New tables and functions created by the migration role are private to every role. 0970 also fixes a real gap here: 0900's per-schema `REVOKE EXECUTE ... FROM PUBLIC` never applied, because per-schema defaults can only add to global ones. 0970 revokes the default globally.
+
+SECURITY DEFINER audit (0980):
+- owner is the migration role;
+- `search_path = pg_catalog, public, pg_temp`;
+- each function is executable only by the process that calls it;
+- no dynamic SQL;
+- all parameters typed;
+- the reaper refuses windows or attempt counts that would requeue live jobs.
+
+Production auth (2026-10-22): `allow_localhost` is off and the shared Google OAuth provider is removed; neither app uses OAuth. Still open: the email provider and the HTTPS reset-link domain.
+
+Onboarding: fixed. Completion is recorded when the first proof is saved, and a UI test relaunches on the receipt; it fails without the fix.
 
 ## Indexes: plans that justified them
 
