@@ -631,8 +631,8 @@ def test_query_statistics_are_not_reachable_by_app_roles(owner: Any) -> None:
 
 
 def test_auth_user_deletion_is_a_backend_only_function(owner: Any) -> None:
-    assert one(owner, "SELECT has_function_privilege('movemark_backend', 'public.delete_auth_user(uuid)', 'EXECUTE')")[0]
-    for role in ("authenticated", "anonymous", "public"):
+    assert one(owner, "SELECT has_function_privilege('movemark_api', 'public.delete_auth_user(uuid)', 'EXECUTE')")[0]
+    for role in ("authenticated", "anonymous", "public", "movemark_worker", "movemark_backend"):
         assert not one(owner, "SELECT has_function_privilege(%s, 'public.delete_auth_user(uuid)', 'EXECUTE')", (role,))[0]
     victim = str(uuid.uuid4())
     owner.execute("INSERT INTO neon_auth.\"user\" (id, email, name) VALUES (%s, %s, 'QA')", (victim, f"{victim[:6]}@qa.test"))
@@ -648,3 +648,31 @@ def test_privileged_functions_pin_search_path(owner: Any) -> None:
     loose = rows(owner, """SELECT p.proname FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.prosecdef
                            AND NOT EXISTS (SELECT 1 FROM unnest(p.proconfig) c WHERE c LIKE 'search_path=%%pg_temp')""")
     assert loose == []
+
+
+PRIVILEGED_FUNCTIONS = {  # 0980: each SECURITY DEFINER function, executable by exactly these roles
+    "public.claim_next_export_job()": {"movemark_worker"},
+    "public.reap_stuck_export_jobs(interval, integer)": {"movemark_worker"},
+    "public.consume_report_credit(uuid, text)": {"movemark_api"},
+    "public.grant_report_credit(uuid, text, text)": {"movemark_api"},
+    "public.delete_user_owned_data(uuid)": {"movemark_api"},
+    "public.delete_auth_user(uuid)": {"movemark_api"},
+}
+
+
+@pytest.mark.parametrize("fn", sorted(PRIVILEGED_FUNCTIONS))
+def test_privileged_functions_are_executable_only_by_their_process(owner: Any, fn: str) -> None:
+    roles = ("anonymous", "authenticated", "movemark_backend", "movemark_api", "movemark_worker", "public")
+    allowed = {r for r in roles if one(owner, "SELECT has_function_privilege(%s, %s, 'EXECUTE')", (r, fn))[0]}
+    assert allowed == PRIVILEGED_FUNCTIONS[fn]
+    defined = {r[0] for r in rows(owner, "SELECT p.oid FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace "
+                                         "AND p.prosecdef AND p.prorettype <> 'trigger'::regtype")}
+    listed = {one(owner, "SELECT %s::regprocedure::oid", (f,))[0] for f in PRIVILEGED_FUNCTIONS}
+    assert defined == listed  # a new privileged function must be added here deliberately
+
+
+@pytest.mark.parametrize("args", ["interval '0'", "interval '30 seconds'", "interval '2 days'", "interval '5 minutes', 0",
+                                  "interval '5 minutes', 99", "NULL"])
+def test_reaper_refuses_windows_that_would_requeue_live_jobs(owner: Any, args: str) -> None:
+    with pytest.raises(errors.InvalidParameterValue):
+        owner.execute(f"SELECT public.reap_stuck_export_jobs({args})")
