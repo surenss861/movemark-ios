@@ -1,6 +1,7 @@
 package com.surensureshkumar.movemark.features.documents
 
 import android.content.Intent
+import androidx.core.content.FileProvider
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
@@ -77,8 +78,12 @@ fun DocumentsScreen(
 
     LaunchedEffect(Unit) { viewModel.refresh() }
     LaunchedEffect(Unit) {
-        viewModel.openUrl.collect { url ->
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        viewModel.openFile.collect { (file, mimeType) ->
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
             runCatching { context.startActivity(intent) }
         }
     }

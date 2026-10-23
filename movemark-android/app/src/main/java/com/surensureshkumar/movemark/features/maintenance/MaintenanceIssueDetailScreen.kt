@@ -50,7 +50,6 @@ import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
 import com.surensureshkumar.movemark.core.util.rememberSignedImageRequest
-import com.surensureshkumar.movemark.core.util.toJpegBytes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -80,12 +79,7 @@ fun MaintenanceIssueDetailScreen(
         ActivityResultContracts.PickMultipleVisualMedia(6),
     ) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        coroutineScope.launch {
-            val bytes = withContext(Dispatchers.IO) {
-                uris.mapNotNull { it.toJpegBytes(context) }
-            }
-            if (bytes.isNotEmpty()) viewModel.attachPhotos(bytes)
-        }
+        viewModel.attachPhotos(uris)
     }
 
     MMBackground {

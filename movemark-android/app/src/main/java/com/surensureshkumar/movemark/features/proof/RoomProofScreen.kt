@@ -112,6 +112,7 @@ fun RoomProofScreen(
     val saveState by viewModel.saveState.collectAsState()
     val saveButtonLabel by viewModel.saveButtonLabel.collectAsState()
     val message by viewModel.message.collectAsState()
+    val loadingOlder by viewModel.loadingOlder.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val reduceMotion = MMMotion.rememberReduceMotion()
@@ -232,8 +233,9 @@ fun RoomProofScreen(
     val hasPending = photos.isNotEmpty()
     val showsSaveBar = hasPending || isBusy || isPartial || isFailed
     val compareLine = room?.let { r ->
-        val moveIn = r.moveInEvidence.sumOf { it.photoCount }
-        val moveOut = r.moveOutEvidence.sumOf { it.photoCount }
+        // Loaded entries plus what the server counted beyond them.
+        val moveIn = r.totals(moveOut = false).photos
+        val moveOut = r.totals(moveOut = true).photos
         if (moveIn > 0 && moveOut > 0) "MOVE-IN $moveIn · MOVE-OUT $moveOut PHOTOS" else null
     }
     val scroll = rememberScrollState()
@@ -283,6 +285,7 @@ fun RoomProofScreen(
                 RoomEvidenceHero(
                     roomName = room?.name ?: "Room",
                     entries = entries,
+                    totalPhotoCount = room?.totals(moveOut = proofPhase == ProofPhase.MoveOut)?.photos,
                     proofPhase = proofPhase,
                     signPhotoUrl = viewModel::signedPhotoUrl,
                     scrollOffset = { scroll.value },
@@ -306,6 +309,11 @@ fun RoomProofScreen(
                         RoomEvidenceBody(
                             entries = entries,
                             proofPhase = proofPhase,
+                            totalEntries = room?.totals(moveOut = proofPhase == ProofPhase.MoveOut)?.entries ?: entries.size,
+                            hasOlderEntries = room?.hasOlderEntries(moveOut = proofPhase == ProofPhase.MoveOut) == true,
+                            isLoadingOlder = loadingOlder,
+                            onLoadOlder = viewModel::loadOlderEntries,
+                            onShowAllPhotos = { viewModel.loadAllPhotos(it.id) },
                             isBusy = isBusy || entryBusy,
                             onEdit = { editingEntry = it },
                             onAddPhotos = { entry ->

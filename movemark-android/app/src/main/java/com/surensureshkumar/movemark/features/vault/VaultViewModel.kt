@@ -3,6 +3,8 @@ package com.surensureshkumar.movemark.features.vault
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.surensureshkumar.movemark.data.auth.SessionManager
+import com.surensureshkumar.movemark.data.backend.StoredFileUrls
+import com.surensureshkumar.movemark.data.models.VaultSummary
 import com.surensureshkumar.movemark.data.models.PropertyRecord
 import com.surensureshkumar.movemark.data.models.PropertyRow
 import com.surensureshkumar.movemark.data.property.InspectionRepository
@@ -25,6 +27,7 @@ class VaultViewModel @Inject constructor(
     private val propertyStore: PropertyStore,
     private val sessionManager: SessionManager,
     private val inspectionRepository: InspectionRepository,
+    private val fileUrls: StoredFileUrls,
     subscriptionRepository: SubscriptionRepository,
 ) : ViewModel() {
     val property: StateFlow<PropertyRecord?> = propertyStore.currentProperty
@@ -45,9 +48,14 @@ class VaultViewModel @Inject constructor(
     private val _previewImagePath = MutableStateFlow<String?>(null)
     val previewImagePath: StateFlow<String?> = _previewImagePath.asStateFlow()
 
+    /** Per-rental rooms / documented rooms / newest evidence, from one `get_vault_summaries` call. */
+    private val _summaries = MutableStateFlow<Map<String, VaultSummary>>(emptyMap())
+    val summaries: StateFlow<Map<String, VaultSummary>> = _summaries.asStateFlow()
+
     init {
         viewModelScope.launch {
             property.collect { record ->
+                _summaries.value = propertyStore.vaultSummaries()
                 refreshPreviewUrl(record)
             }
         }
@@ -64,7 +72,12 @@ class VaultViewModel @Inject constructor(
         _previewImageUrl.value = null
         _previewImagePath.value = null
         if (property == null || RoomProofMetrics.documentedCount(property) <= 0) return
-        val path = RoomProofMetrics.firstPreviewPhotoPath(property) ?: return
+        // The rental's newest evidence (as on iOS), signed by its row id; else the first loaded move-in photo.
+        val latest = _summaries.value[property.id.toString().lowercase()]?.latestEvidence
+        latest?.let { fileUrls.remember(it.id, it.filePath, it.thumbnailPath) }
+        val path = latest?.let { it.thumbnailPath ?: it.filePath }
+            ?: RoomProofMetrics.firstPreviewPhotoPath(property)
+            ?: return
         runCatching {
             inspectionRepository.signedUrl(path)
         }.onSuccess { url ->

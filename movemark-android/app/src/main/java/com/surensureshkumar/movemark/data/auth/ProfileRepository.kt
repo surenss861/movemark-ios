@@ -1,7 +1,6 @@
 package com.surensureshkumar.movemark.data.auth
 
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.postgrest.from
+import com.surensureshkumar.movemark.data.backend.PostgrestClient
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.util.UUID
@@ -29,31 +28,26 @@ private data class ProfileNameUpdate(
 
 @Singleton
 class ProfileRepository @Inject constructor(
-    private val client: SupabaseClient,
+    private val postgrest: PostgrestClient,
 ) {
+    /**
+     * Ensures a `profiles` row exists for the user (required for `properties.user_id`). Idempotent in one round
+     * trip: an existing row is left untouched, so this never blanks a saved name (iOS does the same).
+     */
     suspend fun ensureProfileExists(userId: UUID, email: String) {
-        val existing = runCatching {
-            client.from("profiles")
-                .select {
-                    filter { eq("id", userId.toString()) }
-                    limit(1)
-                }
-                .decodeList<ProfileRow>()
-        }.getOrNull()
-
-        if (!existing.isNullOrEmpty()) return
-
-        client.from("profiles")
-            .insert(ProfileInsert(id = userId.toString(), email = email))
+        postgrest.insertIgnoringDuplicates(
+            "profiles",
+            ProfileInsert(id = userId.toString(), email = email),
+            onConflict = "id",
+        )
     }
 
     suspend fun fetchFullName(userId: UUID): String? = runCatching {
-        client.from("profiles")
-            .select {
-                filter { eq("id", userId.toString()) }
-                limit(1)
-            }
-            .decodeList<ProfileRow>()
+        postgrest.select<ProfileRow>("profiles") {
+            eq("id", userId.toString())
+            order("id")
+            limit(1)
+        }
             .firstOrNull()
             ?.fullName
             ?.trim()
@@ -63,9 +57,6 @@ class ProfileRepository @Inject constructor(
     suspend fun updateFullName(userId: UUID, fullName: String) {
         val trimmed = fullName.trim()
         require(trimmed.isNotEmpty()) { "Enter your full name." }
-        client.from("profiles")
-            .update(ProfileNameUpdate(trimmed)) {
-                filter { eq("id", userId.toString()) }
-            }
+        postgrest.update("profiles", ProfileNameUpdate(trimmed)) { eq("id", userId.toString()) }
     }
 }

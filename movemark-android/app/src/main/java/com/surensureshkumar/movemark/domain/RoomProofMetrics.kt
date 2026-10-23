@@ -9,11 +9,12 @@ object RoomProofMetrics {
         ProofPhase.MoveOut -> room.moveOutEvidence
     }
 
+    /** True photo total: loaded entries plus the server's count of what isn't loaded yet. */
     fun photoCount(room: RoomRecord, phase: ProofPhase = ProofPhase.MoveIn): Int =
-        evidenceFor(room, phase).sumOf { it.photoCount }
+        room.totals(phase == ProofPhase.MoveOut).photos
 
     fun issueTagCount(room: RoomRecord, phase: ProofPhase = ProofPhase.MoveIn): Int =
-        evidenceFor(room, phase).sumOf { it.issueTagCount }
+        room.totals(phase == ProofPhase.MoveOut).issueTags
 
     fun lastProofAt(property: PropertyRecord): String? =
         property.rooms

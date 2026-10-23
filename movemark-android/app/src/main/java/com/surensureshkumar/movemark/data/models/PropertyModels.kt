@@ -66,9 +66,11 @@ data class EvidenceFileRow(
     @SerialName("created_at") var createdAt: String? = null,
     /** ~320px longest-side JPEG uploaded alongside the full-size capture; null for rows captured before thumbnails existed. */
     @SerialName("thumbnail_path") var thumbnailPath: String? = null,
+    /** The immutable source object; its hash, size and type are filled in by the database from the finalized upload ticket. */
+    @SerialName("source_path") var sourcePath: String? = null,
 )
 
-/** Flattened `inspection_item_tags` + `issue_tags` join, as returned by the `get_property_snapshot` RPC's `item_tags` array. */
+/** Flattened `inspection_item_tags` + `issue_tags` join, as returned in the snapshot's `entries.item_tags`. */
 @Serializable
 data class ItemTagRow(
     @SerialName("inspection_item_id") val inspectionItemId: String,
@@ -110,35 +112,109 @@ data class PropertyDocumentRow(
     @SerialName("thumbnail_path") var thumbnailPath: String? = null,
 )
 
-/**
- * Decoded shape of `public.get_property_snapshot(p_property_id)` — see
- * supabase/migrations/20260719000001_property_snapshot_thumbnails_realtime.sql.
- * `property` is null only when the caller isn't the property's owner (RLS), matching the
- * empty-results behavior of the direct per-table `.select()` calls this collapses.
- */
+/** Per-stage totals the server counted for one room (`stats` in `get_property_snapshot_v2`). */
 @Serializable
-data class PropertySnapshot(
-    val property: PropertyRow? = null,
-    val rooms: List<RoomRow> = emptyList(),
-    val inspections: List<InspectionRow> = emptyList(),
-    @SerialName("inspection_items") val inspectionItems: List<InspectionItemRow> = emptyList(),
+data class StageStats(
+    val entries: Int = 0,
+    val photos: Int = 0,
+    @SerialName("entries_with_notes") val entriesWithNotes: Int = 0,
+    @SerialName("issue_tags") val issueTags: Int = 0,
+    @SerialName("latest_at") val latestAt: String? = null,
+)
+
+/** A `rooms` row plus its `stats` object, keyed by inspection type (`move_in` / `move_out`). */
+@Serializable
+data class SnapshotRoomRow(
+    val id: String,
+    @SerialName("property_id") val propertyId: String,
+    val name: String,
+    @SerialName("sort_order") val sortOrder: Int,
+    @SerialName("created_at") val createdAt: String? = null,
+    val stats: Map<String, StageStats> = emptyMap(),
+)
+
+/** The entries payload shared by the snapshot and `get_room_entries_page`. */
+@Serializable
+data class SnapshotEntries(
+    /** True photo count per entry, keyed by lowercase `inspection_items.id`. */
+    @SerialName("photo_counts") val photoCounts: Map<String, Int> = emptyMap(),
+    /** The first photos of each entry, in capture order (created_at, id). */
     @SerialName("evidence_files") val evidenceFiles: List<EvidenceFileRow> = emptyList(),
     @SerialName("item_tags") val itemTags: List<ItemTagRow> = emptyList(),
-    val documents: List<PropertyDocumentRow> = emptyList(),
-    @SerialName("maintenance_issues") val maintenanceIssues: List<MaintenanceIssueRow> = emptyList(),
 )
+
+/**
+ * Decoded shape of `public.get_property_snapshot_v2` (neon/migrations/0990_bounded_snapshot_v2.sql): all rooms
+ * with true per-stage totals, the newest entries per room and stage with their true photo counts and first
+ * photos, newest documents and maintenance with totals. Older entries and remaining photos load through
+ * `get_room_entries_page` / `get_entry_photos_page`. `property` is null only when RLS hides the property.
+ */
+@Serializable
+data class PropertySnapshotV2(
+    val property: PropertyRow? = null,
+    val rooms: List<SnapshotRoomRow> = emptyList(),
+    val inspections: List<InspectionRow> = emptyList(),
+    @SerialName("inspection_items") val inspectionItems: List<InspectionItemRow> = emptyList(),
+    val entries: SnapshotEntries = SnapshotEntries(),
+    val documents: List<PropertyDocumentRow> = emptyList(),
+    /** Every document type present (the document rows themselves are bounded to the newest 100). */
+    @SerialName("document_types") val documentTypes: List<String> = emptyList(),
+    @SerialName("maintenance_issues") val maintenanceIssues: List<MaintenanceIssueRow> = emptyList(),
+    @SerialName("maintenance_photo_counts") val maintenancePhotoCounts: Map<String, Int> = emptyMap(),
+)
+
+/** One page of `get_room_entries_page` (older entries, newest first). */
+@Serializable
+data class RoomEntriesPage(
+    @SerialName("inspection_items") val inspectionItems: List<InspectionItemRow> = emptyList(),
+    val entries: SnapshotEntries = SnapshotEntries(),
+    @SerialName("has_more") val hasMore: Boolean = false,
+)
+
+/** One page of `get_entry_photos_page` (an entry's remaining photos, capture order). */
+@Serializable
+data class EntryPhotosPage(
+    @SerialName("evidence_files") val evidenceFiles: List<EvidenceFileRow> = emptyList(),
+    @SerialName("has_more") val hasMore: Boolean = false,
+)
+
+/** One row of `get_vault_summaries()`. */
+@Serializable
+data class VaultSummary(
+    @SerialName("property_id") val propertyId: String,
+    @SerialName("rooms_total") val roomsTotal: Int = 0,
+    @SerialName("rooms_documented") val roomsDocumented: Int = 0,
+    @SerialName("latest_evidence") val latestEvidence: LatestEvidence? = null,
+) {
+    @Serializable
+    data class LatestEvidence(
+        val id: String,
+        @SerialName("file_path") val filePath: String,
+        @SerialName("thumbnail_path") val thumbnailPath: String? = null,
+        @SerialName("maintenance_issue_id") val maintenanceIssueId: String? = null,
+    )
+}
 
 data class EvidencePhoto(
     val id: UUID,
     val filePath: String,
     /** ~320px JPEG for grids; null on rows captured before thumbnails existed (fall back to filePath). */
     val thumbnailPath: String? = null,
+    /**
+     * The row's `created_at` exactly as the server sent it — the keyset cursor for the next photo page
+     * (a parsed time loses the microseconds the ordering depends on).
+     */
+    val serverCreatedAt: String? = null,
 )
 
 data class EvidenceRecord(
     val id: UUID,
     val title: String,
     val notes: String,
+    /**
+     * The entry's true number of photos. [photos] may hold only the first ones (snapshot v2 loads a bounded
+     * number per entry; the rest load on demand), so never derive the count from [photos].
+     */
     val photoCount: Int,
     val photos: List<EvidencePhoto> = emptyList(),
     /** 1 (poor) .. 5 (excellent); matches InspectionItemRow.conditionRating. Null if never set. */
@@ -147,16 +223,56 @@ data class EvidenceRecord(
     val issueTagCount: Int = 0,
     /** Issue tag names (`issue_tags.name`) linked to this entry — same set iOS shows and edits. */
     val issueTags: List<String> = emptyList(),
+    /** `created_at` exactly as the server sent it — the keyset cursor for loading older entries. */
+    val serverCreatedAt: String? = null,
+) {
+    /** Photos exist on the server that aren't loaded yet. */
+    val hasUnloadedPhotos: Boolean get() = photoCount > photos.size
+}
+
+/** Entries, photos, noted entries and issue tags for one room and stage. */
+data class StageTotals(
+    val entries: Int = 0,
+    val photos: Int = 0,
+    val notedEntries: Int = 0,
+    val issueTags: Int = 0,
+    val latestAt: String? = null,
 )
 
 data class RoomRecord(
     val id: UUID,
     val name: String,
-    /** Move-in inspection evidence only. */
+    /** Loaded move-in entries. Large rooms load their newest entries first; older ones load on demand. */
     val moveInEvidence: List<EvidenceRecord> = emptyList(),
     /** Move-out inspection evidence only — never mixed with move-in. */
     val moveOutEvidence: List<EvidenceRecord> = emptyList(),
-)
+    /**
+     * What the server counted beyond the loaded entries (null = nothing unloaded). Totals are loaded entries
+     * plus this remainder, so edits to loaded entries keep the totals right without bookkeeping.
+     */
+    val moveInUnloaded: StageTotals? = null,
+    val moveOutUnloaded: StageTotals? = null,
+) {
+    fun evidence(moveOut: Boolean): List<EvidenceRecord> = if (moveOut) moveOutEvidence else moveInEvidence
+
+    fun unloaded(moveOut: Boolean): StageTotals? = if (moveOut) moveOutUnloaded else moveInUnloaded
+
+    /** Loaded entries plus the unloaded remainder: what the server holds for this room and stage. */
+    fun totals(moveOut: Boolean): StageTotals = sum(evidence(moveOut), unloaded(moveOut))
+
+    /** Older entries exist that are not loaded yet. */
+    fun hasOlderEntries(moveOut: Boolean): Boolean = (unloaded(moveOut)?.entries ?: 0) > 0
+
+    companion object {
+        fun sum(entries: List<EvidenceRecord>, rest: StageTotals?): StageTotals = StageTotals(
+            entries = entries.size + (rest?.entries ?: 0),
+            photos = entries.sumOf { it.photoCount } + (rest?.photos ?: 0),
+            notedEntries = entries.count { it.notes.isNotBlank() } + (rest?.notedEntries ?: 0),
+            issueTags = entries.sumOf { it.issueTags.size } + (rest?.issueTags ?: 0),
+            latestAt = listOfNotNull(entries.mapNotNull { it.createdAt }.maxOrNull(), rest?.latestAt).maxOrNull(),
+        )
+    }
+}
 
 data class PropertyRecord(
     val id: UUID,

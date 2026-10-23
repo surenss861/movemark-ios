@@ -1,41 +1,42 @@
 package com.surensureshkumar.movemark.data.property
 
+import com.surensureshkumar.movemark.data.backend.MoveMarkStorageService
+import com.surensureshkumar.movemark.data.backend.PostgrestClient
+import com.surensureshkumar.movemark.data.backend.StoredFileUrls
+import com.surensureshkumar.movemark.data.evidence.EvidenceFormats
 import com.surensureshkumar.movemark.data.models.PropertyDocumentRow
 import com.surensureshkumar.movemark.domain.VaultDocumentKind
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.postgrest.query.Order
-import io.github.jan.supabase.storage.storage
-import io.ktor.http.ContentType
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlin.time.Duration.Companion.seconds
 import java.time.Instant
 import java.util.UUID
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class DocumentRepository @Inject constructor(
-    private val client: SupabaseClient,
+/*
+ * Property documents. Files go through the MoveMark API, which picks the bucket from the document type and
+ * builds the key (`{userId}/{propertyId}/{documentType}/{uuid}.{pdf|jpg|png}`); the app records the returned path.
+ */
+class DocumentRepository(
+    private val postgrest: PostgrestClient,
+    private val storage: MoveMarkStorageService,
+    private val fileUrls: StoredFileUrls,
     private val saveFaults: DocumentSaveFaults,
 ) {
     suspend fun fetchDocuments(propertyId: UUID): List<PropertyDocumentRow> =
-        client.from("property_documents").select {
-            filter { eq("property_id", propertyId.toString()) }
-            order("uploaded_at", Order.DESCENDING)
+        postgrest.select<PropertyDocumentRow>("property_documents") {
+            eq("property_id", propertyId.toString())
+            order("uploaded_at", ascending = false)
+            order("id", ascending = false)
             limit(300)
-        }.decodeList()
+        }.also { rows -> rows.forEach { fileUrls.remember(it.id, it.filePath, it.thumbnailPath) } }
 
     /**
      * Saves a new copy of this document type, then retires the old one.
-     * Storage path matches iOS: `{userId}/{propertyId}/{type}/{file}`.
      *
-     * The existing copy is never touched until the new file and its row are both saved: if
-     * the upload or insert fails, the old document stays exactly as it was.
+     * The existing copy is never touched until the new file and its row are both saved: if the upload or
+     * insert fails, the old document stays exactly as it was. A failed insert abandons the upload; the API
+     * keeps the file if the row committed after all.
      */
     suspend fun replaceDocument(
         propertyId: UUID,
@@ -46,9 +47,14 @@ class DocumentRepository @Inject constructor(
     ) {
         val previous = existingDocuments(propertyId, kind)
         val safeName = fileName.substringAfterLast('/').ifBlank { "document" }
-        val path = "$userId/$propertyId/${kind.raw}/${UUID.randomUUID()}-$safeName"
+        val upload = storage.uploadDocument(
+            data = bytes,
+            contentType = contentType(safeName, bytes),
+            thumbnail = null,
+            propertyId = propertyId.toString(),
+            documentType = kind.raw,
+        )
         try {
-            upload(kind, path, bytes, contentType(safeName))
             if (saveFaults.failNextInsert()) {
                 throw IllegalStateException("Document record was not saved.")
             }
@@ -57,89 +63,41 @@ class DocumentRepository @Inject constructor(
                 propertyId = propertyId.toString(),
                 userId = userId.toString(),
                 documentType = kind.raw,
-                filePath = path,
+                filePath = upload.path,
                 fileName = safeName,
                 uploadedAt = Instant.now().toString(),
             )
-            client.from("property_documents").insert(row)
+            postgrest.insert("property_documents", row)
+            fileUrls.remember(row.id, upload.path, null)
         } catch (error: Throwable) {
-            // The storage call can be cancelled after the object already exists, and a failed
-            // insert must not leave that object behind with no property_documents row.
-            withContext(NonCancellable) { removeStale(kind, path) }
+            // The insert can be cancelled after the row already committed, and a failed insert must not leave
+            // the object behind with no row: abandon settles it either way.
+            withContext(NonCancellable) { storage.abandon(upload) }
             throw error
         }
-        // The new copy is saved. Retiring the old one is best-effort: a failure here leaves
-        // an extra row (the newest is shown), never a missing document.
-        withContext(NonCancellable) { removeDocuments(kind, previous) }
+        // The new copy is saved. Retiring the old one is best-effort: a failure here leaves an extra row
+        // (the newest is shown), never a missing document.
+        withContext(NonCancellable) {
+            if (previous.isNotEmpty()) runCatching { storage.deleteDocuments(previous.map { it.id }) }
+        }
     }
 
-    suspend fun signedUrl(kind: VaultDocumentKind, path: String): String {
-        val buckets = if (kind.storageBucket() == "documents") {
-            listOf("documents")
-        } else {
-            listOf(kind.storageBucket(), "documents")
-        }
-        var last: Exception? = null
-        for (bucket in buckets) {
-            try {
-                return client.storage.from(bucket).createSignedUrl(path, 3600.seconds)
-            } catch (error: Exception) {
-                last = error
-            }
-        }
-        throw last ?: IllegalStateException("Couldn't open that file.")
-    }
+    /** Temporary download URL for a stored document path. */
+    suspend fun signedUrl(path: String): String = fileUrls.documentUrl(path)
 
     private suspend fun existingDocuments(propertyId: UUID, kind: VaultDocumentKind): List<PropertyDocumentRow> =
         fetchDocuments(propertyId).filter { row -> kind.queryKeys().contains(row.documentType) }
 
-    private suspend fun removeDocuments(kind: VaultDocumentKind, rows: List<PropertyDocumentRow>) {
-        rows.forEach { row ->
-            runCatching {
-                client.from("property_documents").delete { filter { eq("id", row.id) } }
-            }.onSuccess {
-                removeStale(kind, row.filePath)
-            }
-        }
-    }
-
-    private suspend fun upload(kind: VaultDocumentKind, path: String, bytes: ByteArray, type: ContentType): String {
-        val buckets = if (kind.storageBucket() == "documents") listOf("documents") else listOf(kind.storageBucket(), "documents")
-        var last: Exception? = null
-        for (bucket in buckets) {
-            try {
-                client.storage.from(bucket).upload(path, bytes) {
-                    upsert = false
-                    contentType = type
-                }
-                return bucket
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                last = error
-            }
-        }
-        throw last ?: IllegalStateException("Couldn't upload that file.")
-    }
-
-    private suspend fun removeStale(kind: VaultDocumentKind, path: String) {
-        val buckets = if (kind.storageBucket() == "documents") {
-            listOf("documents")
-        } else {
-            listOf(kind.storageBucket(), "documents")
-        }
-        buckets.forEach { bucket ->
-            runCatching { client.storage.from(bucket).delete(path) }
-        }
-    }
-
-    private fun contentType(fileName: String): ContentType {
+    /** The API accepts PDF, JPEG and PNG documents; a name without a known extension is typed by its bytes. */
+    private fun contentType(fileName: String, bytes: ByteArray): String {
         val lower = fileName.lowercase()
         return when {
-            lower.endsWith(".pdf") -> ContentType.parse("application/pdf")
-            lower.endsWith(".png") -> ContentType.Image.PNG
-            lower.endsWith(".jpg") || lower.endsWith(".jpeg") -> ContentType.Image.JPEG
-            else -> ContentType.Application.OctetStream
+            lower.endsWith(".pdf") -> "application/pdf"
+            lower.endsWith(".png") -> "image/png"
+            lower.endsWith(".jpg") || lower.endsWith(".jpeg") -> "image/jpeg"
+            bytes.size >= 4 && String(bytes, 0, 4, Charsets.ISO_8859_1) == "%PDF" -> "application/pdf"
+            else -> EvidenceFormats.detect(bytes)?.mimeType?.takeIf { it == "image/jpeg" || it == "image/png" }
+                ?: "application/octet-stream"
         }
     }
 }

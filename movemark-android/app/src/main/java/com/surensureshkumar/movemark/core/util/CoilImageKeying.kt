@@ -6,8 +6,8 @@ import androidx.compose.ui.platform.LocalContext
 import coil.request.ImageRequest
 
 /**
- * Builds a Coil [ImageRequest] for a Supabase Storage signed URL, cache-keyed by the stable
- * storage [path] rather than the full signed URL.
+ * Builds a Coil [ImageRequest] for a short-lived signed storage URL (from the MoveMark API), cache-keyed
+ * by the stable storage [path] rather than the full signed URL.
  *
  * Signed URLs mint a fresh token/expiry on every re-fetch, so Coil's default behavior of caching
  * by the full request URL is a guaranteed cache miss on every re-mint of the same underlying photo.

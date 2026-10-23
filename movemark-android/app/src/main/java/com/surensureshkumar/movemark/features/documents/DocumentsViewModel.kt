@@ -7,7 +7,11 @@ import com.surensureshkumar.movemark.data.models.PropertyDocumentRow
 import com.surensureshkumar.movemark.data.property.DocumentRepository
 import com.surensureshkumar.movemark.data.property.PropertyStore
 import com.surensureshkumar.movemark.domain.VaultDocumentKind
+import android.content.Context
+import com.surensureshkumar.movemark.data.export.ReportFileDownloader
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,6 +26,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class DocumentsViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val propertyStore: PropertyStore,
     private val documentRepository: DocumentRepository,
     private val sessionManager: SessionManager,
@@ -35,8 +40,9 @@ class DocumentsViewModel @Inject constructor(
     private val _uploading = MutableStateFlow<VaultDocumentKind?>(null)
     val uploading: StateFlow<VaultDocumentKind?> = _uploading.asStateFlow()
 
-    private val _openUrl = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    val openUrl: SharedFlow<String> = _openUrl.asSharedFlow()
+    /** A downloaded copy in app-private cache, to open through FileProvider (never a signed URL handed out). */
+    private val _openFile = MutableSharedFlow<Pair<File, String>>(extraBufferCapacity = 1)
+    val openFile: SharedFlow<Pair<File, String>> = _openFile.asSharedFlow()
 
     fun refresh() {
         val propertyId = propertyStore.activePropertyId.value ?: return
@@ -87,10 +93,20 @@ class DocumentsViewModel @Inject constructor(
     fun view(kind: VaultDocumentKind) {
         val row = _documents.value.firstOrNull { kind.queryKeys().contains(it.documentType) } ?: return
         viewModelScope.launch {
-            runCatching { documentRepository.signedUrl(kind, row.filePath) }
-                .onSuccess { _openUrl.emit(it) }
+            runCatching {
+                val url = documentRepository.signedUrl(row.filePath)
+                val name = row.filePath.substringAfterLast('/')
+                ReportFileDownloader.downloadTo(appContext, url, "movemark_documents", name) to mimeType(name)
+            }
+                .onSuccess { _openFile.emit(it) }
                 .onFailure { _error.value = "Couldn't open that file." }
         }
+    }
+
+    private fun mimeType(name: String): String = when {
+        name.endsWith(".pdf", ignoreCase = true) -> "application/pdf"
+        name.endsWith(".png", ignoreCase = true) -> "image/png"
+        else -> "image/jpeg"
     }
 
     private companion object {

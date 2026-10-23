@@ -139,6 +139,8 @@ fun RoomEvidenceHero(
     onTakePhotos: () -> Unit,
     onChooseGallery: () -> Unit,
     compareLine: String?,
+    /** The room's true photo total for this stage (loaded entries plus the unloaded remainder). */
+    totalPhotoCount: Int? = null,
     /** Page scroll in px, for parallax. */
     scrollOffset: () -> Int = { 0 },
     modifier: Modifier = Modifier,
@@ -154,7 +156,7 @@ fun RoomEvidenceHero(
 
     val (photo, entry) = current
     val reduceMotion = MMMotion.rememberReduceMotion()
-    val photoCount = entries.sumOf { it.photoCount }
+    val photoCount = totalPhotoCount ?: entries.sumOf { it.photoCount }
     val issueCount = entries.flatMap { it.issueTags }.toSet().size
 
     Column(modifier.fillMaxWidth()) {

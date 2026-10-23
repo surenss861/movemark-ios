@@ -8,8 +8,6 @@ navigation = "2.8.4"
 lifecycle = "2.8.7"
 coroutines = "1.9.0"
 datastore = "1.1.1"
-supabase = "3.0.3"
-ktor = "3.0.1"
 coil = "2.7.0"
 camerax = "1.4.0"
 revenuecat = "8.10.7"
@@ -39,12 +37,6 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
 hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version = "1.2.0" }
-supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version.ref = "supabase" }
-supabase-postgrest = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt" }
-supabase-auth = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
-supabase-storage = { group = "io.github.jan-tennert.supabase", name = "storage-kt" }
-supabase-realtime = { group = "io.github.jan-tennert.supabase", name = "realtime-kt" }
-ktor-client-android = { group = "io.ktor", name = "ktor-client-android", version.ref = "ktor" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 revenuecat = { group = "com.revenuecat.purchases", name = "purchases", version.ref = "revenuecat" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }

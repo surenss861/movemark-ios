@@ -23,6 +23,10 @@ val revenueCatKey = localProp("REVENUECAT_PUBLIC_KEY")
 val debugBillingDefault = if (revenueCatKey.isBlank()) "mock" else "revenuecat"
 val billingModeProp = localProp("BILLING_MODE", debugBillingDefault)
 
+val prodNeonAuthUrl = "https://ep-steep-wind-b56266ss.neonauth.c-7.us-east-2.aws.neon.tech/neondb/auth"
+val prodNeonDataApiUrl = "https://ep-steep-wind-b56266ss.apirest.c-7.us-east-2.aws.neon.tech/neondb/rest/v1"
+val prodMoveMarkApiBaseUrl = "https://movemark-api-py-production.up.railway.app"
+
 android {
     namespace = "com.surensureshkumar.movemark"
     compileSdk = 35
@@ -34,19 +38,22 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        buildConfigField("String", "SUPABASE_URL", "\"${localProp("SUPABASE_URL")}\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProp("SUPABASE_ANON_KEY")}\"")
-        buildConfigField(
-            "String",
-            "MOVE_MARK_API_BASE_URL",
-            "\"${localProp("MOVE_MARK_API_BASE_URL", "https://movemark-api-py-production.up.railway.app")}\"",
-        )
         buildConfigField("String", "REVENUECAT_PUBLIC_KEY", "\"$revenueCatKey\"")
         buildConfigField("String", "BILLING_MODE", "\"$billingModeProp\"")
     }
 
     buildTypes {
+        debug {
+            // Debug talks to whatever local.properties names (the Neon dev branch and a dev API).
+            buildConfigField("String", "NEON_AUTH_URL", "\"${localProp("NEON_AUTH_URL")}\"")
+            buildConfigField("String", "NEON_DATA_API_URL", "\"${localProp("NEON_DATA_API_URL")}\"")
+            buildConfigField("String", "MOVEMARK_API_BASE_URL", "\"${localProp("MOVEMARK_API_BASE_URL")}\"")
+        }
         release {
+            // Release is hard-wired to production; local.properties can never redirect it.
+            buildConfigField("String", "NEON_AUTH_URL", "\"$prodNeonAuthUrl\"")
+            buildConfigField("String", "NEON_DATA_API_URL", "\"$prodNeonDataApiUrl\"")
+            buildConfigField("String", "MOVEMARK_API_BASE_URL", "\"$prodMoveMarkApiBaseUrl\"")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -99,12 +106,6 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
-    implementation(platform(libs.supabase.bom))
-    implementation(libs.supabase.postgrest)
-    implementation(libs.supabase.auth)
-    implementation(libs.supabase.storage)
-    implementation(libs.supabase.realtime)
-    implementation(libs.ktor.client.android)
     implementation(libs.coil.compose)
     implementation(libs.revenuecat)
     implementation(libs.okhttp)

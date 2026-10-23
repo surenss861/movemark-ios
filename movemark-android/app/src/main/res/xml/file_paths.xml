@@ -2,4 +2,5 @@
 <paths>
     <cache-path name="movemark_captures" path="movemark_captures/" />
     <cache-path name="movemark_reports" path="movemark_reports/" />
+    <cache-path name="movemark_documents" path="movemark_documents/" />
 </paths>

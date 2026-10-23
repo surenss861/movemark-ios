@@ -6,7 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.surensureshkumar.movemark.core.growth.MoveMarkGrowthCopy
 import com.surensureshkumar.movemark.data.export.DisputePacketReadiness
 import com.surensureshkumar.movemark.data.export.DisputePacketReadinessMapper
-import com.surensureshkumar.movemark.data.export.ExportRealtimeWatcher
+import com.surensureshkumar.movemark.data.export.ExportStatusPoller
+import com.surensureshkumar.movemark.data.export.isActiveJob
 import com.surensureshkumar.movemark.data.export.ExportRepository
 import com.surensureshkumar.movemark.data.export.ExportRow
 import com.surensureshkumar.movemark.data.export.MoveOutReportReadiness
@@ -64,9 +65,6 @@ data class ReportsUiState(
     val disputePacketStatus: String = "Add room proof first.",
 )
 
-/** Fallback poll cadence while an export is in flight, as a backstop for a dropped realtime socket. */
-private const val EXPORT_FALLBACK_POLL_INTERVAL_MS = 15_000L
-
 /** Lease, deposit receipt and listing proof — iOS `moveInRequiredDocumentTypes`. */
 private const val REQUIRED_SUPPORTING_RECORDS = 3
 
@@ -86,7 +84,6 @@ class ReportsViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val propertyStore: PropertyStore,
     private val exportRepository: ExportRepository,
-    private val exportRealtimeWatcher: ExportRealtimeWatcher,
     subscriptionRepository: SubscriptionRepository,
 ) : ViewModel() {
 
@@ -146,24 +143,14 @@ class ReportsViewModel @Inject constructor(
                     return@collect
                 }
                 refreshExports()
-                // Realtime (task #14) replaces the old poll-driven refresh -- postgres_changes on
-                // `exports`, RLS-scoped the same as a direct .select() (exports_select_own), pushes
-                // an update the moment a status flips. The periodic fallback below is a backstop in
-                // case the socket never connects or silently drops; it only runs while something is
-                // actually in flight, so it isn't a constant battery-draining loop like the old
-                // pattern would be.
+                // While an export is in flight, poll the API until its PDF is ready (409 → 200); the poller
+                // probes nothing when no job is active, so this isn't a constant loop.
                 exportWatchJob = viewModelScope.launch {
-                    launch {
-                        runCatching {
-                            exportRealtimeWatcher.watchExportChanges(property.id) { refreshExports() }
-                        }
-                    }
-                    launch {
-                        while (isActive) {
-                            delay(EXPORT_FALLBACK_POLL_INTERVAL_MS)
-                            if (hasActiveExportJob()) refreshExports()
-                        }
-                    }
+                    ExportStatusPoller(isReady = { exportRepository.isReady(it.id) })
+                        .run(
+                            activeExports = { _exports.value.filter { it.verification.isActiveJob } },
+                            onChange = { refreshExports() },
+                        )
                 }
             }
         }

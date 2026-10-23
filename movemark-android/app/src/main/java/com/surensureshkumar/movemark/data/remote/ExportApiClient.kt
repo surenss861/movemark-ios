@@ -1,17 +1,17 @@
 package com.surensureshkumar.movemark.data.remote
 
+import com.surensureshkumar.movemark.core.util.MMUserMessages
+import com.surensureshkumar.movemark.data.backend.AuthenticatedTransport
+import com.surensureshkumar.movemark.data.backend.resolvePath
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import com.surensureshkumar.movemark.core.util.MMUserMessages
 import java.util.UUID
-import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import javax.inject.Singleton
 
 @Serializable
 enum class ExportJobStatus {
@@ -60,47 +60,48 @@ sealed class ExportApiException(message: String) : Exception(message) {
 @Serializable
 private data class ApiErrorBody(val error: String? = null, val code: String? = null)
 
-@Singleton
-class ExportApiClient @Inject constructor(
-    baseUrl: String,
-    private val client: OkHttpClient,
+/** The MoveMark API's report endpoints (and account deletion), signed in through [AuthenticatedTransport]. */
+class ExportApiClient(
+    private val baseUrl: HttpUrl?,
+    private val transport: AuthenticatedTransport,
 ) {
-    private val base = baseUrl.trimEnd('/')
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun listExports(accessToken: String, propertyId: UUID): List<ExportListItem> = try {
-        val url = "$base/api/exports?propertyId=$propertyId"
-        val body = executeGet(url, accessToken)
+    suspend fun listExports(propertyId: UUID): List<ExportListItem> = try {
+        val body = executeGet(url("api/exports").newBuilder().addQueryParameter("propertyId", propertyId.toString()).build())
         json.decodeFromString(body)
     } catch (e: ExportApiException) {
+        throw e
+    } catch (e: CancellationException) {
         throw e
     } catch (_: Exception) {
         throw ExportApiException.Network()
     }
 
-    suspend fun requestMoveInExport(accessToken: String, propertyId: UUID): MoveInExportResponse =
-        requestExport("$base/api/exports/move-in", accessToken, propertyId)
+    suspend fun requestMoveInExport(propertyId: UUID): MoveInExportResponse =
+        requestExport("api/exports/move-in", propertyId)
 
-    suspend fun requestMoveOutExport(accessToken: String, propertyId: UUID): MoveInExportResponse =
-        requestExport("$base/api/exports/move-out", accessToken, propertyId)
+    suspend fun requestMoveOutExport(propertyId: UUID): MoveInExportResponse =
+        requestExport("api/exports/move-out", propertyId)
 
-    suspend fun requestDisputePacketExport(accessToken: String, propertyId: UUID): MoveInExportResponse =
-        requestExport("$base/api/exports/dispute-packet", accessToken, propertyId)
+    suspend fun requestDisputePacketExport(propertyId: UUID): MoveInExportResponse =
+        requestExport("api/exports/dispute-packet", propertyId)
 
-    private suspend fun requestExport(url: String, accessToken: String, propertyId: UUID): MoveInExportResponse =
+    private suspend fun requestExport(path: String, propertyId: UUID): MoveInExportResponse =
         try {
             val payload = """{"propertyId":"$propertyId","format":"pdf"}"""
-            val body = executePost(url, accessToken, payload)
+            val body = executePost(url(path), payload)
             json.decodeFromString(body)
         } catch (e: ExportApiException) {
+            throw e
+        } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             throw ExportApiException.QueueFailed()
         }
 
-    suspend fun fetchDownloadUrl(accessToken: String, exportId: String): ExportDownloadResponse = try {
-        val url = "$base/api/exports/$exportId/download"
-        val body = executeGet(url, accessToken, allow409 = true)
+    suspend fun fetchDownloadUrl(exportId: String): ExportDownloadResponse = try {
+        val body = executeGet(url("api/exports/$exportId/download"), allow409 = true)
         json.decodeFromString(body)
     } catch (e: ExportApiException) {
         throw when (e) {
@@ -108,58 +109,80 @@ class ExportApiClient @Inject constructor(
             is ExportApiException.ServerFailed -> ExportApiException.DownloadFailed()
             else -> ExportApiException.DownloadFailed()
         }
+    } catch (e: CancellationException) {
+        throw e
     } catch (_: Exception) {
         throw ExportApiException.DownloadFailed()
     }
 
-    private fun executeGet(url: String, accessToken: String, allow409: Boolean = false): String {
-        val request = Request.Builder()
-            .url(url)
-            .header("Authorization", "Bearer $accessToken")
-            .get()
-            .build()
-        return execute(request, allow409 = allow409)
+    /**
+     * Whether a queued/processing export's file is ready: the download endpoint answers 409 until the worker
+     * has written it, 200 once it can be signed. Used to poll an in-flight export; the URL itself is discarded.
+     */
+    suspend fun isExportReady(exportId: String): Boolean = try {
+        executeGet(url("api/exports/$exportId/download"), allow409 = true)
+        true
+    } catch (_: ExportApiException.NotReady) {
+        false
     }
 
-    private fun executePost(url: String, accessToken: String, jsonBody: String): String {
-        val request = Request.Builder()
-            .url(url)
-            .header("Authorization", "Bearer $accessToken")
-            .header("Content-Type", "application/json")
-            .post(jsonBody.toRequestBody("application/json".toMediaType()))
-            .build()
-        return execute(request)
-    }
-
-    private fun execute(request: Request, allow409: Boolean = false): String {
-        client.newCall(request).execute().use { resp ->
-            val body = resp.body?.string().orEmpty()
-            val err = runCatching { json.decodeFromString<ApiErrorBody>(body) }.getOrNull()
-            when {
-                allow409 && resp.code == 409 -> throw ExportApiException.NotReady()
-                resp.code == 409 && err?.code == "export_already_processing" ->
-                    throw ExportApiException.QueueFailed("A move-out report is already building. Check back shortly.")
-                resp.code == 400 -> {
-                    when (err?.code) {
-                        "export_failed" -> throw ExportApiException.ServerFailed()
-                        "not_enough_move_out_proof" ->
-                            throw ExportApiException.QueueFailed(
-                                "Capture move-out proof for at least one room first.",
-                            )
-                        "not_enough_dispute_proof" ->
-                            throw ExportApiException.QueueFailed(
-                                "Add move-in room proof before building a dispute packet.",
-                            )
-                    }
-                    throw ExportApiException.Network(sanitizeMessage(body, resp.message))
-                }
-                !resp.isSuccessful -> throw ExportApiException.Network(sanitizeMessage(body, resp.message))
-            }
-            return body
+    /** Permanently deletes the signed-in account and its cloud data (`DELETE /api/account`, 204). */
+    suspend fun deleteAccount() {
+        val response = try {
+            transport.execute(Request.Builder().url(url("api/account")).delete().build())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            throw ExportApiException.Network("Couldn’t delete your account. Check your connection and try again.")
+        }
+        if (!response.isSuccessful) {
+            val err = runCatching { json.decodeFromString<ApiErrorBody>(response.bodyString()) }.getOrNull()
+            val message = err?.error?.trim().orEmpty()
+            throw ExportApiException.Network(
+                if (message.isBlank() || MMUserMessages.isTechnical(message)) "Couldn’t delete your account. Try again." else message,
+            )
         }
     }
 
-    private fun sanitizeMessage(body: String, fallback: String): String {
+    private fun url(path: String): HttpUrl =
+        (baseUrl ?: throw ExportApiException.Network("This build is not configured to reach MoveMark’s servers."))
+            .resolvePath(path)
+
+    private suspend fun executeGet(url: HttpUrl, allow409: Boolean = false): String =
+        execute(Request.Builder().url(url).get().build(), allow409 = allow409)
+
+    private suspend fun executePost(url: HttpUrl, jsonBody: String): String =
+        execute(Request.Builder().url(url).post(jsonBody.toRequestBody("application/json".toMediaType())).build())
+
+    private suspend fun execute(request: Request, allow409: Boolean = false): String {
+        val resp = transport.execute(request)
+        val body = resp.bodyString()
+        val err = runCatching { json.decodeFromString<ApiErrorBody>(body) }.getOrNull()
+        when {
+            allow409 && resp.code == 409 -> throw ExportApiException.NotReady()
+            resp.code == 409 && err?.code == "export_already_processing" ->
+                throw ExportApiException.QueueFailed("A move-out report is already building. Check back shortly.")
+            resp.code == 400 -> {
+                when (err?.code) {
+                    "export_failed" -> throw ExportApiException.ServerFailed()
+                    "not_enough_move_out_proof" ->
+                        throw ExportApiException.QueueFailed(
+                            "Capture move-out proof for at least one room first.",
+                        )
+                    "not_enough_dispute_proof" ->
+                        throw ExportApiException.QueueFailed(
+                            "Add move-in room proof before building a dispute packet.",
+                        )
+                }
+                throw ExportApiException.Network(sanitizeMessage(body))
+            }
+            resp.code == 429 -> throw ExportApiException.Network("That’s a lot at once. Wait a minute, then try again.")
+            !resp.isSuccessful -> throw ExportApiException.Network(sanitizeMessage(body))
+        }
+        return body
+    }
+
+    private fun sanitizeMessage(body: String): String {
         val err = runCatching { json.decodeFromString<ApiErrorBody>(body) }.getOrNull()
         val raw = err?.error?.trim().orEmpty()
         if (raw.isBlank() || MMUserMessages.isTechnical(raw)) {

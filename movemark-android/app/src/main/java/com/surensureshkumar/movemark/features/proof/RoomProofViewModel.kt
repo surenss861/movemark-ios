@@ -7,8 +7,12 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.surensureshkumar.movemark.core.util.MMUserMessages
-import com.surensureshkumar.movemark.core.util.toJpegBytes
 import com.surensureshkumar.movemark.data.auth.SessionManager
+import com.surensureshkumar.movemark.data.evidence.EvidenceCaptureSource
+import com.surensureshkumar.movemark.data.evidence.EvidenceImport
+import com.surensureshkumar.movemark.data.evidence.EvidenceSaveOutcome
+import com.surensureshkumar.movemark.data.evidence.EvidenceSource
+import com.surensureshkumar.movemark.data.evidence.PendingEvidence
 import com.surensureshkumar.movemark.data.models.RoomRecord
 import com.surensureshkumar.movemark.data.property.EvidenceUploadContext
 import com.surensureshkumar.movemark.data.property.InspectionRepository
@@ -90,6 +94,9 @@ class RoomProofViewModel @Inject constructor(
     private val _entryNotice = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val entryNotice: SharedFlow<String> = _entryNotice.asSharedFlow()
 
+    private val _loadingOlder = MutableStateFlow(false)
+    val loadingOlder: StateFlow<Boolean> = _loadingOlder.asStateFlow()
+
     private var uploadContext: EvidenceUploadContext? = null
     private var pendingReceipt: SavedProofReceiptPayload? = null
 
@@ -109,24 +116,39 @@ class RoomProofViewModel @Inject constructor(
     fun addUris(uris: List<Uri>) {
         if (_saveState.value.isBusy) return
         viewModelScope.launch {
-            val bytes = withContext(Dispatchers.IO) {
-                uris.mapNotNull { uri -> uri.toJpegBytes(context) }
-            }
-            if (bytes.isEmpty() && uris.isNotEmpty()) {
-                _message.value = "Could not read selected photos. Try different images."
+            val imported = withContext(Dispatchers.IO) { importSources(uris) }
+            val sources = imported.mapNotNull { it.getOrNull() }
+            if (sources.isEmpty() && uris.isNotEmpty()) {
+                _message.value = importFailureMessage(imported)
                 return@launch
             }
-            val existing = _photos.value.map { it.bytes.contentHashCode() }.toSet()
-            val newPhotos = bytes
-                .filter { it.contentHashCode() !in existing }
-                .map { PendingPhoto(bytes = it) }
+            // The same file picked twice is one photo (its source hash is its identity).
+            val existing = _photos.value.mapNotNull { it.evidence?.source?.sha256Hex }.toSet()
+            val newPhotos = withContext(Dispatchers.Default) {
+                sources
+                    .distinctBy { it.sha256Hex }
+                    .filter { it.sha256Hex !in existing }
+                    .mapNotNull { source ->
+                        val preview = EvidenceImport.thumbnail(source) ?: return@mapNotNull null
+                        PendingPhoto(bytes = preview, evidence = PendingEvidence(source))
+                    }
+            }
             if (newPhotos.isNotEmpty()) {
                 _photos.value = _photos.value + newPhotos
                 _saveState.value = RoomProofSaveState.Idle
-                _message.value = null
+                _message.value = if (sources.size < uris.size) importFailureMessage(imported) else null
             }
         }
     }
+
+    /** The picked/captured files' bytes, untouched, as evidence sources (one result per uri). */
+    private fun importSources(uris: List<Uri>): List<Result<EvidenceSource>> = uris.map { uri ->
+        runCatching { EvidenceImport.source(context, uri, captureSourceOf(uri)) }
+    }
+
+    private fun importFailureMessage(results: List<Result<EvidenceSource>>): String =
+        results.firstNotNullOfOrNull { it.exceptionOrNull()?.message }
+            ?: "Could not read selected photos. Try different images."
 
     fun save() {
         if (_saveState.value.isBusy) return
@@ -170,16 +192,24 @@ class RoomProofViewModel @Inject constructor(
                 }.also { uploadContext = it }
 
                 var uploadedThisRun = 0
+                var lastFailure: Throwable? = null
                 val batchSize = toUpload.size
 
                 toUpload.forEachIndexed { index, photo ->
                     _saveState.value = RoomProofSaveState.Uploading(index + 1, batchSize)
                     setPhotoStatus(photo.id, PhotoUploadStatus.Uploading)
-                    val ok = withContext(Dispatchers.IO) {
-                        propertyStore.uploadSingleEvidencePhoto(uploadCtx, photo.bytes)
+                    val evidence = photo.evidence ?: return@forEachIndexed setPhotoStatus(photo.id, PhotoUploadStatus.Failed)
+                    when (val outcome = withContext(Dispatchers.IO) { propertyStore.saveEvidencePhoto(uploadCtx, evidence) }) {
+                        is EvidenceSaveOutcome.Saved -> {
+                            setPhotoStatus(photo.id, PhotoUploadStatus.Uploaded)
+                            uploadedThisRun++
+                        }
+                        is EvidenceSaveOutcome.Pending -> {
+                            // Keep the row id and any unresolved upload: the retry settles it before re-sending.
+                            updatePhoto(photo.id) { it.copy(status = PhotoUploadStatus.Failed, evidence = outcome.item) }
+                            lastFailure = outcome.error ?: lastFailure
+                        }
                     }
-                    setPhotoStatus(photo.id, if (ok) PhotoUploadStatus.Uploaded else PhotoUploadStatus.Failed)
-                    if (ok) uploadedThisRun++
                 }
 
                 val totalUploaded = _photos.value.count { it.status == PhotoUploadStatus.Uploaded }
@@ -200,8 +230,9 @@ class RoomProofViewModel @Inject constructor(
                             uploadContext?.let { propertyStore.abandonEvidenceUpload(it) }
                         }
                         uploadContext = null
-                        _saveState.value = RoomProofSaveState.Failed(RoomProofUploadMessages.FULL_FAILURE)
-                        _message.value = RoomProofUploadMessages.FULL_FAILURE
+                        val failure = RoomProofUploadMessages.failure(lastFailure)
+                        _saveState.value = RoomProofSaveState.Failed(failure)
+                        _message.value = failure
                         return@launch
                     }
                 }
@@ -305,10 +336,11 @@ class RoomProofViewModel @Inject constructor(
         val roomId = roomId ?: return
         if (uris.isEmpty()) return
         runEntryAction(success = null, failure = RoomProofUploadMessages.FULL_FAILURE) {
-            val bytes = withContext(Dispatchers.IO) { uris.mapNotNull { it.toJpegBytes(context) } }
-            if (bytes.isEmpty()) throw IllegalStateException("Could not read selected photos.")
+            val sources = withContext(Dispatchers.IO) { importSources(uris) }.mapNotNull { it.getOrNull() }
+            if (sources.isEmpty()) throw IllegalStateException("Could not read selected photos.")
+            val pending = sources.distinctBy { it.sha256Hex }.map { PendingEvidence(it) }
             val result = withContext(Dispatchers.IO) {
-                propertyStore.appendPhotosToEvidence(entryId, roomId, proofPhase, bytes, property.id, userId)
+                propertyStore.appendPhotosToEvidence(entryId, roomId, proofPhase, pending, property.id, userId)
             }
             _entryNotice.tryEmit(
                 if (result.hadPartialFailure) RoomProofUploadMessages.partial(result.savedCount, result.attemptedCount)
@@ -341,10 +373,38 @@ class RoomProofViewModel @Inject constructor(
         }
     }
 
-    private fun setPhotoStatus(id: String, status: PhotoUploadStatus) {
-        _photos.value = _photos.value.map { photo ->
-            if (photo.id == id) photo.copy(status = status) else photo
+    /** Load the next page of this room's older entries (iOS "Show older entries"). */
+    fun loadOlderEntries() {
+        val id = roomId ?: return
+        if (_loadingOlder.value) return
+        viewModelScope.launch {
+            _loadingOlder.value = true
+            try {
+                propertyStore.loadOlderEntries(id, proofPhase)
+            } catch (e: Exception) {
+                Log.e(UPLOAD_TAG, "loadOlderEntries failed", e)
+                _entryNotice.tryEmit("Couldn't load older entries. Try again.")
+            } finally {
+                _loadingOlder.value = false
+            }
         }
+    }
+
+    /** Load every photo of an entry (iOS "Show all N photos"). */
+    fun loadAllPhotos(entryId: UUID) {
+        val id = roomId ?: return
+        runEntryAction(success = null, failure = "Couldn't load all photos. Try again.") {
+            propertyStore.loadAllPhotos(entryId, id, proofPhase)
+            true
+        }
+    }
+
+    private fun setPhotoStatus(id: String, status: PhotoUploadStatus) {
+        updatePhoto(id) { it.copy(status = status) }
+    }
+
+    private fun updatePhoto(id: String, transform: (PendingPhoto) -> PendingPhoto) {
+        _photos.value = _photos.value.map { photo -> if (photo.id == id) transform(photo) else photo }
     }
 
     private fun buildReceiptPayload(
@@ -369,6 +429,11 @@ class RoomProofViewModel @Inject constructor(
     }
 
 }
+
+/** Camera captures are files this app wrote into its capture folder; everything else came from the library. */
+private fun captureSourceOf(uri: Uri): EvidenceCaptureSource =
+    if (uri.scheme == "file" && uri.path?.contains("/movemark_captures/") == true) EvidenceCaptureSource.Camera
+    else EvidenceCaptureSource.Library
 
 /** Details for a Room entry — same fields iOS saves (title is stored as the first line of notes). */
 data class EntryDraft(

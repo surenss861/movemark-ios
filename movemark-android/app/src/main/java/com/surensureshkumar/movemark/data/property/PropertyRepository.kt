@@ -1,15 +1,15 @@
 package com.surensureshkumar.movemark.data.property
 
+import com.surensureshkumar.movemark.data.backend.PostgrestClient
 import com.surensureshkumar.movemark.data.models.CreatePropertyInput
+import com.surensureshkumar.movemark.data.models.EntryPhotosPage
 import com.surensureshkumar.movemark.data.models.PropertyRow
-import com.surensureshkumar.movemark.data.models.PropertySnapshot
+import com.surensureshkumar.movemark.data.models.PropertySnapshotV2
+import com.surensureshkumar.movemark.data.models.RoomEntriesPage
 import com.surensureshkumar.movemark.data.models.RoomRow
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.postgrest.postgrest
-import io.github.jan.supabase.postgrest.query.Order
-import io.github.jan.supabase.postgrest.rpc
-import kotlinx.serialization.json.Json
+import com.surensureshkumar.movemark.data.models.VaultSummary
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.text.SimpleDateFormat
@@ -20,63 +20,104 @@ import javax.inject.Singleton
 
 @Singleton
 class PropertyRepository @Inject constructor(
-    private val client: SupabaseClient,
+    private val postgrest: PostgrestClient,
 ) {
     private val dbDate = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     private companion object {
-        const val MAX_PROPERTIES = 300L
+        const val MAX_PROPERTIES = 300
+        const val MAX_ROOMS = 200
+        const val ENTRIES_PER_ROOM = 30
+        const val PHOTOS_PER_ENTRY = 12
     }
 
-    // Decoded independently of the client's default (strict) serializer: the RPC's jsonb payload
-    // mirrors whole table rows, and `ignoreUnknownKeys` keeps this resilient to future columns
-    // the migration/schema adds that these Kotlin row models haven't been updated to include yet
-    // (a decode failure on one unrelated new column would otherwise break the entire snapshot).
-    private val snapshotJson = Json { ignoreUnknownKeys = true }
-
     /**
-     * Single-round-trip replacement for the old rooms/inspections/inspection_items/evidence_files/
-     * tags/documents/maintenance_issues fan-out. See `get_property_snapshot` in
-     * supabase/migrations/20260719000001_property_snapshot_thumbnails_realtime.sql — SECURITY
-     * INVOKER, so this still runs under the same per-table RLS as the direct `.select()` calls.
+     * The bounded property snapshot in one round trip — rooms with true totals, the newest entries and their
+     * first photos, documents, maintenance. See `get_property_snapshot_v2` in
+     * neon/migrations/0990_bounded_snapshot_v2.sql — SECURITY INVOKER, so RLS applies as for direct reads.
+     * Returns the raw JSON so [PropertyHydrator] can persist it verbatim to the offline cache.
      */
-    suspend fun fetchPropertySnapshot(propertyId: UUID): PropertySnapshot =
-        decodeSnapshot(fetchPropertySnapshotJson(propertyId))
-
-    /**
-     * Same RPC call as [fetchPropertySnapshot], but returns the raw jsonb response string so
-     * callers (see [PropertyHydrator]) can persist it verbatim to the offline cache and decode it
-     * back with [decodeSnapshot] later, without a lossy re-serialize round trip.
-     */
-    suspend fun fetchPropertySnapshotJson(propertyId: UUID): String {
-        val result = client.postgrest.rpc(
-            "get_property_snapshot",
-            buildJsonObject { put("p_property_id", propertyId.toString()) },
+    suspend fun fetchPropertySnapshotJson(propertyId: UUID): String =
+        postgrest.rpcRaw(
+            "get_property_snapshot_v2",
+            buildJsonObject {
+                put("p_property_id", propertyId.toString())
+                put("p_entries_per_room", ENTRIES_PER_ROOM)
+                put("p_photos_per_entry", PHOTOS_PER_ENTRY)
+            },
         )
-        return result.data
-    }
 
-    fun decodeSnapshot(json: String): PropertySnapshot =
-        snapshotJson.decodeFromString(PropertySnapshot.serializer(), json)
+    fun decodeSnapshot(json: String): PropertySnapshotV2 =
+        postgrest.json.decodeFromString(PropertySnapshotV2.serializer(), json)
+
+    /** Older entries of one room and stage, newest first, before the (created_at, id) cursor. */
+    suspend fun fetchRoomEntriesPage(
+        roomId: UUID,
+        inspectionType: String,
+        beforeCreatedAt: String?,
+        beforeId: String?,
+        limit: Int,
+    ): RoomEntriesPage = postgrest.rpc(
+        "get_room_entries_page",
+        RoomEntriesPage.serializer(),
+        buildJsonObject {
+            put("p_room_id", roomId.toString())
+            put("p_inspection_type", inspectionType)
+            // The function wants both halves of the cursor or neither.
+            if (beforeCreatedAt != null && beforeId != null) {
+                put("p_before_created_at", beforeCreatedAt)
+                put("p_before_id", beforeId)
+            } else {
+                put("p_before_created_at", JsonNull)
+                put("p_before_id", JsonNull)
+            }
+            put("p_limit", limit)
+            put("p_photos_per_entry", PHOTOS_PER_ENTRY)
+        },
+    )
+
+    /** One entry's photos after the (created_at, id) cursor, in capture order. */
+    suspend fun fetchEntryPhotosPage(
+        inspectionItemId: UUID,
+        afterCreatedAt: String?,
+        afterId: String?,
+        limit: Int,
+    ): EntryPhotosPage = postgrest.rpc(
+        "get_entry_photos_page",
+        EntryPhotosPage.serializer(),
+        buildJsonObject {
+            put("p_inspection_item_id", inspectionItemId.toString())
+            if (afterCreatedAt != null && afterId != null) {
+                put("p_after_created_at", afterCreatedAt)
+                put("p_after_id", afterId)
+            } else {
+                put("p_after_created_at", JsonNull)
+                put("p_after_id", JsonNull)
+            }
+            put("p_limit", limit)
+        },
+    )
+
+    /** One summary per rental of the caller (rooms, documented rooms, newest evidence) — never a snapshot per rental. */
+    suspend fun fetchVaultSummaries(): List<VaultSummary> =
+        postgrest.rpc("get_vault_summaries", ListSerializer(VaultSummary.serializer()))
 
     suspend fun fetchProperties(userId: UUID): List<PropertyRow> =
-        client.from("properties")
-            .select {
-                filter { eq("user_id", userId.toString()) }
-                // Explicit order (previously implicit/unspecified) plus a cap so a long-time user's
-                // property history can't grow this into an unbounded list; oldest-first preserves
-                // `fetched.first()`'s existing "earliest property" default-selection behavior.
-                order("created_at", Order.ASCENDING)
-                limit(MAX_PROPERTIES)
-            }
-            .decodeList()
+        postgrest.select("properties") {
+            eq("user_id", userId.toString())
+            // Oldest-first preserves `fetched.first()`'s "earliest property" default selection; the cap keeps a
+            // long-time user's property history from growing into an unbounded list.
+            order("created_at")
+            order("id")
+            limit(MAX_PROPERTIES)
+        }
 
     suspend fun fetchRooms(propertyId: UUID): List<RoomRow> =
-        client.from("rooms")
-            .select {
-                filter { eq("property_id", propertyId.toString()) }
-                order("sort_order", Order.ASCENDING)
-            }
-            .decodeList()
+        postgrest.select("rooms") {
+            eq("property_id", propertyId.toString())
+            order("sort_order")
+            order("id")
+            limit(MAX_ROOMS)
+        }
 
     suspend fun createProperty(input: CreatePropertyInput, userId: UUID): PropertyRow {
         val id = UUID.randomUUID()
@@ -95,9 +136,7 @@ class PropertyRepository @Inject constructor(
             landlordPhone = input.landlordPhone.trim().takeIf { it.isNotEmpty() },
             moveInDate = dbDate.format(java.util.Date()),
         )
-        return client.from("properties")
-            .insert(row) { select() }
-            .decodeSingle()
+        return postgrest.insertReturning<PropertyRow, PropertyRow>("properties", row).single()
     }
 
     suspend fun insertDefaultRooms(propertyId: UUID) {
@@ -114,9 +153,7 @@ class PropertyRepository @Inject constructor(
                 sortOrder = index,
             )
         }
-        client.from("rooms").insert(rooms) {
-            select()
-        }
+        postgrest.insert("rooms", rooms)
     }
 
     suspend fun insertRoom(propertyId: UUID, name: String, sortOrder: Int): RoomRow {
@@ -126,6 +163,6 @@ class PropertyRepository @Inject constructor(
             name = name,
             sortOrder = sortOrder,
         )
-        return client.from("rooms").insert(row) { select() }.decodeSingle()
+        return postgrest.insertReturning<RoomRow, RoomRow>("rooms", row).single()
     }
 }

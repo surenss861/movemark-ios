@@ -35,6 +35,7 @@ import com.surensureshkumar.movemark.core.design.components.MMProofTaskCard
 import com.surensureshkumar.movemark.core.design.components.MMProofSectionHeader
 import com.surensureshkumar.movemark.core.design.components.MMVaultProofHeroCard
 import com.surensureshkumar.movemark.data.models.PropertyRow
+import com.surensureshkumar.movemark.data.models.VaultSummary
 import com.surensureshkumar.movemark.domain.LifecycleNudge
 import com.surensureshkumar.movemark.domain.RoomProofMetrics
 import com.surensureshkumar.movemark.domain.VaultDocumentKind
@@ -59,6 +60,7 @@ fun VaultScreen(
 ) {
     val property by viewModel.property.collectAsState()
     val properties by viewModel.properties.collectAsState()
+    val summaries by viewModel.summaries.collectAsState()
     val loading by viewModel.loading.collectAsState()
     val error by viewModel.error.collectAsState()
     val hasPro by viewModel.hasPro.collectAsState()
@@ -245,6 +247,7 @@ fun VaultScreen(
                     otherRentals.forEach { row ->
                         OtherRentalRow(
                             row = row,
+                            summary = summaries[row.id.lowercase()],
                             onClick = {
                                 viewModel.activateProperty(UUID.fromString(row.id))
                             },
@@ -270,13 +273,15 @@ private fun formatProofAdded(raw: String?): String? {
 @Composable
 private fun OtherRentalRow(
     row: PropertyRow,
+    summary: VaultSummary?,
     onClick: () -> Unit,
 ) {
     val location = listOf(row.city, row.provinceState).filter { it.isNotBlank() }.joinToString(", ")
+    val rooms = summary?.takeIf { it.roomsTotal > 0 }?.let { "${it.roomsDocumented} of ${it.roomsTotal} rooms documented" }
     MMCompactProofRow(
         title = row.title,
         subtitle = if (location.isNotBlank()) location else "Tap to switch vault",
-        meta = "Tap to switch vault".takeIf { location.isNotBlank() },
+        meta = rooms ?: "Tap to switch vault".takeIf { location.isNotBlank() },
         onClick = onClick,
     )
 }

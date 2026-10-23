@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -51,6 +53,8 @@ fun AccountScreen(
     val resetInProgress by viewModel.resetInProgress.collectAsState()
     val profileSaving by viewModel.profileSaving.collectAsState()
     val notice by viewModel.notice.collectAsState()
+    val deleting by viewModel.deleting.collectAsState()
+    var confirmDelete by remember { mutableStateOf(false) }
     val isMockMode = viewModel.isMockMode
     val context = LocalContext.current
     val reduceMotion = MMMotion.rememberReduceMotion()
@@ -251,7 +255,35 @@ fun AccountScreen(
                 subtitle = "Clear this device and return to Welcome",
                 onClick = { viewModel.signOut(onSignOut) },
             )
+            MMSettingsDivider()
+            MMSettingsRow(
+                title = if (deleting) "Deleting account…" else "Delete account",
+                subtitle = "Permanently delete your account and all proof",
+                enabled = !deleting,
+                onClick = { confirmDelete = true },
+            )
         }
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete your account?") },
+            text = {
+                Text(
+                    "This permanently deletes your account, rentals, photos, records and reports. It can’t be undone.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    viewModel.deleteAccount(onSignOut)
+                }) { Text("Delete", color = MMColors.SemanticDanger) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text("Cancel", color = MMColors.TextSecondary) }
+            },
+        )
     }
 }
 

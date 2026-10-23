@@ -31,6 +31,8 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.AddAPhoto
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -72,6 +74,12 @@ fun RoomEvidenceBody(
     onAddPhotos: (EvidenceRecord) -> Unit,
     onDelete: (EvidenceRecord) -> Unit,
     modifier: Modifier = Modifier,
+    /** Entries the server holds for this room and stage (loaded + not yet loaded). */
+    totalEntries: Int = entries.size,
+    hasOlderEntries: Boolean = false,
+    isLoadingOlder: Boolean = false,
+    onLoadOlder: () -> Unit = {},
+    onShowAllPhotos: (EvidenceRecord) -> Unit = {},
 ) {
     val ordered = entries.sortedByDescending { it.createdAt.orEmpty() }
     val latest = ordered.firstOrNull()
@@ -108,12 +116,31 @@ fun RoomEvidenceBody(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Kicker(if (proofPhase == ProofPhase.MoveOut) "MOVE-OUT ENTRIES" else "ENTRIES", MMColors.TextMuted)
                 Spacer(Modifier.weight(1f))
-                Text("${ordered.size}", fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MMColors.TextMuted)
+                Text("$totalEntries", fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MMColors.TextMuted)
             }
             Spacer(Modifier.height(4.dp))
             ordered.forEachIndexed { index, entry ->
                 if (index > 0) HorizontalDivider(thickness = 0.5.dp, color = MMColors.CardStroke)
-                EntryRow(entry, isBusy, onEdit, onAddPhotos, onDelete)
+                EntryRow(entry, isBusy, onEdit, onAddPhotos, onDelete, onShowAllPhotos)
+            }
+            if (hasOlderEntries) {
+                HorizontalDivider(thickness = 0.5.dp, color = MMColors.CardStroke)
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 44.dp)
+                        .clickable(enabled = !isLoadingOlder && !isBusy, role = Role.Button, onClick = onLoadOlder),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (isLoadingOlder) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = MMColors.Primary)
+                    Text(
+                        if (isLoadingOlder) "Loading older entries…" else "Show older entries (${totalEntries - ordered.size} more)",
+                        color = MMColors.Primary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
         }
         // Adding evidence lives on the hero ("Add evidence"), so the body ends with the record.
@@ -170,6 +197,7 @@ private fun EntryRow(
     onEdit: (EvidenceRecord) -> Unit,
     onAddPhotos: (EvidenceRecord) -> Unit,
     onDelete: (EvidenceRecord) -> Unit,
+    onShowAllPhotos: (EvidenceRecord) -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -195,6 +223,13 @@ private fun EntryRow(
                     leadingIcon = { Icon(Icons.Outlined.AddAPhoto, contentDescription = null) },
                     onClick = { menuOpen = false; onAddPhotos(entry) },
                 )
+                if (entry.hasUnloadedPhotos) {
+                    DropdownMenuItem(
+                        text = { Text("Show all ${entry.photoCount} photos") },
+                        leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, contentDescription = null) },
+                        onClick = { menuOpen = false; onShowAllPhotos(entry) },
+                    )
+                }
                 HorizontalDivider()
                 DropdownMenuItem(
                     text = { Text("Delete entry", color = MMColors.SemanticDanger) },
