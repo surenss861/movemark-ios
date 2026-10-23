@@ -117,6 +117,11 @@ struct ProofHomeView: View {
             }
         }
         .scrollIndicators(.hidden)
+        // The status bar keeps a solid band of the header colour, so scrolled content never runs under
+        // the clock (the white status bar text stays legible over it).
+        .safeAreaInset(edge: .top, spacing: 0) {
+            Color.clear.frame(height: 0).background(Ink.hero.ignoresSafeArea(edges: .top))
+        }
         // The dark header colour runs up under the status bar; the header's content stays below it.
         .background(alignment: .top) { Ink.hero.frame(height: 420).ignoresSafeArea(edges: .top) }
         .background(Ink.sheet.ignoresSafeArea())
