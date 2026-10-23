@@ -761,3 +761,20 @@ def test_v2_and_vault_summary_show_nothing_of_another_account(dsn: str, busy_roo
     with as_user(dsn, busy_room["user"]) as c:
         mine = {s["property_id"]: s for s in one(c, "SELECT get_vault_summaries()")[0]}
         assert mine[r["property"]]["rooms_documented"] == 1 and mine[r["property"]]["latest_evidence"] is not None
+
+
+def test_entry_payload_called_directly_reveals_only_the_callers_rows(dsn: str, busy_room: Any, owner: Any) -> None:
+    """`_entry_payload` is reachable as an RPC (the invoker RPCs need EXECUTE on it), so a direct call with
+    another account's ids must come back empty: RLS applies inside it, exactly as in the public RPCs."""
+    ids = sorted(busy_room["items"])
+    stranger = _fresh_user(owner)
+    seed_rental(dsn, stranger)
+    with as_user(dsn, stranger) as c:
+        payload = one(c, "SELECT _entry_payload(%s::uuid[], 50)", (ids,))[0]
+        assert not payload["photo_counts"] and payload["evidence_files"] == [] and payload["item_tags"] == []
+    with as_user(dsn, None) as c, pytest.raises(errors.InsufficientPrivilege):
+        c.execute("SELECT _entry_payload(%s::uuid[], 50)", (ids,))
+    with as_user(dsn, busy_room["user"]) as c:  # the owner of the rows does see them, capped per entry
+        payload = one(c, "SELECT _entry_payload(%s::uuid[], 3)", (ids,))[0]
+        assert payload["photo_counts"][busy_room["newest"]] == 7
+        assert len([e for e in payload["evidence_files"] if e["inspection_item_id"] == busy_room["newest"]]) == 3
