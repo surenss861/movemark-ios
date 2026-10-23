@@ -254,3 +254,27 @@ To recover onto a new provider:
    - no trusted domains.
 
    These are for the iOS production phase.
+
+## Gate 1 closed — 2026-10-23
+
+- Production PITR-restored to 2026-10-22T09:30:00Z (by the account owner). The state with the out-of-band
+  0990/1000 objects is kept as `production-out-of-band-2-2026-10-22` (`br-raspy-tooth-b5om6gel`), next to
+  `production-out-of-band-2026-10-22`. Keep both until backups are operational.
+- Containment: the source was the Neon console SQL editor (`docs/production-access-audit.md`). The console
+  tab was closed and the account secured; no owner activity for 20 h before the restore.
+- Auth after restore: localhost disallowed, no OAuth providers, no trusted domains; base URL unchanged.
+- Runner: `status` 36 + 2 pending → `check` zero drift → `apply` 0990, 1000 → 38 applied, `check` clean.
+  Fingerprint identical to dev (446 facts, `399ec2102827001d`).
+- Grants: only `authenticated` executes the five v2 functions (none SECURITY DEFINER); anonymous, PUBLIC
+  and the runtime roles cannot; 0 public functions executable by PUBLIC; every public table has RLS;
+  runtime roles have no superuser/BYPASSRLS/CREATE/ownership/membership and are refused DDL.
+- Data API: no token, malformed token, `alg: none`, unknown kid and real-kid-wrong-key tokens are all
+  rejected on the v2 RPCs, `_entry_payload` and tables. Signed-in cross-account isolation is covered by the
+  test suite (identical schema) and is re-run against production with disposable accounts at Gate 4.
+- `neondb_owner` password rotated (2026-10-23T08:15Z); `movemark_api` and `movemark_worker` have separate
+  random passwords. Their pooled DSNs (0600, `~/.movemark-qa/production/`) are Railway's `DATABASE_URL` on
+  `movemark-api-py` and `movemark-worker`, set with deploys skipped. No owner or migration credential is in
+  Railway.
+- `_entry_payload` keeps its `authenticated` EXECUTE: the invoker RPCs need it. Its direct-call RLS
+  regression test covers launch; moving it out of the exposed schema is post-launch.
+- Schema frozen at 1000 unless a later gate finds a launch blocker.
