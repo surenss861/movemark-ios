@@ -1,4 +1,4 @@
-"""MoveMark — set the runtime roles' passwords on a Neon branch and write their pooled DSNs (0960 roles).
+"""MoveMark — set the runtime roles' passwords on a Neon branch and write their DSNs (0960 roles; 1010 backup).
 
     ../movemark-api-py/.venv/bin/python scripts/db/runtime_roles.py --project shiny-poetry-92207621 --branch dev
     ... --branch production --production --confirm br-solitary-glade-b5nc31al   (at the Railway cutover only)
@@ -28,6 +28,9 @@ migrate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(migrate)
 
 ROLES = ("movemark_api", "movemark_worker")
+# The scheduled backup's role (1010) gets the direct endpoint: pg_dump needs a session, not PgBouncer's
+# transaction pooling. Only `--roles movemark_backup` touches it; its DSN goes to the backup service alone.
+DIRECT_ROLES = ("movemark_backup",)
 
 
 def pooled(owner_dsn: str, role: str, password: str) -> str:
@@ -40,13 +43,23 @@ def pooled(owner_dsn: str, role: str, password: str) -> str:
     return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
 
 
+def direct(owner_dsn: str, role: str, password: str) -> str:
+    parts = urlsplit(owner_dsn)
+    netloc = f"{quote(role)}:{quote(password)}@{parts.hostname}" + (f":{parts.port}" if parts.port else "")
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--project", required=True)
     ap.add_argument("--branch", required=True)
     ap.add_argument("--production", action="store_true")
     ap.add_argument("--confirm", default="")
+    ap.add_argument("--roles", default=",".join(ROLES), help=f"comma-separated, from {ROLES + DIRECT_ROLES}")
     args = ap.parse_args()
+    roles = [r for r in args.roles.split(",") if r]
+    if not roles or any(r not in ROLES + DIRECT_ROLES for r in roles):
+        sys.exit(f"--roles must name roles from {ROLES + DIRECT_ROLES}")
     try:
         migrate.check_target(args)
     except migrate.RefusedError as error:
@@ -55,21 +68,23 @@ def main() -> int:
     out.mkdir(mode=0o700, parents=True, exist_ok=True)
     owner_dsn = migrate.neon_dsn(args.project, args.branch)
     with psycopg.connect(owner_dsn, autocommit=True) as conn:
-        for role in ROLES:
+        for role in roles:
             if not conn.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (role,)).fetchone():
-                sys.exit(f"{role} does not exist on {args.branch}: apply migration 0960 first")
+                sys.exit(f"{role} does not exist on {args.branch}: apply its migration (0960 / 1010) first")
             password = secrets.token_urlsafe(32)
             conn.execute(sql.SQL("ALTER ROLE {} PASSWORD {}").format(sql.Identifier(role), sql.Literal(password)))
             target = out / f"{role}.dsn"
             fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(fd, "w") as fh:
-                fh.write(pooled(owner_dsn, role, password) + "\n")
+                fh.write((direct if role in DIRECT_ROLES else pooled)(owner_dsn, role, password) + "\n")
             print(f"{role}: password rotated, DSN written to {target}")
-    for role in ROLES:  # prove each credential works through the pooler and is what it should be
+    for role in roles:  # prove each credential works and is what it should be
         with psycopg.connect((out / f"{role}.dsn").read_text().strip()) as conn:
-            who, tz, timeout = conn.execute("SELECT current_user, current_setting('TimeZone'), current_setting('statement_timeout')").fetchone()
+            who, tz, timeout, ro = conn.execute("SELECT current_user, current_setting('TimeZone'), "
+                                                "current_setting('statement_timeout'), current_setting('transaction_read_only')").fetchone()
             can_create = conn.execute("SELECT has_schema_privilege('public', 'CREATE')").fetchone()[0]
-            print(f"  connected as {who} (pooled) timezone={tz} statement_timeout={timeout} can_create_in_public={can_create}")
+            print(f"  connected as {who} ({'direct' if role in DIRECT_ROLES else 'pooled'}) timezone={tz} "
+                  f"statement_timeout={timeout} read_only={ro} can_create_in_public={can_create}")
     return 0
 
 

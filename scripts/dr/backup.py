@@ -137,7 +137,7 @@ def main() -> int:
             ledger_head = conn.execute("SELECT max(version) FROM movemark_meta.schema_migrations").fetchone()[0]
 
         t0 = time.monotonic()
-        s3 = boto3.client("s3", endpoint_url=endpoint, region_name=os.getenv("AWS_REGION"))
+        s3 = None if args.database_only else boto3.client("s3", endpoint_url=endpoint, region_name=os.getenv("AWS_REGION"))
         manifest = []
         for bucket in () if args.database_only else BUCKETS:
             for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket):
