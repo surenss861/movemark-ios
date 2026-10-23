@@ -1,10 +1,12 @@
-# Copy to local.properties (gitignored). Same Supabase project as iOS movemork.
+# Copy to local.properties (gitignored). Never commit real values.
 sdk.dir=/Users/YOUR_USER/Library/Android/sdk
 
-SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-SUPABASE_ANON_KEY=your_supabase_anon_key
-
-MOVE_MARK_API_BASE_URL=https://movemark-api-py-production.up.railway.app
+# Debug builds only. Release builds are hard-wired to production in app/build.gradle.kts and ignore these.
+# Neon Auth and the Neon Data API of a non-production branch:
+NEON_AUTH_URL=https://ep-YOUR-DEV-ENDPOINT.neonauth.REGION.aws.neon.tech/neondb/auth
+NEON_DATA_API_URL=https://ep-YOUR-DEV-ENDPOINT.apirest.REGION.aws.neon.tech/neondb/rest/v1
+# MoveMark API. The local dev API (scripts/qa/run_dev_api.sh) from an emulator is http://10.0.2.2:8787
+MOVEMARK_API_BASE_URL=http://10.0.2.2:8787
 
 # Billing: mock (local QA) | revenuecat (Play + RevenueCat). Debug defaults to mock when key is empty.
 BILLING_MODE=mock

@@ -1,6 +1,6 @@
 # MoveMark Android
 
-Native **Kotlin + Jetpack Compose** client for MoveMark. Shares the same Supabase backend and Railway export API as the iOS app (`movemork/`).
+Native **Kotlin + Jetpack Compose** client for MoveMark. Shares the production architecture of the iOS app (`movemork/`): Neon Auth for sign-in, the Neon Data API (PostgREST, under RLS with the user's token) for rows, and the MoveMark API (Railway) for files and reports.
 
 ## Location
 
@@ -10,10 +10,10 @@ movemork/movemark-android/
 
 ## MVP flows
 
-- Welcome → email auth (Supabase)
+- Welcome → email auth (Neon Auth)
 - Create rental vault → default rooms
 - Vault / Rooms tabs with **real** `photoCount > 0` documented logic
-- Room proof → photo picker → upload to `inspection-media` → evidence rows
+- Room proof → photo picker → MoveMark API upload ticket (immutable source + derivative + thumbnail) → evidence rows
 - Report tab → Railway `POST /api/exports/move-in`
 - Account → Privacy / Terms / sign out
 
@@ -21,7 +21,9 @@ movemork/movemark-android/
 
 1. Open **`movemork/movemark-android`** in Android Studio (Ladybug or newer).
 2. Copy `local.properties.example` → `local.properties`.
-3. Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` (same values as iOS `Config/Secrets.xcconfig`).
+3. Set `NEON_AUTH_URL`, `NEON_DATA_API_URL` and `MOVEMARK_API_BASE_URL` for **debug** builds (a non-production
+   Neon branch and a dev API; from an emulator the local dev API is `http://10.0.2.2:8787`). Release builds are
+   hard-wired to production in `app/build.gradle.kts` and ignore these.
 4. Sync Gradle and run on emulator or device (API 26+).
 
 ## Project structure
