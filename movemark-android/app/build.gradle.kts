@@ -65,6 +65,11 @@ android {
         jvmTarget = "17"
     }
 
+    testOptions {
+        // Repository/store code logs through android.util.Log; plain JVM tests get no-op stubs.
+        unitTests.isReturnDefaultValues = true
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -107,4 +112,7 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
     debugImplementation(libs.androidx.compose.ui.tooling.preview)
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
 }
