@@ -60,7 +60,16 @@ final class VisualSnapshotTests: XCTestCase {
     /// Evidence paths map to bundled photos so renders are synchronous and deterministic.
     private static let images: (String) -> UIImage? = { path in
         let name = (path as NSString).deletingPathExtension.components(separatedBy: "/").last ?? path
-        return photo(name)
+        return name == "text-heavy" ? textHeavy : photo(name)
+    }
+
+    /// A photo of a screen full of huge white text — the kind of evidence that once filled the Proof header.
+    private static let textHeavy: UIImage = UIGraphicsImageRenderer(size: CGSize(width: 1200, height: 1600)).image { ctx in
+        UIColor(white: 0.12, alpha: 1).setFill()
+        ctx.fill(CGRect(x: 0, y: 0, width: 1200, height: 1600))
+        ("LEASE\nUNIT 2304\nMOVE-IN" as NSString).draw(
+            in: CGRect(x: 40, y: 80, width: 1120, height: 1500),
+            withAttributes: [.font: UIFont.systemFont(ofSize: 260, weight: .black), .foregroundColor: UIColor.white])
     }
 
     private func host<V: View>(_ view: V) -> UIViewController {
@@ -77,7 +86,6 @@ final class VisualSnapshotTests: XCTestCase {
         var m = ProofHomeModel(
             propertyName: "88 Harbour St", addressLine: "Unit 2304",
             documented: 9, totalRooms: 10,
-            heroPhotoPath: "fixture/snap-hero.jpg",
             nextRoomName: "Primary Bedroom", primaryTitle: "Capture Primary Bedroom",
             photos: 12, records: 3, issues: 1,
             recent: [
@@ -97,8 +105,16 @@ final class VisualSnapshotTests: XCTestCase {
             m.nextRoomName = "Living Room"; m.primaryTitle = "Capture Living Room"
             m.recent = [.init(id: UUID(), roomName: "Kitchen", photoCount: 2, photoPath: "fixture/snap-kitchen.jpg")]
             m.upcoming = [.init(id: UUID(), roomName: "Living Room"), .init(id: UUID(), roomName: "Primary Bedroom")]
+        case "text-heavy":
+            // The TestFlight case: 1 of 10, the newest evidence is a photo of large text.
+            m.documented = 1; m.totalRooms = 10; m.photos = 1; m.records = 0; m.issues = 0
+            m.propertyName = "My Apartment"; m.addressLine = "Toronto, ON"
+            m.nextRoomName = "Living Room"; m.primaryTitle = "Capture Living Room"
+            m.recent = [.init(id: UUID(), roomName: "Kitchen", photoCount: 1, photoPath: "fixture/text-heavy.jpg", capturedAt: Date())]
+            m.upcoming = ["Living Room", "Primary Bedroom", "Bedroom 2", "Bathroom", "Hallway", "Laundry", "Balcony", "Entry"]
+                .map { .init(id: UUID(), roomName: $0) }
         case "no-photos":
-            m.documented = 0; m.heroPhotoPath = nil; m.recent = []; m.photos = 0; m.issues = 0
+            m.documented = 0; m.recent = []; m.photos = 0; m.issues = 0
             m.nextRoomName = "Kitchen"; m.primaryTitle = "Capture Kitchen"
         default: break
         }
@@ -126,6 +142,11 @@ final class VisualSnapshotTests: XCTestCase {
 
     func testProofOneRoom() {
         assertSnapshot(of: host(proofScreen("one-room")), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    /// Evidence stays inside its own tile: nothing of the photo may reach the header or status bar.
+    func testProofTextHeavyEvidenceStaysInItsTile() {
+        assertSnapshot(of: host(proofScreen("text-heavy")), as: Self.strategy(Self.pro), named: "pro")
     }
 
     func testProofNoPhotos() {

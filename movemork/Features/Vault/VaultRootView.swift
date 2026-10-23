@@ -142,23 +142,17 @@ struct VaultRootView: View {
             guard let latest = room.evidence.filter({ !$0.photos.isEmpty }).max(by: { $0.createdAt < $1.createdAt }),
                   let photo = latest.photos.first else { return nil }
             let count = room.moveInPhotoTotal
-            return (latest.createdAt, .init(id: room.id, roomName: room.name, photoCount: count, photoPath: photo.filePath))
+            return (latest.createdAt, .init(id: room.id, roomName: room.name, photoCount: count,
+                                            photoPath: photo.thumbnailPath ?? photo.filePath, capturedAt: latest.createdAt))
         }
         .sorted { $0.0 > $1.0 }
         .map(\.1)
-
-        let heroPath = rooms.flatMap(\.evidence)
-            .filter { !$0.photos.isEmpty }
-            .max(by: { $0.createdAt < $1.createdAt })?
-            .photos.first?.filePath
-            ?? row.flatMap { previewByPropertyId[$0.id]?.path }
 
         return ProofHomeModel(
             propertyName: row.map(displayName(for:)) ?? "Your rental",
             addressLine: row.map(locationText(for:)).flatMap { $0.isEmpty ? nil : $0 },
             documented: vaultDocumentedCount ?? 0,
             totalRooms: vaultTotalRooms ?? 0,
-            heroPhotoPath: heroPath,
             nextRoomName: vaultNextRoomName,
             primaryTitle: featuredContinueProofTitle,
             photos: vaultPhotoCount ?? 0,

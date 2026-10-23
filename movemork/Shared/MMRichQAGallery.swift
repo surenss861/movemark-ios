@@ -410,7 +410,6 @@ private struct ProofQAScreen: View {
             propertyName: "88 Harbour St",
             addressLine: "Unit 2304",
             documented: 9, totalRooms: 10,
-            heroPhotoPath: Self.fixture("proof-hero-v4"),
             nextRoomName: "Primary Bedroom",
             primaryTitle: "Capture Primary Bedroom",
             photos: 12, records: 3, issues: 1,
@@ -427,7 +426,7 @@ private struct ProofQAScreen: View {
             m.documented = 10; m.nextRoomName = nil; m.primaryTitle = "View move-in report"
             m.actions = [actions[3], .init(id: "report", kind: .report, title: "Move-in report", subtitle: "Ready to share", icon: "doc.richtext")]
         case "proof-nophoto":
-            m.documented = 0; m.heroPhotoPath = nil; m.recent = []; m.photos = 0; m.issues = 0
+            m.documented = 0; m.recent = []; m.photos = 0; m.issues = 0
             m.nextRoomName = "Kitchen"; m.primaryTitle = "Capture Kitchen"
         default: break
         }

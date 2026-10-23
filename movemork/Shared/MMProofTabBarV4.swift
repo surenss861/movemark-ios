@@ -68,7 +68,8 @@ struct MMProofTabBarV4: View {
                     .background {
                         if isSelected {
                             Circle()
-                                .fill(Color(red: 0.914, green: 0.914, blue: 0.914))    // #E9E9E9
+                                .fill(Color(red: 0.945, green: 0.945, blue: 0.945))    // #F1F1F1: present, not heavy
+                                .frame(width: 30, height: 30)
                                 .matchedGeometryEffect(id: "lightTabPill", in: tabNamespace)
                         }
                     }
