@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -60,7 +61,7 @@ class SessionManager @Inject constructor(
     init {
         scope.launch {
             // Identity comes from the session persisted on this device; no network needed to restore it.
-            val user = runCatching { auth.currentUser() }.getOrNull()
+            val user = withContext(Dispatchers.IO) { runCatching { auth.currentUser() }.getOrNull() }
             if (user != null) applyUser(user) else clearUser()
         }
         scope.launch {
