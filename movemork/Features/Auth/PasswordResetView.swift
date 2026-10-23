@@ -2,7 +2,8 @@
 //  PasswordResetView.swift
 //  movemork
 //
-//  Set a new password from a reset link (`movemark://reset-password?token=…`).
+//  Set a new password from a reset link: the HTTPS Universal Link (`https://auth.<domain>/reset?token=…`)
+//  or the `movemark://reset-password?token=…` scheme (the reset page's "Open in the app" button).
 //
 
 import SwiftUI
@@ -13,9 +14,14 @@ enum PasswordResetLink {
         var id: String { value }
     }
 
-    /// The token from `movemark://reset-password?token=…`, or nil for any other URL.
-    static func token(from url: URL) -> String? {
-        guard url.scheme?.lowercased() == "movemark", url.host?.lowercased() == "reset-password",
+    /// The token from a reset link (the configured HTTPS reset page, or `movemark://reset-password`), or nil
+    /// for any other URL.
+    static func token(from url: URL, resetPage: URL? = MoveMarkBackendConfig.passwordResetURL) -> String? {
+        let isScheme = url.scheme?.lowercased() == "movemark" && url.host?.lowercased() == "reset-password"
+        let isPage = resetPage.map {
+            url.scheme?.lowercased() == "https" && url.host?.lowercased() == $0.host?.lowercased() && url.path == $0.path
+        } ?? false
+        guard isScheme || isPage,
               let token = URLComponents(url: url, resolvingAgainstBaseURL: false)?
                 .queryItems?.first(where: { $0.name == "token" })?.value,
               !token.isEmpty

@@ -233,7 +233,9 @@ actor NeonAuthClient {
 
     /// Emails a reset link. Answers the same whether or not the address has an account.
     func requestPasswordReset(email: String) async throws {
-        _ = try await post("request-password-reset", ["email": email], storeSession: false)
+        var body = ["email": email]
+        if let redirect = MoveMarkBackendConfig.passwordResetURL { body["redirectTo"] = redirect.absoluteString }
+        _ = try await post("request-password-reset", body, storeSession: false)
     }
 
     /// Sets a new password from the token in a reset link. Neon Auth revokes the account's other sessions.

@@ -49,7 +49,11 @@ PG_BIN = backup.PG_BIN
 # Roles the dump's ownership/grants refer to (Neon platform roles + MoveMark's), all NOLOGIN here except the
 # owner the restore runs as and the runtime roles the API/worker would use.
 ROLES = ["neondb_owner LOGIN", "anonymous", "authenticated", "authenticator", "neon_auth", "neon_superuser",
-         "movemark_backend", "movemark_api LOGIN BYPASSRLS", "movemark_worker LOGIN BYPASSRLS", "cloud_admin", "neon_service"]
+         "movemark_backend", "movemark_api LOGIN", "movemark_worker LOGIN", "movemark_backup LOGIN BYPASSRLS",
+         "cloud_admin", "neon_service"]
+# As on production (0970/0980): the runtime roles are subject to RLS through their per-process policies and
+# belong to no group; role-level settings aren't part of a dump, so they are set again here.
+ROLE_SETTINGS = {"movemark_api": ("15s", "5s", "15s"), "movemark_worker": ("60s", "5s", "60s")}
 PLATFORM = """
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE OR REPLACE FUNCTION auth.user_id() RETURNS text LANGUAGE sql STABLE AS
@@ -95,6 +99,9 @@ def main() -> int:
     ap.add_argument("--key-file", type=pathlib.Path, required=True)
     ap.add_argument("--workdir", type=pathlib.Path, required=True)
     ap.add_argument("--port", type=int, default=5544)
+    ap.add_argument("--evidence", type=pathlib.Path,
+                    help="objects pulled from B2 (scripts/dr/offsite.py pull): <dir>/manifest.tsv + <dir>/objects/")
+    ap.add_argument("--keep-running", action="store_true", help="leave the restored cluster up (to boot the API on it)")
     args = ap.parse_args()
     archive = args.archive.expanduser()
     work = args.workdir.expanduser()
@@ -114,6 +121,11 @@ def main() -> int:
     with tarfile.open(plain) as tar:
         tar.extractall(work, filter="data")
     plain.unlink()
+    if args.evidence:  # a database-only archive plus the off-site evidence set
+        shutil.rmtree(work / "objects", ignore_errors=True)
+        shutil.copytree(args.evidence.expanduser() / "objects", work / "objects")
+        shutil.copy(args.evidence.expanduser() / "manifest.tsv", work / "manifest.tsv")
+    check_objects = bool(args.evidence) or not meta.get("database_only")
     for line in (work / "manifest.tsv").read_text().splitlines():
         bucket, key, size, digest = line.split("\t")
         data = (work / "objects" / bucket / key).read_bytes()
@@ -134,7 +146,11 @@ def main() -> int:
                 name, *attrs = role.split()
                 conn.execute(f"CREATE ROLE {name} {' '.join(attrs) or 'NOLOGIN'}")
             conn.execute("GRANT anonymous, authenticated, movemark_backend, neon_auth TO neondb_owner WITH ADMIN OPTION")
-            conn.execute("GRANT movemark_backend TO movemark_api, movemark_worker")
+            for role, (statement, lock, idle) in ROLE_SETTINGS.items():
+                conn.execute(f"ALTER ROLE {role} SET timezone = 'UTC'")
+                conn.execute(f"ALTER ROLE {role} SET statement_timeout = '{statement}'")
+                conn.execute(f"ALTER ROLE {role} SET lock_timeout = '{lock}'")
+                conn.execute(f"ALTER ROLE {role} SET idle_in_transaction_session_timeout = '{idle}'")
             conn.execute("ALTER ROLE neondb_owner BYPASSRLS CREATEROLE")
             conn.execute("CREATE DATABASE neondb OWNER neondb_owner")
         db = f"host={sock} port={args.port} user=postgres dbname=neondb"
@@ -176,7 +192,7 @@ def main() -> int:
         objects = {(b, k) for b, k, *_ in (line.split("\t") for line in (work / "manifest.tsv").read_text().splitlines())}
         missing = [f"{b}/{k}" for b, k in refs if k and (b, k) not in objects
                    and not any((other, k) in objects for other in backup.BUCKETS)]
-        if missing and not meta.get("database_only"):
+        if missing and check_objects:
             problems.append(f"{len(missing)} referenced objects missing, e.g. {missing[:3]}")
         bad_sources = 0
         for path, digest in sources:
@@ -184,7 +200,7 @@ def main() -> int:
                           if (work / "objects" / b / path).exists()), None)
             if found is None or hashlib.sha256(found.read_bytes()).hexdigest() != digest:
                 bad_sources += 1
-        if bad_sources and not meta.get("database_only"):
+        if bad_sources and check_objects:
             problems.append(f"{bad_sources} evidence sources missing or not matching their recorded SHA-256")
         files = sorted(p for p in (ROOT / "neon" / "migrations").glob("*.sql") if p.name[:4] <= head)
         with migrate.scratch_db(files) as scratch:
@@ -194,10 +210,13 @@ def main() -> int:
             problems.append(f"schema differs from a from-zero build: {drift[:5]}")
         timings["verify_s"] = round(time.monotonic() - t0, 2)
     finally:
-        pg(["pg_ctl", "-D", str(data_dir), "-m", "fast", "stop"], stdout=subprocess.DEVNULL)
-        shutil.rmtree(sock, ignore_errors=True)
+        if args.keep_running and not problems:
+            print(f"RESTORED_CLUSTER host={sock} port={args.port} dbname=neondb (stop: pg_ctl -D {data_dir} stop)")
+        else:
+            pg(["pg_ctl", "-D", str(data_dir), "-m", "fast", "stop"], stdout=subprocess.DEVNULL)
+            shutil.rmtree(sock, ignore_errors=True)
 
-    report = {"backup": meta["created_utc"], "rows": sum(meta["row_counts"].values()), "objects": meta["objects"],
+    report = {"backup": meta["created_utc"], "rows": sum(meta["row_counts"].values()), "objects": len(objects),
               "references_checked": len(refs), "sources_hash_checked": len(sources), "timings": timings}
     print(json.dumps(report))
     for p in problems:

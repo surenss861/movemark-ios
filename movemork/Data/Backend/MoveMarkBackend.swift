@@ -41,6 +41,10 @@ enum MoveMarkBackendConfig {
 
     static var apiBaseURL: URL? { apiBaseURLString.flatMap(URL.init(string:)) }
 
+    /// HTTPS page reset emails link to, e.g. `https://auth.<domain>/reset` (Universal Link into the app, browser
+    /// fallback otherwise). Empty: Neon Auth's default link and the `movemark://` scheme.
+    static let passwordResetURL: URL? = plistURL("MoveMarkPasswordResetURL").flatMap { $0.scheme == "https" ? $0 : nil }
+
     /// `false` when any endpoint is missing, empty, or not a usable HTTP(S) URL with a host
     /// (catches a truncated `https:` from .xcconfig). UI gates on this instead of crashing at launch.
     static var isConfigured: Bool { neonAuthURL != nil && dataAPIURL != nil && apiBaseURL != nil }

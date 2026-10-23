@@ -51,5 +51,7 @@
 	<string>$(NEON_AUTH_URL)</string>
 	<key>NeonDataAPIURL</key>
 	<string>$(NEON_DATA_API_URL)</string>
+	<key>MoveMarkPasswordResetURL</key>
+	<string>$(MOVEMARK_PASSWORD_RESET_URL)</string>
 </dict>
 </plist>

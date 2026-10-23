@@ -91,7 +91,11 @@ def main() -> int:
     ap.add_argument("--confirm", default="")
     ap.add_argument("--key-file", type=pathlib.Path, required=True)
     ap.add_argument("--out", type=pathlib.Path, required=True)
-    ap.add_argument("--database-only", action="store_true", help="timing runs on synthetic data: skip objects")
+    ap.add_argument("--database-only", action="store_true",
+                    help="database only: evidence goes off-site incrementally (scripts/dr/offsite.py sync-evidence)")
+    ap.add_argument("--dsn-env", default="",
+                    help="read the connection string from this env var (the scheduled job's movemark_backup role) "
+                         "instead of the Neon CLI owner login")
     args = ap.parse_args()
     try:
         migrate.check_target(args)
@@ -99,7 +103,7 @@ def main() -> int:
         sys.exit(f"refused: {error}")
     endpoint = os.environ.get("AWS_ENDPOINT_URL_S3", "")
     expected_store = "br-solitary-glade-b5nc31al" if args.branch == "production" else None
-    if expected_store and expected_store not in endpoint:
+    if expected_store and expected_store not in endpoint and not args.database_only:
         sys.exit("refused: AWS_* does not point at the production branch's Object Storage")
     if not expected_store and "br-solitary-glade" in endpoint:
         sys.exit("refused: AWS_* points at production storage for a non-production backup")
@@ -109,7 +113,14 @@ def main() -> int:
     out.mkdir(mode=0o700, parents=True, exist_ok=True)
     stamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
     name = f"movemark-{args.branch}-{stamp}"
-    dsn = migrate.neon_dsn(args.project, args.branch)
+    if args.dsn_env:
+        dsn = os.environ.get(args.dsn_env, "")
+        endpoint_id = "ep-steep-wind-b56266ss" if args.branch == "production" else ""
+        if not dsn.startswith("postgres") or (endpoint_id and endpoint_id not in dsn) or \
+                (not endpoint_id and "ep-steep-wind" in dsn):
+            sys.exit(f"refused: ${args.dsn_env} does not point at the {args.branch} branch")
+    else:
+        dsn = migrate.neon_dsn(args.project, args.branch)
     timings: dict[str, float] = {}
 
     with tempfile.TemporaryDirectory(prefix="mmbk-") as tmp:
