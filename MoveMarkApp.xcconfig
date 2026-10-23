@@ -1,3 +1,12 @@
-// App target base config. Supabase (and optional overrides) live in Config/Secrets.xcconfig (gitignored).
-// If you define SUPABASE_URL there, avoid a raw `https://` (xcconfig treats `//` as end-of-line comment); see Secrets.xcconfig.example.
+// App target base config. Backend endpoints for development builds live in Config/Secrets.xcconfig (gitignored;
+// see Secrets.xcconfig.example). xcconfig treats `//` as a comment, hence the `https:/$()/$(/)` spelling.
 #include? "Config/Secrets.xcconfig"
+
+// Release (archives, TestFlight, App Store) always talks to production, whatever the local Secrets.xcconfig
+// says: these per-configuration settings win over it, so a dev endpoint or a local API override can never ship.
+// Public endpoints only — the app holds no credentials.
+NEON_AUTH_URL[config=Release] = https:/$()/$(/)ep-steep-wind-b56266ss.neonauth.c-7.us-east-2.aws.neon.tech/neondb/auth
+NEON_DATA_API_URL[config=Release] = https:/$()/$(/)ep-steep-wind-b56266ss.apirest.c-7.us-east-2.aws.neon.tech/neondb/rest/v1
+MOVEMARK_API_BASE_URL_OVERRIDE[config=Release] =
+MOVEMARK_PASSWORD_RESET_URL[config=Release] =
+REVENUECAT_TEST_STORE_PUBLIC_KEY[config=Release] =
