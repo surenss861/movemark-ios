@@ -73,6 +73,7 @@ enum MoveMarkStorageError: LocalizedError {
         case .notFound: return "That file isn’t available."
         case .rejected(let status, let code, let message):
             if status == 413 || code == "too_large" { return "This file is too large to upload." }
+            if status == 429 { return "That’s a lot at once. Wait a minute, then try again." }
             if code == "unsupported_type" { return "This file type isn’t supported." }
             return message.isEmpty ? "Couldn’t save the file. Try again." : message
         case .uploadFailed: return "Couldn’t upload the file. Check your connection and try again."
