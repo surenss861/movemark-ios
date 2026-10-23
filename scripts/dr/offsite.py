@@ -30,6 +30,7 @@ import hashlib
 import importlib.util
 import os
 import pathlib
+import re
 import secrets
 import sys
 
@@ -105,6 +106,13 @@ def push_db(args: argparse.Namespace) -> int:
     if got != expected:
         sys.exit(f"uploaded archive does not match: {got} != {expected}")
     print(f"PUSHED db/{archive.name} ({archive.stat().st_size} bytes, sha256 verified after upload)")
+    # The month's first backup is also kept under monthly/ (retained 12 months by the bucket's lifecycle
+    # rule; db/ ages out after the 30-day lock).
+    month = re.search(r"-(\d{6})\d{2}T", archive.name)
+    if month and not client.list_objects_v2(Bucket=bucket, Prefix=f"monthly/{month.group(1)}/").get("KeyCount"):
+        for path in (archive, archive.with_name(archive.name + ".sha256"), archive.with_suffix(".json")):
+            put(client, bucket, f"monthly/{month.group(1)}/{path.name}", path.read_bytes())
+        print(f"KEPT monthly/{month.group(1)}/{archive.name}")
     return 0
 
 

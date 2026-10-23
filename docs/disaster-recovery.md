@@ -14,12 +14,21 @@ deleted inside the window, not even with the job's own keys), and each has its o
 restricted to it. The backup key (32 bytes) lives in the password manager and in the backup job's secrets —
 never in Neon, B2 or the repository; without it the backups are unreadable.
 
-## Schedule (Railway cron service, production)
+## Schedule (Railway cron service `movemark-backup`, production)
 
-- every 6 hours: database backup → push (4 a day);
-- daily: evidence sync (incremental);
-- retention: Object Lock keeps everything 30 days; keep one database backup and one manifest per month for
-  12 months (B2 lifecycle rules on the buckets).
+`scripts/dr/railway.toml` + `scripts/dr/Dockerfile` (PostgreSQL 18 client) run `scripts/dr/run_scheduled.sh`
+at minute 17 of every 6th hour: database backup as `movemark_backup` (read-only, BYPASSRLS — migration 1010;
+direct endpoint, never the owner) → push (hash-checked) → incremental evidence sync. So both run 4 times a day:
+**RPO ≤ 6 hours** for the database and the evidence.
+
+Service variables (sealed; this service only — the API and worker never see them): `BACKUP_DATABASE_URL`
+(`~/.movemark-qa/production/movemark_backup.dsn`, from `scripts/db/runtime_roles.py --roles movemark_backup`),
+`BACKUP_KEY_B64` (base64 of the 32-byte key), the six `B2_*` and `B2_ENDPOINT`, and the production Object
+Storage `AWS_*` (read).
+
+Retention: Object Lock keeps every upload 30 days. The month's first database backup is also written under
+`monthly/<YYYYMM>/`. B2 lifecycle rules: `db/` hidden after 35 days and deleted 1 day later; `monthly/` kept
+365 days; `manifests/` kept 400 days; `objects/` not expired (the live evidence set).
 
 ## Recover (B2-only)
 

@@ -98,7 +98,12 @@ def main() -> int:
                          "instead of the Neon CLI owner login")
     args = ap.parse_args()
     try:
-        migrate.check_target(args)
+        if args.dsn_env:  # the scheduled job: no Neon CLI or owner login; same production flags, endpoint checked below
+            if (args.branch == "production") != bool(args.production) or \
+                    (args.production and args.confirm != migrate.PRODUCTION_BRANCH_ID):
+                raise migrate.RefusedError(f"production requires --production --confirm {migrate.PRODUCTION_BRANCH_ID}")
+        else:
+            migrate.check_target(args)
     except migrate.RefusedError as error:
         sys.exit(f"refused: {error}")
     endpoint = os.environ.get("AWS_ENDPOINT_URL_S3", "")
