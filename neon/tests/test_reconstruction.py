@@ -778,3 +778,96 @@ def test_entry_payload_called_directly_reveals_only_the_callers_rows(dsn: str, b
         payload = one(c, "SELECT _entry_payload(%s::uuid[], 3)", (ids,))[0]
         assert payload["photo_counts"][busy_room["newest"]] == 7
         assert len([e for e in payload["evidence_files"] if e["inspection_item_id"] == busy_room["newest"]]) == 3
+
+
+# --- 1010 movemark_backup ------------------------------------------------------------------
+
+def test_backup_role_attributes_and_membership(owner: Any) -> None:
+    attrs = one(owner, """SELECT rolcanlogin, rolbypassrls, rolsuper, rolcreaterole, rolcreatedb, rolreplication,
+                                 rolinherit, rolconnlimit FROM pg_roles WHERE rolname = 'movemark_backup'""")
+    assert attrs == (True, True, False, False, False, False, False, 1)
+    memberships = owner.execute("""SELECT g.rolname, m.inherit_option, m.set_option, m.admin_option FROM pg_auth_members m
+                                   JOIN pg_roles g ON g.oid = m.roleid JOIN pg_roles r ON r.oid = m.member
+                                   WHERE r.rolname = 'movemark_backup'""").fetchall()
+    assert memberships == [("pg_read_all_data", True, False, False)]
+    assert one(owner, "SELECT count(*) FROM pg_auth_members m JOIN pg_roles g ON g.oid = m.roleid "
+                      "WHERE g.rolname = 'movemark_backup'")[0] == 0  # nobody is a member of it either
+    owned = one(owner, "SELECT count(*) FROM pg_class WHERE relowner = 'movemark_backup'::regrole")[0] + \
+        one(owner, "SELECT count(*) FROM pg_proc WHERE proowner = 'movemark_backup'::regrole")[0] + \
+        one(owner, "SELECT count(*) FROM pg_namespace WHERE nspowner = 'movemark_backup'::regrole")[0]
+    assert owned == 0
+    settings = dict(s.split("=", 1) for s in one(owner, """SELECT setconfig FROM pg_db_role_setting s
+        JOIN pg_roles r ON r.oid = s.setrole WHERE r.rolname = 'movemark_backup'""")[0])
+    assert settings == {"default_transaction_read_only": "on", "TimeZone": "UTC", "statement_timeout": "15min",
+                        "lock_timeout": "30s", "idle_in_transaction_session_timeout": "5min"}
+
+
+def test_backup_role_reads_every_renters_rows_and_auth_identities(dsn: str, owner: Any, two_rentals: Any) -> None:
+    with psycopg.connect(_login_as(dsn, "movemark_backup")) as conn:
+        assert one(conn, "SHOW transaction_read_only")[0] == "on"
+        for table in ("properties", "rooms", "evidence_files", "exports", "user_report_credits", "storage_upload_tickets"):
+            assert one(conn, f"SELECT count(*) FROM public.{table}")[0] == one(owner, f"SELECT count(*) FROM public.{table}")[0]
+        assert one(conn, 'SELECT count(*) FROM neon_auth."user"')[0] == one(owner, 'SELECT count(*) FROM neon_auth."user"')[0]
+
+
+def test_backup_role_can_take_a_complete_pg_dump(dsn: str, tmp_path: Any, two_rentals: Any) -> None:
+    import pathlib
+    import subprocess
+
+    pg_dump = pathlib.Path(os.getenv("MOVEMARK_PG18_BIN", "/opt/homebrew/opt/postgresql@18/bin")) / "pg_dump"
+    if not pg_dump.exists():
+        pytest.skip("PostgreSQL 18 client not installed")
+    out = tmp_path / "db.dump"
+    result = subprocess.run([str(pg_dump), "--format=custom", "--file", str(out), _login_as(dsn, "movemark_backup")],
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr[-1500:]
+    listing = subprocess.run([str(pg_dump).replace("pg_dump", "pg_restore"), "--list", str(out)],
+                             capture_output=True, text=True, check=True).stdout
+    data = [line for line in listing.splitlines() if " TABLE DATA " in line]
+    for table in ("public properties ", "public evidence_files ", "public user_report_credits "):
+        assert any(table in line for line in data), table
+    assert any(" neon_auth " in line and "user" in line for line in data), data
+
+
+BACKUP_ATTEMPTS = {
+    **{k: v for k, v in COMPROMISED_RUNTIME_ATTEMPTS.items() if k != "read auth identities"},
+    "insert evidence": "INSERT INTO public.evidence_files (property_id, file_path, file_type) VALUES (gen_random_uuid(), 'x', 'image')",
+    "delete exports": "DELETE FROM public.exports",
+    "edit entitlements": "UPDATE public.user_entitlements SET status = 'active'",
+    "edit auth identities": 'UPDATE neon_auth."user" SET email = \'x\'',
+    "delete auth identities": 'DELETE FROM neon_auth."user"',
+    "become the api": "SET ROLE movemark_api",
+    "become the worker": "SET ROLE movemark_worker",
+    "become the backend": "SET ROLE movemark_backend",
+    "spend a credit": "SELECT public.consume_report_credit(gen_random_uuid(), 'x')",
+    "grant a credit": "SELECT public.grant_report_credit(gen_random_uuid(), 'x', 'y')",
+    "delete an account": "SELECT public.delete_auth_user(gen_random_uuid())",
+    "claim exports": "SELECT * FROM public.claim_next_export_job()",
+}
+
+
+@pytest.mark.parametrize("name", sorted(BACKUP_ATTEMPTS))
+def test_backup_credentials_cannot_change_anything(dsn: str, owner: Any, name: str) -> None:
+    table_owner = one(owner, "SELECT tableowner FROM pg_tables WHERE schemaname = 'public' AND tablename = 'properties'")[0]
+    with psycopg.connect(_login_as(dsn, "movemark_backup")) as conn:
+        # Read-only is only the session default; turning it off must not unlock anything.
+        conn.execute("SET default_transaction_read_only = off")
+        conn.commit()
+        conn.execute("SET TRANSACTION READ WRITE")
+        with pytest.raises((errors.InsufficientPrivilege, errors.UndefinedObject)):
+            conn.execute(BACKUP_ATTEMPTS[name].format(owner=table_owner))
+        conn.rollback()
+
+
+def test_backup_credentials_cannot_grant_anything(dsn: str, owner: Any) -> None:
+    with psycopg.connect(_login_as(dsn, "movemark_backup"), autocommit=True) as conn:
+        conn.execute("SET default_transaction_read_only = off")
+        for sql in ("GRANT SELECT ON public.properties TO anonymous", "GRANT pg_read_all_data TO anonymous",
+                    "GRANT movemark_backend TO movemark_backup"):
+            try:
+                conn.execute(sql)
+            except errors.InsufficientPrivilege:
+                pass
+    assert not one(owner, "SELECT has_table_privilege('anonymous', 'public.properties', 'SELECT')")[0]
+    assert not one(owner, "SELECT pg_has_role('anonymous', 'pg_read_all_data', 'MEMBER')")[0]
+    assert not one(owner, "SELECT pg_has_role('movemark_backup', 'movemark_backend', 'MEMBER')")[0]
