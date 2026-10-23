@@ -40,7 +40,11 @@ enum NeonAuthError: LocalizedError, Equatable {
             return "Your session has ended. Sign in again."
         case .rejected(let code, let message):
             switch code {
-            case "INVALID_EMAIL_OR_PASSWORD": return "Email or password is incorrect."
+            // One message for an unknown email and a wrong password: telling them apart would let anyone
+            // find out which addresses have a MoveMark account.
+            case "INVALID_EMAIL_OR_PASSWORD":
+                return "Email or password is incorrect. New to MoveMark? Create a private vault instead."
+            case "RATE_LIMITED": return "Too many attempts. Wait a minute, then try again."
             case "USER_ALREADY_EXISTS", "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL":
                 return "An account with this email already exists. Sign in instead."
             case "PASSWORD_TOO_SHORT": return "Password is too short."
@@ -258,7 +262,7 @@ actor NeonAuthClient {
         guard (200..<300).contains(http.statusCode) else {
             let err = try? JSONDecoder().decode(ErrorBody.self, from: data)
             neonAuthLog.notice("\(path, privacy: .public) failed HTTP \(http.statusCode) code=\(err?.code ?? "-", privacy: .public)")
-            throw NeonAuthError.rejected(code: err?.code, message: err?.message ?? "")
+            throw NeonAuthError.rejected(code: http.statusCode == 429 ? "RATE_LIMITED" : err?.code, message: err?.message ?? "")
         }
         if storeSession {
             accessToken = nil

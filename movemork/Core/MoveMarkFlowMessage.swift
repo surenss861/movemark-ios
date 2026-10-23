@@ -247,6 +247,8 @@ enum MoveMarkFlowMessage {
     // MARK: - Auth & account
 
     static func authOperationFailed(_ error: Error) -> String {
+        if let auth = error as? NeonAuthError, let message = auth.errorDescription { return message }
+        if error is URLError { return "No connection. Check your internet and try again." }
         let raw = error.localizedDescription.lowercased()
         if raw.contains("invalid login") || raw.contains("invalid credentials") || raw.contains("invalid email or password") {
             return "Couldn’t sign in. Check your email and password."
