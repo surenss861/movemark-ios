@@ -157,31 +157,46 @@ final class VisualSnapshotTests: XCTestCase {
         assertSnapshot(of: host(ProofHomeEmptyView(onStart: {}, onRetry: {})), as: Self.strategy(Self.pro), named: "pro")
     }
 
-    // MARK: Saved proof receipt (current design, before the Capture redesign)
+    // MARK: Saved proof receipt (after every room save)
 
-    func testSavedProofReceipt() {
+    private func receiptScreen(photos: Int, pending: Int = 0, issues: Int = 0, next: String = "Continue to next room") -> UIViewController {
         let living = Bundle(for: VisualSnapshotTests.self).url(forResource: "snap-living", withExtension: "jpg")
-        let receipt = ScrollView(showsIndicators: false) {
-            ProofSavedReceiptView(
-                model: ProofSavedReceiptModel(
-                    roomName: "Living Room", phaseLabel: "Move-in", photoCount: 4, issueCount: 1,
-                    timestampLabel: "Move-in · Oct 24, 3:18 PM",
-                    headerSubtitle: "Living Room proof · 4 photos saved · Move-in",
-                    primaryActionLabel: "Continue next room", imageURL: living),
-                onPrimary: {}, onViewVault: {}, onAddMorePhotos: {}
-            )
-            .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-            .padding(.top, 8)
-            .padding(.bottom, 32)
-        }
-        .mmProofShellBackground(heroFocus: false, ctaBloom: false)
-        // The receipt plays its entrance on appear: let it appear (and load its photo) in a window first.
-        let controller = host(receipt)
+        let savedAt = Calendar(identifier: .gregorian).date(from: DateComponents(
+            timeZone: TimeZone(identifier: "America/Toronto"), year: 2026, month: 10, day: 24, hour: 15, minute: 18))!
+        let model = ProofSavedReceiptModel(roomName: "Living Room", photoCount: photos, pendingCount: pending,
+                                           issueCount: issues, savedAt: savedAt, imageURL: living, primaryActionLabel: next)
+        let controller = host(ProofSavedReceiptView(model: model, onPrimary: {}, onSecondary: {},
+                                                    onAddMorePhotos: pending > 0 ? nil : {}))
+        // Let the photo load in a window before the snapshot.
         let window = UIWindow(frame: CGRect(origin: .zero, size: Self.pro.size ?? CGSize(width: 402, height: 874)))
         window.rootViewController = controller
         window.makeKeyAndVisible()
-        RunLoop.main.run(until: Date().addingTimeInterval(2))
-        assertSnapshot(of: controller, as: Self.strategy(Self.pro), named: "pro")
+        RunLoop.main.run(until: Date().addingTimeInterval(1.5))
+        return controller
+    }
+
+    func testReceiptOnePhoto() {
+        assertSnapshot(of: receiptScreen(photos: 1), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    func testReceiptPhotosAndOneIssue() {
+        assertSnapshot(of: receiptScreen(photos: 4, issues: 1), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    func testReceiptPhotosAndIssues() {
+        assertSnapshot(of: receiptScreen(photos: 4, issues: 3), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    func testReceiptPartialSave() {
+        assertSnapshot(of: receiptScreen(photos: 3, pending: 1, issues: 1, next: "Retry 1 photo"), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    func testReceiptAllRoomsComplete() {
+        assertSnapshot(of: receiptScreen(photos: 4, next: "View move-in report"), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    func testReceiptLargestText() {
+        assertSnapshot(of: receiptScreen(photos: 4, issues: 1), as: Self.strategy(Self.proAX), named: "ax3")
     }
 
     // MARK: Room (current dark design — regression only until Room is rebuilt and approved)

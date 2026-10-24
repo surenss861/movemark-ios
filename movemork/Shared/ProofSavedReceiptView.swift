@@ -2,7 +2,8 @@
 //  ProofSavedReceiptView.swift
 //  movemork
 //
-//  Strongest proof moment — saved artifact, calm success, clear next action.
+//  The receipt after every room save: proof recorded, preserved, official. States only what the backend
+//  confirmed — confirmed photos, issues, the time it was saved — and what still needs a retry.
 //
 
 import SwiftUI
@@ -10,145 +11,168 @@ import SwiftUI
 struct ProofSavedReceiptModel {
     var roomName: String
     var phaseLabel: String = "Move-in"
+    /// Photos the backend confirmed saved.
     var photoCount: Int
+    /// Photos that did not save and still need a retry.
+    var pendingCount: Int = 0
     var issueCount: Int = 0
-    var timestampLabel: String
-    var headerSubtitle: String
-    var documentedLabel: String = "Room now documented"
-    var partialMessage: String?
-    var primaryActionLabel: String
-    var imageName: String?
+    var savedAt: Date
     var imageURL: URL?
+    var imageName: String?
+    var primaryActionLabel: String
+    var secondaryActionLabel: String = "View evidence"
 }
 
 struct ProofSavedReceiptView: View {
     let model: ProofSavedReceiptModel
     let onPrimary: () -> Void
-    let onViewVault: () -> Void
+    let onSecondary: () -> Void
     var onAddMorePhotos: (() -> Void)?
-    var onRetryUpload: (() -> Void)?
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var visible = false
-    @State private var checkScale: CGFloat = 0.72
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    private var isAX: Bool { dynamicTypeSize.isAccessibilitySize }
+    private var isPartial: Bool { model.pendingCount > 0 }
 
-    private var hasPartialUpload: Bool { model.partialMessage != nil }
+    private enum Ink {
+        static let field = Color(red: 0.067, green: 0.075, blue: 0.071)          // #111312, the room screen's dark
+        static let text = Color.white
+        static let secondary = Color.white.opacity(0.62)
+        static let rule = Color.white.opacity(0.12)
+        static let lime = Color(red: 0.792, green: 0.890, blue: 0.424)           // #CAE36C, as the Vault
+        static let onLime = Color(red: 0.067, green: 0.086, blue: 0.035)
+        static let warning = Color(red: 0.949, green: 0.737, blue: 0.341)
+        static let photoFill = Color.white.opacity(0.06)
+    }
 
     var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                header
+                photo.padding(.top, 24)
+                assurances.padding(.top, 20)
+                actions.padding(.top, 28)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 28)
+            .padding(.bottom, 32)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        }
+        .background(Ink.field.ignoresSafeArea())
+    }
+
+    // MARK: - What was recorded
+
+    private var header: some View {
         VStack(alignment: .leading, spacing: 0) {
-            receiptHeader
-                .opacity(visible ? 1 : 0)
-                .offset(y: visible ? 0 : 8)
-
-            ProofArtifactCard(
-                model: ProofArtifactModel(
-                    phaseEyebrow: "Room Proof",
-                    phaseLabel: model.phaseLabel,
-                    roomName: model.roomName,
-                    photoCount: max(model.photoCount, 1),
-                    issueCount: model.issueCount,
-                    verifiedLabel: verifiedLabel,
-                    savedLabel: "Saved to vault",
-                    statusLabel: "Saved",
-                    statusTone: hasPartialUpload ? .warning : .success
-                ),
-                photoHeight: 220,
-                cornerRadius: 20,
-                imageName: model.imageName,
-                imageURL: model.imageURL,
-                tagsVisible: false
-            )
-            .padding(.top, 18)
-            .opacity(visible ? 1 : 0)
-            .offset(y: visible ? 0 : 10)
-
-            if let partialMessage = model.partialMessage {
-                Text("\(partialMessage). You can retry the rest or continue with saved proof.")
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.semanticWarning)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(MoveMarkTheme.Colors.semanticWarning.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .padding(.top, 12)
+            HStack(spacing: 8) {
+                Image(systemName: isPartial ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(isPartial ? Ink.warning : Ink.lime)
+                Text(isPartial ? "PROOF PARTLY SAVED" : "PROOF SAVED")
+                    .mmFont(12, .semibold)
+                    .tracking(0.6)
+                    .foregroundStyle(Ink.secondary)
             }
-
-            VStack(spacing: 10) {
-                MMButton(
-                    title: model.primaryActionLabel,
-                    action: onPrimary,
-                    kind: .primary,
-                    size: .auth
-                )
-                MMButton(
-                    title: "View proof vault",
-                    action: onViewVault,
-                    kind: .secondary,
-                    size: .standard
-                )
-                if let onAddMorePhotos {
-                    MMButton(
-                        title: "Add more photos",
-                        action: onAddMorePhotos,
-                        kind: .secondary,
-                        size: .standard
-                    )
+            .accessibilityElement(children: .combine)
+            Text(model.roomName)
+                .mmFont(32, .semibold)
+                .foregroundStyle(Ink.text)
+                .lineLimit(isAX ? 3 : 2)
+                .accessibilityAddTraits(.isHeader)
+                .padding(.top, 12)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("\(Self.count(model.photoCount, "photo")) saved")
+                if isPartial {
+                    Text("\(Self.count(model.pendingCount, "photo")) \(model.pendingCount == 1 ? "needs" : "need") a retry")
+                        .foregroundStyle(Ink.warning)
                 }
-                if hasPartialUpload, let onRetryUpload {
-                    MMButton(
-                        title: "Retry upload",
-                        action: onRetryUpload,
-                        kind: .secondary,
-                        size: .standard
-                    )
+                if model.issueCount > 0 {
+                    Text("\(Self.count(model.issueCount, "issue")) recorded")
                 }
             }
-            .padding(.top, 20)
-            .opacity(visible ? 1 : 0)
-        }
-        .onAppear { playEntrance() }
-    }
-
-    private var verifiedLabel: String {
-        if let partialMessage = model.partialMessage {
-            return "\(partialMessage) · \(model.timestampLabel)"
-        }
-        return model.timestampLabel
-    }
-
-    private var receiptHeader: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(MoveMarkTheme.Typography.cardValue)
-                .foregroundStyle(MoveMarkTheme.Colors.primary)
-                .scaleEffect(checkScale)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Saved to your vault")
-                    .font(MoveMarkTheme.Typography.cardTitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                Text(model.headerSubtitle)
-                    .font(MoveMarkTheme.Typography.detailMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                if !model.documentedLabel.isEmpty {
-                    Text(model.documentedLabel)
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                }
-            }
+            .mmFont(16, .medium)
+            .foregroundStyle(Ink.text)
+            .padding(.top, 10)
+            Text("\(model.phaseLabel) · \(model.savedAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))")
+                .mmFont(14)
+                .foregroundStyle(Ink.secondary)
+                .padding(.top, 8)
         }
     }
 
-    private func playEntrance() {
-        guard !reduceMotion else {
-            visible = true
-            checkScale = 1
-            return
+    /// One saved photo, by itself: no text over it.
+    private var photo: some View {
+        Group {
+            if let imageName {
+                Image(imageName).resizable().scaledToFill()
+            } else if let url = model.imageURL {
+                MMCachedAsyncImage(path: nil, signedURL: url) { phase in
+                    if case .success(let image) = phase { image.resizable().scaledToFill() } else { Ink.photoFill }
+                }
+            } else {
+                Ink.photoFill.overlay {
+                    Image(systemName: "photo").font(.system(size: 28)).foregroundStyle(Ink.secondary)
+                }
+            }
         }
-        withAnimation(.easeOut(duration: 0.42)) {
-            visible = true
+        .frame(maxWidth: .infinity)
+        .frame(height: isAX ? 160 : 220)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityHidden(true)
+    }
+
+    private var imageName: String? { model.imageName }
+
+    private var assurances: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Rectangle().fill(Ink.rule).frame(height: 1)
+            assurance("lock.shield", "Source files preserved")
+            assurance("archivebox", "Added to your proof vault")
+            Rectangle().fill(Ink.rule).frame(height: 1)
         }
-        withAnimation(.spring(response: 0.34, dampingFraction: 0.72).delay(0.09)) {
-            checkScale = 1
+    }
+
+    private func assurance(_ icon: String, _ text: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon).font(.system(size: 14, weight: .regular)).frame(width: 20)
+            Text(text).mmFont(14.5)
         }
+        .foregroundStyle(Ink.text.opacity(0.85))
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - What next
+
+    private var actions: some View {
+        VStack(spacing: 4) {
+            Button(action: onPrimary) {
+                Text(model.primaryActionLabel)
+                    .mmFont(16, .semibold)
+                    .foregroundStyle(Ink.onLime)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 50)
+                    .padding(.vertical, isAX ? 8 : 0)
+                    .background(Ink.lime, in: Capsule())
+            }
+            .buttonStyle(MMLightPressStyle())
+            quietButton(model.secondaryActionLabel, action: onSecondary).padding(.top, 8)
+            if let onAddMorePhotos { quietButton("Add more photos", action: onAddMorePhotos) }
+        }
+    }
+
+    private func quietButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .mmFont(15, .medium)
+                .foregroundStyle(Ink.text)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    static func count(_ n: Int, _ noun: String) -> String {
+        "\(n) \(n == 1 ? noun : noun + "s")"
     }
 }

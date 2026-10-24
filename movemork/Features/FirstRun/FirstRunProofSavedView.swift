@@ -31,28 +31,21 @@ struct FirstRunProofSavedView: View {
     }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            ProofSavedReceiptView(
-                model: ProofSavedReceiptModel(
-                    roomName: summary.roomName,
-                    phaseLabel: phaseLabel,
-                    photoCount: summary.photoCount,
-                    issueCount: summary.issueCount,
-                    timestampLabel: "\(phaseLabel) · \(formattedTime)",
-                    headerSubtitle: headerSubtitle,
-                    documentedLabel: moment.receiptDocumentedLabel,
-                    primaryActionLabel: "Continue next room",
-                    imageURL: previewURL
-                ),
-                onPrimary: onContinueNextRoom,
-                onViewVault: onViewProofVault,
-                onAddMorePhotos: onContinueNextRoom
-            )
-            .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-            .padding(.top, 8)
-            .padding(.bottom, 32)
-        }
-        .mmProofShellBackground(heroFocus: false, ctaBloom: false)
+        ProofSavedReceiptView(
+            model: ProofSavedReceiptModel(
+                roomName: summary.roomName,
+                phaseLabel: phaseLabel,
+                photoCount: summary.photoCount,
+                issueCount: summary.issueCount,
+                savedAt: summary.savedAt,
+                imageURL: previewURL,
+                primaryActionLabel: "Continue to next room",
+                secondaryActionLabel: "View proof vault"
+            ),
+            onPrimary: onContinueNextRoom,
+            onSecondary: onViewProofVault,
+            onAddMorePhotos: onContinueNextRoom
+        )
         .task {
             previewURL = await propertyStore.previewImageURL(for: summary.propertyId)
         }

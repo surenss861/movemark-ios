@@ -168,8 +168,8 @@ struct RoomEvidenceHero: View {
 
     private var heroHeight: CGFloat { Self.heroHeight(container: containerSize, topInset: topInset) }
 
-    /// A documented room's next action is not urgent, so it's a white pill, not green
-    /// (green stays reserved for saving). Opens camera or library.
+    /// The room's action, in the same lime as every MoveMark action (dark text on lime reads as clearly as
+    /// black on white over the photo). Opens camera or library.
     private var addEvidencePill: some View {
         Button {
             MMHaptics.soft()
@@ -177,10 +177,10 @@ struct RoomEvidenceHero: View {
         } label: {
             Label("Add evidence", systemImage: "camera.fill")
                 .font(MoveMarkTheme.Typography.subheadlineMedium)
-                .foregroundStyle(Color.black)
+                .foregroundStyle(Self.onLime)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 50)
-                .background(Color.white, in: Capsule())
+                .background(Self.lime, in: Capsule())
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -266,32 +266,27 @@ struct RoomEvidenceHero: View {
 
     // MARK: - Empty
 
+    /// The room brief: which room, that it has no proof yet, what to photograph, and the one action.
     private var emptyField: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 kicker(moveOutMode ? "Move-out evidence" : "Move-in evidence", color: MoveMarkTheme.Colors.textMuted)
                 Text(roomName)
                     .font(MoveMarkTheme.Typography.roomTitle)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
-                HStack(spacing: 8) {
-                    Circle().fill(MoveMarkTheme.Colors.semanticWarning).frame(width: 7, height: 7)
-                    Text("Still needs proof")
-                        .font(MoveMarkTheme.Typography.sectionTitle)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                }
-                Text(moveOutMode
-                     ? "Photograph each surface before you return the keys."
-                     : "Photograph it before boxes cover anything.")
+                Text("No proof yet")
+                    .font(MoveMarkTheme.Typography.subheadlineMedium)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+            }
+            .padding(.top, topInset + 28)
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text(moveOutMode ? "Capture these before you return the keys:" : "Capture these before you unpack:")
                     .font(MoveMarkTheme.Typography.subheadline)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.top, topInset + 64)
-
-            VStack(alignment: .leading, spacing: 12) {
-                kicker("What to capture", color: MoveMarkTheme.Colors.textMuted)
                 ForEach(RoomCapturePrompts.items, id: \.self) { prompt in
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         Image(systemName: "viewfinder")
@@ -304,23 +299,28 @@ struct RoomEvidenceHero: View {
                     }
                 }
             }
-            .padding(.top, 30)
+            .padding(.top, 26)
 
-            VStack(spacing: 10) {
-                // Green only while it is the screen's one action; once photos are picked the
-                // save bar takes over the green.
-                MMButton(
-                    title: "Take photos",
-                    action: onTakePhotos,
-                    kind: hasPendingPhotos ? .secondary : .primary,
-                    size: .standard,
-                    isDisabled: isBusy
-                )
+            VStack(spacing: 6) {
+                // The one action, in the Vault's lime; once photos are picked the save bar takes over.
+                Button(action: onTakePhotos) {
+                    Label("Take photos", systemImage: "camera.fill")
+                        .font(MoveMarkTheme.Typography.subheadlineMedium)
+                        .foregroundStyle(hasPendingPhotos ? MoveMarkTheme.Colors.textPrimary : Self.onLime)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: 50)
+                        .background(hasPendingPhotos ? AnyShapeStyle(MoveMarkTheme.Surface.interactive) : AnyShapeStyle(Self.lime),
+                                    in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(isBusy)
+                .opacity(isBusy ? 0.5 : 1)
                 if let pickerSelection {
-                    RoomGalleryPicker(selection: pickerSelection, isDisabled: isBusy)
+                    RoomGalleryPicker(selection: pickerSelection, isDisabled: isBusy, quiet: true)
                 }
             }
-            .padding(.top, 30)
+            .padding(.top, 26)
         }
         .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
         .padding(.bottom, 8)
@@ -334,6 +334,10 @@ struct RoomEvidenceHero: View {
             .frame(height: topInset + 360)
         }
     }
+
+    /// The Vault's action colour (#CAE36C), so capture continues the same signal.
+    static let lime = Color(red: 0.792, green: 0.890, blue: 0.424)
+    static let onLime = Color(red: 0.067, green: 0.086, blue: 0.035)
 
     // MARK: - Helpers
 
@@ -376,8 +380,25 @@ struct RoomGalleryPicker: View {
     let selection: Binding<[PhotosPickerItem]>
     var isDisabled: Bool = false
     var compact: Bool = false
+    /// A text action under the primary button (the room brief), not a second full-width control.
+    var quiet: Bool = false
 
     var body: some View {
+        if quiet {
+            PhotosPicker(selection: selection, maxSelectionCount: 20, matching: .images, preferredItemEncoding: .current) {
+                Text("Choose from Photos")
+                    .font(MoveMarkTheme.Typography.subheadlineMedium)
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.9))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .disabled(isDisabled)
+        } else {
+            boxed
+        }
+    }
+
+    private var boxed: some View {
         PhotosPicker(selection: selection, maxSelectionCount: 20, matching: .images, preferredItemEncoding: .current) {
             Label(compact ? "Gallery" : "Choose from gallery", systemImage: "photo.on.rectangle.angled")
                 .font(MoveMarkTheme.Typography.subheadlineMedium)

@@ -123,6 +123,10 @@ extension EvidenceCaptureView {
                             issueCount: evidence.issueTags.count,
                             outcomeHints: outcome
                         )
+                        if !result.saved.isEmpty {
+                            presentReceipt(photoCount: result.saved.count, pendingCount: result.pending.count,
+                                           issueCount: evidence.issueTags.count)
+                        }
                     } else {
                         errorMessage = MMEvidenceSaveStatus.partial(saved: result.saved.count, requested: result.requestedCount)
                     }
@@ -163,6 +167,9 @@ extension EvidenceCaptureView {
             guard retry.pending.isEmpty else {
                 pendingRetry = retry
                 MMHaptics.warning()
+                if !result.saved.isEmpty {
+                    presentReceipt(photoCount: retry.savedCount, pendingCount: retry.pending.count, issueCount: retry.issueCount)
+                }
                 return
             }
             pendingRetry = nil
@@ -188,35 +195,55 @@ extension EvidenceCaptureView {
             return
         }
 
-        var msg = moveOutMode
-            ? "Move-out proof saved. Thumbnails may take a moment to appear."
-            : "Proof saved. Thumbnails may take a moment to appear."
-        if outcome.hydrationRefreshFailed {
-            msg += MoveMarkFlowMessage.proofHydrationHint
-        }
-        if outcome.tagInsertFailed {
-            msg += MoveMarkFlowMessage.tagInsertFailedHint
-        }
-        successMessage = msg
+        var hints = ""
+        if outcome.hydrationRefreshFailed { hints += MoveMarkFlowMessage.proofHydrationHint }
+        if outcome.tagInsertFailed { hints += MoveMarkFlowMessage.tagInsertFailedHint }
+        if !hints.isEmpty { successMessage = hints.trimmingCharacters(in: .whitespaces) }
+        presentReceipt(photoCount: photoCount, pendingCount: 0, issueCount: issueCount)
+    }
 
-        MMProofToastPresenter.show(
-            .proofSaved(moveOut: moveOutMode),
-            message: $proofToast,
-            isVisible: $proofToastVisible
+    /// The receipt after a save: what the backend confirmed, and the one next step.
+    private func presentReceipt(photoCount: Int, pendingCount: Int, issueCount: Int) {
+        let property = propertyStore.currentProperty
+        let nextRoom = property?.rooms.first { room in
+            room.id != roomID && (moveOutMode ? room.moveOutEntryTotal : room.moveInEntryTotal) == 0
+        }
+        let next: SavedRoomReceipt.Next
+        if pendingCount > 0 {
+            next = .retry
+        } else if let nextRoom, onOpenRoom != nil {
+            next = .room(nextRoom.id)
+        } else if nextRoom == nil, onOpenReport != nil {
+            next = .report
+        } else {
+            next = .done
+        }
+        MMHaptics.success()
+        savedReceipt = SavedRoomReceipt(
+            propertyId: property?.id,
+            roomName: roomName,
+            phaseLabel: moveOutMode ? "Move-out" : "Move-in",
+            photoCount: photoCount,
+            pendingCount: pendingCount,
+            issueCount: issueCount,
+            savedAt: Date(),
+            next: next
         )
+    }
 
-        withAnimation(MMMotion.fastFade) {
-            didJustSave = true
-        }
-        proofScanlineTrigger += 1
-
-        Task {
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
-            await MainActor.run {
-                withAnimation(MMMotion.fastFade) {
-                    didJustSave = false
-                }
+    func handleReceiptAction(_ action: SavedRoomReceipt.Action, receipt: SavedRoomReceipt) {
+        switch action {
+        case .primary:
+            switch receipt.next {
+            case .room(let id): onOpenRoom?(id)
+            case .report: onOpenReport?()
+            case .retry: saveEvidence()   // with nothing new selected, this retries the pending photos
+            case .done: break
             }
+        case .viewEvidence:
+            break                        // back to this room's evidence
+        case .addMore:
+            presentCameraIfAllowed()
         }
     }
 

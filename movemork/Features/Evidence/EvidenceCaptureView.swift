@@ -30,6 +30,10 @@ struct EvidenceCaptureView: View {
     var moveOutMode: Bool = false
     /// First-run move-in: after first successful save, hand off to receipt screen.
     var onFirstProofSaved: ((FirstRunSavedSummary) -> Void)? = nil
+    /// The receipt's "Continue to next room" (opens another room in place) and, once every room has proof,
+    /// "View move-in report". Without them the receipt just returns to this room.
+    var onOpenRoom: ((UUID) -> Void)? = nil
+    var onOpenReport: (() -> Void)? = nil
 
     @State var title = ""
     @State var notes = ""
@@ -60,6 +64,8 @@ struct EvidenceCaptureView: View {
     @State var proofToastVisible = false
     @State var proofScanlineTrigger = 0
     @State var previewTarget: RoomPhotoPreviewTarget? = nil
+    /// The receipt shown after every save (full or partial).
+    @State var savedReceipt: SavedRoomReceipt? = nil
     @State var heroScrolledAway = false
 
     var room: RoomRecord? {
@@ -185,6 +191,12 @@ struct EvidenceCaptureView: View {
             }
         }
         .animation(MMMotion.cardReveal, value: showsSaveBar)
+        .fullScreenCover(item: $savedReceipt) { receipt in
+            SavedRoomReceiptScreen(receipt: receipt) { action in
+                savedReceipt = nil
+                handleReceiptAction(action, receipt: receipt)
+            }
+        }
         .fullScreenCover(item: $previewTarget) { target in
             RoomPhotoViewer(
                 photos: RoomEvidenceHero.orderedPhotos(existingEntries).map(\.photo),
@@ -265,12 +277,15 @@ struct EvidenceCaptureView: View {
                     .opacity(heroScrolledAway ? 1 : 0)
                     .accessibilityHidden(!heroScrolledAway)
             }
+            // The brief already says which proof it is; the documented room has no other phase label.
+            if !existingEntries.isEmpty {
             ToolbarItem(placement: .topBarTrailing) {
                 Text(moveOutMode ? "Move-out" : "Move-in")
                     .font(MoveMarkTheme.Typography.footnoteEmphasis)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 4)
                     .accessibilityLabel(moveOutMode ? "Move-out evidence" : "Move-in evidence")
+            }
             }
         }
         .toolbarBackground(heroScrolledAway ? .visible : .hidden, for: .navigationBar)
@@ -343,7 +358,7 @@ struct EvidenceCaptureView: View {
         }
     }
 
-    private func presentCameraIfAllowed() {
+    func presentCameraIfAllowed() {
         MoveMarkCameraPermission.requestPresentationIfEligible(
             onPresentCamera: { showCamera = true },
             onNeedsSettingsAlert: { showCameraPermissionAlert = true },

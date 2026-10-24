@@ -21,7 +21,7 @@ struct AuthenticatedShellView: View {
                     case .walkthrough:
                         RoomListView(path: $path)
                     case .roomDetail(let roomID):
-                        RoomDetailDestinationView(roomID: roomID)
+                        RoomDetailDestinationView(roomID: roomID, path: $path)
                     case .maintenance:
                         MaintenanceLogView(path: $path)
                     case .maintenanceIssueDetail(let issueID):
@@ -29,7 +29,7 @@ struct AuthenticatedShellView: View {
                     case .moveOut:
                         MoveOutFoundationView(path: $path)
                     case .moveOutRoomDetail(let roomID):
-                        MoveOutRoomDetailDestinationView(roomID: roomID)
+                        MoveOutRoomDetailDestinationView(roomID: roomID, path: $path)
                     case .exports:
                         ExportHistoryView()
                     case .account:
@@ -73,21 +73,32 @@ private struct VaultDetailDestinationView: View {
 // MARK: - Room detail (resolve name from store)
 private struct RoomDetailDestinationView: View {
     let roomID: UUID
+    @Binding var path: [AppRoute]
     @Environment(PropertyStore.self) private var propertyStore
 
     var body: some View {
         let room = propertyStore.currentProperty?.rooms.first(where: { $0.id == roomID })
-        EvidenceCaptureView(roomID: roomID, roomName: room?.name ?? "Room", moveOutMode: false)
+        EvidenceCaptureView(
+            roomID: roomID, roomName: room?.name ?? "Room", moveOutMode: false,
+            // The receipt's next room replaces this one, so Back still returns to where capture started.
+            onOpenRoom: { next in if !path.isEmpty { path[path.count - 1] = .roomDetail(roomID: next) } },
+            onOpenReport: { path.append(.exports) }
+        )
     }
 }
 
 // MARK: - Move-out room detail (same capture UI in move-out mode)
 private struct MoveOutRoomDetailDestinationView: View {
     let roomID: UUID
+    @Binding var path: [AppRoute]
     @Environment(PropertyStore.self) private var propertyStore
 
     var body: some View {
         let room = propertyStore.currentProperty?.rooms.first(where: { $0.id == roomID })
-        EvidenceCaptureView(roomID: roomID, roomName: room?.name ?? "Room", moveOutMode: true)
+        EvidenceCaptureView(
+            roomID: roomID, roomName: room?.name ?? "Room", moveOutMode: true,
+            onOpenRoom: { next in if !path.isEmpty { path[path.count - 1] = .moveOutRoomDetail(roomID: next) } },
+            onOpenReport: { path.append(.exports) }
+        )
     }
 }
