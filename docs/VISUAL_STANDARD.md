@@ -63,7 +63,7 @@ These are the visual target. They are art direction, not specs to trace: keep th
 | Screen | Reference | What to take from it |
 |---|---|---|
 | Room | `design-refs/room-dark-set.jpg` (screens 2, 3, 6, 7) | The renter's photo as the poster: near edge-to-edge, chips and title layered on it, compact glass controls, a "2 of 4" viewer with filmstrip, a calm capture surface when empty |
-| Proof | `movemorkTests/__Snapshots__/VisualSnapshotTests/testProof*.png` (supersedes `design-refs/proof.jpg`, 2026-10-23) | A quiet dark header — the rental, its location and a thin move-in progress bar (never a captured photo: evidence lives only in its own clipped thumbnails) — then a bright working surface: the next room card holding the one capture action, one line of counts, a fixed-size recent-evidence strip with captions, one "rooms still need proof" row, next actions as a single vertical list |
+| Proof — **LOCKED 2026-10-24** | `movemorkTests/__Snapshots__/VisualSnapshotTests/testProof*.png` (supersedes `design-refs/proof.jpg`) | A quiet dark header — the rental, its location and a thin move-in progress bar (never a captured photo: evidence lives only in its own clipped thumbnails) — then a bright working surface: the next room card holding the one capture action, one line of counts, a fixed-size recent-evidence strip with captions, one "rooms still need proof" row, next actions as a single vertical list |
 | Reports | `design-refs/reports.jpg` | The report as a physical, tilted document inside a dark photographic card; Ready state, record ID and generated time prominent; move-out and dispute quiet below |
 | Account | `design-refs/account.jpg` | Native grouped settings, one Pro block with personality, nothing decorative |
 

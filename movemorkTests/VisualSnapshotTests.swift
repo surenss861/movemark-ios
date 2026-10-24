@@ -111,7 +111,7 @@ final class VisualSnapshotTests: XCTestCase {
             m.propertyName = "My Apartment"; m.addressLine = "Toronto, ON"
             m.nextRoomName = "Living Room"; m.primaryTitle = "Capture Living Room"
             m.recent = [.init(id: UUID(), roomName: "Kitchen", photoCount: 1, photoPath: "fixture/text-heavy.jpg", capturedAt: Date())]
-            m.upcoming = ["Living Room", "Primary Bedroom", "Bedroom 2", "Bathroom", "Hallway", "Laundry", "Balcony", "Entry"]
+            m.upcoming = ["Living Room", "Primary Bedroom", "Bedroom 2", "Bathroom", "Hallway", "Laundry", "Balcony", "Entry", "Closet"]
                 .map { .init(id: UUID(), roomName: $0) }
         case "no-photos":
             m.documented = 0; m.recent = []; m.photos = 0; m.issues = 0

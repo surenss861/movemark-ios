@@ -86,8 +86,9 @@ struct ProofHomeView: View {
         var inset: CGFloat { 20 * k }
         var sheetRadius: CGFloat { 22 * k }
         var controlSize: CGFloat { 32 * k }
-        var ctaHeight: CGFloat { 46 * k }
-        var tile: CGFloat { 104 * k }              // every evidence thumbnail, however many there are
+        var ctaHeight: CGFloat { 44 * k }
+        var tile: CGFloat { 104 * k }              // evidence thumbnails in the scrolling strip
+        var soloTile: CGFloat { 128 * k }          // the only one: same tile, more presence
         var tileGap: CGFloat { 10 * k }
         var rowHeight: CGFloat { 50 * k }
         var cardRadius: CGFloat { 16 * k }
@@ -103,7 +104,7 @@ struct ProofHomeView: View {
         static let text = Color(red: 0.078, green: 0.078, blue: 0.082)           // #141415
         static let secondary = Color(red: 0.494, green: 0.498, blue: 0.502)      // #7E7F80
         static let separator = Color(red: 0.918, green: 0.918, blue: 0.922)      // #EAEAEB
-        static let lime = Color(red: 0.843, green: 0.949, blue: 0.420)           // #D7F26B
+        static let lime = Color(red: 0.792, green: 0.890, blue: 0.424)           // #CAE36C: signal, not highlighter
         static let limeMark = Color(red: 0.757, green: 0.914, blue: 0.298)       // #C1E94C
         static let onLime = Color(red: 0.067, green: 0.086, blue: 0.035)
         static let thumbFill = Color(red: 0.91, green: 0.91, blue: 0.90)
@@ -147,7 +148,7 @@ struct ProofHomeView: View {
 
             Text("YOUR PROOF")
                 .mmFont(11, .semibold)
-                .tracking(1.2)
+                .tracking(0.6)
                 .foregroundStyle(Ink.heroSecondary)
                 .padding(.top, 22 * k)
             Text(model.propertyName)
@@ -286,7 +287,7 @@ struct ProofHomeView: View {
         VStack(alignment: .leading, spacing: 0) {
             if let name = model.nextRoomName {
                 Button(action: onPrimary) {
-                    VStack(alignment: .leading, spacing: 4 * k) {
+                    VStack(alignment: .leading, spacing: 1 * k) {
                         Text("Next room").mmFont(12).foregroundStyle(Ink.secondary)
                         HStack(spacing: 8 * k) {
                             Image(systemName: RoomGlyph.symbol(for: name))
@@ -305,16 +306,17 @@ struct ProofHomeView: View {
                 }
                 .buttonStyle(.plain)
             } else if model.totalRooms > 0 {
-                VStack(alignment: .leading, spacing: 4 * k) {
+                VStack(alignment: .leading, spacing: 1 * k) {
                     Text("Move-in proof").mmFont(12).foregroundStyle(Ink.secondary)
                     Text("Every room documented")
                         .mmFont(20, .semibold).foregroundStyle(Ink.text)
                         .lineLimit(isAX ? 3 : 1).minimumScaleFactor(isAX ? 1 : 0.8)
                 }
             }
-            primaryButton.padding(.top, 16 * k)
+            primaryButton.padding(.top, 12 * k)
         }
-        .padding(18 * k)
+        .padding(.horizontal, 18 * k)
+        .padding(.vertical, 14 * k)
         .background(Ink.card, in: RoundedRectangle(cornerRadius: spec.cardRadius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: spec.cardRadius, style: .continuous).strokeBorder(Ink.cardStroke, lineWidth: 0.75))
     }
@@ -366,7 +368,7 @@ struct ProofHomeView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: spec.tileGap) {
                 ForEach(model.recent) { item in
-                    Button { onOpenRoom(item.id) } label: { evidenceTile(item) }
+                    Button { onOpenRoom(item.id) } label: { evidenceTile(item, side: model.recent.count == 1 ? spec.soloTile : spec.tile) }
                         .buttonStyle(MMLightPressStyle())
                 }
             }
@@ -375,18 +377,18 @@ struct ProofHomeView: View {
     }
 
     /// Fixed size and clipped to its own shape: a photo can never draw outside its tile.
-    private func evidenceTile(_ item: ProofHomeModel.Recent) -> some View {
+    private func evidenceTile(_ item: ProofHomeModel.Recent, side: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 7 * k) {
             MMEvidenceImage(path: item.photoPath, resolve: resolvePhotoURL,
-                            size: CGSize(width: spec.tile, height: spec.tile), placeholder: Ink.thumbFill)
-                .frame(width: spec.tile, height: spec.tile)
+                            size: CGSize(width: side, height: side), placeholder: Ink.thumbFill)
+                .frame(width: side, height: side)
                 .clipShape(RoundedRectangle(cornerRadius: 12 * k, style: .continuous))
                 .contentShape(RoundedRectangle(cornerRadius: 12 * k, style: .continuous))
             VStack(alignment: .leading, spacing: 2 * k) {
                 Text(item.roomName).mmFont(12.5, .medium).foregroundStyle(Ink.text).lineLimit(1)
                 Text(caption(for: item)).mmFont(11.5).foregroundStyle(Ink.secondary).lineLimit(1)
             }
-            .frame(width: spec.tile, alignment: .leading)
+            .frame(width: side, alignment: .leading)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(item.roomName), \(item.photoCount) \(item.photoCount == 1 ? "photo" : "photos")")
@@ -401,11 +403,12 @@ struct ProofHomeView: View {
         return "\(day) · \(count)"
     }
 
-    /// What's left besides the next room: one row into the rental, not a list of names.
+    /// Every room without proof — the next room included, so it adds up with the header's count. One row
+    /// into the rental, not a list of names.
     @ViewBuilder
     private var roomsRemaining: some View {
-        let others = model.upcoming.filter { $0.roomName != model.nextRoomName }
-        if !others.isEmpty {
+        let others = model.upcoming
+        if others.count > 1 || (others.count == 1 && model.nextRoomName == nil) {
             listContainer {
                 listRow(icon: "square.grid.2x2",
                         title: "\(others.count) \(others.count == 1 ? "room still needs" : "rooms still need") proof",
