@@ -175,8 +175,8 @@ struct ProofHomeView: View {
     /// Text only: identity without a brand lockup.
     private var wordmark: some View {
         Text("MoveMark")
-            .font(.system(size: 17.5 * k, weight: .semibold))
-            .foregroundStyle(.white.opacity(0.75))
+            .font(.system(size: 17 * k, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.85))
     }
 
     /// Add a rental, or switch to another one.
