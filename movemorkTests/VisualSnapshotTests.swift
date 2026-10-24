@@ -157,6 +157,33 @@ final class VisualSnapshotTests: XCTestCase {
         assertSnapshot(of: host(ProofHomeEmptyView(onStart: {}, onRetry: {})), as: Self.strategy(Self.pro), named: "pro")
     }
 
+    // MARK: Saved proof receipt (current design, before the Capture redesign)
+
+    func testSavedProofReceipt() {
+        let living = Bundle(for: VisualSnapshotTests.self).url(forResource: "snap-living", withExtension: "jpg")
+        let receipt = ScrollView(showsIndicators: false) {
+            ProofSavedReceiptView(
+                model: ProofSavedReceiptModel(
+                    roomName: "Living Room", phaseLabel: "Move-in", photoCount: 4, issueCount: 1,
+                    timestampLabel: "Move-in · Oct 24, 3:18 PM",
+                    headerSubtitle: "Living Room proof · 4 photos saved · Move-in",
+                    primaryActionLabel: "Continue next room", imageURL: living),
+                onPrimary: {}, onViewVault: {}, onAddMorePhotos: {}
+            )
+            .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
+            .padding(.top, 8)
+            .padding(.bottom, 32)
+        }
+        .mmProofShellBackground(heroFocus: false, ctaBloom: false)
+        // The receipt plays its entrance on appear: let it appear (and load its photo) in a window first.
+        let controller = host(receipt)
+        let window = UIWindow(frame: CGRect(origin: .zero, size: Self.pro.size ?? CGSize(width: 402, height: 874)))
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        RunLoop.main.run(until: Date().addingTimeInterval(2))
+        assertSnapshot(of: controller, as: Self.strategy(Self.pro), named: "pro")
+    }
+
     // MARK: Room (current dark design — regression only until Room is rebuilt and approved)
 
     private func roomScreen(entries: [EvidenceRecord], name: String) -> some View {
