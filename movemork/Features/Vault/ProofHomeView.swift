@@ -94,7 +94,7 @@ struct ProofHomeView: View {
         var cardRadius: CGFloat { 16 * k }
     }
 
-    private enum Ink {
+    fileprivate enum Ink {
         static let hero = Color(red: 0.086, green: 0.094, blue: 0.090)          // #161817
         static let heroSecondary = Color.white.opacity(0.62)
         static let track = Color.white.opacity(0.16)
@@ -146,17 +146,20 @@ struct ProofHomeView: View {
             }
             .frame(height: 44 * k)
 
-            Text("YOUR PROOF")
-                .mmFont(11, .semibold)
-                .tracking(0.6)
-                .foregroundStyle(Ink.heroSecondary)
-                .padding(.top, 22 * k)
+            if !isAX {
+                Text("YOUR PROOF")
+                    .mmFont(11, .semibold)
+                    .tracking(0.6)
+                    .foregroundStyle(Ink.heroSecondary)
+                    .padding(.top, 22 * k)
+            }
             Text(model.propertyName)
                 .mmFont(27, .semibold)
                 .foregroundStyle(.white)
-                .lineLimit(isAX ? 3 : 2)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
                 .accessibilityAddTraits(.isHeader)
-                .padding(.top, 6 * k)
+                .padding(.top, isAX ? 14 * k : 6 * k)
             if let address = model.addressLine {
                 Text(address)
                     .mmFont(14)
@@ -170,6 +173,9 @@ struct ProofHomeView: View {
         .padding(.bottom, 26 * k + spec.sheetRadius)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Ink.hero)
+        // At accessibility sizes the header compacts (capped type, no eyebrow) so the next room and its
+        // capture action stay on the first screen; VoiceOver still reads the full property name.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     /// Text only: identity without a brand lockup.
@@ -265,6 +271,7 @@ struct ProofHomeView: View {
         .padding(.horizontal, spec.inset)
         .padding(.top, 20 * k)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
         .background(
             UnevenRoundedRectangle(topLeadingRadius: spec.sheetRadius, topTrailingRadius: spec.sheetRadius, style: .continuous)
                 .fill(Ink.sheet)
@@ -280,16 +287,18 @@ struct ProofHomeView: View {
                     VStack(alignment: .leading, spacing: 1 * k) {
                         Text("Next room").mmFont(12).foregroundStyle(Ink.secondary)
                         HStack(spacing: 8 * k) {
-                            Image(systemName: RoomGlyph.symbol(for: name))
-                                .font(.system(size: 16 * k, weight: .regular))
-                                .foregroundStyle(Ink.text.opacity(0.7))
+                            if !isAX {
+                                Image(systemName: RoomGlyph.symbol(for: name))
+                                    .font(.system(size: 16 * k, weight: .regular))
+                                    .foregroundStyle(Ink.text.opacity(0.7))
+                            }
                             Text(name)
                                 .mmFont(20, .semibold)
                                 .foregroundStyle(Ink.text)
                                 .lineLimit(isAX ? 3 : 1)
                                 .minimumScaleFactor(isAX ? 1 : 0.8)
                         }
-                        Text("No proof yet").mmFont(13).foregroundStyle(Ink.secondary)
+                        if !isAX { Text("No proof yet").mmFont(13).foregroundStyle(Ink.secondary) }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
@@ -307,6 +316,7 @@ struct ProofHomeView: View {
         }
         .padding(.horizontal, 18 * k)
         .padding(.vertical, 14 * k)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         .background(Ink.card, in: RoundedRectangle(cornerRadius: spec.cardRadius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: spec.cardRadius, style: .continuous).strokeBorder(Ink.cardStroke, lineWidth: 0.75))
     }
@@ -505,36 +515,31 @@ struct ProofHomeEmptyView: View {
     var onStart: () -> Void
     var onRetry: () -> Void
 
+    private typealias Ink = ProofHomeView.Ink
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                ZStack(alignment: .topLeading) {
-                    LinearGradient(
-                        colors: [Color(red: 0.36, green: 0.40, blue: 0.38), Color(red: 0.20, green: 0.23, blue: 0.22)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-                    Image(systemName: "house")
-                        .mmFont(72, .ultraLight)
-                        .foregroundStyle(.white.opacity(0.18))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark.shield").mmFont(18, .semibold)
-                            .foregroundStyle(MoveMarkTheme.Light.accent)
-                        Text("MOVEMARK").mmFont(15, .semibold).tracking(2.2).foregroundStyle(.white)
-                    }
-                    .padding(.horizontal, 22)
-                    .padding(.top, 70)
+                // Same quiet dark field as the Vault header, with the text-only wordmark.
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("MoveMark")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .frame(height: 44)
+                    Spacer(minLength: 0)
                 }
-                .frame(height: 340)
+                .padding(.horizontal, 20)
+                .frame(maxWidth: .infinity, minHeight: 130, alignment: .topLeading)
+                .background(Ink.hero)
 
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Prove what was already there.")
                         .mmFont(30, .bold)
-                        .foregroundStyle(MoveMarkTheme.Light.textPrimary)
+                        .foregroundStyle(Ink.text)
                         .accessibilityAddTraits(.isHeader)
                     Text("Add your rental, then photograph each room before you unpack. MoveMark keeps it as a dated record.")
                         .mmFont(17)
-                        .foregroundStyle(MoveMarkTheme.Light.textSecondary)
+                        .foregroundStyle(Ink.secondary)
                     if let errorMessage {
                         HStack {
                             Text(errorMessage).mmFont(15).foregroundStyle(MoveMarkTheme.Colors.semanticDanger)
@@ -544,24 +549,29 @@ struct ProofHomeEmptyView: View {
                     }
                     Button(action: onStart) {
                         Label("Add your rental", systemImage: "plus")
-                            .mmFont(17, .semibold)
-                            .foregroundStyle(MoveMarkTheme.Light.onAccent)
+                            .mmFont(16, .semibold)
+                            .foregroundStyle(Ink.onLime)
                             .frame(maxWidth: .infinity)
-                            .frame(minHeight: 54)
-                            .background(MoveMarkTheme.Light.accent, in: Capsule())
+                            .frame(minHeight: 50)
+                            .background(Ink.lime, in: Capsule())
                     }
+                    .buttonStyle(MMLightPressStyle())
                     .padding(.top, 12)
                 }
-                .padding(22)
-                .padding(.top, 6)
+                .padding(20)
+                .padding(.top, 8)
                 .background(
-                    UnevenRoundedRectangle(topLeadingRadius: MoveMarkTheme.Light.sheetRadius, topTrailingRadius: MoveMarkTheme.Light.sheetRadius, style: .continuous)
-                        .fill(MoveMarkTheme.Light.surface)
+                    UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22, style: .continuous)
+                        .fill(Ink.sheet)
                 )
-                .padding(.top, -MoveMarkTheme.Light.sheetRadius)
+                .padding(.top, -22)
             }
         }
-        .ignoresSafeArea(edges: .top)
-        .background(MoveMarkTheme.Light.surface.ignoresSafeArea())
+        .scrollIndicators(.hidden)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            Color.clear.frame(height: 0).background(Ink.hero.ignoresSafeArea(edges: .top))
+        }
+        .background(alignment: .top) { Ink.hero.frame(height: 300).ignoresSafeArea(edges: .top) }
+        .background(Ink.sheet.ignoresSafeArea())
     }
 }
