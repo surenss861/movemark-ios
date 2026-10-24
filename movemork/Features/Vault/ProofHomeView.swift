@@ -172,21 +172,11 @@ struct ProofHomeView: View {
         .background(Ink.hero)
     }
 
+    /// Text only: identity without a brand lockup.
     private var wordmark: some View {
-        HStack(spacing: 5 * k) {
-            ZStack {
-                Image(systemName: "hexagon").font(.system(size: 15 * k, weight: .semibold))
-                Image(systemName: "checkmark").font(.system(size: 6.5 * k, weight: .heavy))
-            }
-            .frame(width: 15 * k)
-            .foregroundStyle(Ink.limeMark.opacity(0.85))
-            Text("MOVEMARK")
-                .font(.system(size: 11.5 * k, weight: .semibold))
-                .tracking(1.4)
-                .foregroundStyle(Ink.heroSecondary)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("MoveMark")
+        Text("MoveMark")
+            .font(.system(size: 17.5 * k, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.75))
     }
 
     /// Add a rental, or switch to another one.
