@@ -94,6 +94,102 @@ struct EvidenceCaptureView: View {
         return "MOVE-IN \(moveIn) · MOVE-OUT \(moveOut) PHOTOS"
     }
 
+    private var moveInComparisonPhoto: EvidencePhoto? {
+        guard let room else { return nil }
+        return RoomEvidenceHero.orderedPhotos(room.evidence).first?.photo
+    }
+
+    private var moveOutComparisonPhoto: EvidencePhoto? {
+        guard let room else { return nil }
+        return RoomEvidenceHero.orderedPhotos(room.moveOutEvidence).first?.photo
+    }
+
+    private var showsMoveOutComparison: Bool {
+        moveOutMode && (room?.moveInPhotoTotal ?? 0) > 0
+    }
+
+    @ViewBuilder
+    private var moveOutComparisonSection: some View {
+        if showsMoveOutComparison {
+            VStack(alignment: .leading, spacing: 12) {
+                MMProofSectionHeader(
+                    title: "Before & after",
+                    subtitle: "Your move-in baseline stays beside the final-condition record."
+                )
+
+                HStack(alignment: .top, spacing: 10) {
+                    comparisonEvidenceTile(
+                        label: "Move-in",
+                        photo: moveInComparisonPhoto,
+                        count: room?.moveInPhotoTotal ?? 0,
+                        placeholder: "Baseline saved"
+                    )
+
+                    comparisonEvidenceTile(
+                        label: "Move-out",
+                        photo: moveOutComparisonPhoto,
+                        count: room?.moveOutPhotoTotal ?? 0,
+                        placeholder: "Capture final proof"
+                    )
+                }
+            }
+            .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
+            .padding(.top, 14)
+        }
+    }
+
+    private func comparisonEvidenceTile(
+        label: String,
+        photo: EvidencePhoto?,
+        count: Int,
+        placeholder: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(MoveMarkTheme.Surface.raised)
+
+                if let photo {
+                    MMEvidenceImage(
+                        path: photo.thumbnailPath ?? photo.filePath,
+                        resolve: resolvePhotoURL,
+                        size: CGSize(width: 180, height: 112),
+                        placeholder: MoveMarkTheme.Surface.raised
+                    )
+                    .scaledToFill()
+                    .clipped()
+                } else {
+                    VStack(spacing: 6) {
+                        Image(systemName: "camera")
+                            .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                        Text(placeholder)
+                            .font(MoveMarkTheme.Typography.metadata)
+                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(10)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 112)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(MoveMarkTheme.Stroke.normal, lineWidth: 1)
+            )
+
+            Text(label.uppercased())
+                .font(MoveMarkTheme.Typography.sectionLabel)
+                .tracking(0.7)
+                .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+
+            Text(count == 1 ? "1 photo" : "\(count) photos")
+                .font(MoveMarkTheme.Typography.metadata)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     /// Save bar appears only when there is something to save (or a save just happened).
     private var showsSaveBar: Bool {
         !loadedImages.isEmpty || isUploading || didJustSave
@@ -126,6 +222,8 @@ struct EvidenceCaptureView: View {
                         pickerSelection: $selectedItems,
                         compareLine: compareLine
                     )
+
+                    moveOutComparisonSection
 
                     VStack(alignment: .leading, spacing: 0) {
                         if !existingEntries.isEmpty {
