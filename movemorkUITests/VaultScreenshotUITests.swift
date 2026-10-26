@@ -121,6 +121,11 @@ final class VaultScreenshotUITests: XCTestCase {
             scrollToBottom(app)
             attach(app, "tab-\(title.lowercased())-bottom")
         }
+        // Leave the device signed out, never in the disposable account (deleted after the run).
+        let signOut = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Sign out'")).firstMatch
+        for _ in 0..<6 where !signOut.isHittable { app.swipeUp() }
+        signOut.tap()
+        XCTAssertTrue(app.buttons["welcome.signIn"].waitForExistence(timeout: 20), "signed out")
     }
 
     /// Swipes until the scroll settles at its end (momentum included), so the shot shows the real bottom.
