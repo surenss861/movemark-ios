@@ -176,30 +176,6 @@ struct PropertyVaultView: View {
                     .id(property.id)
                     .padding(.bottom, 8)
 
-                    MMRoomProgressCard(
-                        headline: "\(completedRooms) of \(totalRooms) rooms ready",
-                        nextLine: propertyVaultProofHeroNextLine,
-                        progress: progress,
-                        progressLabel: "\(totalPhotos) photos saved",
-                        primaryTitle: MMNextBestActionMapper.primaryTitle(
-                            for: propertyStore.primaryNextAction(for: property)
-                        ),
-                        onPrimary: {
-                            // "Capture Kitchen" opens Kitchen; anything else continues the guided list.
-                            if case .captureRoom(let roomID, _) = propertyStore.primaryNextAction(for: property) {
-                                path.append(.roomDetail(roomID: roomID))
-                            } else {
-                                path.append(.walkthrough)
-                            }
-                        },
-                        documentedCount: completedRooms,
-                        totalCount: totalRooms
-                    )
-                    .opacity(contentVisible ? 1 : 0)
-                    .offset(y: contentVisible ? 0 : 8)
-                    .animation(MMMotion.screenTransition.delay(0.06), value: contentVisible)
-                    .padding(.bottom, 14)
-
                     if let vaultSummaryError, uploadError == nil {
                         MMErrorBanner(
                             message: vaultSummaryError,
@@ -208,19 +184,8 @@ struct PropertyVaultView: View {
                         .opacity(contentVisible ? 1 : 0)
                         .offset(y: contentVisible ? 0 : 8)
                         .animation(MMMotion.screenTransition.delay(0.06), value: contentVisible)
-                        .padding(.bottom, 10)
+                        .padding(.bottom, 12)
                     }
-
-                    MMProofTimeline(
-                        title: "Proof trail",
-                        rows: vaultProofTrailRows,
-                        highlightedRowID: highlightedTrailRowID,
-                        appeared: contentVisible
-                    )
-                    .opacity(contentVisible ? 1 : 0)
-                    .offset(y: contentVisible ? 0 : 8)
-                    .animation(MMMotion.screenTransition.delay(0.10), value: contentVisible)
-                    .padding(.bottom, 14)
 
                     PropertyVaultRoomQueue(
                         rooms: orderedRooms,
