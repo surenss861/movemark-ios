@@ -61,8 +61,8 @@ struct EvidenceCaptureBottomSaveBar: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        // Near-opaque, so the page scrolling underneath never reads through it.
-        .background(MoveMarkTheme.Colors.appBackground.opacity(0.97))
+        // Solid, down through the home-indicator area, so the page scrolling underneath never shows.
+        .background(MoveMarkTheme.Colors.appBackground.ignoresSafeArea(edges: .bottom))
         .environment(\.colorScheme, .dark)
         .overlay(alignment: .top) {
             Rectangle()

@@ -65,43 +65,44 @@ final class VaultScreenshotUITests: XCTestCase {
         sleep(2)
         attach(app, "1-room-brief")
 
-        for shot in 1...3 {
-            let take = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Take photos'")).firstMatch
-            XCTAssertTrue(take.waitForExistence(timeout: 10), "Take photos (shot \(shot))")
-            take.tap()
-            if springboard.buttons["Allow"].waitForExistence(timeout: 3) { springboard.buttons["Allow"].tap() }
-            let shutter = app.buttons["camera.shutter"]
-            XCTAssertTrue(shutter.waitForExistence(timeout: 15), "camera (shot \(shot))")
-            sleep(2)  // let exposure settle
-            if shot == 2 { attach(app, "2-live-camera-after-one-photo") }
+        app.buttons.matching(NSPredicate(format: "label CONTAINS 'Take photos'")).firstMatch.tap()
+        if springboard.buttons["Allow"].waitForExistence(timeout: 3) { springboard.buttons["Allow"].tap() }
+        let shutter = app.buttons["camera.shutter"]
+        XCTAssertTrue(shutter.waitForExistence(timeout: 15), "camera")
+        sleep(2)
+        attach(app, "2-camera-before-first-shot")
+        // Continuous: four shots without leaving the camera.
+        for shot in 1...4 {
             shutter.tap()
-            let use = app.buttons["camera.use"]
-            XCTAssertTrue(use.waitForExistence(timeout: 10))
-            if shot == 2 { attach(app, "3-camera-review") }
-            use.tap()
-            sleep(2)
-            if shot == 3 { attach(app, "4-room-with-pending-photos") }
+            let count = app.staticTexts["camera.count"]
+            XCTAssertTrue(count.waitForExistence(timeout: 10))
+            let expected = shot == 1 ? "1 photo captured" : "\(shot) photos captured"
+            XCTAssertTrue(NSPredicate(format: "label == %@", expected).evaluate(with: count) ||
+                          app.staticTexts[expected].waitForExistence(timeout: 10), "count after shot \(shot)")
+            if shot == 1 { attach(app, "3-camera-after-one-shot") }
+            sleep(1)
         }
+        attach(app, "4-camera-after-four-shots")
+
+        app.buttons["camera.thumbnail"].tap()  // review in the room
+        sleep(2)
+        attach(app, "5-room-with-four-pending")
+        let remove = app.buttons["Remove photo 4"]
+        if remove.waitForExistence(timeout: 5) { remove.tap(); sleep(1) }
+        attach(app, "6-room-after-removing-one")
 
         let save = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Save proof'")).firstMatch
         XCTAssertTrue(save.waitForExistence(timeout: 10))
         save.tap()
         let saved = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'PROOF'")).firstMatch
         XCTAssertTrue(saved.waitForExistence(timeout: 90), "receipt after save")
-        sleep(5)  // the saved photo
-        attach(app, "5-receipt")
-        app.swipeUp()
-        sleep(1)
-        attach(app, "6-receipt-scrolled")
-
+        sleep(5)
+        attach(app, "7-receipt")
         let next = app.buttons["Continue to next room"]
         if next.waitForExistence(timeout: 5) {
             next.tap()
             sleep(3)
-            attach(app, "7-next-room")
-            app.navigationBars.buttons.firstMatch.tap()
-            sleep(3)
-            attach(app, "8-after-back")
+            attach(app, "8-next-room")
         }
         #endif
     }
@@ -117,9 +118,17 @@ final class VaultScreenshotUITests: XCTestCase {
         let signIn = app.buttons["welcome.signIn"]
         // Only ever act as the disposable account: a device already signed in (someone's real account) is
         // refused, never used.
-        guard signIn.waitForExistence(timeout: 12) else {
-            XCTFail("The app is already signed in to an account; sign out first. These tests only run as the disposable account.")
-            throw XCTSkip("already signed in")
+        if !signIn.waitForExistence(timeout: 12) {
+            // Already signed in (someone's real account): never used. Signed out first only when the run says so.
+            guard env("MM_ALLOW_SIGN_OUT") == "1" else {
+                XCTFail("The app is already signed in to an account; sign out first. These tests only run as the disposable account.")
+                throw XCTSkip("already signed in")
+            }
+            app.buttons["Account"].firstMatch.tap()
+            let signOut = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Sign out'")).firstMatch
+            for _ in 0..<6 where !signOut.isHittable { app.swipeUp() }
+            signOut.tap()
+            XCTAssertTrue(signIn.waitForExistence(timeout: 20), "signed out")
         }
         do {
             signIn.tap()

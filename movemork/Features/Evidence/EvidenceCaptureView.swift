@@ -159,6 +159,8 @@ struct EvidenceCaptureView: View {
                 }
             }
             .ignoresSafeArea(edges: .top)
+            // A hard edge under the save bar: iOS's soft scroll-edge effect let the page show through it.
+            .scrollEdgeEffectStyle(.hard, for: .bottom)
             .onScrollGeometryChange(for: Bool.self) { g in
                 // The title settles into the bar once the hero (or empty-state heading) has scrolled away.
                 let threshold = existingEntries.isEmpty
