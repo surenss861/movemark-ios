@@ -2,7 +2,7 @@
 //  MaintenanceIssueDetailView.swift
 //  movemork
 //
-//  MoveMark — Issue detail with timeline, evidence, follow-up, resolve.
+//  MoveMark — maintenance issue as a preserved case timeline.
 //
 
 import SwiftUI
@@ -36,31 +36,19 @@ struct MaintenanceIssueDetailView: View {
             MoveMarkTheme.Colors.appBackground.ignoresSafeArea()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    header
+                VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.sectionGap) {
+                    caseHero
 
-                    overviewCard
+                    evidenceSection
 
-                    timelineCard
+                    timelineSection
 
-                    if evidenceFileCount > 0 {
-                        evidenceCard
-                    }
+                    followUpSection
 
-                    followUpCard
-
-                    resolveCard
+                    statusSection
 
                     if let softNotice, errorMessage == nil {
-                        MMCard(tone: .quiet, padding: 14, spacing: 8) {
-                            HStack(alignment: .top, spacing: 10) {
-                                Image(systemName: "info.circle.fill")
-                                    .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.9))
-                                Text(softNotice)
-                                    .font(MoveMarkTheme.Typography.subheadline)
-                                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            }
-                        }
+                        quietNotice(softNotice)
                     }
 
                     if let errorMessage {
@@ -72,7 +60,7 @@ struct MaintenanceIssueDetailView: View {
                     }
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.top, 22)
+                .padding(.top, 20)
                 .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
             }
         }
@@ -80,109 +68,150 @@ struct MaintenanceIssueDetailView: View {
         .onChange(of: selectedPhotos) { _, newItems in
             uploadPhotos(newItems)
         }
+        .navigationBarTitleDisplayMode(.inline)
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(issue.title)
-                .font(MoveMarkTheme.Typography.screenTitle)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+    private var caseHero: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("MAINTENANCE CASE")
+                .font(MoveMarkTheme.Typography.sectionLabel)
+                .tracking(0.9)
+                .foregroundStyle(MoveMarkTheme.Colors.textMuted)
 
-            Text("Issue detail, timeline, and photo proof.")
-                .font(MoveMarkTheme.Typography.body)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+            ProofCaseCard(contentPadding: 18) {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text(issue.title)
+                                .font(MoveMarkTheme.Typography.pageTitle)
+                                .tracking(-0.8)
+                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
 
-            Rectangle()
-                .fill(MoveMarkTheme.Colors.primary)
-                .frame(width: 38, height: 3)
-                .clipShape(Capsule())
+                            Text(formatted(issue.dateDiscovered))
+                                .font(MoveMarkTheme.Typography.metadata)
+                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        MMPill(
+                            text: issue.status,
+                            tone: issue.status == "resolved" ? .success : .warning
+                        )
+                    }
+
+                    HStack(spacing: 8) {
+                        Text(issue.category ?? "General")
+                            .font(MoveMarkTheme.Typography.subheadlineMedium)
+                            .foregroundStyle(MoveMarkTheme.Colors.semanticWarning)
+
+                        if evidenceFileCount > 0 {
+                            Text("·")
+                                .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                            Text("\(evidenceFileCount) photo\(evidenceFileCount == 1 ? "" : "s")")
+                                .font(MoveMarkTheme.Typography.subheadline)
+                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        }
+                    }
+
+                    if let description = issue.description, !description.isEmpty {
+                        Text(description)
+                            .font(MoveMarkTheme.Typography.body)
+                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
         }
     }
 
-    private var overviewCard: some View {
-        MMCard {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    MMPill(text: issue.category ?? "General", tone: .warning)
-                    Spacer()
-                    MMPill(text: issue.status, tone: issue.status == "resolved" ? .success : .warning)
+    private var evidenceSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MMSectionLabel("Evidence") {
+                if evidenceFileCount > 0 {
+                    Text("\(evidenceFileCount)")
+                        .font(MoveMarkTheme.Typography.metadata)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 }
+            }
 
-                if let description = issue.description, !description.isEmpty {
-                    Text(description)
+            if isLoadingEvidence {
+                ProgressView()
+                    .tint(MoveMarkTheme.Colors.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 18)
+            } else if evidenceFileCount == 0 {
+                Text("No photos attached yet. Add evidence when the condition changes or you receive a response.")
+                    .font(MoveMarkTheme.Typography.subheadline)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if evidencePreviews.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Couldn’t load photo previews. Your files may still be preserved.")
                         .font(MoveMarkTheme.Typography.subheadline)
                         .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    MMButton(
+                        title: "Retry previews",
+                        action: { Task { await loadEvidence() } },
+                        kind: .secondary,
+                        size: .compact,
+                        expandsToFillWidth: false
+                    )
                 }
-
-                detailRow("Discovered", formatted(issue.dateDiscovered))
-                detailRow("Reported", formatted(issue.dateReported))
-                detailRow("Response", issue.landlordResponse ?? "No response recorded")
-                detailRow("Follow-up", formatted(issue.followUpDate))
-            }
-        }
-    }
-
-    private var timelineCard: some View {
-        MMCard {
-            VStack(alignment: .leading, spacing: 14) {
-                SectionLabel(text: "Timeline")
-
-                TimelineRow(title: "Discovered", value: formatted(issue.dateDiscovered), isEmphasized: true)
-                TimelineRow(title: "Reported", value: formatted(issue.dateReported))
-                TimelineRow(title: "Response", value: issue.landlordResponse ?? "Pending")
-                TimelineRow(title: "Follow-up", value: formatted(issue.followUpDate))
-            }
-        }
-    }
-
-    private var evidenceCard: some View {
-        MMCard {
-            VStack(alignment: .leading, spacing: 14) {
-                SectionLabel(text: "Evidence")
-
-                if isLoadingEvidence {
-                    ProgressView()
-                        .tint(MoveMarkTheme.Colors.primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else if evidencePreviews.isEmpty {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Couldn’t load photo previews. Your files may still be saved.")
-                            .font(MoveMarkTheme.Typography.subheadline)
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        MMButton(
-                            title: "Retry previews",
-                            action: { Task { await loadEvidence() } },
-                            kind: .secondary,
-                            size: .compact,
-                            expandsToFillWidth: false
-                        )
-                    }
-                } else {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 10) {
-                            ForEach(evidencePreviews) { preview in
-                                MaintenanceEvidenceThumbnail(preview: preview, propertyId: issue.propertyId) {
-                                    Task { await loadEvidence() }
-                                }
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(evidencePreviews) { preview in
+                            MaintenanceEvidenceThumbnail(preview: preview, propertyId: issue.propertyId) {
+                                Task { await loadEvidence() }
                             }
                         }
                     }
+                    .padding(.horizontal, 1)
                 }
             }
         }
     }
 
-    private var followUpCard: some View {
-        MMCard {
-            VStack(alignment: .leading, spacing: 14) {
-                SectionLabel(text: "Follow-up")
+    private var timelineSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MMProofSectionHeader(
+                title: "Timeline",
+                subtitle: "A dated record of the issue and what happened next."
+            )
 
+            VStack(alignment: .leading, spacing: 0) {
+                TimelineRow(title: "Discovered", value: formatted(issue.dateDiscovered), isEmphasized: true)
+                TimelineRow(title: "Reported", value: formatted(issue.dateReported))
+                TimelineRow(title: "Landlord response", value: issue.landlordResponse ?? "Pending")
+                TimelineRow(title: "Follow-up", value: formatted(issue.followUpDate))
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.card, style: .continuous)
+                    .fill(MoveMarkTheme.Surface.raised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.card, style: .continuous)
+                    .stroke(MoveMarkTheme.Stroke.normal, lineWidth: 1)
+            )
+        }
+    }
+
+    private var followUpSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MMProofSectionHeader(
+                title: "Add follow-up",
+                subtitle: "Record what the landlord said, what you sent, or how the condition changed."
+            )
+
+            VStack(alignment: .leading, spacing: 14) {
                 MMTextField(
-                    title: "Landlord response / follow-up note",
-                    placeholder: "Add what happened next, what they said, or what you sent",
+                    title: "Response or follow-up note",
+                    placeholder: "What happened next?",
                     text: $followUpNote
                 )
 
@@ -192,71 +221,102 @@ struct MaintenanceIssueDetailView: View {
                     matching: .images,
                     preferredItemEncoding: .current
                 ) {
-                    HStack {
-                        Image(systemName: "paperclip")
-                        Text(isUploadingPhotos ? "Uploading..." : "Attach more photos")
+                    HStack(spacing: 10) {
+                        Image(systemName: "photo.on.rectangle.angled")
+                        Text(isUploadingPhotos ? "Uploading…" : "Attach more photos")
                             .font(MoveMarkTheme.Typography.subheadlineMedium)
+                        Spacer()
+                        if !isUploadingPhotos {
+                            Image(systemName: "plus")
+                        }
                     }
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                    .padding(.horizontal, 16)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .background(MoveMarkTheme.Colors.fieldFill)
+                    .frame(height: 54)
+                    .background(MoveMarkTheme.Surface.interactive)
+                    .clipShape(RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.row, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(MoveMarkTheme.Colors.cardStroke, lineWidth: 1)
+                        RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.row, style: .continuous)
+                            .stroke(MoveMarkTheme.Stroke.interactive, lineWidth: 1)
                     )
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
                 .disabled(isUploadingPhotos)
 
                 ZStack {
-                    MMButton(title: "Save follow-up", action: saveFollowUp, isDisabled: isSavingFollowUp)
-                        .opacity(isSavingFollowUp ? 0.6 : 1.0)
+                    MMButton(
+                        title: "Save follow-up",
+                        action: saveFollowUp,
+                        kind: .primary,
+                        isDisabled: isSavingFollowUp
+                    )
+                    .opacity(isSavingFollowUp ? 0.6 : 1)
 
                     if isSavingFollowUp {
-                        ProgressView().tint(MoveMarkTheme.Colors.primary)
+                        ProgressView()
+                            .tint(MoveMarkTheme.Colors.textOnPrimary)
+                    }
+                }
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.card, style: .continuous)
+                    .fill(MoveMarkTheme.Surface.raised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.card, style: .continuous)
+                    .stroke(MoveMarkTheme.Stroke.normal, lineWidth: 1)
+            )
+        }
+    }
+
+    private var statusSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MMSectionLabel("Status")
+
+            Text(
+                issue.status == "resolved"
+                ? "Resolved. This case stays preserved in the rental record."
+                : "Mark this case resolved only when the issue is actually closed. Its proof and timeline remain preserved."
+            )
+            .font(MoveMarkTheme.Typography.subheadline)
+            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            if issue.status != "resolved" {
+                ZStack {
+                    MMButton(
+                        title: "Mark resolved",
+                        action: markResolved,
+                        kind: .secondary,
+                        isDisabled: isResolving
+                    )
+                    .opacity(isResolving ? 0.6 : 1)
+
+                    if isResolving {
+                        ProgressView()
+                            .tint(MoveMarkTheme.Colors.primary)
                     }
                 }
             }
         }
     }
 
-    private var resolveCard: some View {
-        MMCard {
-            VStack(alignment: .leading, spacing: 12) {
-                SectionLabel(text: "Status")
+    private func quietNotice(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "info.circle")
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
-                Text(issue.status == "resolved"
-                     ? "This incident is marked resolved and stays in the record."
-                     : "Mark this incident resolved once it's closed. The proof remains preserved.")
-                    .font(MoveMarkTheme.Typography.subheadline)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-
-                if issue.status != "resolved" {
-                    ZStack {
-                        MMButton(title: "Mark resolved", action: markResolved, isSecondary: true, isDisabled: isResolving)
-                            .opacity(isResolving ? 0.6 : 1.0)
-
-                        if isResolving {
-                            ProgressView().tint(MoveMarkTheme.Colors.primary)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func detailRow(_ title: String, _ value: String) -> some View {
-        HStack {
-            Text(title)
+            Text(message)
                 .font(MoveMarkTheme.Typography.subheadline)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-            Spacer()
-            Text(value)
-                .font(MoveMarkTheme.Typography.subheadlineMedium)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.row, style: .continuous)
+                .fill(MoveMarkTheme.Surface.raised)
+        )
     }
 
     private func formatted(_ value: String?) -> String {
@@ -344,8 +404,6 @@ struct MaintenanceIssueDetailView: View {
 
             for item in items {
                 guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-                // The picked file is the source evidence (its real type, never relabelled); the derivative
-                // and thumbnail are made from it and the whole set is verified before the row is written.
                 let upload: MoveMarkUpload
                 do {
                     let source = try MMEvidenceImport.source(from: data, captureSource: .library)
@@ -464,11 +522,15 @@ private struct MaintenanceEvidenceThumbnail: View {
                         }
                     }
             case .empty:
-                MoveMarkTheme.Colors.cardRaised.opacity(0.5)
+                MoveMarkTheme.Surface.raised
             }
         }
-        .frame(width: 120, height: 120)
+        .frame(width: 128, height: 128)
         .clipped()
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(MoveMarkTheme.Stroke.normal, lineWidth: 1)
+        )
     }
 }
