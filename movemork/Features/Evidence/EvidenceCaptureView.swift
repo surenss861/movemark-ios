@@ -203,6 +203,8 @@ struct EvidenceCaptureView: View {
             RoomPhotoViewer(
                 photos: RoomEvidenceHero.orderedPhotos(existingEntries).map(\.photo),
                 startID: target.id,
+                subject: roomName,
+                captions: RoomPhotoViewer.captions(for: existingEntries),
                 resolvePhotoURL: resolvePhotoURL,
                 onClose: { previewTarget = nil }
             )
