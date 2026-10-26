@@ -36,6 +36,13 @@ object RoomProofMetrics {
     fun documentedCount(property: PropertyRecord, phase: ProofPhase = ProofPhase.MoveIn): Int =
         property.rooms.count { isDocumented(it, phase) }
 
+    /**
+     * First run (the "Start with one room" picker) is done once this device finished it, or once the vault already
+     * holds move-in proof — e.g. an existing account signing in on a new phone.
+     */
+    fun isFirstRunComplete(localFlag: Boolean, property: PropertyRecord?): Boolean =
+        localFlag || (property != null && moveInDocumentedCount(property) > 0)
+
     fun moveInDocumentedCount(property: PropertyRecord): Int = documentedCount(property, ProofPhase.MoveIn)
 
     fun moveOutDocumentedCount(property: PropertyRecord): Int = documentedCount(property, ProofPhase.MoveOut)
