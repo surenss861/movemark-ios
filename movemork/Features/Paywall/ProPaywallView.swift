@@ -38,9 +38,10 @@ struct ProPaywallView: View {
                     .mmProofShellBackground(heroFocus: true, ctaBloom: false)
 
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.sectionGap) {
                         header
-                        benefitsCard
+                        lifecycleSection
+                        benefitsSection
                         pricingCard
                     }
                     .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
@@ -125,20 +126,26 @@ struct ProPaywallView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("MOVEMARK PRO")
+                .font(MoveMarkTheme.Typography.sectionLabel)
+                .tracking(0.9)
+                .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+
             Text(reason.headline)
-                .font(MoveMarkTheme.Typography.cardValue)
+                .font(MoveMarkTheme.Typography.pageTitle)
+                .tracking(-0.8)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(sharedValueLine)
-                .font(MoveMarkTheme.Typography.subheadline)
+                .font(MoveMarkTheme.Typography.body)
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(reason.subheadline)
-                .font(MoveMarkTheme.Typography.footnote)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
+                .font(MoveMarkTheme.Typography.metadata)
+                .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.top, 10)
@@ -148,24 +155,64 @@ struct ProPaywallView: View {
         MoveMarkGrowthCopy.paywallValueLine
     }
 
-    private var benefitsCard: some View {
-        MMCard {
+    private var lifecycleSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MMSectionLabel("Rental lifecycle")
+
+            VStack(spacing: 0) {
+                lifecycleRow("Move in", detail: "Preserve the condition you received.")
+                Divider().overlay(MoveMarkTheme.Stroke.normal)
+                lifecycleRow("Live there", detail: "Keep maintenance and supporting records together.")
+                Divider().overlay(MoveMarkTheme.Stroke.normal)
+                lifecycleRow("Move out", detail: "Compare the final condition to your baseline.")
+                Divider().overlay(MoveMarkTheme.Stroke.normal)
+                lifecycleRow("Dispute", detail: "Use the proof you already recorded.")
+            }
+            .padding(.horizontal, 16)
+            .background(
+                RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.card, style: .continuous)
+                    .fill(MoveMarkTheme.Surface.raised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.card, style: .continuous)
+                    .stroke(MoveMarkTheme.Stroke.normal, lineWidth: 1)
+            )
+        }
+    }
+
+    private func lifecycleRow(_ title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Circle()
+                .fill(MoveMarkTheme.Colors.textMuted)
+                .frame(width: 6, height: 6)
+                .padding(.top, 8)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(MoveMarkTheme.Typography.rowTitle)
+                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+
+                Text(detail)
+                    .font(MoveMarkTheme.Typography.metadata)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 13)
+    }
+
+    private var benefitsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MMProofSectionHeader(
+                title: benefitsTitle,
+                subtitle: MoveMarkGrowthCopy.paywallSupportLine
+            )
+
             VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(benefitsTitle)
-                        .font(MoveMarkTheme.Typography.cardTitle)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                    Text(MoveMarkGrowthCopy.paywallSupportLine)
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                VStack(alignment: .leading, spacing: 14) {
-                    ForEach(Array(benefits.enumerated()), id: \.offset) { _, item in
-                        benefitRow(item.title, item.subtitle)
-                    }
+                ForEach(Array(benefits.enumerated()), id: \.offset) { _, item in
+                    benefitRow(item.title, item.subtitle)
                 }
             }
         }
@@ -174,11 +221,10 @@ struct ProPaywallView: View {
     private var pricingCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("MoveMark Pro")
-                    .font(MoveMarkTheme.Typography.caption)
+                Text("CHOOSE A PLAN")
+                    .font(MoveMarkTheme.Typography.sectionLabel)
                     .tracking(0.9)
-                    .foregroundStyle(MoveMarkTheme.Colors.limeAccent.opacity(0.95))
-                    .textCase(.uppercase)
+                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
 
                 Text(reason == .reportPack ? "Choose Report Pack or Pro" : (reason == .moveOutExport ? "Choose your protection plan" : "Choose your plan"))
                     .font(MoveMarkTheme.Typography.cardTitle)
@@ -245,21 +291,15 @@ struct ProPaywallView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 18)
         }
-        .padding(20)
+        .padding(18)
         .background(
-            LinearGradient(
-                colors: [MoveMarkTheme.Colors.cardRaised, MoveMarkTheme.Colors.card, MoveMarkTheme.Colors.surface],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.card, style: .continuous)
+                .fill(MoveMarkTheme.Surface.raised)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.limeAccent.opacity(0.2), lineWidth: 1)
+            RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.card, style: .continuous)
+                .stroke(MoveMarkTheme.Stroke.normal, lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.32), radius: 16, y: 8)
-        .shadow(color: MoveMarkTheme.Colors.primary.opacity(0.08), radius: 10, y: 4)
     }
 
     /// Empty catalog after at least one paywall fetch finished — never show silent placeholders.
@@ -336,7 +376,7 @@ struct ProPaywallView: View {
                         } label: {
                             Text("Terms of Use")
                                 .font(MoveMarkTheme.Typography.subheadlineMedium)
-                                .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.92))
+                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         }
                         .buttonStyle(.plain)
                     }
@@ -346,7 +386,7 @@ struct ProPaywallView: View {
                         } label: {
                             Text("Privacy Policy")
                                 .font(MoveMarkTheme.Typography.subheadlineMedium)
-                                .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.92))
+                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         }
                         .buttonStyle(.plain)
                     }
@@ -514,7 +554,7 @@ struct ProPaywallView: View {
                     isDisabled: subscriptionManager.isStoreKitBusy || showPurchaseSuccess
                 )
             } else {
-                Text("Add product IDs report_pack / movemark_report_pack in RevenueCat to enable one-time purchase here. Pro still unlocks unlimited reports.")
+                Text("Report Pack isn't available right now. MoveMark Pro still includes report access.")
                     .font(MoveMarkTheme.Typography.caption)
                     .foregroundStyle(MoveMarkTheme.Colors.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -599,11 +639,7 @@ struct ProPaywallView: View {
                         if isYearly {
                             Text("Best value")
                                 .font(MoveMarkTheme.Typography.caption)
-                                .foregroundStyle(MoveMarkTheme.Colors.primary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(MoveMarkTheme.Colors.primary.opacity(0.16))
-                                .clipShape(Capsule())
+                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                         }
                     }
 
@@ -627,24 +663,24 @@ struct ProPaywallView: View {
 
                 Circle()
                     .stroke(
-                        isSelected ? MoveMarkTheme.Colors.primary : MoveMarkTheme.Colors.cardStroke,
+                        isSelected ? MoveMarkTheme.Colors.textPrimary.opacity(0.55) : MoveMarkTheme.Colors.cardStroke,
                         lineWidth: 1.2
                     )
                     .background(
                         Circle()
-                            .fill(isSelected ? MoveMarkTheme.Colors.primary : .clear)
+                            .fill(isSelected ? MoveMarkTheme.Colors.textPrimary : .clear)
                             .padding(4)
                     )
                     .frame(width: 22, height: 22)
                     .padding(.top, 2)
             }
             .padding(14)
-            .background(isSelected ? MoveMarkTheme.Colors.cardRaised.opacity(0.95) : MoveMarkTheme.Colors.card.opacity(0.92))
+            .background(isSelected ? MoveMarkTheme.Surface.interactive : MoveMarkTheme.Colors.card.opacity(0.92))
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(
                         isSelected
-                            ? MoveMarkTheme.Colors.primary.opacity(isYearly ? 0.95 : 0.75)
+                            ? MoveMarkTheme.Colors.textPrimary.opacity(isYearly ? 0.48 : 0.38)
                             : MoveMarkTheme.Colors.cardStroke,
                         lineWidth: strokeWidth
                     )
@@ -670,9 +706,9 @@ struct ProPaywallView: View {
     private func benefitRow(_ title: String, _ subtitle: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Circle()
-                .fill(MoveMarkTheme.Colors.primary.opacity(0.9))
-                .frame(width: 8, height: 8)
-                .padding(.top, 6)
+                .fill(MoveMarkTheme.Colors.textMuted)
+                .frame(width: 6, height: 6)
+                .padding(.top, 7)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
