@@ -2,7 +2,7 @@
 //  NewPropertyView.swift
 //  movemork
 //
-//  MoveMark — Add your property. Single flow: form → CreatePropertyInput → store → Supabase → Vault.
+//  MoveMark — Add a rental: form → CreatePropertyInput → store → Neon → Proof.
 //
 
 import SwiftUI
@@ -59,139 +59,85 @@ struct NewPropertyView: View {
     }
 
     var body: some View {
-        ZStack {
-            MoveMarkTheme.Colors.appBackground.ignoresSafeArea()
+        MMSheetScaffold(title: "Add rental") {
+            Text("Your rental's proof — room photos, records, issues and reports — lives here.")
+                .mmFont(15)
+                .foregroundStyle(MMInk.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    // 1. Intro
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Add your property")
-                                .font(MoveMarkTheme.Typography.subtitleLarge)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            Text("This is where your proof trail starts. Photos, documents, issues, and exports will live here.")
-                                .font(MoveMarkTheme.Typography.detail)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        }
-                    }
-
-                    // 2. Property
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Property")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(
-                                title: "Nickname or label",
-                                placeholder: "e.g. Downtown Condo or 123 Main St",
-                                text: $name
-                            )
-                        }
-                    }
-
-                    // 3. Address
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Address")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(title: "Address line 1", placeholder: "123 Main St", text: $addressLine1)
-                            MMTextField(title: "Unit / apartment", placeholder: "Optional", text: $unit)
-                            MMTextField(title: "City", placeholder: "San Francisco", text: $city)
-                            MMTextField(title: "Province / state", placeholder: "CA", text: $region)
-                            MMTextField(title: "Postal / ZIP code", placeholder: "94102", text: $postalCode)
-                        }
-                    }
-
-                    // 4. Move-in & lease
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Move-in & lease")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            DatePicker("Move-in date", selection: $moveInDate, displayedComponents: .date)
-                                .colorScheme(.light)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            DatePicker("Lease start", selection: $leaseStartDate, displayedComponents: .date)
-                                .colorScheme(.light)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            DatePicker("Lease end", selection: $leaseEndDate, displayedComponents: .date)
-                                .colorScheme(.light)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                        }
-                    }
-
-                    // 5. Landlord
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Landlord")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(title: "Name", placeholder: "Property manager or landlord", text: $landlordName)
-                            MMTextField(title: "Email", placeholder: "Optional", text: $landlordEmail, keyboardType: .emailAddress)
-                            MMTextField(title: "Phone", placeholder: "Optional", text: $landlordPhone, keyboardType: .phonePad)
-                        }
-                    }
-
-                    // 6. Financials
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Financials")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(title: "Deposit amount", placeholder: "e.g. 1500", text: $depositAmount, keyboardType: .decimalPad)
-                            MMTextField(title: "Rent amount (optional)", placeholder: "e.g. 2200", text: $rentAmount, keyboardType: .decimalPad)
-                        }
-                    }
-
-                    // 7. Country (optional)
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Location")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            Picker("Country", selection: $selectedCountryOption) {
-                                ForEach(supportedCountries + ["Other"], id: \.self) { option in
-                                    Text(option).tag(option)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            if selectedCountryOption == "Other" {
-                                MMTextField(title: "Country code", placeholder: "e.g. FR, DE", text: $customCountry)
-                                    .textInputAutocapitalization(.characters)
-                            }
-                        }
-                    }
-
-                    if !errorMessage.isEmpty {
-                        MMErrorBanner(message: errorMessage)
-                    }
-
-                    // CTA
-                    ZStack {
-                        MMButton(
-                            title: "Create property vault",
-                            action: { submit() },
-                            isDisabled: isSubmitDisabled
-                        )
-                        .opacity(isLoading ? 0.6 : 1.0)
-                        .disabled(isLoading)
-
-                        if isLoading {
-                            ProgressView()
-                                .tint(MoveMarkTheme.Colors.primary)
-                        }
-                    }
-                }
-                .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.top, 24)
-                .padding(.bottom, 32)
+            fieldSection("Rental") {
+                MMField(title: "Nickname or address", placeholder: "e.g. 88 Harbour St", text: $name)
             }
+            fieldSection("Address") {
+                MMField(title: "Street address", placeholder: "123 Main St", text: $addressLine1, contentType: .streetAddressLine1)
+                MMField(title: "Unit", placeholder: "Optional", text: $unit, contentType: .streetAddressLine2)
+                MMField(title: "City", placeholder: "Toronto", text: $city, contentType: .addressCity)
+                MMField(title: "Province / state", placeholder: "ON", text: $region, contentType: .addressState)
+                MMField(title: "Postal / ZIP code", placeholder: "M5J 2N8", text: $postalCode,
+                        contentType: .postalCode, autocapitalization: .characters)
+            }
+            MMGroup(title: "Move-in & lease") {
+                dateRow("Move-in date", $moveInDate)
+                MMRowDivider()
+                dateRow("Lease start", $leaseStartDate)
+                MMRowDivider()
+                dateRow("Lease end", $leaseEndDate)
+            }
+            .padding(.top, 26)
+            fieldSection("Landlord") {
+                MMField(title: "Name", placeholder: "Property manager or landlord", text: $landlordName, contentType: .name)
+                MMField(title: "Email", placeholder: "Optional", text: $landlordEmail, keyboard: .emailAddress,
+                        contentType: .emailAddress, autocapitalization: .never)
+                MMField(title: "Phone", placeholder: "Optional", text: $landlordPhone, keyboard: .phonePad,
+                        contentType: .telephoneNumber)
+            }
+            fieldSection("Deposit & rent") {
+                MMField(title: "Deposit amount", placeholder: "e.g. 1500", text: $depositAmount, keyboard: .decimalPad)
+                MMField(title: "Monthly rent", placeholder: "Optional", text: $rentAmount, keyboard: .decimalPad)
+            }
+            MMGroup(title: "Country") {
+                Picker("Country", selection: $selectedCountryOption) {
+                    ForEach(supportedCountries + ["Other"], id: \.self) { Text($0).tag($0) }
+                }
+                .pickerStyle(.menu)
+                .tint(MMInk.text)
+                .mmFont(16)
+                .padding(.horizontal, 16)
+                .frame(minHeight: MMMetrics.rowHeight)
+            }
+            .padding(.top, 26)
+            if selectedCountryOption == "Other" {
+                MMField(title: "Country code", placeholder: "e.g. FR, DE", text: $customCountry, autocapitalization: .characters)
+                    .padding(.top, 12)
+            }
+
+            if !errorMessage.isEmpty {
+                MMNotice(message: errorMessage).padding(.top, 22)
+            }
+            MMPrimaryButton(title: "Create rental", isLoading: isLoading, isDisabled: isSubmitDisabled) { submit() }
+                .padding(.top, 26)
         }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func fieldSection<Fields: View>(_ title: String, @ViewBuilder _ fields: () -> Fields) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title.uppercased())
+                .mmFont(12, .medium)
+                .tracking(0.3)
+                .foregroundStyle(MMInk.secondary)
+                .accessibilityAddTraits(.isHeader)
+            fields()
+        }
+        .padding(.top, 26)
+    }
+
+    private func dateRow(_ title: String, _ date: Binding<Date>) -> some View {
+        DatePicker(title, selection: date, displayedComponents: .date)
+            .mmFont(16)
+            .foregroundStyle(MMInk.text)
+            .tint(MMInk.text)
+            .padding(.horizontal, 16)
+            .frame(minHeight: MMMetrics.rowHeight)
     }
 
     private var isSubmitDisabled: Bool {

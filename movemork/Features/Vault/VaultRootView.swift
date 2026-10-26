@@ -43,14 +43,9 @@ struct VaultRootView: View {
         .sheet(isPresented: $showAddProperty) {
             NavigationStack {
                 NewPropertyView()
-                    .navigationTitle("Add property")
-                    .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
-                            Button("Close") {
-                                showAddProperty = false
-                            }
-                            .foregroundStyle(MoveMarkTheme.Colors.primary)
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { showAddProperty = false }
                         }
                     }
             }
