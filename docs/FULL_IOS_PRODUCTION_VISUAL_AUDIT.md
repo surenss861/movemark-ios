@@ -163,6 +163,44 @@ Use for completion:
 6. Restore purchases + legal pricing copy
 7. Report-pack purchase remains separate/secondary if enabled
 
+## Implementation status — current design branch
+
+| Surface | Implementation state | Visual sign-off |
+|---|---|---|
+| Proof / Vault | Existing locked production design unchanged | LOCKED |
+| Capture + camera + Saved Proof Receipt | Existing locked production design unchanged | LOCKED |
+| Reports root | Existing locked production design unchanged | LOCKED |
+| Account root | Existing locked production design unchanged | LOCKED |
+| Floating dock | Existing shared navigation unchanged | LOCKED |
+| Maintenance log | Rebuilt as active case + quiet case rows | **Needs simulator/iPhone screenshot review** |
+| Maintenance issue detail | Rebuilt around case hero → evidence → timeline → follow-up → resolution | **Needs simulator/iPhone screenshot review** |
+| Move-out foundation | Rebuilt as move-in/move-out comparison record, missing rooms first | **Needs simulator/iPhone screenshot review** |
+| Add rental | Rebuilt as one native grouped form | **Needs simulator screenshot review** |
+| Edit rental | Aligned with Add Rental; placeholder location values suppressed | **Needs simulator screenshot review** |
+| Rental workspace | Duplicate progress/timeline layers removed; supporting records + lifecycle actions simplified | **Needs simulator/iPhone screenshot review** |
+| Room list / walkthrough | “Proof Sprint” removed; now a move-in evidence queue with one progress model | **Needs simulator/iPhone screenshot review** |
+| Add Room sheet | Legacy green-selected chips removed | **Needs simulator screenshot review** |
+| Auth | Text-only MoveMark, one calm form, no dead password-reset affordance | **Needs simulator/iPhone screenshot review** |
+| First-run rental setup | Card wrapper removed; now enters the same product language | **Needs simulator screenshot review** |
+| First-run room/moment choice | Selected treatment and icon accents restrained | **Needs simulator screenshot review** |
+| First-run saved receipt | Reuses locked Proof Receipt | LOCKED BY REUSE |
+| Welcome | Existing editorial evidence-artifact composition passes code audit; no redesign-for-redesign change made | **Needs final route-tour confirmation only** |
+| Full-screen evidence viewer | Aspect-fit full evidence, internal signed URL, display-only thumbnail crops | PASS — no visual change required |
+| Shared loading/error/empty components | Existing system retained to avoid invalidating locked screens without a usability bug | PASS — no global rewrite |
+| Backend-misconfiguration screen | Production developer setup instructions removed; technical detail DEBUG-only | **Needs simulator error-state check** |
+| Paywall | Lifecycle-first hierarchy, quieter plan selection, no gradient/glow card stack; release RevenueCat debug copy removed | **Needs StoreKit/simulator/iPhone review** |
+| Dispute Builder | **No dedicated native route/view exists in current codebase**. Documentation describes an older v1 implementation, but current native app routes Case Builder to Reports. | PRODUCT GAP — do not pretend complete |
+
+### Reachability / dead-code notes
+
+- `EvidenceSavedProofSection` is an older card-heavy evidence component, but the current room flow uses `RoomEvidenceBody` + `RoomPhotoViewer`; it is not part of the active capture composition.
+- `OnboardingNameScreen` is not part of the current first-run path; first-run name capture happens inside `FirstRunPropertySetupView`.
+- Native system surfaces remain native: camera permission alerts, share sheet, Quick Look/PDF preview, Photos picker, and Apple subscription management.
+
+### CI note
+
+The previous iOS workflow used `macos-15`, which cannot correctly compile the app's iOS 26.2 / current Swift syntax. The design branch updates iOS CI to GitHub's GA `macos-26` runner. This workflow change must be validated before merging.
+
 ## Production acceptance criteria for every redesigned screen
 
 A screen is not “done” because it compiles.
