@@ -249,7 +249,7 @@ struct PropertyVaultView: View {
         .sheet(isPresented: $showEditProperty) {
             NavigationStack {
                 EditPropertyView(property: property)
-                    .navigationTitle("Edit property")
+                    .navigationTitle("Edit rental")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarLeading) {
@@ -637,7 +637,7 @@ struct PropertyVaultView: View {
     private func detailSection(_ property: PropertyRecord) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Property details")
+                Text("Rental details")
                     .font(MoveMarkTheme.Typography.captionEmphasis)
                     .tracking(0.8)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
