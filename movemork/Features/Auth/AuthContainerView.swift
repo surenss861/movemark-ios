@@ -2,7 +2,7 @@
 //  AuthContainerView.swift
 //  movemork
 //
-//  Proof-first auth — save Welcome proof into a private vault.
+//  MoveMark — minimal production auth for the private proof vault.
 //
 
 import SwiftUI
@@ -14,11 +14,8 @@ struct AuthContainerView: View {
         case signUp
     }
 
-    @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(SessionManager.self) private var sessionManager
-
-    @Namespace private var authCardNamespace
 
     let onDismiss: () -> Void
 
@@ -29,8 +26,7 @@ struct AuthContainerView: View {
     @State private var errorMessage = ""
     @State private var infoMessage = ""
     @State private var isLoading = false
-    @State private var surfaceAppeared = false
-    @State private var formFieldsAppeared = false
+    @State private var appeared = false
     @State private var keyboardBottomInset: CGFloat = 0
 
     private var privacyPolicyURL: URL? {
@@ -41,18 +37,18 @@ struct AuthContainerView: View {
         legalURL(forInfoKey: "LegalTermsURL")
     }
 
-    private var authSpring: Animation? {
-        reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.88)
+    private var authAnimation: Animation? {
+        reduceMotion ? nil : .easeOut(duration: 0.24)
     }
 
-    private var headerTitle: String {
-        mode == .signIn ? "Welcome back." : "Create your proof vault"
+    private var title: String {
+        mode == .signIn ? "Welcome back." : "Create your private vault."
     }
 
-    private var headerSubtitle: String {
+    private var subtitle: String {
         mode == .signIn
-            ? "Continue your proof vault."
-            : "Save room photos, lease docs, and reports under one rental."
+            ? "Sign in to continue your rental proof."
+            : "Keep room evidence, supporting records, and reports under one account."
     }
 
     init(initialMode: Mode, onDismiss: @escaping () -> Void = {}) {
@@ -62,49 +58,64 @@ struct AuthContainerView: View {
 
     var body: some View {
         ZStack {
-            Color.clear
-                .mmProofShellBackground(heroFocus: false, ctaBloom: false)
+            MoveMarkTheme.Colors.appBackground.ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
-                    headerBlock
+                    header
 
-                    titleBlock
-                        .padding(.top, 14)
-                        .padding(.bottom, 14)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(mode == .signIn ? "SIGN IN" : "PRIVATE VAULT")
+                            .font(MoveMarkTheme.Typography.sectionLabel)
+                            .tracking(0.9)
+                            .foregroundStyle(MoveMarkTheme.Colors.textMuted)
 
-                    proofSummarySection
-                        .padding(.bottom, 14)
-                        .opacity(surfaceAppeared ? 1 : 0)
-                        .offset(y: surfaceAppeared ? 0 : 8)
+                        Text(title)
+                            .font(MoveMarkTheme.Typography.pageTitle)
+                            .tracking(-0.8)
+                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
 
-                    authFormSection
-                        .opacity(formFieldsAppeared ? 1 : 0)
-                        .offset(y: formFieldsAppeared ? 0 : 8)
+                        Text(subtitle)
+                            .font(MoveMarkTheme.Typography.body)
+                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.top, 28)
+
+                    if mode == .signUp {
+                        trustRows
+                            .padding(.top, 24)
+                    }
+
+                    form
+                        .padding(.top, 26)
+
+                    modeSwitchRow
+                        .padding(.top, 18)
 
                     if mode == .signUp {
                         legalFinePrint
-                            .padding(.top, 14)
-                            .opacity(formFieldsAppeared ? 1 : 0)
-                            .transition(fieldTransition)
-                    }
-
-                    if mode == .signUp {
-                        modeSwitchRow
-                            .padding(.top, 14)
-                            .opacity(formFieldsAppeared ? 1 : 0)
+                            .padding(.top, 16)
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .top)
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.bottom, 24 + keyboardBottomInset)
+                .padding(.bottom, 32 + keyboardBottomInset)
             }
             .scrollDismissesKeyboard(.interactively)
-            .safeAreaPadding(.top, 10)
+            .safeAreaPadding(.top, 8)
         }
-        .offset(y: surfaceAppeared ? 0 : 28)
-        .opacity(surfaceAppeared ? 1 : 0)
-        .onAppear { playSurfaceEntrance() }
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared ? 0 : 10)
+        .onAppear {
+            if reduceMotion {
+                appeared = true
+            } else {
+                withAnimation(.easeOut(duration: 0.28)) {
+                    appeared = true
+                }
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
             applyKeyboardInset(from: note, visible: true)
         }
@@ -113,152 +124,58 @@ struct AuthContainerView: View {
         }
     }
 
-    private func applyKeyboardInset(from note: Notification, visible: Bool) {
-        let duration = (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
-        let animation: Animation? = reduceMotion ? nil : .easeOut(duration: duration)
-
-        withAnimation(animation) {
-            if visible,
-               let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
-                keyboardBottomInset = max(0, frame.height - 32)
-            } else {
-                keyboardBottomInset = 0
-            }
-        }
-    }
-
-    private func playSurfaceEntrance() {
-        if reduceMotion {
-            surfaceAppeared = true
-            formFieldsAppeared = true
-            return
-        }
-        withAnimation(.spring(response: 0.48, dampingFraction: 0.88)) {
-            surfaceAppeared = true
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
-            withAnimation(.spring(response: 0.44, dampingFraction: 0.9)) {
-                formFieldsAppeared = true
-            }
-        }
-    }
-
-    // MARK: - Header
-
-    private var headerBlock: some View {
-        HStack(alignment: .center, spacing: 0) {
+    private var header: some View {
+        HStack {
             Button(action: onDismiss) {
                 Image(systemName: "chevron.left")
                     .font(MoveMarkTheme.Typography.button)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                    .frame(width: 40, height: 40)
-                    .background(MoveMarkTheme.Colors.card.opacity(0.9))
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.75), lineWidth: 0.75)
-                    )
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
             .accessibilityIdentifier("auth.dismiss")
 
-            Spacer(minLength: 0)
+            Spacer()
 
-            HStack(spacing: 8) {
-                Image("MoveMarkLogo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 28, height: 28)
-                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-                    .accessibilityHidden(true)
+            Text("MoveMark")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.85))
+                .accessibilityAddTraits(.isHeader)
 
-                Text("MoveMark")
-                    .font(MoveMarkTheme.Typography.button)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-            }
-
-            Spacer(minLength: 0)
+            Spacer()
 
             Color.clear
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
                 .accessibilityHidden(true)
         }
     }
 
-    private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(headerTitle)
-                .font(MoveMarkTheme.Typography.cardValue)
-                .tracking(-0.4)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-                .id("auth-title-\(mode == .signIn ? "in" : "up")")
-
-            Text(headerSubtitle)
-                .font(MoveMarkTheme.Typography.subheadline)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.94))
-                .fixedSize(horizontal: false, vertical: true)
-                .id("auth-subtitle-\(mode == .signIn ? "in" : "up")")
-        }
-        .animation(authSpring, value: mode)
-    }
-
-    // MARK: - Proof strip
-
-    private var proofSummarySection: some View {
-        AuthProofVaultStrip(mode: mode)
-            .animation(authSpring, value: mode)
-            .matchedGeometryEffect(id: "auth-proof-summary", in: authCardNamespace)
-    }
-
-    // MARK: - Form
-
-    @ViewBuilder
-    private var authFormSection: some View {
-        if mode == .signUp {
-            createFormSurface
-        } else {
-            signInFormSurface
-        }
-    }
-
-    private var createFormSurface: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            authInputFields
-            authStatusMessages
-            primaryActionButton
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 14)
-        .background(authSurfaceBackground(cornerRadius: 22, fillOpacity: 0.88))
-        .matchedGeometryEffect(id: "auth-proof-form", in: authCardNamespace)
-    }
-
-    private var signInFormSurface: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            authInputFields
-            authStatusMessages
-            primaryActionButton
-            modeSwitchRow
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 14)
-        .background(authSurfaceBackground(cornerRadius: 22, fillOpacity: 0.78))
-        .matchedGeometryEffect(id: "auth-proof-form", in: authCardNamespace)
-    }
-
-    private func authSurfaceBackground(cornerRadius: CGFloat, fillOpacity: Double) -> some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(MoveMarkTheme.Colors.card.opacity(fillOpacity))
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.42), lineWidth: 0.75)
-            )
-    }
-
-    private var authInputFields: some View {
+    private var trustRows: some View {
         VStack(alignment: .leading, spacing: 10) {
+            trustRow("Room evidence stays organized by rental.")
+            trustRow("Original source files are preserved when available.")
+            trustRow("Reports are generated from the proof you save.")
+        }
+    }
+
+    private func trustRow(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: "checkmark")
+                .font(MoveMarkTheme.Typography.metadata)
+                .foregroundStyle(MoveMarkTheme.Colors.primary)
+                .frame(width: 18, height: 18)
+
+            Text(text)
+                .font(MoveMarkTheme.Typography.subheadline)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var form: some View {
+        VStack(alignment: .leading, spacing: 14) {
             MMTextField(
                 title: "Email",
                 placeholder: "you@example.com",
@@ -270,7 +187,7 @@ struct AuthContainerView: View {
 
             MMTextField(
                 title: "Password",
-                placeholder: mode == .signIn ? "Your password" : "At least 6 characters",
+                placeholder: mode == .signIn ? "Your password" : "At least 8 characters",
                 text: $password,
                 isSecure: true,
                 density: .authCompact
@@ -288,68 +205,45 @@ struct AuthContainerView: View {
                 .transition(fieldTransition)
             }
 
-            if mode == .signIn {
-                HStack {
-                    Spacer()
-                    Button {
-                        Task { @MainActor in
-                            await requestPasswordReset()
-                        }
-                    } label: {
-                        Text("Forgot password?")
-                            .font(MoveMarkTheme.Typography.footnote)
-                            .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.92))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("auth.forgotPassword")
+            statusMessages
+
+            ZStack {
+                MMButton(
+                    title: mode == .signIn ? "Sign in" : "Create private vault",
+                    action: submit,
+                    kind: .primary,
+                    size: .auth,
+                    isDisabled: isLoading
+                )
+                .opacity(isLoading ? 0.6 : 1)
+                .accessibilityIdentifier("auth.primaryAction")
+
+                if isLoading {
+                    ProgressView()
+                        .tint(MoveMarkTheme.Colors.textOnPrimary)
                 }
-                .transition(fieldTransition)
             }
         }
-        .animation(authSpring, value: mode)
+        .animation(authAnimation, value: mode)
     }
 
-    private var authStatusMessages: some View {
+    private var statusMessages: some View {
         VStack(alignment: .leading, spacing: 6) {
             if !infoMessage.isEmpty {
                 Text(infoMessage)
                     .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.95))
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             if !errorMessage.isEmpty {
                 Text(errorMessage)
                     .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(.red.opacity(0.9))
+                    .foregroundStyle(MoveMarkTheme.Colors.semanticDanger)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("auth.error")
             }
         }
-    }
-
-    private var primaryActionButton: some View {
-        ZStack {
-            MMButton(
-                title: mode == .signIn ? "Continue proof vault" : "Create private vault",
-                action: { submit() },
-                kind: .primary,
-                size: .auth,
-                isDisabled: isLoading
-            )
-            .opacity(isLoading ? 0.6 : 1.0)
-            .accessibilityIdentifier("auth.primaryAction")
-
-            if isLoading {
-                ProgressView()
-                    .tint(MoveMarkTheme.Colors.primary)
-            }
-        }
-        .animation(authSpring, value: mode)
-    }
-
-    private var fieldTransition: AnyTransition {
-        if reduceMotion {
-            return .opacity
-        }
-        return .opacity.combined(with: .move(edge: .bottom))
     }
 
     private var modeSwitchRow: some View {
@@ -358,12 +252,11 @@ struct AuthContainerView: View {
                 .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
 
             Button {
-                switchAuthMode()
+                switchMode()
             } label: {
-                Text(mode == .signIn ? "Create private vault" : "Sign in")
+                Text(mode == .signIn ? "Create a private vault" : "Sign in")
                     .font(MoveMarkTheme.Typography.subheadlineMedium)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.95))
+                    .foregroundStyle(MoveMarkTheme.Colors.primary)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("auth.switchMode")
@@ -375,20 +268,19 @@ struct AuthContainerView: View {
     private var legalFinePrint: some View {
         Text(legalAttributedLine)
             .font(MoveMarkTheme.Typography.tiny)
-            .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.88))
+            .foregroundStyle(MoveMarkTheme.Colors.textMuted)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
-            .padding(.top, 2)
     }
 
     private var legalAttributedLine: AttributedString {
         var line = AttributedString("By continuing, you agree to ")
         var terms = AttributedString("Terms")
-        terms.foregroundColor = MoveMarkTheme.Colors.primary.opacity(0.9)
+        terms.foregroundColor = MoveMarkTheme.Colors.primary
         terms.link = termsURL
         var and = AttributedString(" and ")
         var privacy = AttributedString("Privacy")
-        privacy.foregroundColor = MoveMarkTheme.Colors.primary.opacity(0.9)
+        privacy.foregroundColor = MoveMarkTheme.Colors.primary
         privacy.link = privacyPolicyURL
         line.append(terms)
         line.append(and)
@@ -397,18 +289,13 @@ struct AuthContainerView: View {
         return line
     }
 
-    private func switchAuthMode() {
+    private var fieldTransition: AnyTransition {
+        reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top))
+    }
+
+    private func switchMode() {
         let next: Mode = mode == .signIn ? .signUp : .signIn
-        if reduceMotion {
-            mode = next
-            errorMessage = ""
-            infoMessage = ""
-            if next == .signIn {
-                confirmPassword = ""
-            }
-            return
-        }
-        withAnimation(authSpring) {
+        withAnimation(authAnimation) {
             mode = next
             errorMessage = ""
             infoMessage = ""
@@ -418,41 +305,41 @@ struct AuthContainerView: View {
         }
     }
 
-    private func requestPasswordReset() async {
-        guard mode == .signIn else { return }
-        guard !isLoading else { return }
-        isLoading = true
-        errorMessage = ""
-        infoMessage = ""
-        defer { isLoading = false }
-        do {
-            try await sessionManager.sendPasswordReset(email: email)
-            infoMessage = "If an account exists for that email, you’ll get a reset link shortly."
-        } catch {
-            errorMessage = MoveMarkFlowMessage.authOperationFailed(error)
+    private func applyKeyboardInset(from note: Notification, visible: Bool) {
+        let duration = (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
+        let animation: Animation? = reduceMotion ? nil : .easeOut(duration: duration)
+
+        withAnimation(animation) {
+            if visible,
+               let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                keyboardBottomInset = max(0, frame.height - 32)
+            } else {
+                keyboardBottomInset = 0
+            }
         }
     }
 
     private func submit() {
         guard !isLoading else { return }
+
         isLoading = true
         errorMessage = ""
         infoMessage = ""
 
         Task { @MainActor in
             defer { isLoading = false }
+
             do {
                 switch mode {
                 case .signIn:
                     try await sessionManager.signIn(email: email, password: password)
+
                 case .signUp:
                     let result = try await sessionManager.signUp(
                         email: email,
                         password: password,
                         confirmPassword: confirmPassword
                     )
-                    // No session means no account to route into yet. The phase stays
-                    // `.signedOut`, so this surface remains up and says why.
                     if result == .emailConfirmationRequired {
                         infoMessage = "Check your email to confirm your account, then sign in."
                     }
@@ -468,6 +355,7 @@ struct AuthContainerView: View {
             let value = Bundle.main.object(forInfoDictionaryKey: key) as? String,
             !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return nil }
+
         return URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 }
