@@ -96,6 +96,7 @@ struct FirstRunRoomPickerView: View {
         .mmProofShellBackground(heroFocus: false, ctaBloom: false)
         .sheet(isPresented: $showOtherSheet) {
             otherRoomSheet
+                .presentationBackground(MoveMarkTheme.Colors.appBackground)
         }
         .task(id: propertyId) {
             await ensurePropertyLoaded()
@@ -118,26 +119,22 @@ struct FirstRunRoomPickerView: View {
                     .foregroundStyle(
                         isSelected
                             ? MoveMarkTheme.Colors.primary
-                            : MoveMarkTheme.Colors.textSecondary.opacity(0.45)
+                            : MoveMarkTheme.Colors.textMuted
                     )
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(
-                        isSelected
-                            ? MoveMarkTheme.Colors.primary.opacity(0.12)
-                            : MoveMarkTheme.Colors.card.opacity(0.92)
-                    )
+                    .fill(isSelected ? MoveMarkTheme.Surface.interactive : MoveMarkTheme.Surface.raised)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(
                         isSelected
-                            ? MoveMarkTheme.Colors.primary.opacity(0.45)
-                            : MoveMarkTheme.Colors.cardStroke.opacity(0.45),
-                        lineWidth: 0.75
+                            ? MoveMarkTheme.Colors.textPrimary.opacity(0.24)
+                            : MoveMarkTheme.Stroke.normal,
+                        lineWidth: 1
                     )
             )
         }
@@ -177,7 +174,7 @@ struct FirstRunRoomPickerView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { showOtherSheet = false }
-                        .foregroundStyle(MoveMarkTheme.Colors.primary)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                 }
             }
         }
