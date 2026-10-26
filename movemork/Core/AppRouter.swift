@@ -71,17 +71,22 @@ private struct BackendMisconfigurationView: View {
                     .font(MoveMarkTheme.Typography.screenTitle)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
 
-                Text(
-                    "This build is missing a valid MoveMark server address (often from an unset or mis-merged Secrets.xcconfig). The app won’t crash, but sign-in and sync won’t work until you fix the app target’s build settings."
-                )
-                .font(MoveMarkTheme.Typography.body)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-                Text("Developers: copy Config/Secrets.xcconfig.example to Secrets.xcconfig, set NEON_AUTH_URL and NEON_DATA_API_URL (split https:// in xcconfig), then clean and rebuild.")
-                    .font(MoveMarkTheme.Typography.caption)
+                Text("This version of MoveMark can’t reach the service it needs for sign-in and sync. Your device data hasn’t been changed.")
+                    .font(MoveMarkTheme.Typography.body)
                     .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                Text("Try installing the latest version of MoveMark. If the problem continues, contact support.")
+                    .font(MoveMarkTheme.Typography.subheadline)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                #if DEBUG
+                Text("Developer detail: verify Secrets.xcconfig and the Neon Auth/Data API build settings, then clean and rebuild.")
+                    .font(MoveMarkTheme.Typography.caption)
+                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                #endif
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
