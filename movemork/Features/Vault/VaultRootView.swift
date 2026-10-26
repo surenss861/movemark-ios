@@ -416,9 +416,7 @@ struct VaultRootView: View {
     }
 
     private func locationText(for row: PropertyRow) -> String {
-        [row.city, row.provinceState]
-            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            .joined(separator: ", ")
+        RentalLocation.line(city: row.city, province: row.provinceState)
     }
 
     private var shouldShowLoading: Bool {

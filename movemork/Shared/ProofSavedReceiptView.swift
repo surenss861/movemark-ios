@@ -127,7 +127,7 @@ struct ProofSavedReceiptView: View {
         VStack(alignment: .leading, spacing: 10) {
             Rectangle().fill(Ink.rule).frame(height: 1)
             assurance("lock.shield", "Source files preserved")
-            assurance("archivebox", "Added to your proof vault")
+            assurance("archivebox", "Recorded in your proof vault")
             Rectangle().fill(Ink.rule).frame(height: 1)
         }
     }

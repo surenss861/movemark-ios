@@ -38,8 +38,8 @@ struct EditPropertyView: View {
         _name = State(initialValue: property.title.isEmpty ? property.addressLine1 : property.title)
         _addressLine1 = State(initialValue: property.addressLine1)
         _unit = State(initialValue: property.addressLine2)
-        _city = State(initialValue: property.city)
-        _region = State(initialValue: property.provinceState)
+        _city = State(initialValue: RentalLocation.meaningful(property.city) ?? "")
+        _region = State(initialValue: RentalLocation.meaningful(property.provinceState) ?? "")
         _postalCode = State(initialValue: property.postalCode)
         let storedCountry = property.country.isEmpty ? "CA" : property.country
         let fixedOptions = ["CA", "US", "GB", "AU", "NZ"]

@@ -120,11 +120,8 @@ struct PropertyVaultHeroStage: View {
     }
 
     private var contextLine: String? {
-        let city = property.city.trimmingCharacters(in: .whitespacesAndNewlines)
-        let province = property.provinceState.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !city.isEmpty && !province.isEmpty { return "\(city), \(province)" }
-        if !city.isEmpty { return city }
-        if !province.isEmpty { return province }
+        let line = RentalLocation.line(city: property.city, province: property.provinceState)
+        if !line.isEmpty { return line }
         let country = property.country.trimmingCharacters(in: .whitespacesAndNewlines)
         return country.isEmpty ? nil : country
     }

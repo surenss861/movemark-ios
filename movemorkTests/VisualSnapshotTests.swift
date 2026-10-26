@@ -199,6 +199,14 @@ final class VisualSnapshotTests: XCTestCase {
         assertSnapshot(of: receiptScreen(photos: 4, issues: 1), as: Self.strategy(Self.proAX), named: "ax3")
     }
 
+    // MARK: Camera (the chrome around the preview; the simulator has no camera feed)
+
+    func testCameraChromeWithOnePhotoPending() {
+        let camera = EvidenceCameraViewController(roomName: "Living Room", pendingCount: 1, prompts: RoomCapturePrompts.items,
+                                                  onCapture: { _ in true }, onDone: {}, onCancel: {})
+        assertSnapshot(of: camera, as: Self.strategy(Self.pro), named: "pro")
+    }
+
     // MARK: Room (current dark design — regression only until Room is rebuilt and approved)
 
     private func roomScreen(entries: [EvidenceRecord], name: String) -> some View {

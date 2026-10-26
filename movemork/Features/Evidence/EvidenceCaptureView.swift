@@ -210,18 +210,21 @@ struct EvidenceCaptureView: View {
         }
         .fullScreenCover(isPresented: $showCamera) {
             CameraCaptureView(
+                roomName: roomName,
+                pendingCount: loadedImages.count,
+                prompts: RoomCapturePrompts.items,
                 onCapture: { fileData in
-                    // The camera's encoded capture file is the source evidence, untouched.
-                    do {
-                        var selection = MMEvidenceSelection(sources: loadedSources, previews: loadedImages)
-                        selection.append(try MMEvidenceImport.source(from: fileData, captureSource: .camera))
-                        loadedSources = selection.sources
-                        loadedImages = selection.previews
-                    } catch {
-                        errorMessage = error.localizedDescription
-                    }
-                    showCamera = false
+                    // The camera's encoded capture file is the source evidence, untouched; the camera stays
+                    // open for the next shot.
+                    guard let source = try? MMEvidenceImport.source(from: fileData, captureSource: .camera) else { return false }
+                    var selection = MMEvidenceSelection(sources: loadedSources, previews: loadedImages)
+                    selection.append(source)
+                    guard selection.sources.count > loadedSources.count else { return false }
+                    loadedSources = selection.sources
+                    loadedImages = selection.previews
+                    return true
                 },
+                onDone: { showCamera = false },
                 onCancel: { showCamera = false }
             )
         }
@@ -324,7 +327,8 @@ struct EvidenceCaptureView: View {
                 }
             }
             if !loadedImages.isEmpty {
-                ProofPhotoGridView(images: loadedImages, isUploading: isUploading)
+                ProofPhotoGridView(images: loadedImages, isUploading: isUploading,
+                                   onRemove: { removePendingPhoto(at: $0) })
                     .mmScanline(trigger: proofScanlineTrigger, intensity: 0.1)
             } else if let pendingRetry {
                 ProofPhotoGridView(images: pendingRetry.pendingPreviews, isUploading: isUploading)

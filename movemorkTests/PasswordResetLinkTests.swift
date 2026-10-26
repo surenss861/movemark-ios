@@ -34,3 +34,13 @@ struct PasswordResetLinkTests {
                                         resetPage: nil) == nil)
     }
 }
+
+struct RentalLocationTests {
+    @Test func placeholdersAndBlanksAreNeverShown() {
+        #expect(RentalLocation.line(city: "Toronto", province: "Unknown") == "Toronto")
+        #expect(RentalLocation.line(city: "Toronto", province: "  ") == "Toronto")
+        #expect(RentalLocation.line(city: "Toronto", province: "ON") == "Toronto, ON")
+        #expect(RentalLocation.line(city: "unknown", province: "ON") == "ON")
+        #expect(RentalLocation.line(city: "", province: "") == "")
+    }
+}

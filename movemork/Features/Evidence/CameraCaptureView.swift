@@ -11,8 +11,10 @@
 //  the format's full resolution with quality prioritised; orientation comes from the rotation
 //  coordinator and is recorded in the file's metadata, never by rotating pixels.
 //
-//  The screen mirrors the system camera it replaces: live preview, shutter, cancel, flip, flash, then
-//  Retake / Use Photo.
+//  Continuous capture: every shot goes straight into the room's pending photos and the camera stays live
+//  (aim → shoot → shoot → Done). The top band names the room, counts the photos and suggests the next shot
+//  from the room's checklist; the preview shows the whole frame (nothing cropped). Review, removal and
+//  retakes happen on the room screen, reached from the latest-photo thumbnail or Done.
 //
 
 import AVFoundation
@@ -20,20 +22,33 @@ import SwiftUI
 import UIKit
 
 struct CameraCaptureView: UIViewControllerRepresentable {
-    /// The encoded capture file's bytes.
-    var onCapture: (Data) -> Void
+    var roomName: String = ""
+    /// Photos already pending for this entry before the camera opened.
+    var pendingCount: Int = 0
+    /// Suggested shots, in order; the next one is shown above the preview.
+    var prompts: [String] = []
+    /// The encoded capture file's bytes; returns whether it joined the pending photos.
+    var onCapture: (Data) -> Bool
+    /// Back to the room with the photos taken (Done, or the thumbnail to review them).
+    var onDone: () -> Void = {}
     var onCancel: () -> Void
 
     func makeUIViewController(context: Context) -> EvidenceCameraViewController {
-        EvidenceCameraViewController(onCapture: onCapture, onCancel: onCancel)
+        EvidenceCameraViewController(roomName: roomName, pendingCount: pendingCount, prompts: prompts,
+                                     onCapture: onCapture, onDone: onDone, onCancel: onCancel)
     }
 
     func updateUIViewController(_ uiViewController: EvidenceCameraViewController, context: Context) {}
 }
 
 final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
-    private let onCapture: (Data) -> Void
+    private let roomName: String
+    private let prompts: [String]
+    private let onCapture: (Data) -> Bool
+    private let onDone: () -> Void
     private let onCancel: () -> Void
+    private var total: Int
+    private var takenHere = 0
 
     private let session = AVCaptureSession()
     private let output = AVCapturePhotoOutput()
@@ -42,20 +57,31 @@ final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptur
     private var rotation: AVCaptureDevice.RotationCoordinator?
     private var previewRotationObservation: NSKeyValueObservation?
     private var flashMode: AVCaptureDevice.FlashMode = .auto
-    private var captured: Data?
 
     private let previewView = CameraPreviewView()
-    private let reviewImageView = UIImageView()
+    private let roomLabel = UILabel()
+    private let countLabel = UILabel()
+    private let suggestionLabel = UILabel()
     private let shutterButton = UIButton(type: .system)
     private let cancelButton = UIButton(type: .system)
+    private let thumbnailButton = UIButton(type: .custom)
+    private let doneButton = UIButton(type: .system)
     private let flipButton = UIButton(type: .system)
     private let flashButton = UIButton(type: .system)
-    private let retakeButton = UIButton(type: .system)
-    private let useButton = UIButton(type: .system)
+    private let addedLabel = PaddedLabel()
     private let unavailableLabel = UILabel()
 
-    init(onCapture: @escaping (Data) -> Void, onCancel: @escaping () -> Void) {
+    /// The Vault's action colour (#CAE36C) and the ink on it.
+    private static let lime = UIColor(red: 0.792, green: 0.890, blue: 0.424, alpha: 1)
+    private static let onLime = UIColor(red: 0.067, green: 0.086, blue: 0.035, alpha: 1)
+
+    init(roomName: String, pendingCount: Int, prompts: [String],
+         onCapture: @escaping (Data) -> Bool, onDone: @escaping () -> Void, onCancel: @escaping () -> Void) {
+        self.roomName = roomName
+        self.total = pendingCount
+        self.prompts = prompts
         self.onCapture = onCapture
+        self.onDone = onDone
         self.onCancel = onCancel
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .fullScreen
@@ -162,25 +188,40 @@ final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptur
         #endif
         DispatchQueue.main.async {
             self.shutterButton.isEnabled = true
-            guard let data, let preview = UIImage(data: data) else { return }
-            self.captured = data
-            self.reviewImageView.image = preview
-            self.setReviewing(true)
+            guard let data, let preview = UIImage(data: data), self.onCapture(data) else {
+                self.flash(message: "Couldn’t add that photo. Try again.")
+                return
+            }
+            self.total += 1
+            self.takenHere += 1
+            self.thumbnailButton.setImage(preview.preparingThumbnail(of: CGSize(width: 120, height: 120)) ?? preview, for: .normal)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            self.flash(message: "Photo added")
+            self.refreshProgress()
         }
     }
 
-    @objc private func useTapped() {
-        guard let captured else { return }
-        onCapture(captured)
-    }
-
-    @objc private func retakeTapped() {
-        captured = nil
-        reviewImageView.image = nil
-        setReviewing(false)
-    }
-
     @objc private func cancelTapped() { onCancel() }
+
+    @objc private func doneTapped() { onDone() }
+
+    /// "Photo added" (or a failure) over the preview for a moment; VoiceOver hears it too.
+    private func flash(message: String) {
+        addedLabel.text = message
+        UIAccessibility.post(notification: .announcement, argument: message)
+        addedLabel.layer.removeAllAnimations()
+        addedLabel.alpha = 1
+        UIView.animate(withDuration: 0.3, delay: 1.1, options: [.beginFromCurrentState]) { self.addedLabel.alpha = 0 }
+    }
+
+    /// Room, count, next suggestion; Cancel until a photo is taken here, then the latest-photo thumbnail.
+    private func refreshProgress() {
+        countLabel.text = total == 0 ? "No photos yet" : total == 1 ? "1 photo captured" : "\(total) photos captured"
+        suggestionLabel.text = total < prompts.count ? "Next: \(prompts[total])" : "Anything else worth recording"
+        cancelButton.isHidden = takenHere > 0
+        thumbnailButton.isHidden = takenHere == 0
+        doneButton.isHidden = total == 0
+    }
 
     @objc private func flipTapped() {
         guard let current = device else { return }
@@ -210,13 +251,6 @@ final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptur
 
     // MARK: Interface
 
-    private func setReviewing(_ reviewing: Bool) {
-        reviewImageView.isHidden = !reviewing
-        [retakeButton, useButton].forEach { $0.isHidden = !reviewing }
-        [shutterButton, cancelButton, flipButton].forEach { $0.isHidden = reviewing }
-        flashButton.isHidden = reviewing || !(device?.hasFlash ?? false)
-    }
-
     private func showUnavailable() {
         unavailableLabel.isHidden = false
         shutterButton.isEnabled = false
@@ -225,12 +259,22 @@ final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptur
 
     private func buildInterface() {
         previewView.previewLayer.videoGravity = .resizeAspect  // show the whole frame; nothing is cropped
-        reviewImageView.contentMode = .scaleAspectFit
-        reviewImageView.backgroundColor = .black
-        reviewImageView.isHidden = true
+
+        roomLabel.text = roomName
+        roomLabel.font = .preferredFont(forTextStyle: .headline)
+        roomLabel.textColor = .white
+        roomLabel.accessibilityTraits = .header
+        countLabel.font = .preferredFont(forTextStyle: .footnote)
+        countLabel.textColor = UIColor.white.withAlphaComponent(0.65)
+        countLabel.accessibilityIdentifier = "camera.count"
+        suggestionLabel.font = .preferredFont(forTextStyle: .subheadline)
+        suggestionLabel.textColor = .white
+        suggestionLabel.numberOfLines = 2
+        suggestionLabel.accessibilityIdentifier = "camera.suggestion"
+        [roomLabel, countLabel, suggestionLabel].forEach { $0.adjustsFontForContentSizeCategory = true; $0.maximumContentSizeCategory = .accessibilityMedium }
 
         shutterButton.setImage(UIImage(systemName: "circle.inset.filled",
-                                       withConfiguration: UIImage.SymbolConfiguration(pointSize: 64, weight: .regular)), for: .normal)
+                                       withConfiguration: UIImage.SymbolConfiguration(pointSize: 68, weight: .regular)), for: .normal)
         shutterButton.tintColor = .white
         shutterButton.accessibilityLabel = "Take Photo"
         shutterButton.accessibilityIdentifier = "camera.shutter"
@@ -239,6 +283,25 @@ final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptur
         cancelButton.setTitle("Cancel", for: .normal)
         cancelButton.accessibilityIdentifier = "camera.cancel"
         cancelButton.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
+
+        thumbnailButton.imageView?.contentMode = .scaleAspectFill
+        thumbnailButton.clipsToBounds = true
+        thumbnailButton.layer.cornerRadius = 10
+        thumbnailButton.layer.borderWidth = 1.5
+        thumbnailButton.layer.borderColor = UIColor.white.withAlphaComponent(0.85).cgColor
+        thumbnailButton.accessibilityLabel = "Review photos"
+        thumbnailButton.accessibilityIdentifier = "camera.thumbnail"
+        thumbnailButton.addTarget(self, action: #selector(doneTapped), for: .touchUpInside)
+
+        var done = UIButton.Configuration.filled()
+        done.title = "Done"
+        done.baseBackgroundColor = Self.lime
+        done.baseForegroundColor = Self.onLime
+        done.cornerStyle = .capsule
+        done.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20)
+        doneButton.configuration = done
+        doneButton.accessibilityIdentifier = "camera.done"
+        doneButton.addTarget(self, action: #selector(doneTapped), for: .touchUpInside)
 
         flipButton.setImage(UIImage(systemName: "arrow.triangle.2.circlepath.camera"), for: .normal)
         flipButton.accessibilityLabel = "Switch Camera"
@@ -249,56 +312,77 @@ final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptur
         flashButton.accessibilityIdentifier = "camera.flash"
         flashButton.addTarget(self, action: #selector(flashTapped), for: .touchUpInside)
 
-        retakeButton.setTitle("Retake", for: .normal)
-        retakeButton.accessibilityIdentifier = "camera.retake"
-        retakeButton.addTarget(self, action: #selector(retakeTapped), for: .touchUpInside)
-        useButton.setTitle("Use Photo", for: .normal)
-        useButton.accessibilityIdentifier = "camera.use"
-        useButton.addTarget(self, action: #selector(useTapped), for: .touchUpInside)
-        [retakeButton, useButton].forEach { $0.isHidden = true }
+        addedLabel.font = .preferredFont(forTextStyle: .subheadline)
+        addedLabel.textColor = .white
+        addedLabel.backgroundColor = UIColor.black.withAlphaComponent(0.6)
+        addedLabel.layer.cornerRadius = 16
+        addedLabel.clipsToBounds = true
+        addedLabel.alpha = 0
+        addedLabel.isAccessibilityElement = false
 
         unavailableLabel.text = "Camera unavailable"
         unavailableLabel.textColor = .white
         unavailableLabel.isHidden = true
 
-        for control in [cancelButton, flipButton, flashButton, retakeButton, useButton] {
+        for control in [cancelButton, flipButton, flashButton] {
             control.tintColor = .white
             control.titleLabel?.font = .preferredFont(forTextStyle: .body)
         }
-        for subview in [previewView, reviewImageView, shutterButton, cancelButton, flipButton, flashButton, retakeButton, useButton, unavailableLabel] as [UIView] {
+        let header = UIStackView(arrangedSubviews: [roomLabel, countLabel])
+        header.axis = .vertical
+        header.spacing = 2
+        for subview in [previewView, header, suggestionLabel, shutterButton, cancelButton, thumbnailButton, doneButton,
+                        flipButton, flashButton, addedLabel, unavailableLabel] as [UIView] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(subview)
         }
         let guide = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
-            previewView.topAnchor.constraint(equalTo: guide.topAnchor, constant: 44),
-            previewView.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -120),
+            header.topAnchor.constraint(equalTo: guide.topAnchor, constant: 8),
+            header.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 20),
+            header.trailingAnchor.constraint(lessThanOrEqualTo: flashButton.leadingAnchor, constant: -12),
+            flipButton.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -20),
+            flipButton.topAnchor.constraint(equalTo: guide.topAnchor, constant: 10),
+            flashButton.trailingAnchor.constraint(equalTo: flipButton.leadingAnchor, constant: -20),
+            flashButton.centerYAnchor.constraint(equalTo: flipButton.centerYAnchor),
+            suggestionLabel.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 10),
+            suggestionLabel.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 20),
+            suggestionLabel.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -20),
+
+            previewView.topAnchor.constraint(equalTo: suggestionLabel.bottomAnchor, constant: 12),
+            previewView.bottomAnchor.constraint(equalTo: shutterButton.topAnchor, constant: -16),
             previewView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             previewView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            reviewImageView.topAnchor.constraint(equalTo: previewView.topAnchor),
-            reviewImageView.bottomAnchor.constraint(equalTo: previewView.bottomAnchor),
-            reviewImageView.leadingAnchor.constraint(equalTo: previewView.leadingAnchor),
-            reviewImageView.trailingAnchor.constraint(equalTo: previewView.trailingAnchor),
 
-            flashButton.topAnchor.constraint(equalTo: guide.topAnchor, constant: 8),
-            flashButton.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 20),
+            addedLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            addedLabel.bottomAnchor.constraint(equalTo: previewView.bottomAnchor, constant: -16),
 
             shutterButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            shutterButton.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -24),
+            shutterButton.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -20),
             cancelButton.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 20),
             cancelButton.centerYAnchor.constraint(equalTo: shutterButton.centerYAnchor),
-            flipButton.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -20),
-            flipButton.centerYAnchor.constraint(equalTo: shutterButton.centerYAnchor),
-
-            retakeButton.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 20),
-            retakeButton.centerYAnchor.constraint(equalTo: shutterButton.centerYAnchor),
-            useButton.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -20),
-            useButton.centerYAnchor.constraint(equalTo: shutterButton.centerYAnchor),
+            thumbnailButton.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 20),
+            thumbnailButton.centerYAnchor.constraint(equalTo: shutterButton.centerYAnchor),
+            thumbnailButton.widthAnchor.constraint(equalToConstant: 52),
+            thumbnailButton.heightAnchor.constraint(equalToConstant: 52),
+            doneButton.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -20),
+            doneButton.centerYAnchor.constraint(equalTo: shutterButton.centerYAnchor),
 
             unavailableLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             unavailableLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
         ])
         updateFlashButton()
+        refreshProgress()
+    }
+}
+
+/// A label with room around its text (the "Photo added" capsule).
+final class PaddedLabel: UILabel {
+    private let insets = UIEdgeInsets(top: 7, left: 14, bottom: 7, right: 14)
+    override func drawText(in rect: CGRect) { super.drawText(in: rect.inset(by: insets)) }
+    override var intrinsicContentSize: CGSize {
+        let size = super.intrinsicContentSize
+        return CGSize(width: size.width + insets.left + insets.right, height: size.height + insets.top + insets.bottom)
     }
 }
 

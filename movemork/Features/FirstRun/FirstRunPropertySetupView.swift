@@ -131,7 +131,7 @@ struct FirstRunPropertySetupView: View {
                     name: label,
                     addressLine1: address,
                     unit: "",
-                    city: location.isEmpty ? "Unknown" : location,
+                    city: location,
                     region: "",
                     postalCode: "",
                     country: "CA",

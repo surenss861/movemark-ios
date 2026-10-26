@@ -20,7 +20,7 @@ struct EvidenceCaptureBottomSaveBar: View {
         if isUploading { return "Saving proof…" }
         if didJustSave { return "Proof saved" }
         if photoCount == 0 { return "Add photos to continue" }
-        return "\(photoCount) photo\(photoCount == 1 ? "" : "s") ready to save"
+        return "\(photoCount) photo\(photoCount == 1 ? "" : "s") ready"
     }
 
     private var statusColor: Color {
@@ -45,18 +45,24 @@ struct EvidenceCaptureBottomSaveBar: View {
                 .animation(MMMotion.fastFade, value: didJustSave)
                 .animation(MMMotion.fastFade, value: isUploading)
 
-            MMButton(
-                title: saveTitle,
-                action: onSave,
-                kind: .primary,
-                size: .standard,
-                isDisabled: photoCount == 0 || isUploading
-            )
+            // The MoveMark action lime, as on the Vault, the room brief and the receipt.
+            Button(action: onSave) {
+                Text(saveTitle)
+                    .font(MoveMarkTheme.Typography.subheadlineMedium)
+                    .foregroundStyle(RoomEvidenceHero.onLime)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 50)
+                    .background(RoomEvidenceHero.lime, in: Capsule())
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(photoCount == 0 || isUploading)
+            .opacity(photoCount == 0 || isUploading ? 0.5 : 1)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        // Floats over the evidence: native material, not another slab.
-        .background(.ultraThinMaterial)
+        // Near-opaque, so the page scrolling underneath never reads through it.
+        .background(MoveMarkTheme.Colors.appBackground.opacity(0.97))
         .environment(\.colorScheme, .dark)
         .overlay(alignment: .top) {
             Rectangle()

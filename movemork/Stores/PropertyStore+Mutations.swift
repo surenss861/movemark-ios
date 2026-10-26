@@ -173,8 +173,9 @@ extension PropertyStore {
             title: input.titleValue,
             addressLine1: input.addressLine1.trimmingCharacters(in: .whitespacesAndNewlines),
             addressLine2: input.unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : input.unit.trimmingCharacters(in: .whitespacesAndNewlines),
-            city: input.city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Unknown" : input.city.trimmingCharacters(in: .whitespacesAndNewlines),
-            provinceState: input.region.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Unknown" : input.region.trimmingCharacters(in: .whitespacesAndNewlines),
+            // Blank stays blank (the columns are NOT NULL, not non-empty): no "Unknown" placeholder.
+            city: input.city.trimmingCharacters(in: .whitespacesAndNewlines),
+            provinceState: input.region.trimmingCharacters(in: .whitespacesAndNewlines),
             postalCode: input.postalCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "00000" : input.postalCode.trimmingCharacters(in: .whitespacesAndNewlines),
             country: countryVal.isEmpty ? "CA" : countryVal,
             landlordName: input.landlordName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : input.landlordName.trimmingCharacters(in: .whitespacesAndNewlines),
