@@ -414,7 +414,7 @@ private struct AddRoomSheetView: View {
 
                 Button("Cancel", action: onDismiss)
                     .font(MoveMarkTheme.Typography.subheadlineMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.primary)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
             }
 
             MMTextField(
@@ -455,7 +455,7 @@ private struct AddRoomSheetView: View {
 
                 if isAdding {
                     ProgressView()
-                        .tint(MoveMarkTheme.Colors.primary)
+                        .tint(MoveMarkTheme.Colors.textOnPrimary)
                 }
             }
         }
@@ -484,13 +484,18 @@ private struct AddRoomSheetView: View {
                     Capsule(style: .continuous)
                         .fill(
                             isSelected
-                                ? MoveMarkTheme.Colors.primary.opacity(0.18)
-                                : MoveMarkTheme.Colors.card.opacity(0.92)
+                                ? MoveMarkTheme.Surface.interactive
+                                : MoveMarkTheme.Surface.raised
                         )
                 )
                 .overlay(
                     Capsule(style: .continuous)
-                        .stroke(Color.white.opacity(isSelected ? 0.14 : 0.08), lineWidth: 1)
+                        .stroke(
+                            isSelected
+                                ? MoveMarkTheme.Colors.textPrimary.opacity(0.22)
+                                : MoveMarkTheme.Stroke.normal,
+                            lineWidth: 1
+                        )
                 )
         }
         .buttonStyle(.plain)
