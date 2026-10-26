@@ -179,6 +179,29 @@ final class VaultScreenshotUITests: XCTestCase {
         app.buttons["Done"].firstMatch.tap()
     }
 
+    /// Account as the disposable account sees it, then the real in-app deletion: Delete account → the
+    /// explanation → the final confirmation → back at Welcome. The caller checks zero residue afterwards.
+    func testAccountAndDeletion() throws {
+        let app = try signedIn()
+        app.buttons["Account"].firstMatch.tap()
+        sleep(2)
+        attach(app, "account-1-top")
+        scrollToBottom(app)
+        attach(app, "account-2-bottom")
+        app.buttons["Delete account"].firstMatch.tap()
+        let permanently = app.buttons["Delete account permanently"].firstMatch
+        XCTAssertTrue(permanently.waitForExistence(timeout: 10), "delete sheet")
+        sleep(1)
+        attach(app, "account-3-delete-sheet")
+        permanently.tap()
+        let confirm = app.buttons["Delete Permanently"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10), "final confirmation")
+        attach(app, "account-4-confirmation")
+        confirm.tap()
+        XCTAssertTrue(app.buttons["welcome.signIn"].waitForExistence(timeout: 60), "back at Welcome")
+        attach(app, "account-5-deleted")
+    }
+
     /// Swipes until the scroll settles at its end (momentum included), so the shot shows the real bottom.
     private func scrollToBottom(_ app: XCUIApplication) {
         for _ in 0..<6 { app.swipeUp() }

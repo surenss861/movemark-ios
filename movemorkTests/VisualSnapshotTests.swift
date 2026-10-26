@@ -372,4 +372,61 @@ final class VisualSnapshotTests: XCTestCase {
     func testReportsNoRental() {
         assertSnapshot(of: host(reportsScreen("no-rental")), as: Self.strategy(Self.pro), named: "pro")
     }
+
+    // MARK: Account
+
+    private func accountModel(_ state: String) -> AccountHomeModel {
+        var m = AccountHomeModel(email: "sss@gmail.com", name: "Suren", isPro: false, appVersion: "1.4 (6)")
+        switch state {
+        case "pro": m.isPro = true
+        case "long-email": m.email = "suren.sureshkumar.moving.to.toronto.2026@longexampledomain.com"; m.name = nil
+        case "restoring": m.isRestoring = true
+        case "restore-success": m.isPro = true; m.restoreFeedback = .init(message: "MoveMark Pro is active on this Apple ID.")
+        case "restore-failure": m.restoreFeedback = .init(message: "Couldn't reach the App Store. Check your connection and try again.", isError: true)
+        default: break
+        }
+        return m
+    }
+
+    private func accountScreen(_ state: String, atBottom: Bool = false) -> some View {
+        AccountHomeView(model: accountModel(state), initialScrollAnchor: atBottom ? .bottom : nil)
+            .environment(\.mmRootTabBarVisible, true)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                MMProofTabBarV4(selectedTab: .constant(.account))
+            }
+    }
+
+    func testAccountFree() {
+        assertSnapshot(of: host(accountScreen("free")), as: Self.strategy(Self.pro), named: "pro")
+        assertSnapshot(of: host(accountScreen("free")), as: Self.strategy(Self.small), named: "small")
+        assertSnapshot(of: host(accountScreen("free")), as: Self.strategy(Self.proAX), named: "ax3")
+    }
+
+    func testAccountPro() {
+        assertSnapshot(of: host(accountScreen("pro")), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    func testAccountLongEmail() {
+        assertSnapshot(of: host(accountScreen("long-email")), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    func testAccountRestore() {
+        assertSnapshot(of: host(accountScreen("restoring")), as: Self.strategy(Self.pro), named: "restoring")
+        assertSnapshot(of: host(accountScreen("restore-success")), as: Self.strategy(Self.pro), named: "success")
+        assertSnapshot(of: host(accountScreen("restore-failure")), as: Self.strategy(Self.pro), named: "failure")
+    }
+
+    /// The end of the scroll: Delete account and the footer clear the floating dock.
+    func testAccountScrollBottom() {
+        assertSnapshot(of: host(accountScreen("free", atBottom: true)), as: Self.strategy(Self.pro), named: "pro")
+        assertSnapshot(of: host(accountScreen("free", atBottom: true)), as: Self.strategy(Self.small), named: "small")
+        assertSnapshot(of: host(accountScreen("free", atBottom: true)), as: Self.strategy(Self.proAX), named: "ax3")
+    }
+
+    func testDeleteAccount() {
+        assertSnapshot(of: host(DeleteAccountContent(isDeleting: false, errorMessage: nil)), as: Self.strategy(Self.pro), named: "pro")
+        assertSnapshot(of: host(DeleteAccountContent(isDeleting: true, errorMessage: nil)), as: Self.strategy(Self.pro), named: "deleting")
+        assertSnapshot(of: host(DeleteAccountContent(isDeleting: false, errorMessage: "Couldn't delete your account. Try again.")),
+                       as: Self.strategy(Self.pro), named: "error")
+    }
 }
