@@ -128,6 +128,57 @@ final class VaultScreenshotUITests: XCTestCase {
         XCTAssertTrue(app.buttons["welcome.signIn"].waitForExistence(timeout: 20), "signed out")
     }
 
+    /// Reports with a real report: generate, generating, ready, the native PDF preview, and Share. Needs an
+    /// export-ready disposable account (a documented room and one record).
+    func testReportLifecycle() throws {
+        let app = try signedIn()
+        app.buttons["Reports"].firstMatch.tap()
+        let generate = app.buttons["Generate report"].firstMatch
+        XCTAssertTrue(generate.waitForExistence(timeout: 20), "Generate report")
+        attach(app, "report-1-can-generate")
+        generate.tap()
+        if app.staticTexts["Generating report…"].waitForExistence(timeout: 10) { attach(app, "report-2-generating") }
+        let view = app.buttons["View report"].firstMatch
+        XCTAssertTrue(view.waitForExistence(timeout: 120), "report ready")
+        sleep(1)
+        attach(app, "report-3-ready")
+        view.tap()
+        let done = app.buttons["Done"].firstMatch
+        XCTAssertTrue(done.waitForExistence(timeout: 30), "PDF preview")
+        sleep(2)
+        attach(app, "report-4-preview")
+        done.tap()
+        let share = app.buttons.matching(NSPredicate(format: "label == 'Share'")).firstMatch
+        XCTAssertTrue(share.waitForExistence(timeout: 10))
+        share.tap()
+        sleep(3)
+        attach(app, "report-5-share-sheet")
+        app.swipeDown(velocity: .fast)
+        sleep(1)
+        scrollToBottom(app)
+        attach(app, "report-6-bottom")
+        app.buttons["Account"].firstMatch.tap()
+        let signOut = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Sign out'")).firstMatch
+        for _ in 0..<6 where !signOut.isHittable { app.swipeUp() }
+        signOut.tap()
+        XCTAssertTrue(app.buttons["welcome.signIn"].waitForExistence(timeout: 20), "signed out")
+    }
+
+    /// An existing report opened in the native preview, given time to render.
+    func testReportPreview() throws {
+        let app = try signedIn()
+        app.buttons["Reports"].firstMatch.tap()
+        let view = app.buttons["View report"].firstMatch
+        XCTAssertTrue(view.waitForExistence(timeout: 30), "report ready")
+        view.tap()
+        XCTAssertTrue(app.buttons["Done"].firstMatch.waitForExistence(timeout: 30), "PDF preview")
+        for second in [2, 6, 12] {
+            sleep(second == 2 ? 2 : 4)
+            attach(app, "preview-after-\(second)s")
+        }
+        app.buttons["Done"].firstMatch.tap()
+    }
+
     /// Swipes until the scroll settles at its end (momentum included), so the shot shows the real bottom.
     private func scrollToBottom(_ app: XCUIApplication) {
         for _ in 0..<6 { app.swipeUp() }

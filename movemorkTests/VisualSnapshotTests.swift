@@ -272,4 +272,104 @@ final class VisualSnapshotTests: XCTestCase {
         )
         assertSnapshot(of: host(roomScreen(entries: [entry], name: "Living Room")), as: Self.strategy(Self.pro), named: "pro")
     }
+
+    // MARK: Reports
+
+    private static let reportDay = Date(timeIntervalSince1970: 1_761_510_540)   // Oct 26, fixed for goldens
+
+    private func reportsModel(_ state: String) -> ReportsHomeModel {
+        var m = ReportsHomeModel(rentalName: "88 Harbour St", documented: 10, totalRooms: 10, photos: 12, records: 3, issues: 1,
+                                 primary: .ready(generatedAt: Self.reportDay))
+        let moveOut = ReportsHomeModel.OtherReport(id: "move_out", title: "Move-out report", detail: "Not started")
+        let dispute = ReportsHomeModel.OtherReport(id: "dispute", title: "Dispute packet", detail: "Ready to generate")
+        m.others = [moveOut, dispute]
+        let first = ReportsHomeModel.HistoryItem(id: UUID(), title: "Move-in report", date: Self.reportDay, status: .ready)
+        switch state {
+        case "no-report":
+            m.documented = 4; m.photos = 9; m.records = 1; m.issues = 0
+            m.primary = .needsProof(.rooms)
+            m.primaryTitle = "Continue room proof"
+            m.others = [moveOut, .init(id: "dispute", title: "Dispute packet", detail: "Needs move-in proof")]
+        case "needs-record":
+            m.documented = 1; m.photos = 1; m.records = 0; m.issues = 0
+            m.primary = .needsProof(.record)
+            m.primaryTitle = "Add a record"
+        case "can-generate":
+            m.primary = .canGenerate
+        case "generating":
+            m.primary = .generating
+            m.history = [.init(id: UUID(), title: "Move-in report", date: Self.reportDay, status: .generating)]
+        case "failed":
+            m.primary = .failed(lastReadyAt: Self.reportDay.addingTimeInterval(-86_400 * 3))
+            m.history = [.init(id: UUID(), title: "Move-in report", date: Self.reportDay, status: .failed, canRetry: true),
+                         .init(id: UUID(), title: "Move-in report", date: Self.reportDay.addingTimeInterval(-86_400 * 3), status: .ready)]
+        case "history":
+            m.history = [first,
+                         .init(id: UUID(), title: "Dispute packet", date: Self.reportDay.addingTimeInterval(-3_600), status: .generating),
+                         .init(id: UUID(), title: "Move-out report", date: Self.reportDay.addingTimeInterval(-86_400), status: .failed, canRetry: true),
+                         .init(id: UUID(), title: "Move-in report", date: Self.reportDay.addingTimeInterval(-86_400 * 2), status: .ready),
+                         .init(id: UUID(), title: "Move-in report", date: Self.reportDay.addingTimeInterval(-86_400 * 5), status: .failed),
+                         .init(id: UUID(), title: "Move-in report", date: Self.reportDay.addingTimeInterval(-86_400 * 9), status: .ready)]
+            m.others = [.init(id: "move_out", title: "Move-out report", detail: "Couldn't generate · Tap to retry"),
+                        .init(id: "dispute", title: "Dispute packet", detail: "Generating…", isGenerating: true)]
+        case "free":
+            m.history = [first]
+            m.others = [.init(id: "move_out", title: "Move-out report", detail: "Re-capture rooms before you return the keys.", isProLocked: true),
+                        .init(id: "dispute", title: "Dispute packet", detail: "Bundle your proof if your deposit is questioned.", isProLocked: true)]
+        case "no-rental":
+            m = ReportsHomeModel(rentalName: "Your rental", primary: .noRental, primaryTitle: "Go to Proof")
+        default:   // ready
+            m.history = [first]
+        }
+        return m
+    }
+
+    private func reportsScreen(_ state: String, atBottom: Bool = false) -> some View {
+        ReportsHomeView(model: reportsModel(state), initialScrollAnchor: atBottom ? .bottom : nil)
+            .environment(\.mmRootTabBarVisible, true)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                MMProofTabBarV4(selectedTab: .constant(.exports))
+            }
+    }
+
+    func testReportsReady() {
+        assertSnapshot(of: host(reportsScreen("ready")), as: Self.strategy(Self.pro), named: "pro")
+        assertSnapshot(of: host(reportsScreen("ready")), as: Self.strategy(Self.small), named: "small")
+        assertSnapshot(of: host(reportsScreen("ready")), as: Self.strategy(Self.proAX), named: "ax3")
+    }
+
+    func testReportsNoReportYet() {
+        assertSnapshot(of: host(reportsScreen("no-report")), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    func testReportsNeedsARecord() {
+        assertSnapshot(of: host(reportsScreen("needs-record")), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    func testReportsMoveInCompleteNotGenerated() {
+        assertSnapshot(of: host(reportsScreen("can-generate")), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    func testReportsGenerating() {
+        assertSnapshot(of: host(reportsScreen("generating")), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    func testReportsFailedKeepsLastReport() {
+        assertSnapshot(of: host(reportsScreen("failed")), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    func testReportsHistory() {
+        assertSnapshot(of: host(reportsScreen("history")), as: Self.strategy(Self.pro), named: "pro")
+        // The end of the scroll: the last row clears the floating dock.
+        assertSnapshot(of: host(reportsScreen("history", atBottom: true)), as: Self.strategy(Self.pro), named: "bottom")
+        assertSnapshot(of: host(reportsScreen("history", atBottom: true)), as: Self.strategy(Self.small), named: "small-bottom")
+    }
+
+    func testReportsFreePlan() {
+        assertSnapshot(of: host(reportsScreen("free")), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    func testReportsNoRental() {
+        assertSnapshot(of: host(reportsScreen("no-rental")), as: Self.strategy(Self.pro), named: "pro")
+    }
 }
