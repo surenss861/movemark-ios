@@ -107,6 +107,28 @@ final class VaultScreenshotUITests: XCTestCase {
         #endif
     }
 
+    /// The root dock on all three root surfaces, at rest and scrolled to the bottom.
+    func testRootTabsWithTheDock() throws {
+        let app = try signedIn()
+        sleep(3)
+        attach(app, "tab-proof")
+        scrollToBottom(app)
+        attach(app, "tab-proof-bottom")
+        for title in ["Reports", "Account"] {
+            app.buttons[title].firstMatch.tap()
+            sleep(3)
+            attach(app, "tab-\(title.lowercased())")
+            scrollToBottom(app)
+            attach(app, "tab-\(title.lowercased())-bottom")
+        }
+    }
+
+    /// Swipes until the scroll settles at its end (momentum included), so the shot shows the real bottom.
+    private func scrollToBottom(_ app: XCUIApplication) {
+        for _ in 0..<6 { app.swipeUp() }
+        sleep(3)
+    }
+
     private func env(_ key: String) -> String? { ProcessInfo.processInfo.environment[key] }
 
     private func signedIn() throws -> XCUIApplication {

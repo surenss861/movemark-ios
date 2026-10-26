@@ -126,14 +126,15 @@ enum MoveMarkTheme {
 
         /// Root tab rail content height (icons + labels; safe area is additional).
         static let rootTabBarContentHeight: CGFloat = 60
-        /// Floating evidence dock footprint (height + bottom inset above home indicator).
-        static let floatingDockHeight: CGFloat = 62
-        static let floatingDockBottomInset: CGFloat = 8
-        /// Scroll tail when the floating dock is visible. The dock is a bottom safe-area
-        /// inset, so this is breathing room above it, not clearance for it.
-        static let scrollTailRootTabChrome: CGFloat = 40
-        static let scrollTailReportsTabChrome: CGFloat = 40
-        static let scrollTailAccountTabChrome: CGFloat = 40
+        /// Floating root dock footprint (height + gap above the home indicator).
+        static let floatingDockHeight: CGFloat = 66
+        static let floatingDockBottomInset: CGFloat = 12
+        /// Scroll tail when the floating dock is visible. The shell's safe-area inset does not reach the
+        /// tabs' scroll views (measured: they see only the home indicator), so the tail clears the whole
+        /// dock and leaves breathing room above it.
+        static let scrollTailRootTabChrome: CGFloat = floatingDockHeight + floatingDockBottomInset + 28
+        static let scrollTailReportsTabChrome: CGFloat = scrollTailRootTabChrome
+        static let scrollTailAccountTabChrome: CGFloat = scrollTailRootTabChrome
         /// Pushed signed-in flows (room proof, property detail) without tab bar.
         static let scrollTailFocusedSignedIn: CGFloat = 180
         static let scrollTailFocusedFlow: CGFloat = 24

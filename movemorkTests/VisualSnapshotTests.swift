@@ -199,6 +199,33 @@ final class VisualSnapshotTests: XCTestCase {
         assertSnapshot(of: receiptScreen(photos: 4, issues: 1), as: Self.strategy(Self.proAX), named: "ax3")
     }
 
+    // MARK: Root dock (Proof · Reports · Account)
+
+    private func dockScreen(_ tab: RootTab, dark: Bool) -> some View {
+        // Content runs to the bottom so the floating dock is seen over it.
+        LinearGradient(colors: dark ? [Color(white: 0.10), Color(white: 0.06)] : [Color(white: 0.97), Color(white: 0.90)],
+                       startPoint: .top, endPoint: .bottom)
+            .ignoresSafeArea()
+            .safeAreaInset(edge: .bottom, spacing: 0) { MMProofTabBarV4(selectedTab: .constant(tab)) }
+    }
+
+    func testDockProofOnLight() {
+        assertSnapshot(of: host(dockScreen(.vaults, dark: false)), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    func testDockReportsOnDark() {
+        assertSnapshot(of: host(dockScreen(.exports, dark: true)), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    func testDockAccountOnDark() {
+        assertSnapshot(of: host(dockScreen(.account, dark: true)), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    func testDockLargestText() {
+        assertSnapshot(of: host(dockScreen(.exports, dark: false)), as: Self.strategy(Self.proAX), named: "ax3")
+        assertSnapshot(of: host(dockScreen(.vaults, dark: false)), as: Self.strategy(Self.small), named: "small")
+    }
+
     // MARK: Camera (the chrome around the preview; the simulator has no camera feed)
 
     func testCameraChromeWithOnePhotoPending() {
