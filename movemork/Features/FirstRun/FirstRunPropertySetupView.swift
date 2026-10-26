@@ -31,7 +31,9 @@ struct FirstRunPropertySetupView: View {
                     subtitle: moment.setupSubtitle
                 )
 
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 18) {
+                    MMSectionLabel("Rental")
+
                     if requiresOnboarding {
                         MMTextField(
                             title: "Your name",
@@ -56,14 +58,12 @@ struct FirstRunPropertySetupView: View {
                     )
 
                     DatePicker("Move-in date", selection: $moveInDate, displayedComponents: .date)
-                        .font(MoveMarkTheme.Typography.subheadline)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        .font(MoveMarkTheme.Typography.subheadlineMedium)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                         .tint(MoveMarkTheme.Colors.primary)
 
                     if !errorMessage.isEmpty {
-                        Text(errorMessage)
-                            .font(MoveMarkTheme.Typography.footnote)
-                            .foregroundStyle(.red.opacity(0.9))
+                        MMErrorBanner(message: errorMessage)
                     }
 
                     ZStack {
@@ -78,19 +78,10 @@ struct FirstRunPropertySetupView: View {
 
                         if isLoading {
                             ProgressView()
-                                .tint(MoveMarkTheme.Colors.primary)
+                                .tint(MoveMarkTheme.Colors.textOnPrimary)
                         }
                     }
                 }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(MoveMarkTheme.Colors.card.opacity(0.94))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.5), lineWidth: 0.75)
-                )
             }
             .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
             .padding(.top, 8)

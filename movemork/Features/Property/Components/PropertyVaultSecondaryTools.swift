@@ -2,7 +2,7 @@
 //  PropertyVaultSecondaryTools.swift
 //  movemork
 //
-//  Quiet command tiles: Maintenance, Move-out, Case builder, Exports.
+//  MoveMark — quiet lifecycle actions inside a rental workspace.
 //
 
 import SwiftUI
@@ -20,115 +20,109 @@ struct PropertyVaultSecondaryTools: View {
     let onDisputeBuilder: () -> Void
     let onExports: () -> Void
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 10),
-        GridItem(.flexible(), spacing: 10)
-    ]
-
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 10) {
-            compactTool(
-                title: "Maintenance",
-                subtitle: openIssuesCount > 0
-                    ? (openIssuesCount == 1 ? "1 open issue" : "\(openIssuesCount) open issues")
-                    : "Track property issues",
-                systemImage: "wrench.and.screwdriver.fill",
-                onTap: onMaintenance
-            )
+        VStack(alignment: .leading, spacing: 10) {
+            MMSectionLabel("Rental lifecycle")
 
-            compactTool(
-                title: "Move-out",
-                subtitle: completedRooms > 0
-                    ? "Compare before and after"
-                    : "Use with move-in proof",
-                systemImage: "arrow.2.circlepath",
-                onTap: onMoveOut
-            )
+            VStack(spacing: 0) {
+                actionRow(
+                    title: "Maintenance",
+                    subtitle: openIssuesCount > 0
+                        ? (openIssuesCount == 1 ? "1 open issue" : "\(openIssuesCount) open issues")
+                        : "Record repairs, problems, and follow-up",
+                    systemImage: "wrench.and.screwdriver",
+                    onTap: onMaintenance
+                )
 
-            compactTool(
-                title: "Case builder",
-                subtitle: readinessScore >= 70
-                    ? "Build dispute packet"
-                    : "Assemble captured proof",
-                systemImage: "doc.text.fill",
-                isPulsing: pulseDisputeTile,
-                onTap: onDisputeBuilder
-            )
+                divider
 
-            compactTool(
-                title: "Exports",
-                subtitle: exportsSubtitle,
-                systemImage: "square.and.arrow.up",
-                isPulsing: pulseExportsTile,
-                onTap: onExports
+                actionRow(
+                    title: "Move-out",
+                    subtitle: completedRooms > 0
+                        ? "Compare move-in proof with final condition"
+                        : "Build move-in proof before comparing condition",
+                    systemImage: "arrow.left.arrow.right",
+                    onTap: onMoveOut
+                )
+
+                divider
+
+                actionRow(
+                    title: "Case builder",
+                    subtitle: readinessScore >= 70
+                        ? "Assemble captured proof for a dispute"
+                        : "Keep building proof before you need it",
+                    systemImage: "doc.text",
+                    isHighlighted: pulseDisputeTile,
+                    onTap: onDisputeBuilder
+                )
+
+                divider
+
+                actionRow(
+                    title: "Reports",
+                    subtitle: exportsSubtitle,
+                    systemImage: "doc.richtext",
+                    isHighlighted: pulseExportsTile,
+                    onTap: onExports
+                )
+            }
+            .padding(.horizontal, 16)
+            .background(
+                RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.card, style: .continuous)
+                    .fill(MoveMarkTheme.Surface.raised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.card, style: .continuous)
+                    .stroke(MoveMarkTheme.Stroke.normal, lineWidth: 1)
             )
         }
     }
 
-    private func compactTool(
+    private var divider: some View {
+        Divider()
+            .overlay(MoveMarkTheme.Stroke.normal)
+    }
+
+    private func actionRow(
         title: String,
         subtitle: String,
         systemImage: String,
-        isPulsing: Bool = false,
+        isHighlighted: Bool = false,
         onTap: @escaping () -> Void
     ) -> some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(MoveMarkTheme.Colors.cardRaised.opacity(0.55))
-                            .frame(width: 36, height: 36)
+            HStack(alignment: .center, spacing: 14) {
+                Image(systemName: systemImage)
+                    .font(MoveMarkTheme.Typography.bodyMedium)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    .frame(width: 24, height: 24)
 
-                        Image(systemName: systemImage)
-                            .font(MoveMarkTheme.Typography.detailEmphasis)
-                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.88))
-                    }
-
-                    Spacer()
-
-                    if isPulsing {
-                        Circle()
-                            .fill(MoveMarkTheme.Colors.primary.opacity(0.9))
-                            .frame(width: 7, height: 7)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(MoveMarkTheme.Typography.subheadlineMedium)
+                        .font(MoveMarkTheme.Typography.rowTitle)
                         .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                        .lineLimit(1)
 
                     Text(subtitle)
-                        .font(MoveMarkTheme.Typography.caption)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.8))
-                        .lineLimit(2)
-                        .frame(minHeight: 30, alignment: .topLeading)
+                        .font(MoveMarkTheme.Typography.metadata)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+
+                Spacer(minLength: 8)
+
+                if isHighlighted {
+                    Circle()
+                        .fill(MoveMarkTheme.Colors.primary)
+                        .frame(width: 6, height: 6)
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(MoveMarkTheme.Typography.metadata)
+                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 104, maxHeight: 104, alignment: .topLeading)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.card.opacity(0.84))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(
-                        isPulsing
-                            ? MoveMarkTheme.Colors.primary.opacity(0.20)
-                            : MoveMarkTheme.Colors.cardStroke.opacity(0.42),
-                        lineWidth: isPulsing ? 1.0 : 0.8
-                    )
-            )
-            .shadow(
-                color: MoveMarkTheme.Colors.textPrimary.opacity(isPulsing ? 0.10 : 0.05),
-                radius: isPulsing ? 14 : 8,
-                y: isPulsing ? 6 : 3
-            )
-            .scaleEffect(isPulsing ? 1.012 : 1.0)
-            .animation(.easeInOut(duration: 0.22), value: isPulsing)
+            .padding(.vertical, MoveMarkTheme.Spacing.rowVertical)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

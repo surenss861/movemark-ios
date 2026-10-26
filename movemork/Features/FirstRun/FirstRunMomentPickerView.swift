@@ -58,7 +58,7 @@ struct FirstRunMomentPickerView: View {
             HStack(spacing: 14) {
                 Image(systemName: moment.iconName)
                     .font(MoveMarkTheme.Typography.subtitleLarge)
-                    .foregroundStyle(MoveMarkTheme.Colors.primary)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     .frame(width: 28)
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -84,11 +84,11 @@ struct FirstRunMomentPickerView: View {
             .padding(.vertical, 14)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.card.opacity(0.92))
+                    .fill(MoveMarkTheme.Surface.raised)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.45), lineWidth: 0.75)
+                    .stroke(MoveMarkTheme.Stroke.normal, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
