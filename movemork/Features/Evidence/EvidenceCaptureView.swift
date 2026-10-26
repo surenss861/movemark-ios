@@ -380,7 +380,7 @@ struct RoomPhotoPreviewTarget: Identifiable {
 }
 
 // MARK: - Edit evidence sheet
-private struct EditEvidenceSheet: View {
+struct EditEvidenceSheet: View {
     let evidence: EvidenceRecord
     let roomName: String
     let onSave: (String, String, [String], RoomRecord.ConditionRating) async -> String?
@@ -411,213 +411,50 @@ private struct EditEvidenceSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    MMCard(tone: .artifact, padding: 18, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 16) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Edit proof")
-                                    .font(MoveMarkTheme.Typography.cardTitle)
-                                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+            MMEvidenceSheetScaffold(title: "Edit proof") {
+                Text("Update the title, notes, issue tags and condition of this saved entry in \(roomName).")
+                    .mmFont(14.5)
+                    .foregroundStyle(MMInk.heroSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                                Text("Update the title, notes, issue markers, and condition for this saved entry.")
-                                    .font(MoveMarkTheme.Typography.footnote)
-                                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.82))
-                            }
-
-                            if evidence.photoCount > 0 {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Photos on file")
-                                        .font(MoveMarkTheme.Typography.caption)
-                                        .tracking(0.9)
-                                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                                        .textCase(.uppercase)
-
-                                    PhotoStripView(placeholderCount: evidence.photoCount)
-                                        .padding(12)
-                                        .background(MoveMarkTheme.Colors.fieldFill.opacity(0.65))
-                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.42), lineWidth: 0.8)
-                                        )
-                                }
-                            }
-
-                            VStack(alignment: .leading, spacing: 16) {
-                                MMTextField(title: "Entry title", placeholder: "e.g. North wall", text: $title)
-                                MMTextField(title: "Notes", placeholder: "What matters, where it is", text: $notes)
-
-                                issueTagPicker
-
-                                VStack(alignment: .leading, spacing: 10) {
-                                    Text("Condition")
-                                        .font(MoveMarkTheme.Typography.caption)
-                                        .tracking(0.9)
-                                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                                        .textCase(.uppercase)
-
-                                    Picker("Condition", selection: $condition) {
-                                        ForEach(RoomRecord.ConditionRating.allCases, id: \.self) { r in
-                                            Text(r.rawValue).tag(r)
-                                        }
-                                    }
-                                    .pickerStyle(.segmented)
-                                }
-                                .padding(12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.55))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.38), lineWidth: 0.8)
-                                )
-                            }
-                            .disabled(isSaving)
-
-                            if let localEditError {
-                                MMErrorBanner(
-                                    message: localEditError,
-                                    retryTitle: MMCopy.tryAgain,
-                                    onRetry: {
-                                        Task { await commitSave() }
-                                    }
-                                )
-                            }
-                        }
+                if evidence.photoCount > 0 {
+                    VStack(alignment: .leading, spacing: 8) {
+                        MMEvidenceCaption(title: "Photos on file", detail: evidence.photoCount == 1 ? "1 photo" : "\(evidence.photoCount) photos")
+                        MMEvidencePhotoStrip(placeholderCount: evidence.photoCount)
                     }
+                    .padding(.top, 20)
                 }
-                .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.vertical, 16)
-                .padding(.bottom, 88)
+
+                VStack(alignment: .leading, spacing: 20) {
+                    MMEvidenceField(title: "Entry title", placeholder: "e.g. North wall", text: $title)
+                    MMEvidenceField(title: "Notes", placeholder: "What matters, where it is", text: $notes, axis: .vertical)
+                    MMEvidenceTagPicker(tags: fixedIssueTags, selected: $selectedTags, onToggle: { MMHaptics.selection() })
+                    MMEvidenceConditionPicker(condition: $condition)
+                }
+                .disabled(isSaving)
+                .padding(.top, 22)
+
+                if let localEditError {
+                    MMEvidenceNotice(
+                        message: localEditError,
+                        actionTitle: MMCopy.tryAgain,
+                        action: { Task { await commitSave() } }
+                    )
+                    .padding(.top, 20)
+                }
+            } footer: {
+                MMPrimaryButton(title: isSaving ? "Saving…" : "Save changes", isLoading: isSaving, isDisabled: isSaving) {
+                    Task { await commitSave() }
+                }
             }
-            .mmEmeraldBackground()
-            .navigationTitle("Edit proof")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { onDismiss() }
                         .disabled(isSaving)
                 }
             }
-            .safeAreaInset(edge: .bottom) {
-                editSaveChrome
-            }
             .interactiveDismissDisabled(isSaving)
         }
-    }
-
-    private var issueTagPicker: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Issue tags")
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.92))
-
-                Text(
-                    selectedTags.isEmpty
-                        ? "Optional damage markers"
-                        : "\(selectedTags.count) selected"
-                )
-                .font(MoveMarkTheme.Typography.caption)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.68))
-            }
-
-            FlowLayout(spacing: 8) {
-                ForEach(fixedIssueTags, id: \.self) { tag in
-                    tagChip(tag)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func tagChip(_ tag: String) -> some View {
-        let isSelected = selectedTags.contains(tag)
-
-        Button {
-            MMHaptics.selection()
-            if isSelected {
-                selectedTags.remove(tag)
-            } else {
-                selectedTags.insert(tag)
-            }
-        } label: {
-            Text(tag)
-                .font(MoveMarkTheme.Typography.footnote)
-                .foregroundStyle(
-                    isSelected
-                        ? MoveMarkTheme.Colors.textPrimary
-                        : MoveMarkTheme.Colors.textSecondary.opacity(0.76)
-                )
-                .padding(.horizontal, 13)
-                .frame(height: 34)
-                .background(
-                    Capsule()
-                        .fill(
-                            isSelected
-                                ? MoveMarkTheme.Colors.primary.opacity(0.18)
-                                : MoveMarkTheme.Colors.cardRaised.opacity(0.5)
-                        )
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(
-                            isSelected
-                                ? MoveMarkTheme.Colors.primary.opacity(0.45)
-                                : MoveMarkTheme.Colors.cardStroke,
-                            lineWidth: 0.8
-                        )
-                )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var editSaveChrome: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(editPrimaryChromeLine)
-                    .font(MoveMarkTheme.Typography.footnoteEmphasis)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                Text("Updates this saved proof entry.")
-                    .font(MoveMarkTheme.Typography.tinyMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.78))
-            }
-
-            Spacer(minLength: 0)
-
-            Button {
-                Task { await commitSave() }
-            } label: {
-                Text(isSaving ? "Saving…" : "Save changes")
-                    .font(MoveMarkTheme.Typography.footnoteEmphasis)
-                .foregroundStyle(MoveMarkTheme.Colors.textOnPrimary)
-                .padding(.horizontal, 16)
-                .frame(height: 40)
-                .background(
-                    Capsule()
-                        .fill(MoveMarkTheme.Colors.primary.opacity(isSaving ? 0.72 : 1.0))
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(isSaving)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-        .background(MoveMarkTheme.Colors.card)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(MoveMarkTheme.Colors.cardStroke)
-                .frame(height: 0.5)
-        }
-        .shadow(color: MoveMarkTheme.Colors.textPrimary.opacity(0.06), radius: 8, y: -2)
-    }
-
-    private var editPrimaryChromeLine: String {
-        if isSaving { return "Saving changes…" }
-        return "Review changes"
     }
 
     private func commitSave() async {
@@ -639,7 +476,7 @@ private struct EditEvidenceSheet: View {
 }
 
 // MARK: - Append photos sheet
-private struct AppendPhotosSheet: View {
+struct AppendPhotosSheet: View {
     let entry: EvidenceRecord
     /// Returns the photos still needing a retry and a message; empty when everything was added.
     let onAdd: ([MMPendingEvidence]) async -> (pending: [MMPendingEvidence], message: String?)
@@ -656,177 +493,97 @@ private struct AppendPhotosSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    MMCard(tone: .artifact, padding: 18, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 16) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Add photos")
-                                    .font(MoveMarkTheme.Typography.cardTitle)
-                                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+            MMEvidenceSheetScaffold(title: "Add photos") {
+                Text("Add to “\(entry.title)”. New photos are saved with this entry’s record.")
+                    .mmFont(14.5)
+                    .foregroundStyle(MMInk.heroSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                                Text("Append to “\(entry.title)”. New shots upload with this entry’s record.")
-                                    .font(MoveMarkTheme.Typography.footnote)
-                                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.82))
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
+                if entry.photoCount > 0 {
+                    VStack(alignment: .leading, spacing: 8) {
+                        MMEvidenceCaption(title: "On this entry", detail: entry.photoCount == 1 ? "1 photo" : "\(entry.photoCount) photos")
+                        MMEvidencePhotoStrip(placeholderCount: entry.photoCount)
+                    }
+                    .padding(.top, 20)
+                }
 
-                            if entry.photoCount > 0 {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Current photos on entry")
-                                        .font(MoveMarkTheme.Typography.caption)
-                                        .tracking(0.9)
-                                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                                        .textCase(.uppercase)
+                PhotosPicker(selection: $selectedItems, maxSelectionCount: 20, matching: .images, preferredItemEncoding: .current) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 16))
+                            .frame(width: 24)
+                        Text(loadedImages.isEmpty ? "Choose photos from library" : "Change selection")
+                            .mmFont(16)
+                        Spacer(minLength: 8)
+                        Image(systemName: "plus")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(MMInk.heroSecondary)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, minHeight: MMMetrics.rowHeight)
+                    .background(MMInk.evidenceRaised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(MMInk.evidenceStroke, lineWidth: 1))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(MMLightPressStyle())
+                .disabled(isUploading || retryPending != nil)
+                .onChange(of: selectedItems) { _, new in
+                    loadItems(new)
+                }
+                .padding(.top, 22)
 
-                                    PhotoStripView(placeholderCount: entry.photoCount)
-                                        .padding(12)
-                                        .background(MoveMarkTheme.Colors.fieldFill.opacity(0.55))
-                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.38), lineWidth: 0.8)
-                                        )
-                                }
-                            }
+                if loadedImages.isEmpty {
+                    MMEvidenceNotice(
+                        message: "No new photos selected. Pick one or more — they’re saved as part of this entry.",
+                        tone: .info
+                    )
+                    .padding(.top, 14)
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        MMEvidenceCaption(title: "Ready to add", detail: loadedImages.count == 1 ? "1 new photo" : "\(loadedImages.count) new photos")
+                        MMEvidencePhotoStrip(images: loadedImages)
+                    }
+                    .padding(.top, 18)
+                }
 
-                            PhotosPicker(selection: $selectedItems, maxSelectionCount: 20, matching: .images, preferredItemEncoding: .current) {
-                                HStack(spacing: 10) {
-                                    Image(systemName: "photo.on.rectangle.angled")
-                                        .font(MoveMarkTheme.Typography.bodySmallEmphasis)
-                                    Text(loadedImages.isEmpty ? "Choose photos from library" : "\(loadedImages.count) new photo\(loadedImages.count == 1 ? "" : "s") selected")
-                                        .font(MoveMarkTheme.Typography.subheadlineMedium)
-                                }
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 52)
-                                .background(MoveMarkTheme.Colors.fieldFill.opacity(0.88))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.65), lineWidth: 0.9)
-                                )
-                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            }
-                            .disabled(isUploading || retryPending != nil)
-                            .onChange(of: selectedItems) { _, new in
-                                loadItems(new)
-                            }
-
-                            if loadedImages.isEmpty {
-                                MMCompactCallout(
-                                    systemImage: "photo.badge.plus",
-                                    title: "No new photos selected",
-                                    message: "Pick one or more images. They’ll upload as part of this proof entry."
-                                )
-                            } else {
-                                VStack(alignment: .leading, spacing: 10) {
-                                    HStack {
-                                        Text("\(loadedImages.count) new photo\(loadedImages.count == 1 ? "" : "s") ready")
-                                            .font(MoveMarkTheme.Typography.subheadlineMedium)
-                                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.92))
-
-                                        Spacer()
-
-                                        MMPill(text: "Ready to append", tone: .success)
-                                    }
-
-                                    PhotoStripView(images: loadedImages)
-                                        .padding(12)
-                                        .background(MoveMarkTheme.Colors.fieldFill.opacity(0.65))
-                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.4), lineWidth: 0.8)
-                                        )
-                                }
-                            }
-
-                            if let localError {
-                                MMErrorBanner(
-                                    message: localError,
-                                    retryTitle: MMCopy.tryAgain,
-                                    onRetry: { Task { await commitAppend() } }
-                                )
-                            }
-                        }
+                if let localError {
+                    MMEvidenceNotice(
+                        message: localError,
+                        actionTitle: MMCopy.tryAgain,
+                        action: { Task { await commitAppend() } }
+                    )
+                    .padding(.top, 14)
+                }
+            } footer: {
+                VStack(spacing: 8) {
+                    Text(bottomPrimaryLine)
+                        .mmFont(13)
+                        .foregroundStyle(MMInk.heroSecondary)
+                    MMPrimaryButton(
+                        title: isUploading ? "Adding…" : "Add to entry",
+                        isLoading: isUploading,
+                        isDisabled: loadedImages.isEmpty || isUploading
+                    ) {
+                        Task { await commitAppend() }
                     }
                 }
-                .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.vertical, 16)
-                .padding(.bottom, 88)
             }
-            .mmEmeraldBackground()
-            .navigationTitle("Add photos")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { onDismiss() }
                         .disabled(isUploading)
                 }
             }
-            .safeAreaInset(edge: .bottom) {
-                appendBottomChrome
-            }
             .interactiveDismissDisabled(isUploading)
         }
-    }
-
-    private var appendBottomChrome: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(bottomPrimaryLine)
-                    .font(MoveMarkTheme.Typography.footnoteEmphasis)
-                    .foregroundStyle(bottomPrimaryColor)
-
-                Text("Appends to this entry’s gallery.")
-                    .font(MoveMarkTheme.Typography.tinyMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.78))
-            }
-
-            Spacer(minLength: 0)
-
-            Button {
-                Task { await commitAppend() }
-            } label: {
-                Text(isUploading ? "Adding…" : "Add to entry")
-                    .font(MoveMarkTheme.Typography.footnoteEmphasis)
-                    .foregroundStyle(loadedImages.isEmpty ? MoveMarkTheme.Colors.textSecondary : MoveMarkTheme.Colors.textOnPrimary)
-                    .padding(.horizontal, 14)
-                    .frame(height: 40)
-                    .background(
-                        Capsule()
-                            .fill(
-                                loadedImages.isEmpty
-                                    ? MoveMarkTheme.Colors.cardRaised.opacity(0.6)
-                                    : MoveMarkTheme.Colors.primary.opacity(isUploading ? 0.72 : 1.0)
-                            )
-                    )
-            }
-            .buttonStyle(.plain)
-            .disabled(loadedImages.isEmpty || isUploading)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-        .background(MoveMarkTheme.Colors.card)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(MoveMarkTheme.Colors.cardStroke)
-                .frame(height: 0.5)
-        }
-        .shadow(color: MoveMarkTheme.Colors.textPrimary.opacity(0.06), radius: 8, y: -2)
     }
 
     private var bottomPrimaryLine: String {
         if isUploading { return "Adding photos…" }
         if loadedImages.isEmpty { return "Select photos to continue" }
-        return "\(loadedImages.count) photo\(loadedImages.count == 1 ? "" : "s") ready to append"
-    }
-
-    private var bottomPrimaryColor: Color {
-        if loadedImages.isEmpty, !isUploading {
-            return MoveMarkTheme.Colors.semanticWarning.opacity(0.95)
-        }
-        return MoveMarkTheme.Colors.textPrimary
+        return "\(loadedImages.count) photo\(loadedImages.count == 1 ? "" : "s") ready to add"
     }
 
     private func commitAppend() async {

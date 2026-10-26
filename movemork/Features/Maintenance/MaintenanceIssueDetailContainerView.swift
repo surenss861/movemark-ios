@@ -16,31 +16,42 @@ struct MaintenanceIssueDetailContainerView: View {
 
     private let repo = MaintenanceRepository()
 
+    init(issueID: UUID, initialIssue: MaintenanceIssueRow? = nil, initialError: String? = nil) {
+        self.issueID = issueID
+        _issue = State(initialValue: initialIssue)
+        _loadError = State(initialValue: initialError)
+    }
+
     var body: some View {
         Group {
             if let issue {
                 MaintenanceIssueDetailView(issue: issue)
             } else if let loadError {
-                VStack(spacing: 12) {
-                    Image(systemName: "wrench.and.screwdriver")
-                        .font(.largeTitle)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    Text("Issue not found")
-                        .font(MoveMarkTheme.Typography.cardTitle)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                    Text(loadError)
-                        .font(MoveMarkTheme.Typography.subheadline)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        .multilineTextAlignment(.center)
+                MMScreen(title: "Issue not found", isPushed: true) {
+                    MMEmptyBlock(
+                        icon: "wrench.and.screwdriver",
+                        title: "This issue isn't available",
+                        message: loadError
+                    )
+                    .frame(minHeight: 420, alignment: .top)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ProgressView()
-                    .tint(MoveMarkTheme.Colors.primary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                MMScreen(title: "Maintenance issue", isPushed: true) {
+                    HStack(spacing: 10) {
+                        ProgressView().tint(MMInk.secondary)
+                        Text("Loading issue…").mmFont(14).foregroundStyle(MMInk.secondary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 420, alignment: .top)
+                    .padding(.top, 40)
+                    .accessibilityElement(children: .combine)
+                }
             }
         }
-        .task { await loadIssue() }
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            guard issue == nil, loadError == nil else { return }
+            await loadIssue()
+        }
     }
 
     private func loadIssue() async {

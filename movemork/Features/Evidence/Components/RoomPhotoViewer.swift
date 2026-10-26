@@ -32,7 +32,7 @@ struct RoomPhotoViewer: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            MMInk.evidence.ignoresSafeArea()
 
             TabView(selection: $selection) {
                 ForEach(photos) { photo in
@@ -47,18 +47,23 @@ struct RoomPhotoViewer: View {
                 HStack {
                     Button(action: onClose) {
                         Image(systemName: "xmark")
-                            .font(MoveMarkTheme.Typography.subheadlineMedium)
+                            .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(width: 44, height: 44)
-                            .background(.ultraThinMaterial, in: Circle())
+                            .background(MMInk.evidence.opacity(0.72), in: Circle())
+                            .overlay(Circle().strokeBorder(MMInk.evidenceStroke, lineWidth: 0.75))
                     }
                     .accessibilityLabel("Close")
                     Spacer()
                     Text("\(index + 1) of \(photos.count)")
-                        .font(MoveMarkTheme.Typography.subheadlineMedium)
+                        .mmFont(15, .medium)
                         .foregroundStyle(.white)
                         .monospacedDigit()
                         .contentTransition(.numericText())
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 32)
+                        .background(MMInk.evidence.opacity(0.72), in: Capsule())
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
                     Spacer()
                     Color.clear.frame(width: 44, height: 44)
                 }
@@ -98,7 +103,7 @@ private struct ViewerPage: View {
     let resolvePhotoURL: (String) async -> URL?
 
     var body: some View {
-        MMEvidenceImage(path: photo.filePath, resolve: resolvePhotoURL, placeholder: .black, fit: true)
+        MMEvidenceImage(path: photo.filePath, resolve: resolvePhotoURL, placeholder: MMInk.evidence, fit: true)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityLabel("Evidence photo")
     }
@@ -111,7 +116,7 @@ private struct ViewerThumb: View {
 
     var body: some View {
         MMEvidenceImage(path: photo.thumbnailPath ?? photo.filePath, resolve: resolvePhotoURL,
-                        size: CGSize(width: 52, height: 52), placeholder: Color.white.opacity(0.08))
+                        size: CGSize(width: 52, height: 52), placeholder: MMInk.evidenceRaised)
             .frame(width: 52, height: 52)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(

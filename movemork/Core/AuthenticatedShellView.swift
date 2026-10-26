@@ -32,8 +32,6 @@ struct AuthenticatedShellView: View {
                         MoveOutRoomDetailDestinationView(roomID: roomID, path: $path)
                     case .exports:
                         ExportHistoryView()
-                    case .account:
-                        AccountView()
                     }
                 }
         }

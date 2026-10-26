@@ -146,7 +146,7 @@ struct RoomEvidenceBody: View {
                         if isLoadingOlder { ProgressView().controlSize(.small) }
                         Text(isLoadingOlder ? "Loading older entries…" : "Show older entries (\((totalEntries ?? ordered.count) - ordered.count) more)")
                             .font(MoveMarkTheme.Typography.subheadlineMedium)
-                            .foregroundStyle(MoveMarkTheme.Colors.primary)
+                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     }
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     .contentShape(Rectangle())

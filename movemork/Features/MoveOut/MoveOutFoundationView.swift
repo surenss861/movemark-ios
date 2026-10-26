@@ -37,40 +37,51 @@ struct MoveOutFoundationView: View {
 
     private var apiBaseURL: String? { MoveMarkBackendConfig.apiBaseURLString }
 
+    init(
+        path: Binding<[AppRoute]>,
+        initialChecklist: MoveOutChecklistRow? = nil,
+        initiallyExporting: Bool = false,
+        initialError: String? = nil,
+        initialQueuedNotice: String? = nil
+    ) {
+        _path = path
+        _checklist = State(initialValue: initialChecklist)
+        _isExporting = State(initialValue: initiallyExporting)
+        _errorMessage = State(initialValue: initialError)
+        _queuedNotice = State(initialValue: initialQueuedNotice)
+    }
+
     var body: some View {
-        ZStack {
-            MoveMarkTheme.Colors.appBackground.ignoresSafeArea()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    header
-
-                    moveOutReadinessSummary
-
-                    checklistCard
-
-                    roomsSection
-
-                    exportCard
-
-                    if let errorMessage {
-                        MMErrorBanner(
-                            message: errorMessage,
-                            retryTitle: MMCopy.tryAgain,
-                            onRetry: {
-                                if lastErrorFromExport {
-                                    exportMoveOutReport()
-                                } else {
-                                    Task { await loadChecklist() }
-                                }
-                            }
-                        )
+        MMScreen(
+            eyebrow: propertyStore.currentProperty.map { $0.title.isEmpty ? $0.addressLine1 : $0.title },
+            title: "Move-out",
+            subtitle: "Re-capture each room before you return the keys. Your before-and-after is what protects your deposit.",
+            isPushed: true
+        ) {
+            if let errorMessage {
+                MMNotice(
+                    message: errorMessage,
+                    actionTitle: MMCopy.tryAgain,
+                    action: {
+                        if lastErrorFromExport {
+                            exportMoveOutReport()
+                        } else {
+                            Task { await loadChecklist() }
+                        }
                     }
-                }
-                .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.top, 22)
-                .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
+                )
+                .padding(.bottom, 18)
             }
+
+            moveOutReadinessSummary
+
+            roomsSection
+
+            checklistSection
+                .padding(.top, 26)
+
+            exportSection
+                .padding(.top, 30)
         }
         .sheet(isPresented: $showPaywall) {
             ProPaywallView(
@@ -81,52 +92,36 @@ struct MoveOutFoundationView: View {
         .task { await loadChecklist() }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Move-out")
-                .font(MoveMarkTheme.Typography.screenTitle)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-            Text("Re-capture each room at move-out. Your before-and-after record is what protects you if the landlord disputes condition or deposit.")
-                .font(MoveMarkTheme.Typography.body)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-
-            Rectangle()
-                .fill(MoveMarkTheme.Colors.primary)
-                .frame(width: 38, height: 3)
-                .clipShape(Capsule())
-        }
-    }
-
-    private var checklistCard: some View {
-        MMCard {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    SectionLabel(text: "Closeout proof")
-                    Spacer()
-
-                    if let checklist {
-                        MMPill(
-                            text: "\(checklist.completedCount) of 6 complete",
-                            tone: checklist.completedCount == 6 ? .success : .warning
-                        )
-                    }
-                }
-
-                Text("Check off as you go. Each step adds move-out proof.")
-                    .font(MoveMarkTheme.Typography.subheadline)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-
+    @ViewBuilder
+    private var checklistSection: some View {
+        if let checklist {
+            MMGroup(title: "Closeout checklist · \(checklist.completedCount) of 6", footer: "Check off as you go. Each step adds to your move-out record.") {
                 checklistToggle("Cabinets cleared", keyPath: \.cabinetsClear)
+                MMRowDivider()
                 checklistToggle("Appliances cleaned", keyPath: \.appliancesClean)
+                MMRowDivider()
                 checklistToggle("Keys returned", keyPath: \.keysReturned)
+                MMRowDivider()
                 checklistToggle("Utilities cancelled", keyPath: \.utilitiesCancelled)
+                MMRowDivider()
                 checklistToggle("Cleaning receipt uploaded", keyPath: \.cleaningReceiptUploaded)
+                MMRowDivider()
                 checklistToggle("Forwarding address noted", keyPath: \.forwardingAddressNoted)
+            }
+        } else if isLoadingChecklist {
+            MMGroup(title: "Closeout checklist") {
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small).tint(MMInk.secondary)
+                    Text("Loading checklist…").mmFont(15).foregroundStyle(MMInk.secondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .frame(minHeight: MMMetrics.rowHeight)
             }
         }
     }
 
+    @ViewBuilder
     private var moveOutReadinessSummary: some View {
         let roomsWithMoveOut = rooms.filter { !$0.moveOutEvidence.isEmpty }.count
         let totalRooms = rooms.count
@@ -134,169 +129,95 @@ struct MoveOutFoundationView: View {
         let checklistTotal = 6
         let allRoomsDocumented = totalRooms > 0 && roomsWithMoveOut == totalRooms
 
-        return Group {
-            if totalRooms > 0 || checklistDone > 0 {
-                MMCard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Your move-out defense")
-                                .font(MoveMarkTheme.Typography.cardTitle)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            Spacer()
-                            if allRoomsDocumented && checklistDone == checklistTotal {
-                                MMPill(text: "Ready to export", tone: .success)
-                            }
-                        }
-                        Text("Document every room at move-out so you have a clear before-and-after. Export when ready.")
-                            .font(MoveMarkTheme.Typography.subheadline)
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        HStack(spacing: 16) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Rooms with move-out proof")
-                                    .font(MoveMarkTheme.Typography.caption)
-                                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                                Text("\(roomsWithMoveOut) of \(totalRooms)")
-                                    .font(MoveMarkTheme.Typography.sectionTitle)
-                                    .foregroundStyle(roomsWithMoveOut == totalRooms ? MoveMarkTheme.Colors.primary : MoveMarkTheme.Colors.textPrimary)
-                            }
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Closeout checklist")
-                                    .font(MoveMarkTheme.Typography.caption)
-                                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                                Text("\(checklistDone) of \(checklistTotal)")
-                                    .font(MoveMarkTheme.Typography.sectionTitle)
-                                    .foregroundStyle(checklistDone == checklistTotal ? MoveMarkTheme.Colors.primary : MoveMarkTheme.Colors.textPrimary)
-                            }
-                        }
-                    }
+        if totalRooms > 0 || checklistDone > 0 {
+            MMPanel {
+                HStack(alignment: .top, spacing: 16) {
+                    summaryStat("Rooms with move-out proof", "\(roomsWithMoveOut) of \(totalRooms)")
+                    Rectangle().fill(MMInk.separator).frame(width: 0.75)
+                    summaryStat("Closeout checklist", "\(checklistDone) of \(checklistTotal)")
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                if allRoomsDocumented && checklistDone == checklistTotal {
+                    MMStatusLabel(text: "Ready to export", tone: .done).padding(.top, 14)
                 }
             }
+            .padding(.bottom, 26)
         }
     }
 
+    private func summaryStat(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(value).mmFont(22, .semibold).foregroundStyle(MMInk.text).monospacedDigit()
+            Text(label).mmFont(13).foregroundStyle(MMInk.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
     private var roomsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            MMSectionHeader(
-                title: "Before & after by room",
-                subtitle: "Compare move-in baseline to move-out. Capture any room that’s missing move-out proof."
+        if rooms.isEmpty {
+            MMEmptyBlock(
+                icon: "arrow.left.arrow.right",
+                title: "Add rooms in Room proof first",
+                message: "Move-out compares each room to your move-in baseline. Create rooms and capture move-in proof, then come back for move-out photos and notes."
             )
-
-            if rooms.isEmpty {
-                MMEmptyState(
-                    systemImage: "arrow.left.arrow.right.circle",
-                    title: "Add rooms in Room proof first",
-                    message: "Move-out compares each room to your move-in baseline. Create rooms and capture move-in proof, then return here for move-out photos and notes."
-                )
-            }
-
-            ForEach(rooms) { room in
-                Button {
-                    path.append(.moveOutRoomDetail(roomID: room.id))
-                } label: {
-                    beforeAfterRoomCard(room: room)
+        } else {
+            MMGroup(title: "Before & after by room", footer: "Compare each room's move-in baseline to its move-out proof.") {
+                ForEach(Array(rooms.enumerated()), id: \.element.id) { index, room in
+                    if index > 0 { MMRowDivider() }
+                    Button {
+                        path.append(.moveOutRoomDetail(roomID: room.id))
+                    } label: {
+                        beforeAfterRoomRow(room: room)
+                    }
+                    .buttonStyle(MMLightPressStyle())
                 }
-                .buttonStyle(.plain)
             }
         }
     }
 
-    private func beforeAfterRoomCard(room: RoomRecord) -> some View {
+    private func beforeAfterRoomRow(room: RoomRecord) -> some View {
         let latestMoveIn = room.evidence.first
         let latestMoveOut = room.moveOutEvidence.first
-        let moveInEntries = room.moveInEntryTotal
-        let moveInPhotos = room.moveInPhotoTotal
-        let moveOutEntries = room.moveOutEntryTotal
-        let moveOutPhotos = room.moveOutPhotoTotal
         let hasMoveIn = !room.evidence.isEmpty
         let hasMoveOut = !room.moveOutEvidence.isEmpty
         let conditionDeltaText = conditionDelta(latestMoveIn: latestMoveIn, latestMoveOut: latestMoveOut)
 
-        return MMCard(tone: .artifact) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text(room.name)
-                        .font(MoveMarkTheme.Typography.cardTitle)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                    Spacer()
-                    if hasMoveOut {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(MoveMarkTheme.Typography.screenSubtitle)
-                            .foregroundStyle(MoveMarkTheme.Colors.semanticSuccess)
-                    }
-                }
-
-                HStack(alignment: .top, spacing: 16) {
-                    beforeAfterBlock(
-                        label: "Move-in",
-                        entries: moveInEntries,
-                        photos: moveInPhotos,
-                        latestDate: latestMoveIn?.createdAt,
-                        condition: latestMoveIn?.condition,
-                        isEmpty: !hasMoveIn
-                    )
-                    Rectangle()
-                        .fill(MoveMarkTheme.Colors.cardStroke)
-                        .frame(width: 1, height: 52)
-                    beforeAfterBlock(
-                        label: "Move-out",
-                        entries: moveOutEntries,
-                        photos: moveOutPhotos,
-                        latestDate: latestMoveOut?.createdAt,
-                        condition: latestMoveOut?.condition,
-                        isEmpty: !hasMoveOut
-                    )
-                }
-
+        return HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(room.name).mmFont(16, .medium).foregroundStyle(MMInk.text)
+                Text("Move-in · \(stageSummary(entries: room.moveInEntryTotal, photos: room.moveInPhotoTotal, hasProof: hasMoveIn, condition: latestMoveIn?.condition))")
+                    .mmFont(13).foregroundStyle(MMInk.secondary)
+                Text("Move-out · \(stageSummary(entries: room.moveOutEntryTotal, photos: room.moveOutPhotoTotal, hasProof: hasMoveOut, condition: latestMoveOut?.condition))")
+                    .mmFont(13).foregroundStyle(MMInk.secondary)
                 if !conditionDeltaText.isEmpty {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.left.arrow.right")
-                            .font(MoveMarkTheme.Typography.tinyMedium)
-                        Text(conditionDeltaText)
-                            .font(MoveMarkTheme.Typography.footnote)
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    }
+                    Text(conditionDeltaText).mmFont(13).foregroundStyle(MMInk.text.opacity(0.8))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-
-                Text(hasMoveOut ? "Tap to add more move-out proof or review." : "Tap to capture move-out proof — required for a defensible before-and-after.")
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                MMStatusLabel(text: hasMoveOut ? "Move-out captured" : "Needs move-out proof", tone: hasMoveOut ? .done : .open)
+                    .padding(.top, 4)
             }
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(MMInk.secondary.opacity(0.6))
+                .padding(.top, 4)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(hasMoveOut ? "Add more move-out proof or review." : "Capture move-out proof.")
+        .accessibilityAddTraits(.isButton)
     }
 
-    private func beforeAfterBlock(
-        label: String,
-        entries: Int,
-        photos: Int,
-        latestDate: Date?,
-        condition: RoomRecord.ConditionRating?,
-        isEmpty: Bool
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label)
-                .font(MoveMarkTheme.Typography.caption)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-            if isEmpty {
-                Text("No proof")
-                    .font(MoveMarkTheme.Typography.subheadline)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-            } else {
-                Text("\(entries) \(entries == 1 ? "entry" : "entries"), \(photos) photos")
-                    .font(MoveMarkTheme.Typography.subheadlineMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                if let date = latestDate {
-                    Text("Latest \(date.formatted(date: .abbreviated, time: .omitted))")
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                }
-                if let c = condition {
-                    Text("Condition \(c.conditionMeterValue)/5")
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    private func stageSummary(entries: Int, photos: Int, hasProof: Bool, condition: RoomRecord.ConditionRating?) -> String {
+        guard hasProof else { return "No proof" }
+        var line = "\(entries) \(entries == 1 ? "entry" : "entries"), \(photos) \(photos == 1 ? "photo" : "photos")"
+        if let condition { line += " · \(condition.conditionMeterValue)/5" }
+        return line
     }
 
     private func conditionDelta(latestMoveIn: EvidenceRecord?, latestMoveOut: EvidenceRecord?) -> String {
@@ -314,31 +235,34 @@ struct MoveOutFoundationView: View {
         return "Condition \(inVal)/5 → \(outVal)/5."
     }
 
-    private var exportCard: some View {
-        MMCard {
-            VStack(alignment: .leading, spacing: 14) {
-                SectionLabel(text: "Export")
+    private var exportSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            MMSectionTitle(title: "Move-out report")
+            Text("Your before-and-after room proof in one dated PDF. Keep it, share it, or attach it to a dispute.")
+                .mmFont(14)
+                .foregroundStyle(MMInk.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 4)
 
-                Text("Make a move-out report with your before-and-after room proof. Keep it, share it, or attach it to a dispute.")
-                    .font(MoveMarkTheme.Typography.subheadline)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+            if let queuedNotice {
+                MMNotice(message: queuedNotice, tone: .success).padding(.top, 16)
+            }
 
-                ZStack {
-                    MMButton(
-                        title: "Export move-out report",
-                        action: handleMoveOutExportTap,
-                        isDisabled: isExporting || roomsWithMoveOutPhotos == 0
-                    )
-                    .opacity(isExporting ? 0.6 : 1.0)
+            MMPrimaryButton(
+                title: isExporting ? "Queuing report…" : "Export move-out report",
+                isLoading: isExporting,
+                isDisabled: isExporting || roomsWithMoveOutPhotos == 0,
+                action: handleMoveOutExportTap
+            )
+            .padding(.top, 18)
 
-                    if isExporting {
-                        ProgressView().tint(MoveMarkTheme.Colors.primary)
-                    }
-                }
-
+            if queuedNotice == nil {
                 Text(moveOutExportFootnote)
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    .mmFont(12.5)
+                    .foregroundStyle(MMInk.secondary)
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 10)
             }
         }
     }
@@ -381,10 +305,12 @@ struct MoveOutFoundationView: View {
                 }
             )) {
                 Text(title)
-                    .font(MoveMarkTheme.Typography.subheadlineMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                    .mmFont(16)
+                    .foregroundStyle(MMInk.text)
             }
-            .tint(MoveMarkTheme.Colors.primary)
+            .tint(MMInk.text)
+            .padding(.horizontal, 16)
+            .frame(minHeight: MMMetrics.rowHeight)
         }
     }
 

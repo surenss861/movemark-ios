@@ -142,7 +142,7 @@ struct AccountView: View {
     }
 }
 
-private struct EditNameSheet: View {
+struct EditNameSheet: View {
     let currentName: String
     let onSave: (String) throws -> Void
     @Environment(\.dismiss) private var dismiss
@@ -163,18 +163,16 @@ private struct EditNameSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                MMTextField(title: "Full name", placeholder: "Enter your full name", text: $name)
+            MMSheetScaffold(title: "Edit name") {
+                MMField(title: "Full name", placeholder: "Enter your full name", text: $name,
+                        contentType: .name, autocapitalization: .words)
+                    .padding(.top, 12)
 
                 if let errorMessage {
-                    Text(errorMessage)
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.semanticDanger.opacity(0.92))
+                    MMNotice(message: errorMessage)
+                        .padding(.top, 18)
                 }
             }
-            .padding()
-            .navigationTitle("Edit name")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
