@@ -2,7 +2,7 @@
 //  EditPropertyView.swift
 //  movemork
 //
-//  MoveMark — Edit active property. Sheet from Vault; save to DB and refresh.
+//  MoveMark — edit rental identity and lease metadata without touching proof.
 //
 
 import SwiftUI
@@ -33,6 +33,8 @@ struct EditPropertyView: View {
     @State private var errorMessage = ""
     @State private var isLoading = false
 
+    private let supportedCountries = ["CA", "US", "GB", "AU", "NZ"]
+
     init(property: PropertyRecord) {
         self.property = property
         _name = State(initialValue: property.title.isEmpty ? property.addressLine1 : property.title)
@@ -41,6 +43,7 @@ struct EditPropertyView: View {
         _city = State(initialValue: RentalLocation.meaningful(property.city) ?? "")
         _region = State(initialValue: RentalLocation.meaningful(property.provinceState) ?? "")
         _postalCode = State(initialValue: property.postalCode)
+
         let storedCountry = property.country.isEmpty ? "CA" : property.country
         let fixedOptions = ["CA", "US", "GB", "AU", "NZ"]
         if fixedOptions.contains(storedCountry) {
@@ -50,6 +53,7 @@ struct EditPropertyView: View {
             _selectedCountryOption = State(initialValue: "Other")
             _customCountry = State(initialValue: storedCountry)
         }
+
         _moveInDate = State(initialValue: property.moveInDate)
         _leaseStartDate = State(initialValue: property.leaseStartDate ?? property.moveInDate)
         _leaseEndDate = State(initialValue: property.leaseEndDate)
@@ -63,8 +67,6 @@ struct EditPropertyView: View {
     private var countryValue: String {
         selectedCountryOption == "Other" ? customCountry : selectedCountryOption
     }
-
-    private let supportedCountries = ["CA", "US", "GB", "AU", "NZ"]
 
     private var input: CreatePropertyInput {
         CreatePropertyInput(
@@ -91,99 +93,78 @@ struct EditPropertyView: View {
             MoveMarkTheme.Colors.appBackground.ignoresSafeArea()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Edit property")
-                                .font(MoveMarkTheme.Typography.subtitleLarge)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            Text("Changes are saved to this property. Rooms and evidence are unchanged.")
-                                .font(MoveMarkTheme.Typography.detail)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        }
-                    }
+                VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.sectionGap) {
+                    header
 
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Property")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    formGroup("Rental") {
+                        MMTextField(
+                            title: "Rental name",
+                            placeholder: "My Apartment",
+                            text: $name
+                        )
+                        MMTextField(title: "Street address", placeholder: "123 Main St", text: $addressLine1)
+                        MMTextField(title: "Unit / apartment", placeholder: "Optional", text: $unit)
+                        MMTextField(title: "City", placeholder: "Toronto", text: $city)
+                        MMTextField(title: "Province / state", placeholder: "ON", text: $region)
+                        MMTextField(title: "Postal / ZIP code", placeholder: "M5V 1A1", text: $postalCode)
+
+                        Picker("Country", selection: $selectedCountryOption) {
+                            ForEach(supportedCountries + ["Other"], id: \.self) { option in
+                                Text(option).tag(option)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .tint(MoveMarkTheme.Colors.textPrimary)
+
+                        if selectedCountryOption == "Other" {
                             MMTextField(
-                                title: "Nickname or label",
-                                placeholder: "e.g. Downtown Condo or 123 Main St",
-                                text: $name
+                                title: "Country code",
+                                placeholder: "e.g. FR, DE",
+                                text: $customCountry
                             )
+                            .textInputAutocapitalization(.characters)
                         }
                     }
 
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Address")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(title: "Address line 1", placeholder: "123 Main St", text: $addressLine1)
-                            MMTextField(title: "Unit / apartment", placeholder: "Optional", text: $unit)
-                            MMTextField(title: "City", placeholder: "San Francisco", text: $city)
-                            MMTextField(title: "Province / state", placeholder: "CA", text: $region)
-                            MMTextField(title: "Postal / ZIP code", placeholder: "94102", text: $postalCode)
-                        }
+                    formGroup("Dates") {
+                        dateRow("Move-in date", selection: $moveInDate)
+                        dateRow("Lease start", selection: $leaseStartDate)
+                        dateRow("Lease end", selection: $leaseEndDate)
                     }
 
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Move-in & lease")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            DatePicker("Move-in date", selection: $moveInDate, displayedComponents: .date)
-                                .colorScheme(.light)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            DatePicker("Lease start", selection: $leaseStartDate, displayedComponents: .date)
-                                .colorScheme(.light)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            DatePicker("Lease end", selection: $leaseEndDate, displayedComponents: .date)
-                                .colorScheme(.light)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                        }
+                    formGroup("Landlord") {
+                        MMTextField(
+                            title: "Name",
+                            placeholder: "Property manager or landlord",
+                            text: $landlordName
+                        )
+                        MMTextField(
+                            title: "Email",
+                            placeholder: "Optional",
+                            text: $landlordEmail,
+                            keyboardType: .emailAddress
+                        )
+                        MMTextField(
+                            title: "Phone",
+                            placeholder: "Optional",
+                            text: $landlordPhone,
+                            keyboardType: .phonePad
+                        )
                     }
 
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Landlord")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(title: "Name", placeholder: "Property manager or landlord", text: $landlordName)
-                            MMTextField(title: "Email", placeholder: "Optional", text: $landlordEmail, keyboardType: .emailAddress)
-                            MMTextField(title: "Phone", placeholder: "Optional", text: $landlordPhone, keyboardType: .phonePad)
-                        }
-                    }
-
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Financials")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(title: "Deposit amount", placeholder: "e.g. 1500", text: $depositAmount, keyboardType: .decimalPad)
-                            MMTextField(title: "Rent amount (optional)", placeholder: "e.g. 2200", text: $rentAmount, keyboardType: .decimalPad)
-                        }
-                    }
-
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Location")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            Picker("Country", selection: $selectedCountryOption) {
-                                ForEach(supportedCountries + ["Other"], id: \.self) { option in
-                                    Text(option).tag(option)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            if selectedCountryOption == "Other" {
-                                MMTextField(title: "Country code", placeholder: "e.g. FR, DE", text: $customCountry)
-                                    .textInputAutocapitalization(.characters)
-                            }
-                        }
+                    formGroup("Money") {
+                        MMTextField(
+                            title: "Deposit amount",
+                            placeholder: "e.g. 1500",
+                            text: $depositAmount,
+                            keyboardType: .decimalPad
+                        )
+                        MMTextField(
+                            title: "Rent amount",
+                            placeholder: "Optional",
+                            text: $rentAmount,
+                            keyboardType: .decimalPad
+                        )
                     }
 
                     if !errorMessage.isEmpty {
@@ -193,25 +174,75 @@ struct EditPropertyView: View {
                     ZStack {
                         MMButton(
                             title: "Save changes",
-                            action: { submit() },
+                            action: submit,
+                            kind: .primary,
                             isDisabled: input.validationError != nil || isLoading
                         )
-                        .opacity(isLoading ? 0.6 : 1.0)
-                        .disabled(isLoading)
+                        .opacity(isLoading ? 0.6 : 1)
 
                         if isLoading {
                             ProgressView()
-                                .tint(MoveMarkTheme.Colors.primary)
+                                .tint(MoveMarkTheme.Colors.textOnPrimary)
                         }
                     }
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.top, 24)
-                .padding(.bottom, 32)
+                .padding(.top, 22)
+                .padding(.bottom, 36)
             }
         }
-        .navigationTitle("")
+        .navigationTitle("Edit rental")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("RENTAL DETAILS")
+                .font(MoveMarkTheme.Typography.sectionLabel)
+                .tracking(0.9)
+                .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+
+            Text("Update the rental, not the proof.")
+                .font(MoveMarkTheme.Typography.pageTitle)
+                .tracking(-0.8)
+                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("Rooms, evidence, maintenance cases, and reports stay unchanged when you edit these details.")
+                .font(MoveMarkTheme.Typography.body)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder
+    private func formGroup<Content: View>(
+        _ title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MMSectionLabel(title)
+
+            VStack(alignment: .leading, spacing: 14) {
+                content()
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.card, style: .continuous)
+                    .fill(MoveMarkTheme.Surface.raised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.card, style: .continuous)
+                    .stroke(MoveMarkTheme.Stroke.normal, lineWidth: 1)
+            )
+        }
+    }
+
+    private func dateRow(_ title: String, selection: Binding<Date>) -> some View {
+        DatePicker(title, selection: selection, displayedComponents: .date)
+            .font(MoveMarkTheme.Typography.subheadlineMedium)
+            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+            .tint(MoveMarkTheme.Colors.primary)
     }
 
     private func submit() {
@@ -219,22 +250,27 @@ struct EditPropertyView: View {
             errorMessage = msg
             return
         }
+
         guard let userId = sessionManager.userId else {
             errorMessage = MoveMarkFlowMessage.notSignedInShort
             return
         }
-        if isLoading { return }
+
+        guard !isLoading else { return }
 
         errorMessage = ""
         isLoading = true
 
         Task { @MainActor in
             defer { isLoading = false }
+
             do {
                 try await propertyStore.updateProperty(propertyId: property.id, input: input, userId: userId)
+                MMHaptics.success()
                 dismiss()
             } catch {
                 errorMessage = MoveMarkFlowMessage.propertyUpdateFailed(error)
+                MMHaptics.error()
             }
         }
     }
