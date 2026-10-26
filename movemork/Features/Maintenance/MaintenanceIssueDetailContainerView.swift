@@ -27,18 +27,18 @@ struct MaintenanceIssueDetailContainerView: View {
             if let issue {
                 MaintenanceIssueDetailView(issue: issue)
             } else if let loadError {
-                MMScreen(title: "Issue not found", isPushed: true) {
+                MMScreen(eyebrow: "Maintenance case", title: "Case not found", isPushed: true) {
                     MMEmptyBlock(
                         icon: "wrench.and.screwdriver",
-                        title: "This issue isn't available",
+                        title: "This case isn't available",
                         message: loadError
                     )
                 }
             } else {
-                MMScreen(title: "Maintenance issue", isPushed: true) {
+                MMScreen(eyebrow: "Maintenance case", title: "Opening case", isPushed: true) {
                     HStack(spacing: 10) {
                         ProgressView().tint(MMInk.secondary)
-                        Text("Loading issue…").mmFont(14).foregroundStyle(MMInk.secondary)
+                        Text("Loading the case file…").mmFont(14).foregroundStyle(MMInk.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 40)

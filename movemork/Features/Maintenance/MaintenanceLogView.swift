@@ -2,7 +2,8 @@
 //  MaintenanceLogView.swift
 //  movemork
 //
-//  MoveMark — Maintenance log: issues first, then the inline composer (native PhotosPicker).
+//  MoveMark — Maintenance log: the rental's cases (open first), each read as a case — evidence thumbnail when it
+//  has one, title, category, reported date, photo count, calm status — then the composer (native PhotosPicker).
 //
 
 import SwiftUI
@@ -25,6 +26,8 @@ struct MaintenanceLogView: View {
     @State private var errorMessage: String? = nil
     @State private var errorRetryAction: (() -> Void)? = nil
     @State private var softNotice: String? = nil
+    /// Newest photo per case, for the row thumbnails (best effort; a case without one shows no photo).
+    @State private var covers: [UUID: EvidencePhoto] = [:]
 
     private var log: [MaintenanceRecord] {
         propertyStore.maintenanceLog
@@ -38,8 +41,10 @@ struct MaintenanceLogView: View {
         log.filter { $0.status == .resolved }
     }
 
-    init(path: Binding<[AppRoute]>, initialError: String? = nil, initialNotice: String? = nil, initiallyLoading: Bool = false) {
+    init(path: Binding<[AppRoute]>, initialError: String? = nil, initialNotice: String? = nil, initiallyLoading: Bool = false,
+         initialCovers: [UUID: EvidencePhoto] = [:]) {
         _path = path
+        _covers = State(initialValue: initialCovers)
         _errorMessage = State(initialValue: initialError)
         _softNotice = State(initialValue: initialNotice)
         _isLoading = State(initialValue: initiallyLoading)
@@ -49,7 +54,7 @@ struct MaintenanceLogView: View {
         MMScreen(
             eyebrow: propertyStore.currentProperty.map { $0.title.isEmpty ? $0.addressLine1 : $0.title },
             title: "Maintenance",
-            subtitle: "Log what breaks, with photos and dates. Each issue stays in your rental's record.",
+            subtitle: "Every issue you record becomes a dated case with its photos.",
             isPushed: true
         ) {
             if let errorMessage {
@@ -79,15 +84,15 @@ struct MaintenanceLogView: View {
         if log.isEmpty && isLoading {
             HStack(spacing: 10) {
                 ProgressView().tint(MMInk.secondary)
-                Text("Loading issues…").mmFont(14).foregroundStyle(MMInk.secondary)
+                Text("Loading cases…").mmFont(14).foregroundStyle(MMInk.secondary)
             }
             .frame(maxWidth: .infinity, minHeight: 80)
             .accessibilityElement(children: .combine)
         } else if log.isEmpty {
             MMEmptyBlock(
-                icon: "wrench.and.screwdriver",
-                title: "No issues logged yet",
-                message: "When something breaks or needs your landlord, log it below with photos. Dated issues become part of your record."
+                icon: "doc.text.magnifyingglass",
+                title: "No cases recorded",
+                message: "When something breaks or needs your landlord, record it below with photos. Each one is kept as a dated case."
             )
         } else {
             VStack(alignment: .leading, spacing: 26) {
@@ -102,8 +107,8 @@ struct MaintenanceLogView: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 0) {
-            MMSectionTitle(title: "Log an issue")
-            Text("Add it while it's fresh. Photos and timestamps matter.")
+            MMSectionTitle(title: "Record a new issue")
+            Text("Add it while it's fresh. MoveMark dates it and keeps the photos with it.")
                 .mmFont(14)
                 .foregroundStyle(MMInk.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -178,11 +183,11 @@ struct MaintenanceLogView: View {
         if !rows.isEmpty {
             MMGroup(title: "\(title) · \(rows.count)") {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, entry in
-                    if index > 0 { MMRowDivider() }
+                    if index > 0 { MMRowDivider(leading: 14) }
                     Button {
                         path.append(.maintenanceIssueDetail(issueID: entry.id))
                     } label: {
-                        issueRow(entry)
+                        caseRow(entry)
                     }
                     .buttonStyle(MMLightPressStyle())
                 }
@@ -190,46 +195,31 @@ struct MaintenanceLogView: View {
         }
     }
 
-    private func issueRow(_ entry: MaintenanceRecord) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(entry.title)
-                    .mmFont(16, .medium)
-                    .foregroundStyle(MMInk.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(maintenanceMetadataLine(for: entry))
-                    .mmFont(13)
-                    .foregroundStyle(MMInk.secondary)
-                if !entry.details.isEmpty {
-                    Text(entry.details)
-                        .mmFont(14)
-                        .foregroundStyle(MMInk.secondary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                MMStatusLabel(text: entry.status.rawValue, tone: entry.status == .resolved ? .done : .open)
-                    .padding(.top, 4)
+    private func caseRow(_ entry: MaintenanceRecord) -> some View {
+        let cover = entry.photoCount > 0 ? covers[entry.id] : nil
+        return MMCaseRow(
+            title: entry.title,
+            line: "\(entry.category) · Reported \(MMCaseDate.text(entry.createdAt, time: false))",
+            photoCount: entry.photoCount,
+            status: entry.status == .resolved ? .resolved : (entry.status == .followUp ? .followUp : .open),
+            hasThumb: cover != nil
+        ) {
+            if let cover {
+                MMEvidenceImage(path: cover.thumbnailPath ?? cover.filePath, resolve: resolvePhotoURL,
+                                size: CGSize(width: 60, height: 60), placeholder: MMInk.field)
             }
-            Spacer(minLength: 8)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(MMInk.secondary.opacity(0.6))
-                .padding(.top, 4)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 13)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
     }
 
-    private func maintenanceMetadataLine(for entry: MaintenanceRecord) -> String {
-        let date = entry.createdAt.formatted(date: .abbreviated, time: .omitted)
-        if entry.photoCount > 0 {
-            return "\(entry.category) · \(entry.photoCount) photo\(entry.photoCount == 1 ? "" : "s") · \(date)"
-        }
-        return "\(entry.category) · \(date)"
+    private func resolvePhotoURL(_ path: String) async -> URL? {
+        try? await InspectionRepository().signedURL(bucket: "maintenance-media", path: path)
+    }
+
+    /// Thumbnails are a nicety: a failed read leaves the rows without photos and never raises an error.
+    private func loadCovers(propertyId: UUID) async {
+        guard let found = try? await InspectionRepository().maintenanceCoverPhotos(propertyId: propertyId) else { return }
+        MoveMarkStoredFileURLs.remember(Array(found.values))
+        covers = found
     }
 
     private func syncMaintenanceLogFromServer() async {
@@ -240,6 +230,7 @@ struct MaintenanceLogView: View {
         defer { isLoading = false }
 
         let ok = await propertyStore.refreshMaintenance(propertyId: property.id)
+        await loadCovers(propertyId: property.id)
         if !ok {
             errorMessage = MoveMarkFlowMessage.maintenanceListSyncFailed
             errorRetryAction = { Task { await syncMaintenanceLogFromServer() } }

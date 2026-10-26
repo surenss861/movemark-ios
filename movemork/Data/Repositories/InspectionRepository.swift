@@ -246,6 +246,38 @@ struct InspectionRepository {
         return inserted.id
     }
 
+    /// The newest photo of each maintenance issue of a property (paths only), for the log's case thumbnails.
+    /// One bounded read of existing rows; issues without photos are simply absent.
+    func maintenanceCoverPhotos(propertyId: UUID) async throws -> [UUID: EvidencePhoto] {
+        struct Row: Decodable {
+            let id: UUID
+            let maintenanceIssueId: UUID
+            let filePath: String
+            let thumbnailPath: String?
+            enum CodingKeys: String, CodingKey {
+                case id
+                case maintenanceIssueId = "maintenance_issue_id"
+                case filePath = "file_path"
+                case thumbnailPath = "thumbnail_path"
+            }
+        }
+        let rows: [Row] = try await dataAPI
+            .from("evidence_files")
+            .select("id,maintenance_issue_id,file_path,thumbnail_path")
+            .eq("property_id", value: propertyId)
+            .not("maintenance_issue_id", operator: .is, value: "null")
+            .order("created_at", ascending: false)
+            .order("id", ascending: false)
+            .limit(400)
+            .execute()
+            .value
+        var covers: [UUID: EvidencePhoto] = [:]
+        for row in rows where covers[row.maintenanceIssueId] == nil {
+            covers[row.maintenanceIssueId] = EvidencePhoto(id: row.id, filePath: row.filePath, thumbnailPath: row.thumbnailPath)
+        }
+        return covers
+    }
+
     /// Photo count per maintenance issue of a property, grouped by the server (Data API aggregate) — the
     /// photo rows themselves are not downloaded.
     func maintenancePhotoCounts(propertyId: UUID) async throws -> [UUID: Int] {
