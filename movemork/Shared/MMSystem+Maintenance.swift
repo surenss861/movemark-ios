@@ -287,7 +287,7 @@ struct MMCaseRow<Thumb: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 12) {
                     MMCaseStatusMark(state: status)
-                    Text(photoCount == 1 ? "1 photo" : "\(photoCount) photos")
+                    Text(photoCount == 0 ? "No photos" : photoCount == 1 ? "1 photo" : "\(photoCount) photos")
                         .mmFont(12.5)
                         .monospacedDigit()
                         .foregroundStyle(MMInk.secondary)

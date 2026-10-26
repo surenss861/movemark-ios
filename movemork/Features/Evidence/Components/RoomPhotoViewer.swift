@@ -187,18 +187,19 @@ struct RoomPhotoViewer: View {
     }
 
     private func tagRow(_ tags: [String]) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(tags, id: \.self) { tag in
-                    Text(tag)
-                        .mmFont(12.5, .medium)
-                        .foregroundStyle(.white.opacity(0.9))
-                        .padding(.horizontal, 10)
-                        .frame(minHeight: 26)
-                        .overlay(Capsule().strokeBorder(MMInk.evidenceStroke, lineWidth: 1))
-                }
+        TagFlow(spacing: 6) {
+            ForEach(tags, id: \.self) { tag in
+                Text(tag)
+                    .mmFont(12.5, .medium)
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.1))
+                    .clipShape(Capsule())
             }
         }
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("Issues: \(tags.joined(separator: ", "))")
     }
 
@@ -234,6 +235,35 @@ struct RoomPhotoViewer: View {
             }
         }
         .padding(.bottom, 10)
+    }
+}
+
+/// Wraps issue tags onto as many lines as they need (no sideways scrolling in the record bar).
+private struct TagFlow: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, maxX: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width { x = 0; y += rowHeight + spacing; rowHeight = 0 }
+            x += size.width + spacing
+            maxX = max(maxX, x - spacing)
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: min(maxX, width), height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX { x = bounds.minX; y += rowHeight + spacing; rowHeight = 0 }
+            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
     }
 }
 

@@ -2,12 +2,12 @@
 //  FlowScreenSnapshotTests.swift
 //  movemorkTests
 //
-//  @file Goldens for the flow screens on the final system (area C): Maintenance (log, issue, loading /
-//        not-found), Move-out, the evidence sheets (edit proof, add photos, photo viewer, capture form), the Pro
+//  @file Goldens for the flow screens on the final system (area C): Move-out, the evidence sheets (edit proof,
+//        add photos, capture form), the Pro
 //        paywall (loading, plans, unavailable, report pack, success, restore, toast), Edit name and the toast —
 //        on the Pro phone, the small phone and AX3.
 //  @domain design-system
-//  @see [[MMSystem+Flows.swift]]
+//  @see [[MMSystem+Flows.swift]] — Maintenance and the evidence viewer: MaintenanceCaseSnapshotTests
 //
 //  Re-record after an approved change: delete the PNG under __Snapshots__ and run twice.
 //
@@ -25,78 +25,6 @@ final class FlowScreenSnapshotTests: XCTestCase {
     private static let userID = UUID(uuidString: "6F1E2C3D-0000-4000-8000-000000000002")!
 
     private var devices: [(String, ViewImageConfig)] { ScreenSnapshot.allDevices }
-
-    // MARK: Maintenance
-
-    private func maintenanceStore(_ log: [MaintenanceRecord]) -> PropertyStore {
-        let store = PropertyStore()
-        store.maintenanceLog = log
-        return store
-    }
-
-    private var maintenanceLog: [MaintenanceRecord] {
-        [
-            MaintenanceRecord(title: "Bathroom sink leak", category: "Plumbing",
-                              details: "Water pooling under the vanity; reported to the property manager by email.",
-                              status: .open, createdAt: Self.day, photoCount: 3),
-            MaintenanceRecord(title: "Bedroom window won't latch", category: "Structural", details: "",
-                              status: .followUp, createdAt: Self.day.addingTimeInterval(-86_400 * 6), photoCount: 1),
-            MaintenanceRecord(title: "Dishwasher not draining", category: "Appliance", details: "Replaced pump on Oct 2.",
-                              status: .resolved, createdAt: Self.day.addingTimeInterval(-86_400 * 30), photoCount: 0),
-        ]
-    }
-
-    func testMaintenanceLogPopulated() {
-        assertScreen(MaintenanceLogView(path: .constant([])).environment(maintenanceStore(maintenanceLog)), devices: devices)
-    }
-
-    func testMaintenanceLogEmpty() {
-        assertScreen(MaintenanceLogView(path: .constant([])).environment(maintenanceStore([])), devices: devices)
-    }
-
-    func testMaintenanceLogLoading() {
-        assertScreen(MaintenanceLogView(path: .constant([]), initiallyLoading: true).environment(maintenanceStore([])))
-    }
-
-    func testMaintenanceLogError() {
-        assertScreen(MaintenanceLogView(path: .constant([]), initialError: MoveMarkFlowMessage.maintenanceListSyncFailed)
-            .environment(maintenanceStore(maintenanceLog)), devices: [("pro", ScreenSnapshot.pro), ("small", ScreenSnapshot.small)])
-    }
-
-    private func issue(resolved: Bool = false) -> MaintenanceIssueRow {
-        MaintenanceIssueRow(
-            id: UUID(uuidString: "6F1E2C3D-0000-4000-8000-0000000000AA")!, propertyId: Self.propertyID, userId: Self.userID,
-            title: "Bathroom sink leak", description: "Water pooling under the vanity after every use.",
-            category: "Plumbing", status: resolved ? "resolved" : "open",
-            dateDiscovered: "2026-10-20T14:05:00Z", dateReported: "2026-10-21T09:30:00Z", reportMethod: "email",
-            landlordResponse: resolved ? "Plumber replaced the trap on Oct 24." : nil,
-            followUpDate: resolved ? "2026-10-24T16:00:00Z" : nil, updatedAt: nil
-        )
-    }
-
-    func testMaintenanceIssueOpen() {
-        assertScreen(MaintenanceIssueDetailView(issue: issue()), devices: devices)
-    }
-
-    func testMaintenanceIssueResolved() {
-        assertScreen(MaintenanceIssueDetailView(issue: issue(resolved: true)))
-    }
-
-    func testMaintenanceIssueError() {
-        assertScreen(MaintenanceIssueDetailView(issue: issue(), initialError: "Couldn’t save follow-up. Check your connection and try again."))
-    }
-
-    func testMaintenanceIssueNotFound() {
-        assertScreen(MaintenanceIssueDetailContainerView(issueID: UUID(), initialError: MoveMarkFlowMessage.maintenanceIssueNotFound),
-                     devices: devices)
-    }
-
-    func testMaintenanceIssueLoading() {
-        // A real property makes the container wait on the network lookup, so the loading state holds.
-        let store = PropertyStore()
-        store.currentProperty = property(rooms: [])
-        assertScreen(MaintenanceIssueDetailContainerView(issueID: UUID()).environment(store))
-    }
 
     // MARK: Move-out
 
@@ -172,12 +100,6 @@ final class FlowScreenSnapshotTests: XCTestCase {
     func testAppendPhotosSheet() {
         assertScreen(AppendPhotosSheet(entry: savedEntry, onAdd: { _ in ([], nil) }, onDismiss: {}),
                      devices: devices, inNavigation: false)
-    }
-
-    func testRoomPhotoViewer() {
-        let photos = (0..<3).map { EvidencePhoto(id: UUID(uuidString: "6F1E2C3D-0000-4000-8000-00000000010\($0)")!, filePath: "fixture/\($0).jpg") }
-        assertScreen(RoomPhotoViewer(photos: photos, startID: photos[1].id, resolvePhotoURL: { _ in nil }, onClose: {}),
-                     devices: [("pro", ScreenSnapshot.pro), ("ax3", ScreenSnapshot.proAX)], inNavigation: false)
     }
 
     private func captureForm(error: String? = nil, success: String? = nil) -> some View {
