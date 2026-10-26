@@ -162,136 +162,52 @@ struct PropertyVaultView: View {
     }
 
     var body: some View {
-        ZStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    PropertyVaultHeroStage(
-                        property: property,
-                        namespace: namespace,
-                        documentedRooms: completedRooms,
-                        totalRooms: totalRooms,
-                        nextRoomName: nextRoom?.name,
-                        missingSupportingDocs: missingRecordsCount
-                    )
-                    .id(property.id)
-                    .padding(.bottom, 8)
-
-                    MMRoomProgressCard(
-                        headline: "\(completedRooms) of \(totalRooms) rooms ready",
-                        nextLine: propertyVaultProofHeroNextLine,
-                        progress: progress,
-                        progressLabel: "\(totalPhotos) photos saved",
-                        primaryTitle: MMNextBestActionMapper.primaryTitle(
-                            for: propertyStore.primaryNextAction(for: property)
-                        ),
-                        onPrimary: {
-                            // "Capture Kitchen" opens Kitchen; anything else continues the guided list.
-                            if case .captureRoom(let roomID, _) = propertyStore.primaryNextAction(for: property) {
-                                path.append(.roomDetail(roomID: roomID))
-                            } else {
-                                path.append(.walkthrough)
-                            }
-                        },
-                        documentedCount: completedRooms,
-                        totalCount: totalRooms
-                    )
-                    .opacity(contentVisible ? 1 : 0)
-                    .offset(y: contentVisible ? 0 : 8)
-                    .animation(MMMotion.screenTransition.delay(0.06), value: contentVisible)
-                    .padding(.bottom, 14)
-
-                    if let vaultSummaryError, uploadError == nil {
-                        MMErrorBanner(
-                            message: vaultSummaryError,
-                            onRetry: { Task { await loadVaultSummary() } }
-                        )
-                        .opacity(contentVisible ? 1 : 0)
-                        .offset(y: contentVisible ? 0 : 8)
-                        .animation(MMMotion.screenTransition.delay(0.06), value: contentVisible)
-                        .padding(.bottom, 10)
-                    }
-
-                    MMProofTimeline(
-                        title: "Proof trail",
-                        rows: vaultProofTrailRows,
-                        highlightedRowID: highlightedTrailRowID,
-                        appeared: contentVisible
-                    )
-                    .opacity(contentVisible ? 1 : 0)
-                    .offset(y: contentVisible ? 0 : 8)
-                    .animation(MMMotion.screenTransition.delay(0.10), value: contentVisible)
-                    .padding(.bottom, 14)
-
-                    PropertyVaultRoomQueue(
-                        rooms: orderedRooms,
-                        nextRoomID: nextRoom?.id,
-                        pulseQueueHeadRoomId: pulseQueueHeadRoomId,
-                        completedRooms: completedRooms,
-                        totalRooms: totalRooms,
-                        onSeeAll: { path.append(.walkthrough) },
-                        onOpenRoom: { room in path.append(.roomDetail(roomID: room.id)) }
-                    )
-                    .opacity(contentVisible ? 1 : 0)
-                    .offset(y: contentVisible ? 0 : 8)
-                    .animation(MMMotion.screenTransition.delay(0.12), value: contentVisible)
-                    .padding(.bottom, 16)
-
-                    documentsSection
-                        .opacity(contentVisible ? 1 : 0)
-                        .offset(y: contentVisible ? 0 : 8)
-                        .animation(MMMotion.screenTransition.delay(0.15), value: contentVisible)
-                        .padding(.bottom, 16)
-
-                    PropertyVaultSecondaryTools(
-                        openIssuesCount: openIssuesCount,
-                        completedRooms: completedRooms,
-                        readinessScore: readinessScore,
-                        exportsSubtitle: exportsSubtitle,
-                        pulseDisputeTile: pulseDisputeTile,
-                        pulseExportsTile: pulseExportsTile,
-                        onMaintenance: { path.append(.maintenance) },
-                        onMoveOut: { path.append(.moveOut) },
-                        onDisputeBuilder: {
-                            if subscriptionManager.canUseCaseBuilder() {
-                                path.append(.exports)
-                            } else {
-                                activePaywallReason = .disputePacket
-                                showPaywall = true
-                            }
-                        },
-                        onExports: { path.append(.exports) }
-                    )
-                    .opacity(contentVisible ? 1 : 0)
-                    .offset(y: contentVisible ? 0 : 8)
-                    .animation(MMMotion.screenTransition.delay(0.17), value: contentVisible)
-                    .padding(.bottom, 18)
-
-                    detailSection(property)
-                        .opacity(contentVisible ? 1 : 0)
-                        .offset(y: contentVisible ? 0 : 8)
-                        .animation(MMMotion.screenTransition.delay(0.20), value: contentVisible)
-
-                    MMSignedInScrollTailSpacer(kind: .focusedSignedIn)
+        PropertyVaultContent(
+            model: vaultModel,
+            showAllRecords: $showAllSupportingRecords,
+            showDetails: $showPropertyDetails,
+            appeared: contentVisible,
+            onPrimary: {
+                // "Capture Kitchen" opens Kitchen; anything else continues the guided list.
+                if case .captureRoom(let roomID, _) = propertyStore.primaryNextAction(for: property) {
+                    path.append(.roomDetail(roomID: roomID))
+                } else {
+                    path.append(.walkthrough)
                 }
-                .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.top, 4)
-                .mmScrollContentTopInset(2)
-                .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
-            }
-        }
+            },
+            onRetrySummary: { Task { await loadVaultSummary() } },
+            onSeeAllRooms: { path.append(.walkthrough) },
+            onOpenRoom: { roomID in path.append(.roomDetail(roomID: roomID)) },
+            onRetryUpload: retryDocumentUpload,
+            onViewRecord: { docType in Task { await previewDocument(type: docType) } },
+            onUploadRecord: { docType in startUpload(for: docType) },
+            onDeleteRecord: { docType in deleteConfirmType = docType.rawValue },
+            onTool: { tool in
+                switch tool {
+                case .maintenance: path.append(.maintenance)
+                case .moveOut: path.append(.moveOut)
+                case .caseBuilder:
+                    if subscriptionManager.canUseCaseBuilder() {
+                        path.append(.exports)
+                    } else {
+                        activePaywallReason = .disputePacket
+                        showPaywall = true
+                    }
+                case .exports: path.append(.exports)
+                }
+            },
+            onEdit: { showEditProperty = true }
+        )
+        .id(property.id)
         .mmProofToast(message: proofToast, isVisible: proofToastVisible)
-        .mmProofShellBackground(heroFocus: false, ctaBloom: false)
         .sheet(isPresented: $showEditProperty) {
             NavigationStack {
                 EditPropertyView(property: property)
-                    .navigationTitle("Edit property")
-                    .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
+                        ToolbarItem(placement: .cancellationAction) {
                             Button("Close") {
                                 showEditProperty = false
                             }
-                            .foregroundStyle(MoveMarkTheme.Colors.primary)
                         }
                     }
             }
@@ -374,13 +290,75 @@ struct PropertyVaultView: View {
         }
         .overlay {
             if isPreparingDocumentPreview {
-                ZStack {
-                    MoveMarkTheme.Colors.textPrimary.opacity(0.25).ignoresSafeArea()
-                    ProgressView("Opening…")
-                        .tint(MoveMarkTheme.Colors.primary)
-                }
+                MMBusyOverlay(message: "Opening…")
             }
         }
+    }
+
+    // MARK: - Presentation model
+
+    private var vaultModel: PropertyVaultModel {
+        let primaryAction = propertyStore.primaryNextAction(for: property)
+        var primaryIcon: String? = nil
+        if case .captureRoom = primaryAction { primaryIcon = "camera.fill" }
+        return PropertyVaultModel(
+            title: Self.displayTitle(for: property),
+            location: Self.locationLine(for: property),
+            documented: completedRooms,
+            total: totalRooms,
+            photos: totalPhotos,
+            progress: progress,
+            nextLine: propertyVaultProofHeroNextLine,
+            primaryTitle: MMNextBestActionMapper.primaryTitle(for: primaryAction),
+            primaryIcon: primaryIcon,
+            summaryError: vaultSummaryError,
+            trail: vaultProofTrailRows,
+            highlightedTrailID: highlightedTrailRowID,
+            rooms: orderedRooms.map { room in
+                PropertyVaultModel.Room(room: room, isNext: room.id == nextRoom?.id,
+                                        isPulsing: room.id == pulseQueueHeadRoomId)
+            },
+            records: Self.documentTypeOrder.map { docType in
+                let present = hasDoc(docType)
+                return PropertyVaultModel.Record(
+                    type: docType,
+                    isPresent: present,
+                    subtitle: recordSubtitle(for: docType, isPresent: present),
+                    isHighlighted: highlightedDocumentType == docType
+                )
+            },
+            priorityCount: Self.priorityDocumentTypes.count,
+            uploadedCount: propertyStore.uploadedSupportingRecordCount(for: property),
+            uploadError: uploadError,
+            softNotice: uploadSoftNotice,
+            previewError: previewErrorMessage,
+            isUploading: isUploading,
+            tools: PropertyVaultModel.Tool.all(
+                openIssues: openIssuesCount,
+                completedRooms: completedRooms,
+                readinessScore: readinessScore,
+                exportsSubtitle: exportsSubtitle,
+                pulseDispute: pulseDisputeTile,
+                pulseExports: pulseExportsTile
+            ),
+            tenancy: PropertyVaultModel.Detail.tenancy(for: property),
+            contact: PropertyVaultModel.Detail.contact(for: property)
+        )
+    }
+
+    static func displayTitle(for property: PropertyRecord) -> String {
+        let title = property.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty { return title }
+        let address = property.addressLine1.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !address.isEmpty { return address }
+        return "Property"
+    }
+
+    static func locationLine(for property: PropertyRecord) -> String? {
+        let line = RentalLocation.line(city: property.city, province: property.provinceState)
+        if !line.isEmpty { return line }
+        let country = property.country.trimmingCharacters(in: .whitespacesAndNewlines)
+        return country.isEmpty ? nil : country
     }
 
     private var depositDisplayText: String {
@@ -423,123 +401,6 @@ struct PropertyVaultView: View {
         return "Your proof looks strong. Keep documents current."
     }
 
-    private var documentsSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Receipts & lease docs")
-                        .font(MoveMarkTheme.Typography.captionEmphasis)
-                        .tracking(0.8)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        .textCase(.uppercase)
-
-                    Text("Lease, deposit receipt, and other papers.")
-                        .font(MoveMarkTheme.Typography.detail)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.86))
-                }
-
-                Spacer()
-
-                Text("\(propertyStore.uploadedSupportingRecordCount(for: property)) of \(Self.documentTypeOrder.count) uploaded")
-                    .font(MoveMarkTheme.Typography.tiny)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.56))
-            }
-
-            if let uploadError {
-                MMErrorBanner(
-                    message: uploadError,
-                    retryTitle: MMCopy.tryAgain,
-                    onRetry: retryDocumentUpload
-                )
-            }
-
-            if let uploadSoftNotice, uploadError == nil {
-                MMCard(tone: .quiet, padding: 14, spacing: 8) {
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "info.circle.fill")
-                            .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.9))
-                        Text(uploadSoftNotice)
-                            .font(MoveMarkTheme.Typography.subheadline)
-                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                    }
-                }
-            }
-
-            if let previewErrorMessage {
-                MMErrorBanner(message: previewErrorMessage)
-            }
-
-            if showAllSupportingRecords {
-                VStack(spacing: 0) {
-                    ForEach(Self.documentTypeOrder, id: \.self) { docType in
-                        supportingRecordRow(for: docType)
-
-                        if let last = Self.documentTypeOrder.last, docType != last {
-                            Divider()
-                                .background(MoveMarkTheme.Colors.divider.opacity(0.22))
-                                .padding(.leading, 54)
-                        }
-                    }
-                }
-
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showAllSupportingRecords = false
-                    }
-                } label: {
-                    Text("Collapse records")
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.primary)
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 10)
-            } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(missingPriorityDocTypes.prefix(3), id: \.self) { docType in
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(docType.displayTitle)
-                                    .font(MoveMarkTheme.Typography.subheadlineMedium)
-                                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                                Text(recordSubtitle(for: docType, isPresent: false))
-                                    .font(MoveMarkTheme.Typography.footnote)
-                                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            }
-                            Spacer()
-                            Button {
-                                startUpload(for: docType)
-                            } label: {
-                                recordActionButton(title: "Upload")
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.horizontal, 6)
-                    }
-
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showAllSupportingRecords = true
-                        }
-                    } label: {
-                        Text("See all records")
-                            .font(MoveMarkTheme.Typography.subheadlineMedium)
-                            .foregroundStyle(MoveMarkTheme.Colors.primary)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 6)
-                }
-            }
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(MoveMarkTheme.Colors.fieldFill.opacity(0.94))
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.52), lineWidth: 0.5)
-        )
-    }
-
     private func recordSubtitle(for docType: VaultDocumentType, isPresent: Bool) -> String {
         switch docType {
         case .lease:
@@ -557,192 +418,6 @@ struct PropertyVaultView: View {
         case .other:
             return isPresent ? "Additional proof attached" : "Additional proof"
         }
-    }
-
-    private func recordActionButton(title: String, isBusy: Bool = false) -> some View {
-        Text(isBusy ? "Saving…" : title)
-            .font(MoveMarkTheme.Typography.footnoteEmphasis)
-            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-            .padding(.horizontal, 10)
-            .frame(height: 30)
-            .background(MoveMarkTheme.Colors.cardRaised.opacity(0.55))
-            .overlay(
-                Capsule()
-                    .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.55), lineWidth: 0.8)
-            )
-            .clipShape(Capsule())
-    }
-
-    private func supportingRecordRow(for docType: VaultDocumentType) -> some View {
-        let present = hasDoc(docType)
-        let isHighlighted = highlightedDocumentType == docType
-
-        return SupportingRecordRow(
-            title: docType.displayTitle,
-            subtitle: recordSubtitle(for: docType, isPresent: present),
-            isPresent: present
-        ) {
-            if present {
-                Button {
-                    Task { await previewDocument(type: docType) }
-                } label: {
-                    recordActionButton(title: "View")
-                }
-                .contextMenu {
-                    if docType.acceptsImage {
-                        Button("Replace with photo") {
-                            pendingPhotoDocType = docType.rawValue
-                            showReplacePhotoSheet = true
-                        }
-                    } else {
-                        Button("Replace") {
-                            pendingFileDocType = docType.rawValue
-                            showFilePicker = true
-                        }
-                    }
-
-                    Button("Delete", role: .destructive) {
-                        deleteConfirmType = docType.rawValue
-                    }
-                }
-            } else {
-                if docType.acceptsImage {
-                    Button {
-                        pendingPhotoDocType = docType.rawValue
-                        showReplacePhotoSheet = true
-                    } label: {
-                        recordActionButton(title: "Add", isBusy: isUploading)
-                    }
-                    .disabled(isUploading)
-                } else {
-                    Button {
-                        pendingFileDocType = docType.rawValue
-                        showFilePicker = true
-                    } label: {
-                        recordActionButton(title: "Add")
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(
-                    isHighlighted
-                        ? MoveMarkTheme.Colors.primary.opacity(0.10)
-                        : Color.clear
-                )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(
-                    isHighlighted
-                        ? MoveMarkTheme.Colors.primary.opacity(0.18)
-                        : Color.clear,
-                    lineWidth: 0.8
-                )
-        )
-        .animation(.easeInOut(duration: 0.22), value: isHighlighted)
-    }
-
-    private func detailSection(_ property: PropertyRecord) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Property details")
-                    .font(MoveMarkTheme.Typography.captionEmphasis)
-                    .tracking(0.8)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    .textCase(.uppercase)
-
-                Spacer()
-
-                Button("Edit") {
-                    showEditProperty = true
-                }
-                .font(MoveMarkTheme.Typography.detailEmphasis)
-                .foregroundStyle(MoveMarkTheme.Colors.primary)
-            }
-
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showPropertyDetails.toggle()
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Text(showPropertyDetails ? "Hide details" : "Show details")
-                        .font(MoveMarkTheme.Typography.subheadlineMedium)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                    Image(systemName: showPropertyDetails ? "chevron.up" : "chevron.down")
-                        .font(MoveMarkTheme.Typography.captionEmphasis)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                }
-            }
-            .buttonStyle(.plain)
-
-            if showPropertyDetails {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Tenancy")
-                        .font(MoveMarkTheme.Typography.footnoteEmphasis)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
-
-                    VStack(spacing: 10) {
-                        detailRow("Move-in", property.moveInDate.formatted(date: .abbreviated, time: .omitted))
-
-                        if let start = property.leaseStartDate {
-                            detailRow("Lease start", start.formatted(date: .abbreviated, time: .omitted))
-                        }
-
-                        detailRow("Lease end", property.leaseEndDate.formatted(date: .abbreviated, time: .omitted))
-
-                        if !property.depositAmount.isEmpty {
-                            detailRow("Deposit", property.depositAmount)
-                        }
-
-                        if !property.rentAmount.isEmpty {
-                            detailRow("Rent", property.rentAmount)
-                        }
-                    }
-                }
-
-                Divider()
-                    .background(MoveMarkTheme.Colors.divider.opacity(0.22))
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Contact")
-                        .font(MoveMarkTheme.Typography.footnoteEmphasis)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
-
-                    VStack(spacing: 10) {
-                        detailRow("Landlord", property.landlordName.isEmpty ? "Not added" : property.landlordName)
-                        detailRow("Email", property.landlordEmail.isEmpty ? "Not added" : property.landlordEmail)
-                    }
-                }
-            }
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(MoveMarkTheme.Colors.card.opacity(0.80))
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.48), lineWidth: 0.5)
-        )
-    }
-
-    private func detailRow(_ title: String, _ value: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(title)
-                .font(MoveMarkTheme.Typography.detail)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.82))
-
-            Spacer(minLength: 12)
-
-            Text(value)
-                .font(MoveMarkTheme.Typography.subheadlineMedium)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.96))
-                .multilineTextAlignment(.trailing)
-        }
-        .padding(.vertical, 4)
     }
 
     private func showFeedback(_ event: VaultFeedbackEvent) {
@@ -1265,33 +940,35 @@ struct PropertyVaultView: View {
 
 // MARK: - Replace photo sheet (for image doc types)
 
-private struct ReplacePhotoSheet: View {
+struct ReplacePhotoSheet: View {
     let onDismiss: () -> Void
     @Binding var selection: PhotosPickerItem?
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
+            MMSheetScaffold(title: "Listing proof") {
+                Text("Choose a screenshot of the original listing. It is saved with this rental's records.")
+                    .mmFont(15)
+                    .foregroundStyle(MMInk.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 PhotosPicker(selection: $selection, matching: .images, preferredItemEncoding: .current) {
-                    Label("Choose photo", systemImage: "photo.on.rectangle.angled")
-                        .font(MoveMarkTheme.Typography.button)
-                        .foregroundStyle(MoveMarkTheme.Colors.primary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(MoveMarkTheme.Colors.fieldFill)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    HStack(spacing: 8) {
+                        Image(systemName: "photo.on.rectangle.angled").font(.system(size: 14, weight: .semibold))
+                        Text("Choose photo").mmFont(15.5, .semibold)
+                    }
+                    .foregroundStyle(MMInk.onLime)
+                    .frame(maxWidth: .infinity, minHeight: MMMetrics.ctaHeight)
+                    .background(MMInk.lime, in: Capsule())
+                    .contentShape(Capsule())
                 }
-                Button("Cancel") { onDismiss() }
-                    .font(MoveMarkTheme.Typography.subheadlineMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .buttonStyle(MMLightPressStyle())
+                .padding(.top, 22)
+                MMSecondaryButton(title: "Cancel", action: onDismiss)
+                    .padding(.top, 8)
             }
-            .padding(24)
-            .navigationTitle("Replace with photo")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { onDismiss() }
-                        .foregroundStyle(MoveMarkTheme.Colors.primary)
                 }
             }
         }

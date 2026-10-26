@@ -42,7 +42,7 @@ struct AuthenticatedShellView: View {
 }
 
 // MARK: - Vault detail (property workspace; currentProperty set by dashboard before push)
-private struct VaultDetailDestinationView: View {
+struct VaultDetailDestinationView: View {
     let propertyId: UUID
     @Binding var path: [AppRoute]
     @Environment(PropertyStore.self) private var propertyStore
@@ -55,7 +55,11 @@ private struct VaultDetailDestinationView: View {
             if let property = propertyStore.currentProperty, property.id == propertyId {
                 PropertyVaultView(property: property, path: $path, namespace: vaultNamespace)
             } else {
-                MMLoadingState(message: MMCopy.loading)
+                // The rental's own dark bar while it loads, so the push lands on the screen it becomes.
+                MMLoadingBlock(message: MMCopy.loading)
+                    .toolbarBackground(MMInk.hero, for: .navigationBar)
+                    .toolbarBackground(.visible, for: .navigationBar)
+                    .toolbarColorScheme(.dark, for: .navigationBar)
             }
         }
         .navigationTitle("")
