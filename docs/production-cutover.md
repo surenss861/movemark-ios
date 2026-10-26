@@ -13,3 +13,10 @@
 
 Still open: sealing `DATABASE_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `REVENUECAT_WEBHOOK_SECRET`
 (dashboard action), and the `movemark-backup` cron service (needs the bucket-restricted B2 keys — Gate 3A).
+
+
+## 2026-10-26 — Gate 3A closed, Gate 4 sealed
+
+- `movemark-backup` (Railway cron `17 */6 * * *`, `scripts/dr/Dockerfile`; build and cron settings live on the service — the repo-root `railway.toml` of the retired Node API was removed from this branch). First runs 07:59Z and 08:07Z: `BACKUP_RUN OK`; the production archive restores from B2 alone (`RESTORE_DRILL PASS`).
+- B2 keys are bucket-restricted (each key reaches only its bucket; list-buckets denied). `movemark_backup` has a production password (read-only, direct endpoint).
+- Sealed: `DATABASE_URL`, `AWS_*`, `REVENUECAT_WEBHOOK_SECRET` on the API and worker; `BACKUP_DATABASE_URL`, `BACKUP_KEY_B64`, the B2 application keys and `AWS_*` on `movemark-backup`. Fresh deploys verified on sealed values.

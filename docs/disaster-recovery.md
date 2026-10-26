@@ -57,3 +57,5 @@ deletes the QA account.
 | Date | B2 | Result |
 |---|---|---|
 | 2026-10-23 | local S3 stand-in (account pending) | PASS — 8 rows, 5 objects; backup 20 s, recovery 3 s; API ready; 4/4 evidence files served byte-identical; dev zeroed after |
+| 2026-10-26 | real B2 (us-east-005, bucket-restricted keys) | PASS — 8 rows, 5 objects; backup 23.5 s, recovery 6.0 s; API ready; 4/4 evidence files served byte-identical; dev zeroed after |
+| 2026-10-26 | production, from B2 alone | RESTORE_DRILL PASS — first scheduled-service backup (Railway `movemark-backup`): 24 rows, 12 objects, 12 references and 4 immutable sources hash-checked |
