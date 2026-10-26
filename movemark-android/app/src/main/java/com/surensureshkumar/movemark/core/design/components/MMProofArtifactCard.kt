@@ -56,6 +56,13 @@ data class MMProofArtifactModel(
     val issueTags: List<String> = emptyList(),
 )
 
+/** "2 photos · 1 issue" — the artifact card's metadata line, pluralised. */
+fun proofArtifactSummary(photoCount: Int, issueCount: Int): String {
+    val photos = if (photoCount == 1) "1 photo" else "$photoCount photos"
+    val issues = if (issueCount == 1) "1 issue" else "$issueCount issues"
+    return "$photos · $issues"
+}
+
 /**
  * MoveMark proof artifact — photo-first evidence object with metadata strip.
  * Used on Welcome, Vault hero, and Receipt.
@@ -293,7 +300,7 @@ private fun MMProofArtifactFooter(model: MMProofArtifactModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "${model.photoCount} photos · ${model.issueCount} issues",
+                proofArtifactSummary(model.photoCount, model.issueCount),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 color = MMColors.TextSecondary,

@@ -115,7 +115,7 @@ fun SavedProofReceiptScreen(
                             phaseLabel = phaseLabel,
                             roomName = state.roomName,
                             photoCount = state.savedCount.coerceAtLeast(1),
-                            issueCount = 0,
+                            issueCount = state.issueCount,
                             verifiedLabel = verifiedLabel,
                             savedLabel = "Saved to vault",
                             statusLabel = "Saved",

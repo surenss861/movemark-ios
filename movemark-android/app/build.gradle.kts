@@ -26,6 +26,7 @@ val billingModeProp = localProp("BILLING_MODE", debugBillingDefault)
 val prodNeonAuthUrl = "https://ep-steep-wind-b56266ss.neonauth.c-7.us-east-2.aws.neon.tech/neondb/auth"
 val prodNeonDataApiUrl = "https://ep-steep-wind-b56266ss.apirest.c-7.us-east-2.aws.neon.tech/neondb/rest/v1"
 val prodMoveMarkApiBaseUrl = "https://movemark-api-py-production.up.railway.app"
+val debugTargetsProduction = (findProperty("movemarkTarget") as String?)?.trim() == "production"
 
 android {
     namespace = "com.surensureshkumar.movemark"
@@ -44,10 +45,18 @@ android {
 
     buildTypes {
         debug {
-            // Debug talks to whatever local.properties names (the Neon dev branch and a dev API).
-            buildConfigField("String", "NEON_AUTH_URL", "\"${localProp("NEON_AUTH_URL")}\"")
-            buildConfigField("String", "NEON_DATA_API_URL", "\"${localProp("NEON_DATA_API_URL")}\"")
-            buildConfigField("String", "MOVEMARK_API_BASE_URL", "\"${localProp("MOVEMARK_API_BASE_URL")}\"")
+            // Debug talks to whatever local.properties names (the Neon dev branch and a dev API), unless the build
+            // is run with -PmovemarkTarget=production: then it points at production (device QA with disposable
+            // accounts), the Android equivalent of the iOS Debug production override.
+            if (debugTargetsProduction) {
+                buildConfigField("String", "NEON_AUTH_URL", "\"$prodNeonAuthUrl\"")
+                buildConfigField("String", "NEON_DATA_API_URL", "\"$prodNeonDataApiUrl\"")
+                buildConfigField("String", "MOVEMARK_API_BASE_URL", "\"$prodMoveMarkApiBaseUrl\"")
+            } else {
+                buildConfigField("String", "NEON_AUTH_URL", "\"${localProp("NEON_AUTH_URL")}\"")
+                buildConfigField("String", "NEON_DATA_API_URL", "\"${localProp("NEON_DATA_API_URL")}\"")
+                buildConfigField("String", "MOVEMARK_API_BASE_URL", "\"${localProp("MOVEMARK_API_BASE_URL")}\"")
+            }
         }
         release {
             // Release is hard-wired to production; local.properties can never redirect it.

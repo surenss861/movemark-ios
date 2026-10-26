@@ -245,6 +245,7 @@ class RoomProofViewModel @Inject constructor(
                             propertyId = property.id,
                             savedCount = totalUploaded,
                             attemptedCount = attempted,
+                            issueCount = uploadCtx.issueTags.toSet().size,
                         )
                         _saveState.value = RoomProofSaveState.PartialSuccess(totalUploaded, failedCount)
                         _message.value = RoomProofUploadMessages.partial(totalUploaded, attempted)
@@ -256,6 +257,7 @@ class RoomProofViewModel @Inject constructor(
                             propertyId = property.id,
                             savedCount = totalUploaded,
                             attemptedCount = attempted,
+                            issueCount = uploadCtx.issueTags.toSet().size,
                         )
                         receiptCache.put(payload)
                         _photos.value = emptyList()
@@ -412,6 +414,7 @@ class RoomProofViewModel @Inject constructor(
         propertyId: UUID,
         savedCount: Int,
         attemptedCount: Int,
+        issueCount: Int,
     ): SavedProofReceiptPayload {
         val thumbnail = _photos.value.firstOrNull { it.status == PhotoUploadStatus.Uploaded }?.bytes
             ?: _photos.value.firstOrNull()?.bytes
@@ -425,6 +428,7 @@ class RoomProofViewModel @Inject constructor(
             timestampMillis = System.currentTimeMillis(),
             thumbnailJpeg = thumbnail,
             proofPhase = proofPhase,
+            issueCount = issueCount,
         )
     }
 
