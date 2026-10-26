@@ -103,9 +103,7 @@ struct PropertyLoadFailureView: View {
     var body: some View {
         MMScreen(
             title: "Can’t load your vault",
-            subtitle: message ?? "Your proof is safe. We couldn’t reach MoveMark to load it just now.",
-            // Short content: the tail keeps the light sheet running past the header backdrop.
-            tail: 360
+            subtitle: message ?? "Your proof is safe. We couldn’t reach MoveMark to load it just now."
         ) {
             MMPrimaryButton(
                 title: isRetrying ? "Trying again…" : "Try again",

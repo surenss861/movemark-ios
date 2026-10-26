@@ -87,7 +87,6 @@ struct MMScreen<Trailing: View, Content: View>: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             Color.clear.frame(height: 0).background(MMInk.hero.ignoresSafeArea(edges: .top))
         }
-        .background(alignment: .top) { MMInk.hero.frame(height: 360).ignoresSafeArea(edges: .top) }
         .background(MMInk.sheet.ignoresSafeArea())
         .toolbar(isPushed ? .automatic : .hidden, for: .navigationBar)
         .toolbarBackground(MMInk.hero, for: .navigationBar)
@@ -134,7 +133,9 @@ struct MMScreen<Trailing: View, Content: View>: View {
         .padding(.horizontal, MMMetrics.inset)
         .padding(.bottom, 28 + MMMetrics.sheetRadius)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(MMInk.hero)
+        // The header's dark runs up past the top so pulling down never shows the light sheet colour above it;
+        // below a short sheet there is only the sheet colour (no dark band).
+        .background(alignment: .bottom) { MMInk.hero.frame(height: 2000) }
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 }
@@ -434,8 +435,10 @@ struct MMChip: View {
                 .frame(minHeight: 36)
                 .background(isSelected ? MMInk.text : MMInk.card, in: Capsule())
                 .overlay(Capsule().strokeBorder(isSelected ? Color.clear : MMInk.cardStroke, lineWidth: 1))
+                .contentShape(Capsule())
         }
         .buttonStyle(MMLightPressStyle())
+        .clipShape(Capsule())
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

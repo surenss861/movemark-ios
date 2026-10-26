@@ -33,7 +33,6 @@ struct MaintenanceIssueDetailContainerView: View {
                         title: "This issue isn't available",
                         message: loadError
                     )
-                    .frame(minHeight: 420, alignment: .top)
                 }
             } else {
                 MMScreen(title: "Maintenance issue", isPushed: true) {
@@ -41,7 +40,7 @@ struct MaintenanceIssueDetailContainerView: View {
                         ProgressView().tint(MMInk.secondary)
                         Text("Loading issue…").mmFont(14).foregroundStyle(MMInk.secondary)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 420, alignment: .top)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 40)
                     .accessibilityElement(children: .combine)
                 }
