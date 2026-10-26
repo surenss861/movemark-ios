@@ -16,9 +16,7 @@ struct SignedInRootView: View {
     var body: some View {
         Group {
             if !propertyStore.hasCompletedInitialFetch {
-                ProgressView()
-                    .tint(MoveMarkTheme.Colors.primary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                MMLaunchWait()
             } else if shouldShowLoadFailure {
                 PropertyLoadFailureView(
                     message: propertyStore.errorMessage,
@@ -97,32 +95,24 @@ struct SignedInRootView: View {
 // MARK: - Recoverable load failure
 
 /// Authentication succeeded; only the property load failed. The user stays signed in.
-private struct PropertyLoadFailureView: View {
+struct PropertyLoadFailureView: View {
     let message: String?
     let isRetrying: Bool
     let onRetry: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.titleToSubtitle) {
-            Text("Can’t load your vault")
-                .font(MoveMarkTheme.Typography.screenTitle)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-            Text(message ?? "Your proof is safe. We couldn’t reach MoveMark to load it just now.")
-                .font(MoveMarkTheme.Typography.body)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            MMButton(
+        MMScreen(
+            title: "Can’t load your vault",
+            subtitle: message ?? "Your proof is safe. We couldn’t reach MoveMark to load it just now.",
+            // Short content: the tail keeps the light sheet running past the header backdrop.
+            tail: 360
+        ) {
+            MMPrimaryButton(
                 title: isRetrying ? "Trying again…" : "Try again",
-                action: onRetry,
-                kind: .primary,
-                size: .standard,
-                isDisabled: isRetrying
+                icon: "arrow.clockwise",
+                isLoading: isRetrying,
+                action: onRetry
             )
-            .padding(.top, MoveMarkTheme.Spacing.titleToSubtitle)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
     }
 }

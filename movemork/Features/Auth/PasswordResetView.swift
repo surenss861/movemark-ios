@@ -42,44 +42,58 @@ struct PasswordResetView: View {
     @State private var isSaving = false
     @State private var didReset = false
 
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.panelPadding) {
-                Text(didReset ? "Password updated" : "Choose a new password")
-                    .font(MoveMarkTheme.Typography.screenTitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+    init(token: String, onDone: @escaping () -> Void) {
+        self.token = token
+        self.onDone = onDone
+    }
 
+    /// Snapshot tests only: open on the done or the failed state. Production uses the init above.
+    init(token: String, previewDidReset: Bool, previewError: String = "", onDone: @escaping () -> Void = {}) {
+        self.token = token
+        self.onDone = onDone
+        _didReset = State(initialValue: previewDidReset)
+        _errorMessage = State(initialValue: previewError)
+    }
+
+    var body: some View {
+        NavigationStack {
+            MMSheetScaffold(title: didReset ? "Password updated" : "Choose a new password") {
                 if didReset {
                     Text("Sign in with your new password.")
-                        .font(MoveMarkTheme.Typography.body)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    MMButton(title: "Done", action: onDone, kind: .primary, size: .auth, isDisabled: false)
+                        .mmFont(15)
+                        .foregroundStyle(MMInk.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    MMPrimaryButton(title: "Done", action: onDone)
                         .accessibilityIdentifier("passwordReset.done")
+                        .padding(.top, 22)
                 } else {
-                    MMTextField(title: "New password", placeholder: "At least 8 characters", text: $password, isSecure: true, density: .authCompact)
-                        .accessibilityIdentifier("passwordReset.password")
-                    MMTextField(title: "Confirm password", placeholder: "Same as above", text: $confirmPassword, isSecure: true, density: .authCompact)
-                        .accessibilityIdentifier("passwordReset.confirm")
+                    VStack(alignment: .leading, spacing: 14) {
+                        MMField(title: "New password", placeholder: "At least 8 characters", text: $password,
+                                isSecure: true, accessibilityID: "passwordReset.password")
+                        MMField(title: "Confirm password", placeholder: "Same as above", text: $confirmPassword,
+                                isSecure: true, accessibilityID: "passwordReset.confirm")
+                    }
+                    .padding(.top, 8)
 
                     if !errorMessage.isEmpty {
-                        Text(errorMessage)
-                            .font(MoveMarkTheme.Typography.footnote)
-                            .foregroundStyle(MoveMarkTheme.Colors.semanticDanger)
+                        MMNotice(message: errorMessage)
                             .accessibilityIdentifier("passwordReset.error")
+                            .padding(.top, 18)
                     }
 
-                    MMButton(title: "Save new password", action: save, kind: .primary, size: .auth, isDisabled: isSaving)
-                        .opacity(isSaving ? 0.6 : 1)
+                    MMPrimaryButton(title: "Save new password", isLoading: isSaving, action: save)
                         .accessibilityIdentifier("passwordReset.save")
-                    Button("Cancel", action: onDone)
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        .padding(.top, 22)
                 }
             }
-            .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-            .padding(.vertical, MoveMarkTheme.Spacing.screenHorizontal)
+            .toolbar {
+                if !didReset {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel", action: onDone)
+                    }
+                }
+            }
         }
-        .background(MoveMarkTheme.Colors.appBackground.ignoresSafeArea())
         .interactiveDismissDisabled(isSaving)
     }
 

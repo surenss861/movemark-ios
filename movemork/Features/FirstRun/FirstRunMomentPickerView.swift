@@ -14,86 +14,48 @@ struct FirstRunMomentPickerView: View {
     let onSelect: (RentalMoment) -> Void
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 24) {
-                MMRenterHeader(
-                    title: MoveMarkGrowthCopy.firstRunMomentTitle,
-                    subtitle: MoveMarkGrowthCopy.firstRunMomentSubtitle
-                )
-
-                VStack(spacing: 10) {
-                    ForEach(RentalMoment.allCases) { moment in
-                        momentRow(moment)
-                    }
-                }
-
-                HStack(spacing: 8) {
-                    if isPreparing {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(MoveMarkTheme.Colors.textSecondary)
-                    }
-
-                    Text(
-                        isPreparing
-                            ? "Loading your vaults…"
-                            : MoveMarkGrowthCopy.firstRunMomentFootnote
-                    )
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+        MMScreen(
+            title: MoveMarkGrowthCopy.firstRunMomentTitle,
+            subtitle: MoveMarkGrowthCopy.firstRunMomentSubtitle
+        ) {
+            MMGroup {
+                ForEach(Array(RentalMoment.allCases.enumerated()), id: \.element) { index, moment in
+                    if index > 0 { MMRowDivider(leading: 52) }
+                    momentRow(moment)
                 }
             }
-            .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-            .padding(.top, 8)
-            .padding(.bottom, 32)
+
+            HStack(spacing: 8) {
+                if isPreparing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(MMInk.secondary)
+                }
+
+                Text(
+                    isPreparing
+                        ? "Loading your vaults…"
+                        : MoveMarkGrowthCopy.firstRunMomentFootnote
+                )
+                .mmFont(13)
+                .foregroundStyle(MMInk.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
         }
-        .mmProofShellBackground(heroFocus: false, ctaBloom: false)
     }
 
     private func momentRow(_ moment: RentalMoment) -> some View {
-        Button {
+        MMRow(
+            title: moment.title,
+            subtitle: moment.blurb,
+            icon: moment.iconName,
+            isDisabled: isPreparing
+        ) {
             MMHaptics.selection()
             onSelect(moment)
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: moment.iconName)
-                    .font(MoveMarkTheme.Typography.subtitleLarge)
-                    .foregroundStyle(MoveMarkTheme.Colors.primary)
-                    .frame(width: 28)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(moment.title)
-                        .font(MoveMarkTheme.Typography.bodySmallEmphasis)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Text(moment.blurb)
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.94))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 0)
-
-                Image(systemName: "chevron.right")
-                    .font(MoveMarkTheme.Typography.footnoteEmphasis)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.45))
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.card.opacity(0.92))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.45), lineWidth: 0.75)
-            )
         }
-        .buttonStyle(.plain)
-        .disabled(isPreparing)
-        .opacity(isPreparing ? 0.55 : 1)
         .accessibilityLabel("\(moment.title). \(moment.blurb)")
     }
 }

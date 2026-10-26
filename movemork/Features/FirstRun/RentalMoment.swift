@@ -47,7 +47,7 @@ enum RentalMoment: String, CaseIterable, Identifiable {
         case .foundDamage: return "exclamationmark.triangle"
         case .movingOut: return "key"
         case .needReport: return "doc.text"
-        case .depositQuestioned: return "shield.lefthalf.filled"
+        case .depositQuestioned: return "questionmark.bubble"
         }
     }
 

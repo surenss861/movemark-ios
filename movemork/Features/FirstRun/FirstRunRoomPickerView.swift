@@ -54,46 +54,22 @@ struct FirstRunRoomPickerView: View {
     @State private var isLoading = false
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 24) {
-                MMRenterHeader(
-                    title: moment.roomTitle,
-                    subtitle: moment.roomSubtitle
-                )
-
-                VStack(spacing: 10) {
-                    ForEach(FirstRunRoomOption.allCases) { option in
-                        roomOptionRow(option)
-                    }
-                }
-
-                if !errorMessage.isEmpty {
-                    Text(errorMessage)
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(.red.opacity(0.9))
-                }
-
-                ZStack {
-                    MMButton(
-                        title: "Start room proof",
-                        action: { startRoomProof() },
-                        kind: .primary,
-                        size: .auth,
-                        isDisabled: isLoading
-                    )
-                    .opacity(isLoading ? 0.6 : 1)
-
-                    if isLoading {
-                        ProgressView()
-                            .tint(MoveMarkTheme.Colors.primary)
-                    }
+        MMScreen(title: moment.roomTitle, subtitle: moment.roomSubtitle) {
+            MMGroup {
+                ForEach(Array(FirstRunRoomOption.allCases.enumerated()), id: \.element) { index, option in
+                    if index > 0 { MMRowDivider() }
+                    roomOptionRow(option)
                 }
             }
-            .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-            .padding(.top, 8)
-            .padding(.bottom, 32)
+
+            if !errorMessage.isEmpty {
+                MMNotice(message: errorMessage)
+                    .padding(.top, 22)
+            }
+
+            MMPrimaryButton(title: "Start room proof", isLoading: isLoading) { startRoomProof() }
+                .padding(.top, 26)
         }
-        .mmProofShellBackground(heroFocus: false, ctaBloom: false)
         .sheet(isPresented: $showOtherSheet) {
             otherRoomSheet
         }
@@ -103,81 +79,21 @@ struct FirstRunRoomPickerView: View {
     }
 
     private func roomOptionRow(_ option: FirstRunRoomOption) -> some View {
-        let isSelected = selected == option
-        return Button {
+        MMSelectRow(title: option.title, isSelected: selected == option) {
             MMHaptics.selection()
             selected = option
-        } label: {
-            HStack {
-                Text(option.title)
-                    .font(MoveMarkTheme.Typography.bodySmallEmphasis)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                Spacer()
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(MoveMarkTheme.Typography.subtitleLarge)
-                    .foregroundStyle(
-                        isSelected
-                            ? MoveMarkTheme.Colors.primary
-                            : MoveMarkTheme.Colors.textSecondary.opacity(0.45)
-                    )
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(
-                        isSelected
-                            ? MoveMarkTheme.Colors.primary.opacity(0.12)
-                            : MoveMarkTheme.Colors.card.opacity(0.92)
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(
-                        isSelected
-                            ? MoveMarkTheme.Colors.primary.opacity(0.45)
-                            : MoveMarkTheme.Colors.cardStroke.opacity(0.45),
-                        lineWidth: 0.75
-                    )
-            )
         }
-        .buttonStyle(.plain)
     }
 
     private var otherRoomSheet: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Name this room")
-                    .font(MoveMarkTheme.Typography.cardTitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                MMTextField(
-                    title: "Room name",
-                    placeholder: "e.g. Office",
-                    text: $otherRoomName,
-                    density: .authCompact
-                )
-
-                MMButton(
-                    title: "Use this room",
-                    action: {
-                        showOtherSheet = false
-                        startRoomProof()
-                    },
-                    kind: .primary,
-                    size: .standard,
-                    isDisabled: otherRoomName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                )
-
-                Spacer()
+            FirstRunOtherRoomSheet(otherRoomName: $otherRoomName) {
+                showOtherSheet = false
+                startRoomProof()
             }
-            .padding(20)
-            .navigationTitle("Other room")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { showOtherSheet = false }
-                        .foregroundStyle(MoveMarkTheme.Colors.primary)
                 }
             }
         }
@@ -266,5 +182,41 @@ struct FirstRunRoomPickerView: View {
             throw NSError(domain: "FirstRun", code: 4, userInfo: [NSLocalizedDescriptionKey: "Couldn’t open \(targetName). Try again."])
         }
         return (room.id, room.name)
+    }
+}
+
+extension FirstRunRoomPickerView {
+    /// Snapshot tests only: open on a given selection, optionally with an error showing. In an extension so
+    /// the memberwise init the flow uses stays as it is.
+    init(propertyId: UUID, moment: RentalMoment, previewSelection: FirstRunRoomOption, previewError: String = "") {
+        self.init(propertyId: propertyId, moment: moment, onStartProof: { _, _ in })
+        _selected = State(initialValue: previewSelection)
+        _errorMessage = State(initialValue: previewError)
+    }
+}
+
+/// The "Other" room sheet: name the room, then start its proof.
+struct FirstRunOtherRoomSheet: View {
+    @Binding var otherRoomName: String
+    let onUse: () -> Void
+
+    private var isNameEmpty: Bool {
+        otherRoomName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        MMSheetScaffold(title: "Other room") {
+            Text("Name this room")
+                .mmFont(20, .semibold)
+                .foregroundStyle(MMInk.text)
+                .accessibilityAddTraits(.isHeader)
+
+            MMField(title: "Room name", placeholder: "e.g. Office", text: $otherRoomName, autocapitalization: .never)
+                .autocorrectionDisabled()
+                .padding(.top, 16)
+
+            MMPrimaryButton(title: "Use this room", isDisabled: isNameEmpty, action: onUse)
+                .padding(.top, 22)
+        }
     }
 }

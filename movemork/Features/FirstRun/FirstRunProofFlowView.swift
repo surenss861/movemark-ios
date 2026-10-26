@@ -85,7 +85,7 @@ struct FirstRunProofFlowView: View {
                             Button("Back") {
                                 step = .pickRoom(propertyId)
                             }
-                            .foregroundStyle(MoveMarkTheme.Colors.primary)
+                            .foregroundStyle(.white)
                         }
                     }
                 }

@@ -24,80 +24,39 @@ struct FirstRunPropertySetupView: View {
     @State private var isLoading = false
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 24) {
-                MMRenterHeader(
-                    title: moment.setupTitle,
-                    subtitle: moment.setupSubtitle
-                )
-
-                VStack(alignment: .leading, spacing: 12) {
-                    if requiresOnboarding {
-                        MMTextField(
-                            title: "Your name",
-                            placeholder: "Optional",
-                            text: $yourName,
-                            density: .authCompact
-                        )
-                    }
-
-                    MMTextField(
-                        title: "Rental name",
-                        placeholder: "My apartment",
-                        text: $rentalName,
-                        density: .authCompact
-                    )
-
-                    MMTextField(
-                        title: "City / location",
-                        placeholder: "Optional",
-                        text: $city,
-                        density: .authCompact
-                    )
-
-                    DatePicker("Move-in date", selection: $moveInDate, displayedComponents: .date)
-                        .font(MoveMarkTheme.Typography.subheadline)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        .tint(MoveMarkTheme.Colors.primary)
-
-                    if !errorMessage.isEmpty {
-                        Text(errorMessage)
-                            .font(MoveMarkTheme.Typography.footnote)
-                            .foregroundStyle(.red.opacity(0.9))
-                    }
-
-                    ZStack {
-                        MMButton(
-                            title: moment.setupCTA,
-                            action: { createVault() },
-                            kind: .primary,
-                            size: .auth,
-                            isDisabled: isLoading
-                        )
-                        .opacity(isLoading ? 0.6 : 1)
-
-                        if isLoading {
-                            ProgressView()
-                                .tint(MoveMarkTheme.Colors.primary)
-                        }
-                    }
+        MMScreen(title: moment.setupTitle, subtitle: moment.setupSubtitle) {
+            VStack(alignment: .leading, spacing: 14) {
+                if requiresOnboarding {
+                    field("Your name", placeholder: "Optional", text: $yourName)
                 }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(MoveMarkTheme.Colors.card.opacity(0.94))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.5), lineWidth: 0.75)
-                )
+                field("Rental name", placeholder: "My apartment", text: $rentalName)
+                field("City / location", placeholder: "Optional", text: $city)
             }
-            .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-            .padding(.top, 8)
-            .padding(.bottom, 32)
+
+            MMGroup {
+                DatePicker("Move-in date", selection: $moveInDate, displayedComponents: .date)
+                    .mmFont(16)
+                    .foregroundStyle(MMInk.text)
+                    .tint(MMInk.text)
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: MMMetrics.rowHeight)
+            }
+            .padding(.top, 22)
+
+            if !errorMessage.isEmpty {
+                MMNotice(message: errorMessage)
+                    .padding(.top, 22)
+            }
+
+            MMPrimaryButton(title: moment.setupCTA, isLoading: isLoading) { createVault() }
+                .padding(.top, 26)
         }
-        .scrollDismissesKeyboard(.interactively)
-        .mmProofShellBackground(heroFocus: false, ctaBloom: false)
+    }
+
+    /// Same input behaviour as before the system pass: no auto-capitalisation, no autocorrect.
+    private func field(_ title: String, placeholder: String, text: Binding<String>) -> some View {
+        MMField(title: title, placeholder: placeholder, text: text, autocapitalization: .never)
+            .autocorrectionDisabled()
     }
 
     private func createVault() {
@@ -160,5 +119,14 @@ struct FirstRunPropertySetupView: View {
                 MMHaptics.error()
             }
         }
+    }
+}
+
+extension FirstRunPropertySetupView {
+    /// Snapshot tests only: open with an error already showing. In an extension so the memberwise init
+    /// the flow uses stays as it is.
+    init(requiresOnboarding: Bool, moment: RentalMoment, previewError: String) {
+        self.init(requiresOnboarding: requiresOnboarding, moment: moment, onCreated: { _ in })
+        _errorMessage = State(initialValue: previewError)
     }
 }

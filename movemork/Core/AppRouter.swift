@@ -15,12 +15,11 @@ struct AppRouter: View {
 
     var body: some View {
         ZStack {
-            MoveMarkTheme.Colors.appBackground.ignoresSafeArea()
+            MMInk.hero.ignoresSafeArea()
 
             switch sessionManager.authPhase {
             case .loading:
-                ProgressView()
-                    .tint(MoveMarkTheme.Colors.primary)
+                MMLaunchWait()
 
             case .misconfigured:
                 BackendMisconfigurationView()
@@ -63,29 +62,18 @@ struct AppRouter: View {
 
 // MARK: - Misconfiguration
 
-private struct BackendMisconfigurationView: View {
+/// The build has no usable server address. Nothing to retry from here, so there is no primary action.
+struct BackendMisconfigurationView: View {
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.panelPadding) {
-                Text("Can’t connect to MoveMark")
-                    .font(MoveMarkTheme.Typography.screenTitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                Text(
-                    "This build is missing a valid MoveMark server address (often from an unset or mis-merged Secrets.xcconfig). The app won’t crash, but sign-in and sync won’t work until you fix the app target’s build settings."
-                )
-                .font(MoveMarkTheme.Typography.body)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-                Text("Developers: copy Config/Secrets.xcconfig.example to Secrets.xcconfig, set NEON_AUTH_URL and NEON_DATA_API_URL (split https:// in xcconfig), then clean and rebuild.")
-                    .font(MoveMarkTheme.Typography.caption)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-            .padding(.vertical, MoveMarkTheme.Spacing.screenHorizontal)
+        MMScreen(
+            title: "Can’t connect to MoveMark",
+            subtitle: "This build is missing a valid MoveMark server address (often from an unset or mis-merged Secrets.xcconfig). The app won’t crash, but sign-in and sync won’t work until you fix the app target’s build settings.",
+            tail: 360
+        ) {
+            MMNotice(
+                message: "Developers: copy Config/Secrets.xcconfig.example to Secrets.xcconfig, set NEON_AUTH_URL and NEON_DATA_API_URL (split https:// in xcconfig), then clean and rebuild.",
+                tone: .warning
+            )
         }
     }
 }
