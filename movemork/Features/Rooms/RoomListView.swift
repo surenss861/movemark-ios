@@ -63,7 +63,7 @@ struct RoomListView: View {
                 roomsListAppeared = true
             }
         }
-        .navigationTitle("Proof Sprint")
+        .navigationTitle("Rooms")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -93,34 +93,56 @@ struct RoomListView: View {
 
     private var progressCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let propertyTitle = propertyStore.currentProperty?.title.trimmingCharacters(in: .whitespacesAndNewlines),
-               !propertyTitle.isEmpty,
-               !rooms.isEmpty
-            {
-                Text(propertyTitle)
-                    .font(MoveMarkTheme.Typography.heroTitle)
-                    .tracking(-0.4)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-            }
+            Text("MOVE-IN WALKTHROUGH")
+                .font(MoveMarkTheme.Typography.sectionLabel)
+                .tracking(0.9)
+                .foregroundStyle(MoveMarkTheme.Colors.textMuted)
 
-            if !rooms.isEmpty {
-                MMRoomProgressCard(
-                    headline: "\(completedCount) of \(rooms.count) rooms documented",
-                    nextLine: progressNextLine,
-                    progress: progress,
-                    primaryTitle: progressPrimaryTitle,
-                    onPrimary: openNextRoom,
-                    documentedCount: completedCount,
-                    totalCount: rooms.count
-                )
-            }
+            Text(propertyStore.currentProperty?.title.isEmpty == false
+                 ? propertyStore.currentProperty?.title ?? "Your rental"
+                 : "Your rental")
+                .font(MoveMarkTheme.Typography.pageTitle)
+                .tracking(-0.8)
+                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
 
             if rooms.isEmpty {
-                MMMissingItemCard(
+                Text("Add the rooms you want documented, then capture what was already there.")
+                    .font(MoveMarkTheme.Typography.body)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                MMButton(
                     title: "Add your first room",
-                    message: "Start with the room you are in — Kitchen works well.",
-                    actionTitle: MMNextBestAction.addRoom.title,
-                    onAction: { showAddRoom = true }
+                    action: { showAddRoom = true },
+                    kind: .primary,
+                    size: .inline
+                )
+            } else {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("\(completedCount) of \(rooms.count) rooms documented")
+                        .font(MoveMarkTheme.Typography.rowTitle)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+
+                    Spacer()
+
+                    Text("\(Int(progress * 100))%")
+                        .font(MoveMarkTheme.Typography.metadata)
+                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                }
+
+                ProgressView(value: progress)
+                    .tint(MoveMarkTheme.Colors.primary)
+
+                Text(progressNextLine)
+                    .font(MoveMarkTheme.Typography.metadata)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+
+                MMButton(
+                    title: progressPrimaryTitle,
+                    action: openNextRoom,
+                    kind: .primary,
+                    size: .inline
                 )
             }
         }
@@ -200,42 +222,101 @@ struct RoomListView: View {
         )
     }
 
-    /// Lease, deposit and maintenance — shown after rooms, outside the room count.
+    /// Lease, deposit, maintenance and move-out remain supporting proof, outside room completion.
     @ViewBuilder
     private var supportingProofSection: some View {
         if let property = propertyStore.currentProperty {
             let issues = propertyStore.openIssueCount(for: property)
-            VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.cardGap) {
-                MMSectionLabel("Supporting proof")
 
-                ForEach(ProofSprint.documentTargets) { target in
-                    let added = ProofSprint.isDocumentUploaded(target.documentType, in: property)
-                    ProofTaskCard(
-                        title: target.title,
-                        reason: added ? "Saved to your vault" : target.reason,
-                        action: { path.append(.vaultDetail(propertyId: property.id)) },
-                        statusLabel: added ? "Added" : "Needed",
-                        statusTone: added ? .success : .warning
-                    )
-                }
-
-                ProofTaskCard(
-                    title: "Maintenance issues",
-                    reason: issues == 0
-                        ? "Timestamp repairs and problems."
-                        : (issues == 1 ? "1 open issue" : "\(issues) open issues"),
-                    action: { path.append(.maintenance) },
-                    statusLabel: issues > 0 ? "\(issues) open" : nil,
-                    statusTone: .neutral
+            VStack(alignment: .leading, spacing: 10) {
+                MMProofSectionHeader(
+                    title: "Supporting proof",
+                    subtitle: "Records that strengthen the room evidence without changing room completion."
                 )
 
-                ProofTaskCard(
-                    title: "Move-out proof",
-                    reason: "Re-capture the same rooms when you leave.",
-                    action: { path.append(.moveOut) }
+                VStack(spacing: 0) {
+                    ForEach(Array(ProofSprint.documentTargets.enumerated()), id: \.element.id) { index, target in
+                        let added = ProofSprint.isDocumentUploaded(target.documentType, in: property)
+                        supportingRow(
+                            title: target.title,
+                            subtitle: added ? "Recorded in your vault" : target.reason,
+                            status: added ? "Added" : "Needed",
+                            isComplete: added,
+                            action: { path.append(.vaultDetail(propertyId: property.id)) }
+                        )
+
+                        Divider().overlay(MoveMarkTheme.Stroke.normal)
+                    }
+
+                    supportingRow(
+                        title: "Maintenance",
+                        subtitle: issues == 0
+                            ? "Record repairs and problems as they happen"
+                            : (issues == 1 ? "1 open case" : "\(issues) open cases"),
+                        status: issues > 0 ? "\(issues) open" : nil,
+                        isComplete: false,
+                        action: { path.append(.maintenance) }
+                    )
+
+                    Divider().overlay(MoveMarkTheme.Stroke.normal)
+
+                    supportingRow(
+                        title: "Move-out",
+                        subtitle: "Re-capture these rooms when you leave",
+                        status: nil,
+                        isComplete: false,
+                        action: { path.append(.moveOut) }
+                    )
+                }
+                .padding(.horizontal, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.card, style: .continuous)
+                        .fill(MoveMarkTheme.Surface.raised)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: MoveMarkTheme.Radius.card, style: .continuous)
+                        .stroke(MoveMarkTheme.Stroke.normal, lineWidth: 1)
                 )
             }
         }
+    }
+
+    private func supportingRow(
+        title: String,
+        subtitle: String,
+        status: String?,
+        isComplete: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(MoveMarkTheme.Typography.rowTitle)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+
+                    Text(subtitle)
+                        .font(MoveMarkTheme.Typography.metadata)
+                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 8)
+
+                if let status {
+                    Text(status)
+                        .font(MoveMarkTheme.Typography.metadata)
+                        .foregroundStyle(isComplete ? MoveMarkTheme.Colors.semanticSuccess : MoveMarkTheme.Colors.textSecondary)
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(MoveMarkTheme.Typography.metadata)
+                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+            }
+            .padding(.vertical, MoveMarkTheme.Spacing.rowVertical)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
