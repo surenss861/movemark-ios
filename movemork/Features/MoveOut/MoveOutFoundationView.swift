@@ -181,9 +181,9 @@ struct MoveOutFoundationView: View {
         let notCompared = all.filter { $0.state == .noBaseline }
 
         ScrollViewReader { proxy in
-        VStack(alignment: .leading, spacing: 30) {
+        VStack(alignment: .leading, spacing: 26) {
             // The page's index: tap a count to jump to those rooms.
-            MMPanel {
+            MMPanel(padding: 14) {
                 MoveOutTally(changed: changed.count, missing: missing.count, unchanged: unchanged.count) { index in
                     withAnimation { proxy.scrollTo(["changed", "missing", "unchanged"][index], anchor: .top) }
                 }
