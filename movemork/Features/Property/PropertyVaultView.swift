@@ -2,7 +2,7 @@
 //  PropertyVaultView.swift
 //  movemork
 //
-//  MoveMark — Property command center: hero, rooms, documents, details, actions.
+//  MoveMark — The rental record: owns its state, uploads and backend calls; PropertyVaultContent draws it.
 //
 
 import SwiftUI
@@ -101,64 +101,12 @@ struct PropertyVaultView: View {
         return propertyStore.readinessScore(for: property)
     }
 
-    private var orderedRooms: [RoomRecord] {
-        guard let next = nextRoom else { return property.rooms }
-        return property.rooms.sorted { lhs, rhs in
-            if lhs.id == next.id { return true }
-            if rhs.id == next.id { return false }
-            let lhsDone = !lhs.evidence.isEmpty
-            let rhsDone = !rhs.evidence.isEmpty
-            if lhsDone != rhsDone { return !lhsDone && rhsDone }
-            return lhs.name < rhs.name
-        }
-    }
-
-    private var walkthroughSubtitle: String {
-        if let label = vaultSummary?.readiness.primaryNextAction?.label,
-           !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return label
-        }
-        if let next = nextRoom, next.evidence.isEmpty {
-            return "Open \(next.name) to capture proof"
-        }
-        if totalRooms == 0 { return "Start documenting the property" }
-        return "Review finished rooms"
-    }
-
-    private var exportsSubtitle: String {
-        propertyStore.isExportReady(for: property)
-            ? "Make and share reports"
-            : "Add proof before making a report"
-    }
-
-    private var vaultProofTrailRows: [MMProofTimelineRow] {
-        MMProofTimelineBuilder.vaultTrail(
-            property: property,
-            nextRoom: nextRoom,
-            isExportReady: exportReady
-        )
-    }
-
-    private var highlightedTrailRowID: String? {
-        if let doc = highlightedDocumentType {
-            return "doc-\(doc.rawValue)"
-        }
-        if let roomId = pulseQueueHeadRoomId {
-            return "room-\(roomId.uuidString)"
-        }
-        return nil
-    }
-
     private var uploadedDocumentCount: Int {
         propertyStore.uploadedSupportingRecordCount(for: property)
     }
 
     private var exportReady: Bool {
         propertyStore.isExportReady(for: property)
-    }
-
-    private var missingPriorityDocTypes: [VaultDocumentType] {
-        Self.priorityDocumentTypes.filter { !hasDoc($0) }
     }
 
     var body: some View {
@@ -171,6 +119,8 @@ struct PropertyVaultView: View {
                 // "Capture Kitchen" opens Kitchen; anything else continues the guided list.
                 if case .captureRoom(let roomID, _) = propertyStore.primaryNextAction(for: property) {
                     path.append(.roomDetail(roomID: roomID))
+                } else if let next = nextRoom, !MMRoomProofMetrics.isDocumented(next) {
+                    path.append(.roomDetail(roomID: next.id))
                 } else {
                     path.append(.walkthrough)
                 }
@@ -182,8 +132,8 @@ struct PropertyVaultView: View {
             onViewRecord: { docType in Task { await previewDocument(type: docType) } },
             onUploadRecord: { docType in startUpload(for: docType) },
             onDeleteRecord: { docType in deleteConfirmType = docType.rawValue },
-            onTool: { tool in
-                switch tool {
+            onLink: { link in
+                switch link {
                 case .maintenance: path.append(.maintenance)
                 case .moveOut: path.append(.moveOut)
                 case .caseBuilder:
@@ -256,7 +206,8 @@ struct PropertyVaultView: View {
         .sheet(isPresented: $showReplacePhotoSheet) {
             ReplacePhotoSheet(
                 onDismiss: { showReplacePhotoSheet = false },
-                selection: $selectedPhotoItem
+                selection: $selectedPhotoItem,
+                current: listingPreview
             )
         }
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.pdf]) { result in
@@ -298,126 +249,78 @@ struct PropertyVaultView: View {
     // MARK: - Presentation model
 
     private var vaultModel: PropertyVaultModel {
-        let primaryAction = propertyStore.primaryNextAction(for: property)
-        var primaryIcon: String? = nil
-        if case .captureRoom = primaryAction { primaryIcon = "camera.fill" }
-        return PropertyVaultModel(
-            title: Self.displayTitle(for: property),
-            location: Self.locationLine(for: property),
-            documented: completedRooms,
-            total: totalRooms,
-            photos: totalPhotos,
-            progress: progress,
-            nextLine: propertyVaultProofHeroNextLine,
-            primaryTitle: MMNextBestActionMapper.primaryTitle(for: primaryAction),
-            primaryIcon: primaryIcon,
+        PropertyVaultModel(
+            title: PropertyVaultModel.displayTitle(for: property),
+            addressLine: PropertyVaultModel.addressLine(for: property),
+            moveInLine: PropertyVaultModel.moveInLine(for: property),
+            rooms: property.rooms.map { MMRentalRoom($0, isHighlighted: $0.id == pulseQueueHeadRoomId) },
+            nextRoomID: nextRoom.flatMap { MMRoomProofMetrics.isDocumented($0) ? nil : $0.id }
+                ?? property.rooms.first(where: { !MMRoomProofMetrics.isDocumented($0) })?.id,
             summaryError: vaultSummaryError,
-            trail: vaultProofTrailRows,
-            highlightedTrailID: highlightedTrailRowID,
-            rooms: orderedRooms.map { room in
-                PropertyVaultModel.Room(room: room, isNext: room.id == nextRoom?.id,
-                                        isPulsing: room.id == pulseQueueHeadRoomId)
-            },
             records: Self.documentTypeOrder.map { docType in
-                let present = hasDoc(docType)
-                return PropertyVaultModel.Record(
+                PropertyVaultModel.Record(
                     type: docType,
-                    isPresent: present,
-                    subtitle: recordSubtitle(for: docType, isPresent: present),
+                    isPresent: hasDoc(docType),
+                    addedOn: recordAddedOn(for: docType),
+                    file: recordFile(for: docType),
                     isHighlighted: highlightedDocumentType == docType
                 )
             },
             priorityCount: Self.priorityDocumentTypes.count,
-            uploadedCount: propertyStore.uploadedSupportingRecordCount(for: property),
             uploadError: uploadError,
             softNotice: uploadSoftNotice,
             previewError: previewErrorMessage,
             isUploading: isUploading,
-            tools: PropertyVaultModel.Tool.all(
-                openIssues: openIssuesCount,
-                completedRooms: completedRooms,
-                readinessScore: readinessScore,
-                exportsSubtitle: exportsSubtitle,
-                pulseDispute: pulseDisputeTile,
-                pulseExports: pulseExportsTile
-            ),
-            tenancy: PropertyVaultModel.Detail.tenancy(for: property),
-            contact: PropertyVaultModel.Detail.contact(for: property)
+            maintenance: maintenanceSummary,
+            moveOut: moveOutSummary,
+            details: PropertyVaultModel.Detail.primary(for: property),
+            moreDetails: PropertyVaultModel.Detail.more(for: property)
         )
     }
 
-    static func displayTitle(for property: PropertyRecord) -> String {
-        let title = property.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !title.isEmpty { return title }
-        let address = property.addressLine1.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !address.isEmpty { return address }
-        return "Property"
+    /// Open and total cases: the server's summary when loaded, else this rental's hydrated log.
+    private var maintenanceSummary: PropertyVaultModel.Maintenance {
+        if let m = vaultSummary?.maintenance {
+            return .init(open: m.openCount + m.followUpCount, total: m.openCount + m.followUpCount + m.resolvedCount)
+        }
+        let isActive = propertyStore.currentProperty?.id == property.id
+        return .init(open: openIssuesCount, total: isActive ? propertyStore.maintenanceLog.count : nil)
     }
 
-    static func locationLine(for property: PropertyRecord) -> String? {
-        let line = RentalLocation.line(city: property.city, province: property.provinceState)
-        if !line.isEmpty { return line }
-        let country = property.country.trimmingCharacters(in: .whitespacesAndNewlines)
-        return country.isEmpty ? nil : country
+    /// Move-out shows once it's relevant: move-out proof exists, or the lease ends within 45 days.
+    private var moveOutSummary: PropertyVaultModel.MoveOut? {
+        let documentedOut = propertyStore.moveOutDocumentedRoomCount(for: property)
+        let started = documentedOut > 0 || (vaultSummary?.walkthrough.hasMoveOutStarted ?? false)
+        let calendar = Calendar.current
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: Date()),
+                                           to: calendar.startOfDay(for: property.leaseEndDate)).day
+        let leaseEnding = property.leaseEndDate.timeIntervalSince1970 > 0 && (days ?? 999) <= 45
+        guard started || leaseEnding else { return nil }
+        return .init(documented: documentedOut, total: totalRooms,
+                     daysUntilLeaseEnd: leaseEnding && !started ? max(days ?? 0, 0) : nil)
     }
 
-    private var depositDisplayText: String {
-        let raw = property.depositAmount.trimmingCharacters(in: .whitespacesAndNewlines)
-        if raw.isEmpty { return "Deposit protection" }
-        if raw.hasPrefix("$") { return raw }
-        return "$\(raw)"
+    /// When a stored record was added, if the row says.
+    private func recordAddedOn(for docType: VaultDocumentType) -> String? {
+        MMRecordDate.parse(docRow(for: docType.rawValue)?.uploadedAt).map(MMRecordDate.display)
     }
 
-    private var proofScoreLabel: String {
-        if readinessScore >= 70 { return "Strong proof" }
-        if readinessScore >= 40 { return "Building proof" }
-        return "Early proof"
+    /// What a stored record's file is. Photos are stored under generated names, so they read as "Image".
+    private func recordFile(for docType: VaultDocumentType) -> String? {
+        guard let row = docRow(for: docType.rawValue) else { return nil }
+        if docType.acceptsImage { return "Image" }
+        let name = row.fileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "PDF" : name
     }
 
-    private var propertyVaultProofHeroNextLine: String {
-        if totalRooms > 0,
-           completedRooms < totalRooms,
-           let name = nextRoom?.name,
-           !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "Next: \(name)"
-        }
-        return readinessGuidanceLine
-    }
-
-    private var readinessGuidanceLine: String {
-        if let label = vaultSummary?.readiness.primaryNextAction?.label,
-           !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return label
-        }
-        if totalRooms == 0 {
-            return "Add rooms, then capture photos for each one."
-        }
-        if completedRooms < totalRooms {
-            return "Mark what was already there in rooms still missing photos."
-        }
-        if missingRecordsCount > 0 {
-            return "Add your lease and deposit receipt when you can."
-        }
-        return "Your proof looks strong. Keep documents current."
-    }
-
-    private func recordSubtitle(for docType: VaultDocumentType, isPresent: Bool) -> String {
-        switch docType {
-        case .lease:
-            return isPresent ? "Tenancy agreement attached" : "Tenancy agreement"
-        case .depositReceipt:
-            return isPresent ? "Payment proof attached" : "Payment proof"
-        case .listingScreenshot:
-            return isPresent ? "Original listing attached" : "Original listing"
-        case .cleaningReceipt:
-            return isPresent ? "Cleaning proof attached" : "Cleaning proof"
-        case .utilityProof:
-            return isPresent ? "Utility record attached" : "Utility record"
-        case .moveOutInvoice:
-            return isPresent ? "Move-out cost attached" : "Move-out cost"
-        case .other:
-            return isPresent ? "Additional proof attached" : "Additional proof"
-        }
+    /// The stored listing image for the listing-proof sheet, when there is one.
+    private var listingPreview: ReplacePhotoSheet.Current? {
+        guard hasDoc(.listingScreenshot), let row = docRow(for: VaultDocumentType.listingScreenshot.rawValue) else { return nil }
+        let bucket = DocumentRepository.storageBucket(forDocumentType: row.documentType)
+        let repo = documentRepo
+        return .init(path: row.thumbnailPath ?? row.filePath,
+                     addedOn: MMRecordDate.parse(row.uploadedAt),
+                     resolve: { path in try? await repo.signedURL(bucket: bucket, path: path) })
     }
 
     private func showFeedback(_ event: VaultFeedbackEvent) {
@@ -938,39 +841,3 @@ struct PropertyVaultView: View {
     }
 }
 
-// MARK: - Replace photo sheet (for image doc types)
-
-struct ReplacePhotoSheet: View {
-    let onDismiss: () -> Void
-    @Binding var selection: PhotosPickerItem?
-
-    var body: some View {
-        NavigationStack {
-            MMSheetScaffold(title: "Listing proof") {
-                Text("Choose a screenshot of the original listing. It is saved with this rental's records.")
-                    .mmFont(15)
-                    .foregroundStyle(MMInk.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                PhotosPicker(selection: $selection, matching: .images, preferredItemEncoding: .current) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "photo.on.rectangle.angled").font(.system(size: 14, weight: .semibold))
-                        Text("Choose photo").mmFont(15.5, .semibold)
-                    }
-                    .foregroundStyle(MMInk.onLime)
-                    .frame(maxWidth: .infinity, minHeight: MMMetrics.ctaHeight)
-                    .background(MMInk.lime, in: Capsule())
-                    .contentShape(Capsule())
-                }
-                .buttonStyle(MMLightPressStyle())
-                .padding(.top, 22)
-                MMSecondaryButton(title: "Cancel", action: onDismiss)
-                    .padding(.top, 8)
-            }
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { onDismiss() }
-                }
-            }
-        }
-    }
-}

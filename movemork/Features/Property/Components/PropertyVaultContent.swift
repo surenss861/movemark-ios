@@ -2,43 +2,46 @@
 //  PropertyVaultContent.swift
 //  movemork
 //
-//  @file The rental detail as a presentational view: the dark header names the rental, the light sheet
-//        carries its proof state with the one next action, its rooms, its records (lease, deposit receipt,
-//        listing proof, invoices) as a native grouped list with a status and one action each, the proof
-//        trail, tools and details. PropertyVaultView owns every state, upload and backend call and feeds
-//        this a model, so the screen can be snapshotted in every state.
+//  @file The rental record as a presentational view — the master file for one rental. The dark header names
+//        the rental (address, move-in date) and states its move-in proof as the Proof header does. The light
+//        sheet then reads in order of weight: rooms (the next room with the one capture action, then every
+//        room's proof), records (lease, deposit receipt, listing proof — Added / Needed, one action each),
+//        maintenance and move-out as related proof, and the rental's details quietly at the bottom.
+//        PropertyVaultView owns every state, upload and backend call and feeds this a model, so the screen
+//        can be snapshotted in every state.
 //  @domain property
-//  @see [[MMSystem+Property.swift]]
+//  @see [[MMSystem+Rental.swift]]
 //
 
 import SwiftUI
 
 struct PropertyVaultModel {
-    struct Room: Identifiable {
-        let id: UUID
-        let name: String
-        let detail: String
-        let state: MMRoomRow.RoomState
-        var isPulsing = false
-    }
-
     struct Record: Identifiable {
         var id: String { type.rawValue }
         let type: VaultDocumentType
         let isPresent: Bool
-        let subtitle: String
+        /// Present: when it was added ("Oct 19, 2025"), when known.
+        var addedOn: String? = nil
+        /// Present: what the file is ("lease-2025.pdf", or "Image" for photos stored under generated names).
+        var file: String? = nil
         var isHighlighted = false
     }
 
-    struct Tool: Identifiable {
-        enum Kind { case maintenance, moveOut, caseBuilder, exports }
-        var id: Kind { kind }
-        let kind: Kind
-        let title: String
-        let subtitle: String
-        let icon: String
-        var isPulsing = false
+    /// Maintenance cases for this rental. `total` is nil when only the open count is known.
+    struct Maintenance {
+        var open = 0
+        var total: Int? = nil
     }
+
+    /// Move-out, shown only once it's relevant (move-out proof exists, or the lease is ending).
+    struct MoveOut {
+        var documented: Int
+        var total: Int
+        /// Days until the lease ends, when that is why move-out is showing.
+        var daysUntilLeaseEnd: Int? = nil
+    }
+
+    enum Link { case maintenance, moveOut, caseBuilder, exports }
 
     struct Detail: Identifiable {
         var id: String { label }
@@ -47,30 +50,29 @@ struct PropertyVaultModel {
     }
 
     var title: String
-    var location: String?
-    var documented: Int
-    var total: Int
-    var photos: Int
-    var progress: Double
-    var nextLine: String
-    var primaryTitle: String
-    /// The camera glyph when the next action is a capture; none otherwise.
-    var primaryIcon: String? = nil
+    /// "Unit 2304 · Toronto, ON".
+    var addressLine: String?
+    /// "Moved in Oct 19, 2025".
+    var moveInLine: String?
+    var rooms: [MMRentalRoom] = []
+    var nextRoomID: UUID?
     var summaryError: String?
-    var trail: [MMProofTimelineRow] = []
-    var highlightedTrailID: String?
-    var rooms: [Room] = []
-    /// Every record slot, in display order; the first `priorityCount` show when the list is collapsed.
+    /// Every record slot, in display order; the first `priorityCount` always show.
     var records: [Record] = []
     var priorityCount = 3
-    var uploadedCount = 0
     var uploadError: String?
     var softNotice: String?
     var previewError: String?
     var isUploading = false
-    var tools: [Tool] = []
-    var tenancy: [Detail] = []
-    var contact: [Detail] = []
+    var maintenance = Maintenance()
+    var moveOut: MoveOut? = nil
+    /// Address and dates, always shown in Rental details.
+    var details: [Detail] = []
+    /// Deposit, rent and landlord, shown under "More details".
+    var moreDetails: [Detail] = []
+
+    var documented: Int { rooms.filter(\.isDocumented).count }
+    var total: Int { rooms.count }
 }
 
 struct PropertyVaultContent: View {
@@ -79,6 +81,7 @@ struct PropertyVaultContent: View {
     @Binding var showDetails: Bool
     var appeared = true
 
+    /// Capture the next room.
     var onPrimary: () -> Void = {}
     var onRetrySummary: () -> Void = {}
     var onSeeAllRooms: () -> Void = {}
@@ -87,122 +90,116 @@ struct PropertyVaultContent: View {
     var onViewRecord: (VaultDocumentType) -> Void = { _ in }
     var onUploadRecord: (VaultDocumentType) -> Void = { _ in }
     var onDeleteRecord: (VaultDocumentType) -> Void = { _ in }
-    var onTool: (PropertyVaultModel.Tool.Kind) -> Void = { _ in }
+    var onLink: (PropertyVaultModel.Link) -> Void = { _ in }
     var onEdit: () -> Void = {}
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
-        MMScreen(eyebrow: "Rental", title: model.title, subtitle: model.location, isPushed: true) {
-            proofPanel
-            if let error = model.summaryError, model.uploadError == nil {
-                MMNotice(message: error, actionTitle: MMCopy.tryAgain, action: onRetrySummary)
-                    .padding(.top, 14)
+        MMRecordScreen(
+            eyebrow: "Rental record",
+            title: model.title,
+            lines: [model.addressLine, model.moveInLine].compactMap { $0 },
+            headerExtra: {
+                MMHeaderProofProgress(done: model.documented, total: model.total).padding(.top, 22)
             }
-            section(delay: 0.06) { roomsSection }
-            section(delay: 0.10) { recordsSection }
-            section(delay: 0.14) { trailSection }
-            section(delay: 0.17) { toolsSection }
-            section(delay: 0.20) { detailsSection }
+        ) {
+            if let error = model.summaryError, model.uploadError == nil {
+                MMNotice(message: error, tone: .info, actionTitle: MMCopy.tryAgain, action: onRetrySummary)
+                    .padding(.bottom, 22)
+            }
+            section(delay: 0, top: 0) { roomsSection }
+            section(delay: 0.06) { recordsSection }
+            section(delay: 0.10) { relatedSection }
+            section(delay: 0.14) { detailsSection }
         }
     }
 
-    private func section<C: View>(delay: Double, @ViewBuilder _ content: () -> C) -> some View {
+    private func section<C: View>(delay: Double, top: CGFloat = 32, @ViewBuilder _ content: () -> C) -> some View {
         content()
-            .padding(.top, 30)
+            .padding(.top, top)
             .opacity(appeared ? 1 : 0)
             .offset(y: appeared ? 0 : 8)
             .animation(MMMotion.screenTransition.delay(delay), value: appeared)
     }
 
-    // MARK: Proof state + the one action
+    // MARK: Rooms — the evidence, and the one action
 
-    private var proofPanel: some View {
-        MMPanel {
-            Text("Move-in proof").mmFont(12.5).foregroundStyle(MMInk.secondary)
-            Text(model.total == 0 ? "No rooms yet" : "\(model.documented) of \(model.total) rooms ready")
-                .mmFont(20, .semibold)
-                .foregroundStyle(MMInk.text)
-                .padding(.top, 2)
-            MMProgressLine(fraction: model.progress).padding(.top, 12)
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(model.nextLine).mmFont(13.5).foregroundStyle(MMInk.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 8)
-                Text("\(model.photos) \(model.photos == 1 ? "photo" : "photos")")
-                    .mmFont(13).monospacedDigit().foregroundStyle(MMInk.secondary)
-            }
-            .padding(.top, 10)
-            MMPrimaryButton(title: model.primaryTitle, icon: model.primaryIcon) {
-                MMHaptics.soft()
-                onPrimary()
-            }
-            .padding(.top, 16)
-        }
-    }
-
-    // MARK: Rooms
-
+    @ViewBuilder
     private var roomsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            MMSectionTitle(title: "Rooms", trailing: "See all", action: onSeeAllRooms)
-            MMGroup {
-                if model.rooms.isEmpty {
-                    MMRow(title: "No rooms yet", subtitle: "Add the rooms you want documented.",
-                          icon: "door.left.hand.open", action: onSeeAllRooms)
-                } else {
-                    ForEach(Array(model.rooms.enumerated()), id: \.element.id) { index, room in
-                        if index > 0 { MMRowDivider(leading: 52) }
-                        Button { onOpenRoom(room.id) } label: {
-                            MMRoomRow(name: room.name, detail: room.detail, state: room.state, isHighlighted: room.isPulsing)
-                        }
-                        .buttonStyle(MMLightPressStyle())
-                        .accessibilityElement(children: .combine)
-                    }
-                }
+        VStack(alignment: .leading, spacing: 10) {
+            MMRecordSectionHeader(title: "Rooms",
+                                  actionTitle: model.rooms.isEmpty ? nil : "All rooms",
+                                  action: model.rooms.isEmpty ? nil : onSeeAllRooms)
+            if model.rooms.isEmpty {
+                MMEmptyBlock(
+                    icon: "door.left.hand.open",
+                    title: "No rooms yet",
+                    message: "Add the rooms you'll document, then photograph each one before you unpack. That becomes your move-in record.",
+                    actionTitle: "Add rooms",
+                    action: onSeeAllRooms
+                )
+            } else {
+                MMRentalRoomsBlock(
+                    rooms: model.rooms,
+                    nextID: model.nextRoomID,
+                    limit: 4,
+                    completeTitle: "Every room documented",
+                    completeActionTitle: "Generate move-in report",
+                    completeAction: { onLink(.exports) },
+                    onCapture: onPrimary,
+                    onOpenRoom: onOpenRoom,
+                    onSeeAll: onSeeAllRooms
+                )
             }
         }
     }
 
-    // MARK: Records (lease, deposit receipt, listing proof, invoices)
+    // MARK: Records — lease, deposit receipt, listing proof
 
+    private var priorityRecords: [PropertyVaultModel.Record] { Array(model.records.prefix(model.priorityCount)) }
+    private var otherRecords: [PropertyVaultModel.Record] { Array(model.records.dropFirst(model.priorityCount)) }
+    /// Other records show when added, or when the list is expanded.
     private var visibleRecords: [PropertyVaultModel.Record] {
-        showAllRecords ? model.records : Array(model.records.prefix(model.priorityCount))
+        priorityRecords + otherRecords.filter { showAllRecords || $0.isPresent }
     }
+    private var hiddenRecordCount: Int { otherRecords.filter { !$0.isPresent }.count }
 
     private var recordsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                MMSectionTitle(title: "Records")
-                Text("\(model.uploadedCount) of \(model.records.count) added")
-                    .mmFont(13).monospacedDigit().foregroundStyle(MMInk.secondary)
-            }
+        VStack(alignment: .leading, spacing: 10) {
+            MMRecordSectionHeader(title: "Records",
+                                  detail: "\(priorityRecords.filter(\.isPresent).count) of \(priorityRecords.count) added")
             if let uploadError = model.uploadError {
                 MMNotice(message: uploadError, actionTitle: MMCopy.tryAgain, action: onRetryUpload)
             }
             if let notice = model.softNotice, model.uploadError == nil {
-                MMNotice(message: notice, tone: .info)
+                MMNotice(message: notice.trimmingCharacters(in: .whitespaces), tone: .info)
             }
             if let previewError = model.previewError {
-                MMNotice(message: previewError)
+                MMNotice(message: previewError, tone: .warning)
             }
             MMGroup(footer: model.records.contains(where: \.isPresent)
                     ? "Touch and hold an added record to replace or delete it." : nil) {
                 ForEach(Array(visibleRecords.enumerated()), id: \.element.id) { index, record in
-                    if index > 0 { MMRowDivider(leading: 52) }
+                    if index > 0 { MMRowDivider(leading: dynamicTypeSize.isAccessibilitySize ? 16 : 52) }
                     recordRow(record)
                 }
-                if model.records.count > model.priorityCount {
-                    MMRowDivider(leading: 52)
+                if hiddenRecordCount > 0 {
+                    MMRowDivider(leading: dynamicTypeSize.isAccessibilitySize ? 16 : 52)
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) { showAllRecords.toggle() }
                     } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: showAllRecords ? "chevron.up" : "chevron.down")
+                            Image(systemName: showAllRecords ? "chevron.up" : "plus")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(MMInk.secondary)
                                 .frame(width: 24)
-                            Text(showAllRecords ? "Fewer records" : "All records")
+                            Text(showAllRecords ? "Fewer records" : "Other records")
                                 .mmFont(15.5).foregroundStyle(MMInk.text)
                             Spacer()
+                            if !showAllRecords && !dynamicTypeSize.isAccessibilitySize {
+                                Text("Receipts, invoices").mmFont(13).foregroundStyle(MMInk.secondary).lineLimit(1)
+                            }
                         }
                         .padding(.horizontal, 16)
                         .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
@@ -215,22 +212,24 @@ struct PropertyVaultContent: View {
     }
 
     private func recordRow(_ record: PropertyVaultModel.Record) -> some View {
-        let busy = !record.isPresent && record.type.acceptsImage && model.isUploading
-        return MMStatusRow(
+        let busy = record.type.acceptsImage && model.isUploading
+        return MMRecordRow(
             title: Self.recordTitle(record.type),
-            subtitle: record.subtitle,
-            icon: record.isPresent ? "doc.text.fill" : "doc.text",
-            status: record.isPresent ? "Added" : "Needed",
-            tone: record.isPresent ? .done : .needed,
+            icon: Self.recordIcon(record.type),
+            isPresent: record.isPresent,
+            detail: record.isPresent ? record.addedOn : Self.recordReason(record.type),
+            file: record.file,
             isHighlighted: record.isHighlighted
         ) {
-            if record.isPresent {
+            if record.isPresent && !busy {
                 Button { onViewRecord(record.type) } label: { MMRowActionLabel(title: "View") }
                     .buttonStyle(MMLightPressStyle())
+                    .accessibilityLabel("View \(Self.recordTitle(record.type))")
             } else {
                 Button { onUploadRecord(record.type) } label: { MMRowActionLabel(title: "Add", isBusy: busy) }
                     .buttonStyle(MMLightPressStyle())
                     .disabled(busy)
+                    .accessibilityLabel("Add \(Self.recordTitle(record.type))")
             }
         }
         .contextMenu {
@@ -246,38 +245,47 @@ struct PropertyVaultContent: View {
         return title.prefix(1).uppercased() + title.dropFirst()
     }
 
-    // MARK: Proof trail
-
-    private var trailSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            MMSectionTitle(title: "Proof trail")
-            MMGroup {
-                if model.trail.isEmpty {
-                    Text("Your proof trail will show up here.")
-                        .mmFont(14).foregroundStyle(MMInk.secondary)
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    ForEach(Array(model.trail.enumerated()), id: \.element.id) { index, row in
-                        if index > 0 { MMRowDivider(leading: 52) }
-                        MMTrailRow(icon: row.iconName, title: row.title.prefix(1).uppercased() + row.title.dropFirst(), message: row.message, timestamp: row.timestamp,
-                                   tone: row.status.rowTone, isHighlighted: row.id == model.highlightedTrailID)
-                    }
-                }
-            }
+    static func recordIcon(_ type: VaultDocumentType) -> String {
+        switch type {
+        case .lease: "signature"
+        case .depositReceipt: "dollarsign.circle"
+        case .listingScreenshot: "photo"
+        case .cleaningReceipt: "sparkles"
+        case .utilityProof: "bolt"
+        case .moveOutInvoice: "doc.plaintext"
+        case .other: "doc"
         }
     }
 
-    // MARK: Tools
+    /// Why a missing record is worth adding.
+    static func recordReason(_ type: VaultDocumentType) -> String {
+        switch type {
+        case .lease: "Ties your proof to this rental"
+        case .depositReceipt: "Shows what you paid, and when"
+        case .listingScreenshot: "How the rental was advertised"
+        case .cleaningReceipt: "Shows the unit was cleaned"
+        case .utilityProof: "Dates when you lived here"
+        case .moveOutInvoice: "Any charges at move-out"
+        case .other: "Anything else worth keeping"
+        }
+    }
 
-    private var toolsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            MMSectionTitle(title: "Tools")
+    // MARK: Related proof — maintenance, move-out
+
+    private var relatedSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            MMRecordSectionHeader(title: model.moveOut == nil ? "Maintenance" : "Maintenance & move-out")
             MMGroup {
-                ForEach(Array(model.tools.enumerated()), id: \.element.id) { index, tool in
-                    if index > 0 { MMRowDivider(leading: 52) }
-                    Button { onTool(tool.kind) } label: {
-                        MMStatusRow(title: tool.title, subtitle: tool.subtitle, icon: tool.icon, isHighlighted: tool.isPulsing)
+                Button { onLink(.maintenance) } label: {
+                    MMStatusRow(title: "Maintenance log", subtitle: maintenanceLine, icon: "wrench.and.screwdriver",
+                                status: model.maintenance.open > 0 ? openLabel : nil, tone: .needed)
+                }
+                .buttonStyle(MMLightPressStyle())
+                .accessibilityElement(children: .combine)
+                if let moveOut = model.moveOut {
+                    MMRowDivider(leading: dynamicTypeSize.isAccessibilitySize ? 16 : 52)
+                    Button { onLink(.moveOut) } label: {
+                        MMStatusRow(title: "Move-out", subtitle: moveOutLine(moveOut), icon: "arrow.2.circlepath")
                     }
                     .buttonStyle(MMLightPressStyle())
                     .accessibilityElement(children: .combine)
@@ -286,36 +294,73 @@ struct PropertyVaultContent: View {
         }
     }
 
-    // MARK: Details
+    private var openLabel: String { "\(model.maintenance.open) open" }
+
+    private var maintenanceLine: String {
+        let open = model.maintenance.open
+        let total = max(model.maintenance.total ?? open, open)
+        if total == 0 { return "No cases recorded. When something breaks, record it with photos and a date." }
+        let cases = total == 1 ? "1 case recorded" : "\(total) cases recorded"
+        let resolved = total - open
+        if open == 0 { return "\(cases) · all resolved" }
+        return resolved > 0 ? "\(cases) · \(resolved) resolved" : cases
+    }
+
+    private func moveOutLine(_ moveOut: PropertyVaultModel.MoveOut) -> String {
+        if moveOut.documented == 0 {
+            if let days = moveOut.daysUntilLeaseEnd {
+                let when = days == 0 ? "today" : (days == 1 ? "in 1 day" : "in \(days) days")
+                return "Lease ends \(when). Compare move-in to move-out, room by room."
+            }
+            return "Compare move-in to move-out, room by room."
+        }
+        return "\(moveOut.documented) of \(moveOut.total) rooms recaptured"
+    }
+
+    // MARK: Rental details — quiet, last
 
     private var detailsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                MMSectionTitle(title: "Rental details")
-                Button("Edit", action: onEdit).mmFont(14, .semibold).foregroundStyle(MMInk.text)
-            }
-            MMGroup {
-                if showDetails {
-                    ForEach(model.tenancy + model.contact) { detail in
-                        detailRow(detail)
-                        MMRowDivider()
-                    }
-                }
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { showDetails.toggle() }
-                } label: {
-                    HStack {
-                        Text(showDetails ? "Hide details" : "Show details").mmFont(15.5).foregroundStyle(MMInk.text)
-                        Spacer()
-                        Image(systemName: showDetails ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(MMInk.secondary)
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(maxWidth: .infinity, minHeight: 46)
-                    .contentShape(Rectangle())
+                Text("Rental details").mmFont(16, .semibold).foregroundStyle(MMInk.text).accessibilityAddTraits(.isHeader)
+                Spacer()
+                Button(action: onEdit) {
+                    Text("Edit").mmFont(14, .semibold).foregroundStyle(MMInk.text)
+                        .frame(minWidth: 44, minHeight: 32, alignment: .trailing)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(MMLightPressStyle())
+                .accessibilityLabel("Edit rental details")
+            }
+            MMGroup {
+                ForEach(Array(model.details.enumerated()), id: \.element.id) { index, detail in
+                    if index > 0 { MMRowDivider() }
+                    detailRow(detail)
+                }
+                if showDetails {
+                    ForEach(model.moreDetails) { detail in
+                        MMRowDivider()
+                        detailRow(detail)
+                    }
+                }
+                if !model.moreDetails.isEmpty {
+                    MMRowDivider()
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { showDetails.toggle() }
+                    } label: {
+                        HStack {
+                            Text(showDetails ? "Fewer details" : "Deposit, rent and landlord").mmFont(15).foregroundStyle(MMInk.text)
+                            Spacer()
+                            Image(systemName: showDetails ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(MMInk.secondary)
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(maxWidth: .infinity, minHeight: 46)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(MMLightPressStyle())
+                }
             }
         }
     }
@@ -323,13 +368,14 @@ struct PropertyVaultContent: View {
     private func detailRow(_ detail: PropertyVaultModel.Detail) -> some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(detail.label).mmFont(15).foregroundStyle(MMInk.secondary)
+                Text(detail.label).mmFont(15).foregroundStyle(MMInk.secondary).fixedSize()
                 Spacer(minLength: 12)
                 Text(detail.value).mmFont(15).foregroundStyle(MMInk.text).multilineTextAlignment(.trailing)
+                    .lineLimit(2)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(detail.label).mmFont(13).foregroundStyle(MMInk.secondary)
-                Text(detail.value).mmFont(15).foregroundStyle(MMInk.text)
+                Text(detail.value).mmFont(15).foregroundStyle(MMInk.text).fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.horizontal, 16)
@@ -341,58 +387,60 @@ struct PropertyVaultContent: View {
 
 // MARK: - Mapping from records (shared by the screen and its snapshots)
 
-extension PropertyVaultModel.Room {
-    init(room: RoomRecord, isNext: Bool, isPulsing: Bool = false) {
-        let photos = room.moveInPhotoTotal + room.moveOutPhotoTotal
-        let issues = room.moveInIssueTagTotal + room.moveOutIssueTagTotal
-        let isDone = !room.evidence.isEmpty
-        self.init(
-            id: room.id,
-            name: room.name,
-            detail: isDone ? MMProofTimelineBuilder.photoIssueLine(photos: photos, issues: issues) : "No proof yet",
-            state: isDone ? .documented : (isNext ? .next : .todo),
-            isPulsing: isPulsing
-        )
+extension PropertyVaultModel {
+    static func displayTitle(for property: PropertyRecord) -> String {
+        let title = property.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty { return title }
+        let address = property.addressLine1.trimmingCharacters(in: .whitespacesAndNewlines)
+        return address.isEmpty ? "Your rental" : address
     }
-}
 
-extension PropertyVaultModel.Tool {
-    static func all(openIssues: Int, completedRooms: Int, readinessScore: Int, exportsSubtitle: String,
-                    pulseDispute: Bool = false, pulseExports: Bool = false) -> [Self] {
-        [
-            .init(kind: .maintenance, title: "Maintenance",
-                  subtitle: openIssues > 0
-                      ? (openIssues == 1 ? "1 open issue" : "\(openIssues) open issues")
-                      : "Track property issues",
-                  icon: "wrench.and.screwdriver"),
-            .init(kind: .moveOut, title: "Move-out",
-                  subtitle: completedRooms > 0 ? "Compare before and after" : "Use with move-in proof",
-                  icon: "arrow.2.circlepath"),
-            .init(kind: .caseBuilder, title: "Case builder",
-                  subtitle: readinessScore >= 70 ? "Build dispute packet" : "Assemble captured proof",
-                  icon: "doc.text.magnifyingglass", isPulsing: pulseDispute),
-            .init(kind: .exports, title: "Exports", subtitle: exportsSubtitle,
-                  icon: "square.and.arrow.up", isPulsing: pulseExports),
-        ]
+    static func addressLine(for property: PropertyRecord) -> String? {
+        RentalAddress.line(title: displayTitle(for: property), street: property.addressLine1,
+                           unit: property.addressLine2, city: property.city, province: property.provinceState)
+    }
+
+    static func moveInLine(for property: PropertyRecord, now: Date = Date()) -> String {
+        let date = MMRecordDate.display(property.moveInDate)
+        return property.moveInDate > now ? "Moving in \(date)" : "Moved in \(date)"
     }
 }
 
 extension PropertyVaultModel.Detail {
-    static func tenancy(for property: PropertyRecord) -> [Self] {
-        var rows: [Self] = [.init(label: "Move-in", value: property.moveInDate.formatted(date: .abbreviated, time: .omitted))]
+    /// Address and dates: what identifies the rental.
+    static func primary(for property: PropertyRecord) -> [Self] {
+        var rows: [Self] = []
+        let street = [property.addressLine1.trimmingCharacters(in: .whitespacesAndNewlines),
+                      RentalAddress.unitLabel(property.addressLine2)]
+            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        let place = [RentalLocation.line(city: property.city, province: property.provinceState),
+                     property.postalCode.trimmingCharacters(in: .whitespacesAndNewlines)]
+            .filter { !$0.isEmpty }.joined(separator: " ")
+        let address = [street, place].filter { !$0.isEmpty }.joined(separator: "\n")
+        if !address.isEmpty { rows.append(.init(label: "Address", value: address)) }
+        rows.append(.init(label: "Move-in", value: MMRecordDate.display(property.moveInDate)))
+        let end = MMRecordDate.display(property.leaseEndDate)
         if let start = property.leaseStartDate {
-            rows.append(.init(label: "Lease start", value: start.formatted(date: .abbreviated, time: .omitted)))
+            rows.append(.init(label: "Lease", value: "\(MMRecordDate.display(start)) – \(end)"))
+        } else {
+            rows.append(.init(label: "Lease ends", value: end))
         }
-        rows.append(.init(label: "Lease end", value: property.leaseEndDate.formatted(date: .abbreviated, time: .omitted)))
-        if !property.depositAmount.isEmpty { rows.append(.init(label: "Deposit", value: property.depositAmount)) }
-        if !property.rentAmount.isEmpty { rows.append(.init(label: "Rent", value: property.rentAmount)) }
         return rows
     }
 
-    static func contact(for property: PropertyRecord) -> [Self] {
-        [
-            .init(label: "Landlord", value: property.landlordName.isEmpty ? "Not added" : property.landlordName),
-            .init(label: "Email", value: property.landlordEmail.isEmpty ? "Not added" : property.landlordEmail),
-        ]
+    /// Deposit, rent, landlord: only what was entered.
+    static func more(for property: PropertyRecord) -> [Self] {
+        var rows: [Self] = []
+        func money(_ raw: String) -> String? {
+            let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty else { return nil }
+            return value.hasPrefix("$") ? value : "$\(value)"
+        }
+        if let deposit = money(property.depositAmount) { rows.append(.init(label: "Deposit", value: deposit)) }
+        if let rent = money(property.rentAmount) { rows.append(.init(label: "Rent", value: "\(rent) / month")) }
+        let landlord = [property.landlordName, property.landlordEmail, property.landlordPhone]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        if !landlord.isEmpty { rows.append(.init(label: "Landlord", value: landlord.joined(separator: "\n"))) }
+        return rows
     }
 }

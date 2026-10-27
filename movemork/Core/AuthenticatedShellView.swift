@@ -53,11 +53,8 @@ struct VaultDetailDestinationView: View {
             if let property = propertyStore.currentProperty, property.id == propertyId {
                 PropertyVaultView(property: property, path: $path, namespace: vaultNamespace)
             } else {
-                // The rental's own dark bar while it loads, so the push lands on the screen it becomes.
-                MMLoadingBlock(message: MMCopy.loading)
-                    .toolbarBackground(MMInk.hero, for: .navigationBar)
-                    .toolbarBackground(.visible, for: .navigationBar)
-                    .toolbarColorScheme(.dark, for: .navigationBar)
+                // The rental record's own shape while it loads, so the push lands on the screen it becomes.
+                MMRentalRecordSkeleton()
             }
         }
         .navigationTitle("")

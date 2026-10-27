@@ -86,13 +86,13 @@ enum MoveMarkFlowMessage {
 
     static let maintenanceEvidencePreviewHint = " Photos are saved; previews may take a moment. Leave and return if images don’t appear."
 
-    static let documentVaultRefreshHint = " File is saved. If the row doesn’t update, leave this vault and open it again."
+    static let documentVaultRefreshHint = "File saved. If it doesn’t show here yet, go back and open this rental again."
 
     static let exportQueuedHint = "Report queued. Open Reports to share when it’s ready—verification can take a moment."
 
     /// Railway vault summary (`GET /api/vaults/.../summary`) failed; local ``PropertyStore`` data is still shown.
     static let vaultSummaryRefreshFailed =
-        "Couldn’t refresh vault summary right now. Your vault still shows saved data—try again in a moment."
+        "Couldn’t refresh this rental just now. Your saved proof is still here."
 
     // MARK: - Likely cause
 
@@ -195,7 +195,7 @@ enum MoveMarkFlowMessage {
 
     static let documentImageReadFailed = "Couldn’t read this photo. Try another image."
 
-    static let documentPreviewMissing = "No document on file for this slot yet."
+    static let documentPreviewMissing = "This record isn’t on file yet. Add it to keep it with your rental."
 
     static func documentDeleteFailed(_ error: Error) -> String {
         UserFacingDatabaseError.message(from: error, fallback: "Couldn’t remove this document. Try again.", intent: .mutate)
@@ -203,7 +203,7 @@ enum MoveMarkFlowMessage {
 
     static func documentPreviewFailed(_ error: Error) -> String {
         if isLikelyStorageFailure(error) {
-            return "Couldn’t open a preview right now. The file may still be saved—try again in a moment."
+            return "Couldn’t open this file right now. It’s still saved — try again in a moment."
         }
         return UserFacingDatabaseError.message(from: error, fallback: "Couldn’t open preview. Try again.", intent: .load)
     }
