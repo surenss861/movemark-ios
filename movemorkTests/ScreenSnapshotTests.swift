@@ -2,9 +2,9 @@
 //  ScreenSnapshotTests.swift
 //  movemorkTests
 //
-//  @file Goldens for every first-party screen outside the locked core (VisualSnapshotTests holds those): forms,
-//        pushed screens, sheets and their empty / loading / error states, on the Pro phone, the small phone
-//        and the largest text size.
+//  @file The shared screen-snapshot harness: the devices (Pro phone, small phone, largest text size), the
+//        strategy, and hosting a screen as the app does. Each area's goldens live in its own suite
+//        (Auth, Flow, RentalRecord, Maintenance…); the locked core is in VisualSnapshotTests.
 //  @domain design-system
 //  @see [[MMSystem.swift]]
 //
@@ -60,15 +60,5 @@ extension XCTestCase {
             assertSnapshot(of: ScreenSnapshot.host(view, inNavigation: inNavigation), as: ScreenSnapshot.strategy(config),
                            named: name, file: file, testName: testName, line: line)
         }
-    }
-}
-
-@MainActor
-final class ScreenSnapshotTests: XCTestCase {
-    // MARK: Property
-
-    func testAddRental() {
-        assertScreen(NewPropertyView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") {} } },
-                     devices: ScreenSnapshot.allDevices)
     }
 }

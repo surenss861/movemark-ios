@@ -51,7 +51,7 @@ struct RoomListView: View {
                     rooms: rooms.map { MMRentalRoom($0) },
                     nextID: nextRoom?.id,
                     completeTitle: "Every room documented",
-                    completeActionTitle: "Generate move-in report",
+                    completeActionTitle: "Generate move\u{2011}in report",   // non-breaking hyphen: never "move-" / "in"
                     completeAction: { path.append(.exports) },
                     onCapture: openNextRoom,
                     onOpenRoom: { path.append(.roomDetail(roomID: $0)) },

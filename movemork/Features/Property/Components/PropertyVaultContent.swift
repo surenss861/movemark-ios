@@ -145,7 +145,7 @@ struct PropertyVaultContent: View {
                     nextID: model.nextRoomID,
                     limit: 4,
                     completeTitle: "Every room documented",
-                    completeActionTitle: "Generate move-in report",
+                    completeActionTitle: "Generate move\u{2011}in report",   // non-breaking hyphen: never "move-" / "in"
                     completeAction: { onLink(.exports) },
                     onCapture: onPrimary,
                     onOpenRoom: onOpenRoom,
