@@ -276,6 +276,8 @@ struct MMComparisonPair<Before: View, After: View>: View {
     var photoHeight: CGFloat = 150
     /// Off when the host draws its own title and state above the pair (Move-out leads with the state).
     var showsHeader = true
+    /// Dates ride in the side labels ("MOVE-IN · OCT 24") above the photos, as an inspection spread reads.
+    var datesInLabel = false
     @ViewBuilder var before: () -> Before
     @ViewBuilder var after: () -> After
 
@@ -307,13 +309,14 @@ struct MMComparisonPair<Before: View, After: View>: View {
 
     private func side<V: View>(_ label: String, note: String?, date: String?, @ViewBuilder content: () -> V) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(label).mmFont(10.5, .semibold).tracking(0.8).foregroundStyle(MMInk.secondary)
+            Text(datesInLabel && date != nil ? "\(label) · \(date!.uppercased())" : label)
+                .mmFont(10.5, .semibold).tracking(0.8).monospacedDigit().foregroundStyle(MMInk.secondary)
             content()
                 .frame(maxWidth: .infinity)
                 .frame(height: photoHeight)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             if let note { Text(note).mmFont(13).foregroundStyle(MMInk.text).fixedSize(horizontal: false, vertical: true) }
-            if let date { Text(date).mmFont(12).monospacedDigit().foregroundStyle(MMInk.secondary) }
+            if let date, !datesInLabel { Text(date).mmFont(12).monospacedDigit().foregroundStyle(MMInk.secondary) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

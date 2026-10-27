@@ -121,37 +121,105 @@ struct MoveOutComparison: Identifiable, Hashable {
         date?.formatted(.dateTime.month(.abbreviated).day())
     }
 
-    /// The note under a side: condition first, then the renter's words.
-    static func note(_ condition: RoomRecord.ConditionRating?, _ text: String?) -> String? {
-        let parts = [condition?.rawValue, text].compactMap { $0 }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
-    }
-
-    /// One plain sentence on what differs; nil when nothing does.
-    var changeSentence: String? {
+    /// What changed, in record language only — never a judgement of cause or fault. Built from the move-out
+    /// issue tags the move-in record doesn't carry, or the condition ratings. Nil when nothing changed.
+    var headline: String? {
         switch state {
         case .newIssue:
-            // Built only from the move-out tags the move-in record doesn't carry.
-            let shown = Array(newTags.prefix(3))
-            var list = shown.count > 1 ? shown.dropLast().joined(separator: ", ") + " and " + shown[shown.count - 1]
-                : (shown.first ?? "")
-            if newTags.count > 3 { list = shown.joined(separator: ", ") + " and \(newTags.count - 3) more" }
-            return "\(list) not present at move-in."
+            let shown = newTags.prefix(3).joined(separator: ", ")
+            let more = newTags.count > 3 ? " and \(newTags.count - 3) more" : ""
+            return "New issue recorded: \(shown)\(more)"
         case .changed:
-            guard let a = moveInCondition, let b = moveOutCondition else { return nil }
-            return "Condition recorded as \(b.rawValue) at move-out, down from \(a.rawValue) at move-in."
+            return conditionLine
         default:
             return nil
         }
+    }
+
+    /// "Condition Good → Fair" when the move-out rating is lower than move-in; nil otherwise.
+    var conditionLine: String? {
+        guard let a = moveInCondition, let b = moveOutCondition, b.conditionMeterValue < a.conditionMeterValue else { return nil }
+        return "Condition \(a.rawValue) → \(b.rawValue)"
     }
 }
 
 enum MoveOutSide { case moveIn, moveOut }
 
+// MARK: - Header progress
+
+/// Move-out progress in the Proof header's language: label and percentage, a thin lime line on the dark
+/// track, and the count it stands for underneath.
+struct MoveOutHeaderProgress: View {
+    let done: Int
+    let total: Int
+
+    var body: some View {
+        let fraction = total == 0 ? 0 : Double(done) / Double(total)
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Move-out proof").mmFont(12.5, .medium).foregroundStyle(.white)
+                Spacer()
+                Text("\(Int((fraction * 100).rounded()))%")
+                    .mmFont(12.5, .medium).monospacedDigit().foregroundStyle(MMInk.heroSecondary)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.16))
+                    Capsule().fill(MMInk.limeMark).frame(width: done == 0 ? 0 : max(geo.size.width * fraction, 4))
+                }
+            }
+            .frame(height: 4)
+            Text("\(done) of \(total) rooms compared").mmFont(12.5).monospacedDigit().foregroundStyle(MMInk.heroSecondary)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Move-out proof: \(done) of \(total) rooms compared")
+    }
+}
+
+// MARK: - Tally
+
+/// The page's index, read in one glance: how many rooms changed, still need move-out proof, are unchanged.
+struct MoveOutTally: View {
+    let changed: Int
+    let missing: Int
+    let unchanged: Int
+    /// Jump to that group (0 changed, 1 missing, 2 unchanged).
+    var onSelect: (Int) -> Void = { _ in }
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        let items = [("Changed", changed), ("Need proof", missing), ("Unchanged", unchanged)]
+        let layout = dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 0))
+        layout {
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                Button { onSelect(index) } label: {
+                    let itemLayout = dynamicTypeSize.isAccessibilitySize
+                        ? AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 10))
+                        : AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+                    itemLayout {
+                        Text("\(item.1)").mmFont(22, .semibold).monospacedDigit()
+                            .foregroundStyle(item.1 == 0 ? MMInk.secondary.opacity(0.6) : MMInk.text)
+                        Text(item.0).mmFont(12.5).foregroundStyle(MMInk.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(MMLightPressStyle())
+                .disabled(item.1 == 0)
+                .accessibilityElement(children: .combine)
+                .accessibilityHint(item.1 == 0 ? "" : "Moves to these rooms.")
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
 // MARK: - State mark
 
-/// The change state as the first thing read on a comparison: a small mark and a plain word. Amber outline
-/// for a difference, a dashed ring for missing proof, a quiet filled dot for unchanged. Never red.
+/// The state as the first thing read on a room: a small mark and a plain word. Filled amber for a new issue,
+/// amber ring for a change, dashed ring for missing proof. Never red.
 struct MoveOutStateMark: View {
     let state: MoveOutComparison.State
 
@@ -177,23 +245,64 @@ struct MoveOutStateMark: View {
     }
 }
 
-// MARK: - Comparison card
+/// What the renter just gained: a room that now has its move-out side. Quiet ink, no celebration.
+struct MoveOutJustCompared: View {
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "checkmark").font(.system(size: 10.5, weight: .bold))
+            Text("Compared just now").mmFont(12, .medium)
+        }
+        .foregroundStyle(MMInk.text)
+        .accessibilityElement(children: .combine)
+    }
+}
 
-/// A room that changed or still needs move-out proof: the state first, the room, then move-in and move-out
-/// side by side at full width. Each photo opens the evidence viewer; a missing side offers capture.
-struct MoveOutComparisonCard: View {
+// MARK: - Photo side
+
+/// One side's photo: fills the frame the pair gives it, opens the viewer, shows the side's photo count.
+private struct MoveOutPhoto: View {
+    let photo: EvidencePhoto?
+    let count: Int
+    let size: CGSize
+    let resolve: (String) async -> URL?
+    var missingLabel = "Not captured yet"
+    let onOpen: () -> Void
+
+    var body: some View {
+        if let photo {
+            Button(action: onOpen) {
+                MMEvidenceImage(path: photo.filePath, resolve: resolve, size: size, placeholder: MMInk.field)
+                    .overlay(alignment: .bottomTrailing) {
+                        if count > 1 {
+                            Text("\(count)")
+                                .mmFont(11.5, .semibold).monospacedDigit().foregroundStyle(.white)
+                                .padding(.horizontal, 7).padding(.vertical, 3)
+                                .background(Color.black.opacity(0.55), in: Capsule())
+                                .padding(8)
+                                .accessibilityLabel("\(count) photos")
+                        }
+                    }
+            }
+            .buttonStyle(MMLightPressStyle())
+        } else {
+            MMMissingPhotoFrame(label: count > 0 ? "\(count) photos" : missingLabel)
+        }
+    }
+}
+
+// MARK: - Inspection spread (changed / new issue)
+
+/// A room whose move-out record differs from move-in: the state, the room, what changed in record language,
+/// then MOVE-IN · date and MOVE-OUT · date above large photos side by side, and the renter's move-out note.
+struct MoveOutSpreadCard: View {
     let comparison: MoveOutComparison
     let resolve: (String) async -> URL?
-    var onOpenPhoto: (MoveOutSide) -> Void = { _ in }
-    var onCapture: () -> Void = {}
-    /// The room gained its move-out side while this screen was open.
     var justCompared = false
+    var onOpenPhoto: (MoveOutSide) -> Void = { _ in }
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    private var photoHeight: CGFloat {
-        comparison.state == .missing ? 128 : (dynamicTypeSize.isAccessibilitySize ? 170 : 196)
-    }
+    private var photoHeight: CGFloat { dynamicTypeSize.isAccessibilitySize ? 200 : 236 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -203,33 +312,122 @@ struct MoveOutComparisonCard: View {
                 if justCompared { MoveOutJustCompared() }
             }
             Text(comparison.roomName)
-                .mmFont(20, .semibold)
+                .mmFont(21, .semibold)
                 .foregroundStyle(MMInk.text)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 6)
                 .accessibilityAddTraits(.isHeader)
-            if let sentence = comparison.changeSentence {
-                // The plain difference sits with the state, before the photos: the first thing read.
-                Text(sentence)
-                    .mmFont(14.5)
+            if let headline = comparison.headline {
+                Text(headline)
+                    .mmFont(15.5, .medium)
                     .foregroundStyle(MMInk.text)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 3)
             }
 
             MMComparisonPair(
-                title: comparison.roomName, change: .unchanged,
-                beforeNote: MoveOutComparison.note(comparison.moveInCondition, comparison.moveInText),
+                title: comparison.roomName, change: comparison.state == .newIssue ? .newIssue : .changed,
+                beforeNote: comparison.moveInCondition?.rawValue,
                 beforeDate: MoveOutComparison.day(comparison.moveInDate),
-                afterNote: comparison.state == .missing ? nil : MoveOutComparison.note(comparison.moveOutCondition, comparison.moveOutText),
-                afterDate: comparison.state == .missing ? nil : MoveOutComparison.day(comparison.moveOutDate),
-                photoHeight: photoHeight, showsHeader: false,
+                afterNote: comparison.moveOutCondition?.rawValue,
+                afterDate: MoveOutComparison.day(comparison.moveOutDate),
+                photoHeight: photoHeight, showsHeader: false, datesInLabel: true,
                 before: { side(.moveIn) },
                 after: { side(.moveOut) }
             )
             .padding(.top, 14)
 
-            if comparison.state == .missing {
+            if !details.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(details, id: \.self) { line in
+                        Text(line).mmFont(13.5).foregroundStyle(MMInk.text).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(MMInk.field, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .padding(.top, 12)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(MMInk.card, in: RoundedRectangle(cornerRadius: MMMetrics.cardRadius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: MMMetrics.cardRadius, style: .continuous)
+            .strokeBorder(MMInk.cardStroke, lineWidth: 0.75))
+        .accessibilityElement(children: .combine)
+        .accessibilityActions {
+            if comparison.moveInPhoto != nil { Button("View move-in photo") { onOpenPhoto(.moveIn) } }
+            if comparison.moveOutPhoto != nil { Button("View move-out photo") { onOpenPhoto(.moveOut) } }
+        }
+    }
+
+    /// The renter's own words from each end, quoted as recorded, plus a lower condition when the headline is
+    /// about a new issue.
+    private var details: [String] {
+        var lines: [String] = []
+        if comparison.state == .newIssue, let condition = comparison.conditionLine { lines.append(condition) }
+        if let note = comparison.moveOutText { lines.append("Move-out note: “\(note)”") }
+        if let note = comparison.moveInText { lines.append("Move-in note: “\(note)”") }
+        return lines
+    }
+
+    private func side(_ side: MoveOutSide) -> some View {
+        MoveOutPhoto(photo: side == .moveIn ? comparison.moveInPhoto : comparison.moveOutPhoto,
+                     count: side == .moveIn ? comparison.moveInPhotoCount : comparison.moveOutPhotoCount,
+                     size: CGSize(width: 180, height: photoHeight), resolve: resolve, missingLabel: "No photo",
+                     onOpen: { onOpenPhoto(side) })
+    }
+}
+
+// MARK: - Missing move-out proof
+
+/// A room still waiting for its move-out side: the move-in photo it will be compared with beside an empty
+/// frame, and the capture action — lime only when it is the screen's one most important action.
+struct MoveOutMissingCard: View {
+    let comparison: MoveOutComparison
+    let resolve: (String) async -> URL?
+    var isPrimary = false
+    var onOpenPhoto: (MoveOutSide) -> Void = { _ in }
+    var onCapture: () -> Void = {}
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            MoveOutStateMark(state: .missing)
+            Text(comparison.roomName)
+                .mmFont(19, .semibold)
+                .foregroundStyle(MMInk.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 6)
+                .accessibilityAddTraits(.isHeader)
+
+            // The two sides are deliberately unequal: the real move-in photo, then a quiet line for the side
+            // that doesn't exist yet — never an empty photo-sized slot competing with real evidence.
+            sideLabel("MOVE-IN", date: MoveOutComparison.day(comparison.moveInDate))
+                .padding(.top, 12)
+            MoveOutPhoto(photo: comparison.moveInPhoto, count: comparison.moveInPhotoCount,
+                         size: CGSize(width: 340, height: 150), resolve: resolve, missingLabel: "No photo",
+                         onOpen: { onOpenPhoto(.moveIn) })
+                .frame(maxWidth: .infinity)
+                .frame(height: 150)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(.top, 6)
+            if let condition = comparison.moveInCondition?.rawValue {
+                Text(condition).mmFont(13).foregroundStyle(MMInk.text).padding(.top, 6)
+            }
+
+            Rectangle().fill(MMInk.separator).frame(height: 0.75).padding(.top, 14)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                sideLabel("MOVE-OUT", date: nil)
+                Text("No proof recorded yet").mmFont(14).foregroundStyle(MMInk.secondary)
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 12)
+
+            if isPrimary {
+                MMPrimaryButton(title: "Capture move-out proof", icon: "camera", action: onCapture)
+                    .padding(.top, 14)
+            } else {
                 Button(action: onCapture) {
                     HStack(spacing: 7) {
                         Image(systemName: "camera").font(.system(size: 14, weight: .medium))
@@ -243,72 +441,31 @@ struct MoveOutComparisonCard: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(MMLightPressStyle())
-                .padding(.top, 8)
-                .accessibilityHint("Opens move-out capture for \(comparison.roomName).")
+                .padding(.top, 6)
             }
         }
-        .padding(16)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(MMInk.card, in: RoundedRectangle(cornerRadius: MMMetrics.cardRadius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: MMMetrics.cardRadius, style: .continuous)
-            .strokeBorder(MMInk.cardStroke, lineWidth: 0.75))
+            .strokeBorder(MMInk.cardStroke, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
         .accessibilityElement(children: .combine)
         .accessibilityActions {
             if comparison.moveInPhoto != nil { Button("View move-in photo") { onOpenPhoto(.moveIn) } }
-            if comparison.moveOutPhoto != nil { Button("View move-out photo") { onOpenPhoto(.moveOut) } }
-            if comparison.state == .missing { Button("Capture move-out proof") { onCapture() } }
+            Button("Capture move-out proof") { onCapture() }
         }
     }
 
-    @ViewBuilder
-    private func side(_ side: MoveOutSide) -> some View {
-        let photo = side == .moveIn ? comparison.moveInPhoto : comparison.moveOutPhoto
-        let count = side == .moveIn ? comparison.moveInPhotoCount : comparison.moveOutPhotoCount
-        if let photo {
-            Button { onOpenPhoto(side) } label: {
-                MMEvidenceImage(path: photo.filePath, resolve: resolve, size: CGSize(width: 190, height: photoHeight),
-                                placeholder: MMInk.field)
-                    .overlay(alignment: .bottomTrailing) {
-                        if count > 1 {
-                            Text("\(count)")
-                                .mmFont(11.5, .semibold)
-                                .monospacedDigit()
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(Color.black.opacity(0.55), in: Capsule())
-                                .padding(8)
-                                .accessibilityLabel("\(count) photos")
-                        }
-                    }
-            }
-            .buttonStyle(MMLightPressStyle())
-        } else if side == .moveOut && comparison.state == .missing {
-            MMMissingPhotoFrame()
-        } else {
-            MMMissingPhotoFrame(label: count > 0 ? "\(count) photos" : "No photo")
-        }
+    private func sideLabel(_ label: String, date: String?) -> some View {
+        Text(date.map { "\(label) · \($0.uppercased())" } ?? label)
+            .mmFont(10.5, .semibold).tracking(0.8).monospacedDigit().foregroundStyle(MMInk.secondary)
     }
 }
 
-// MARK: - Just compared
+// MARK: - Compact row (unchanged / not compared)
 
-/// What the renter just gained: a room that now has its move-out side. Quiet ink, no celebration.
-struct MoveOutJustCompared: View {
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "checkmark").font(.system(size: 10.5, weight: .bold))
-            Text("Compared just now").mmFont(12, .medium)
-        }
-        .foregroundStyle(MMInk.text)
-        .accessibilityElement(children: .combine)
-    }
-}
-
-// MARK: - Compact row
-
-/// A room that reads the same at both ends: small paired thumbnails, the room, "✓ Unchanged" and both dates.
-/// Tapping expands it to the full move-in | move-out pair; each photo there opens the viewer.
+/// A room that reads the same at both ends, compressed: "Kitchen · ✓ Unchanged", then both dates. Tapping
+/// expands it to the full move-in | move-out pair; each photo there opens the viewer.
 struct MoveOutCompactRow: View {
     let comparison: MoveOutComparison
     let resolve: (String) async -> URL?
@@ -327,11 +484,11 @@ struct MoveOutCompactRow: View {
         _isExpanded = State(initialValue: initiallyExpanded)
     }
 
-    private var dateParts: [String] {
+    private var dates: String {
         let moveIn = MoveOutComparison.day(comparison.moveInDate).map { "Move-in \($0)" }
             ?? (comparison.state == .noBaseline ? "No move-in photos" : nil)
         let moveOut = MoveOutComparison.day(comparison.moveOutDate).map { "Move-out \($0)" }
-        return [moveIn, moveOut].compactMap { $0 }
+        return [moveIn, moveOut].compactMap { $0 }.joined(separator: " · ")
     }
 
     var body: some View {
@@ -342,13 +499,13 @@ struct MoveOutCompactRow: View {
             if isExpanded {
                 MMComparisonPair(
                     title: comparison.roomName, change: .unchanged,
-                    beforeNote: MoveOutComparison.note(comparison.moveInCondition, comparison.moveInText),
+                    beforeNote: comparison.moveInCondition?.rawValue,
                     beforeDate: MoveOutComparison.day(comparison.moveInDate),
-                    afterNote: MoveOutComparison.note(comparison.moveOutCondition, comparison.moveOutText),
+                    afterNote: comparison.moveOutCondition?.rawValue,
                     afterDate: MoveOutComparison.day(comparison.moveOutDate),
-                    photoHeight: 150, showsHeader: false,
-                    before: { photo(.moveIn) },
-                    after: { photo(.moveOut) }
+                    photoHeight: 170, showsHeader: false, datesInLabel: true,
+                    before: { side(.moveIn) },
+                    after: { side(.moveOut) }
                 )
                 .padding(.horizontal, 16)
                 .padding(.bottom, 16)
@@ -361,32 +518,14 @@ struct MoveOutCompactRow: View {
     }
 
     private var summary: some View {
-        HStack(spacing: 12) {
-            if !dynamicTypeSize.isAccessibilitySize {
-                HStack(spacing: 3) {
-                    thumb(.moveIn)
-                    thumb(.moveOut)
-                }
-            }
+        HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(comparison.roomName).mmFont(16, .medium).foregroundStyle(MMInk.text)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
-                HStack(spacing: 4) {
-                    if comparison.state == .unchanged {
-                        Image(systemName: "checkmark").font(.system(size: 10.5, weight: .bold))
-                    }
-                    Text(comparison.state.label).mmFont(13, .medium)
-                    if justCompared { Text("· Compared just now").mmFont(13) }
-                }
-                .foregroundStyle(MMInk.text)
-                // One line when it fits; otherwise one end per line, never a date split across lines.
                 ViewThatFits(in: .horizontal) {
-                    Text(dateParts.joined(separator: " · ")).lineLimit(1)
-                    VStack(alignment: .leading, spacing: 1) {
-                        ForEach(dateParts, id: \.self) { Text($0).fixedSize(horizontal: false, vertical: true) }
-                    }
+                    HStack(spacing: 8) { name; state }
+                    VStack(alignment: .leading, spacing: 3) { name; state }
                 }
-                .mmFont(12.5).monospacedDigit().foregroundStyle(MMInk.secondary)
+                Text(dates).mmFont(12.5).monospacedDigit().foregroundStyle(MMInk.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 6)
             Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
@@ -395,38 +534,30 @@ struct MoveOutCompactRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 11)
-        .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
 
-    @ViewBuilder
-    private func photo(_ side: MoveOutSide) -> some View {
-        if let photo = side == .moveIn ? comparison.moveInPhoto : comparison.moveOutPhoto {
-            Button { onOpenPhoto(side) } label: {
-                MMEvidenceImage(path: photo.filePath, resolve: resolve, size: CGSize(width: 170, height: 150),
-                                placeholder: MMInk.field)
-            }
-            .buttonStyle(MMLightPressStyle())
-        } else {
-            MMMissingPhotoFrame(label: "No photo")
-        }
+    private var name: some View {
+        Text(comparison.roomName).mmFont(16, .medium).foregroundStyle(MMInk.text).fixedSize(horizontal: false, vertical: true)
     }
 
-    private func thumb(_ side: MoveOutSide) -> some View {
-        let photo = side == .moveIn ? comparison.moveInPhoto : comparison.moveOutPhoto
-        return Group {
-            if let photo {
-                MMEvidenceImage(path: photo.thumbnailPath ?? photo.filePath, resolve: resolve,
-                                size: CGSize(width: 44, height: 44), placeholder: MMInk.field)
-            } else {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(MMInk.secondary.opacity(0.45), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                    .background(MMInk.field)
+    private var state: some View {
+        HStack(spacing: 4) {
+            if comparison.state == .unchanged {
+                Image(systemName: "checkmark").font(.system(size: 10, weight: .bold))
             }
+            Text(justCompared ? "\(comparison.state.label) · compared just now" : comparison.state.label)
+                .mmFont(13)
         }
-        .frame(width: 44, height: 44)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .accessibilityHidden(true)
+        .foregroundStyle(MMInk.secondary)
+    }
+
+    private func side(_ side: MoveOutSide) -> some View {
+        MoveOutPhoto(photo: side == .moveIn ? comparison.moveInPhoto : comparison.moveOutPhoto,
+                     count: side == .moveIn ? comparison.moveInPhotoCount : comparison.moveOutPhotoCount,
+                     size: CGSize(width: 170, height: 170), resolve: resolve, missingLabel: "No photo",
+                     onOpen: { onOpenPhoto(side) })
     }
 }

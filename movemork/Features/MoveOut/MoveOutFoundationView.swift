@@ -50,10 +50,19 @@ struct MoveOutFoundationView: View {
     private var rentalName: String {
         guard let property = propertyStore.currentProperty else { return "Move-out" }
         let title = property.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return title.isEmpty ? property.addressLine1 : title
+        let name = title.isEmpty ? property.addressLine1 : title
+        let unit = property.addressLine2.trimmingCharacters(in: .whitespacesAndNewlines)
+        return unit.isEmpty || name.localizedCaseInsensitiveContains(unit) ? name : "\(name), \(unit)"
     }
 
     private var comparisons: [MoveOutComparison] { rooms.map(MoveOutComparison.make(room:)) }
+
+    /// All rooms compared, or nearly all (at least 90% and at most one room left).
+    private var isSubstantiallyCompared: Bool {
+        guard !rooms.isEmpty else { return false }
+        let missing = rooms.count - roomsWithMoveOutPhotos
+        return missing == 0 || (missing == 1 && Double(roomsWithMoveOutPhotos) / Double(rooms.count) >= 0.9)
+    }
 
     /// Move-in photos exist somewhere: without them there is no baseline to compare against.
     private var hasBaseline: Bool { rooms.contains { $0.moveInPhotoTotal > 0 } }
@@ -79,14 +88,13 @@ struct MoveOutFoundationView: View {
 
     var body: some View {
         MMScreen(
-            eyebrow: "Move-out proof",
+            eyebrow: "Move-out",
             title: rentalName,
-            subtitle: "Compare move-in to move-out. Show what changed — and what didn’t.",
+            subtitle: "Compare what changed since move-in.",
             isPushed: true,
             showsWordmark: true,
             headerAccessory: rooms.isEmpty || !hasBaseline ? nil : AnyView(
-                MMProgressStrip(label: "Before and after", done: roomsWithMoveOutPhotos, total: rooms.count,
-                                unit: "rooms compared", onDark: true)
+                MoveOutHeaderProgress(done: roomsWithMoveOutPhotos, total: rooms.count)
             )
         ) {
             if let gained = justComparedLine {
@@ -171,33 +179,53 @@ struct MoveOutFoundationView: View {
         let unchanged = all.filter { $0.state == .unchanged }
         let notCompared = all.filter { $0.state == .noBaseline }
 
+        ScrollViewReader { proxy in
         VStack(alignment: .leading, spacing: 30) {
-            if let next = missing.first {
-                nextCapture(next: next, remaining: missing.count)
+            // The page's index: tap a count to jump to those rooms.
+            MMPanel {
+                MoveOutTally(changed: changed.count, missing: missing.count, unchanged: unchanged.count) { index in
+                    withAnimation { proxy.scrollTo(["changed", "missing", "unchanged"][index], anchor: .top) }
+                }
+                if isSubstantiallyCompared {
+                    // The quiet payoff: reassurance that the record is now whole, not a celebration.
+                    Rectangle().fill(MMInk.separator).frame(height: 0.75).padding(.vertical, 14)
+                    Text(missing.isEmpty
+                         ? "Your move-out record now shows how the rental changed since move-in."
+                         : "Your move-out record now shows how most of the rental changed since move-in.")
+                        .mmFont(14)
+                        .foregroundStyle(MMInk.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             if !changed.isEmpty {
                 section(title: "What changed", count: changed.count,
-                        caption: "Compared with your move-in record. Tap a photo to see it full size.") {
-                    ForEach(changed) { card($0) }
+                        caption: "Recorded differences from your move-in record. Tap a photo to see it full size.") {
+                    ForEach(changed) { spread($0) }
                 }
+                .id("changed")
             }
 
             if !missing.isEmpty {
                 section(title: "Move-out proof missing", count: missing.count,
                         caption: "Photograph these from the same angles as at move-in.") {
-                    ForEach(missing) { card($0) }
+                    ForEach(missing) { item in
+                        // Lime on the first missing room only: while rooms are missing, capture is the one action.
+                        missingCard(item, isPrimary: item.id == missing.first?.id)
+                    }
                 }
+                .id("missing")
             }
 
             if !unchanged.isEmpty {
                 MMGroup(title: "Unchanged · \(unchanged.count)",
-                        footer: "Photographed at both ends: no new issue and no lower condition. Tap a room to see both photos.") {
+                        footer: "Photographed at both ends with no new issue and no lower condition. Tap a room to compare its photos.") {
                     ForEach(Array(unchanged.enumerated()), id: \.element.id) { index, item in
                         if index > 0 { MMRowDivider() }
                         compactRow(item)
                     }
                 }
+                .id("unchanged")
             }
 
             if !notCompared.isEmpty {
@@ -210,19 +238,6 @@ struct MoveOutFoundationView: View {
                 }
             }
         }
-    }
-
-    /// While rooms are missing, capturing the next one is the screen's one primary action.
-    private func nextCapture(next: MoveOutComparison, remaining: Int) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(remaining == 1 ? "One room still needs move-out proof before it can be compared."
-                 : "\(remaining) rooms still need move-out proof before they can be compared.")
-                .mmFont(14.5)
-                .foregroundStyle(MMInk.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            MMPrimaryButton(title: "Capture \(next.roomName)", icon: "camera") {
-                path.append(.moveOutRoomDetail(roomID: next.id))
-            }
         }
     }
 
@@ -240,13 +255,15 @@ struct MoveOutFoundationView: View {
         }
     }
 
-    private func card(_ item: MoveOutComparison) -> some View {
-        MoveOutComparisonCard(
-            comparison: item, resolve: resolvePhotoURL,
-            onOpenPhoto: { openViewer(item, $0) },
-            onCapture: { path.append(.moveOutRoomDetail(roomID: item.id)) },
-            justCompared: justCompared.contains(item.id)
-        )
+    private func spread(_ item: MoveOutComparison) -> some View {
+        MoveOutSpreadCard(comparison: item, resolve: resolvePhotoURL, justCompared: justCompared.contains(item.id),
+                          onOpenPhoto: { openViewer(item, $0) })
+    }
+
+    private func missingCard(_ item: MoveOutComparison, isPrimary: Bool) -> some View {
+        MoveOutMissingCard(comparison: item, resolve: resolvePhotoURL, isPrimary: isPrimary,
+                           onOpenPhoto: { openViewer(item, $0) },
+                           onCapture: { path.append(.moveOutRoomDetail(roomID: item.id)) })
     }
 
     private func compactRow(_ item: MoveOutComparison) -> some View {

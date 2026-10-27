@@ -202,6 +202,11 @@ final class MoveOutSnapshotTests: XCTestCase {
         XCTAssertEqual(states["Bathroom"], .unchanged)
         XCTAssertEqual(MoveOutComparison.make(room: Self.allStateRooms[2]).newTags, ["Stain"])
 
+        // Record language only, built from the records.
+        XCTAssertEqual(MoveOutComparison.make(room: Self.allStateRooms[2]).headline, "New issue recorded: Stain")
+        XCTAssertEqual(MoveOutComparison.make(room: Self.allStateRooms[0]).headline, "Condition Good → Fair")
+        XCTAssertNil(MoveOutComparison.make(room: Self.allStateRooms[3]).headline)
+
         // Move-out photos without any move-in photo: no change is claimed.
         let noBaseline = Self.room(9, "Entry", moveOut: [Self.entry("Entry", tags: ["Scuff"], .fair, stage: .moveOut,
                                                                      photo: "snap-hero", count: 1, seed: 90)])
