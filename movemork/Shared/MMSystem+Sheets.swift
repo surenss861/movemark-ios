@@ -89,14 +89,9 @@ struct MMEvidenceRecordPhotos: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let lead = photos.first {
-                GeometryReader { geo in
-                    MMEvidenceImage(path: lead.filePath, resolve: resolve,
-                                    size: CGSize(width: geo.size.width, height: geo.size.height),
-                                    placeholder: Color.white.opacity(0.06))
-                }
-                .aspectRatio(4.0 / 3.0, contentMode: .fit)
-                .frame(maxHeight: dynamicTypeSize.isAccessibilitySize ? 200 : 260)
-                .frame(maxWidth: .infinity)
+                MMEvidenceImage(path: lead.filePath, resolve: resolve, placeholder: Color.white.opacity(0.06))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: dynamicTypeSize.isAccessibilitySize ? 190 : 240)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(MMInk.evidenceStroke, lineWidth: 0.75))
                 .accessibilityHidden(true)
@@ -253,7 +248,7 @@ struct MMDarkTimelineStep: View {
                     .accessibilityLabel("\(proPart), included with Pro")
                 }
             }
-            .padding(.bottom, isLast ? 0 : 22)
+            .padding(.bottom, isLast ? 0 : 18)
             Spacer(minLength: 0)
         }
         .fixedSize(horizontal: false, vertical: true)

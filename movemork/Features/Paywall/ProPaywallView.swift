@@ -16,6 +16,7 @@ struct ProPaywallView: View {
     let onClose: () -> Void
 
     @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(SubscriptionManager.self) private var subscriptionManager
     @State private var localErrorMessage: String? = nil
     @State private var selectedPackageID: String? = nil
@@ -74,6 +75,11 @@ struct ProPaywallView: View {
 
                     plansLoadSection
                         .padding(.top, 30)
+
+                    if dynamicTypeSize.isAccessibilitySize {
+                        VStack(spacing: 0) { quietActions }
+                            .padding(.top, 22)
+                    }
 
                     legalSection
                         .padding(.top, 26)
@@ -283,15 +289,19 @@ struct ProPaywallView: View {
                     action: { if let selectedPackage { startPurchase(selectedPackage) } }
                 )
 
-                Text("Cancel anytime · Managed by Apple")
+                // The chosen plan's App Store price stays beside the action even when the plan rows are below.
+                Text([selectedPackage.map { priceCaption(for: $0, product: $0.storeProduct) },
+                      "Cancel anytime · Managed by Apple"].compactMap { $0 }.joined(separator: " · "))
                     .mmFont(12.5)
+                    .monospacedDigit()
                     .foregroundStyle(MMInk.heroSecondary)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
-            ViewThatFits(in: .horizontal) {
+            // At accessibility sizes the quiet actions move to the end of the page so the pinned bar stays small.
+            if !dynamicTypeSize.isAccessibilitySize {
                 HStack(spacing: 0) { quietActions }
-                VStack(spacing: 0) { quietActions }
             }
         }
         .padding(.horizontal, MMMetrics.inset)

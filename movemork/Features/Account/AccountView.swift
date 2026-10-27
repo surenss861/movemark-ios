@@ -160,11 +160,11 @@ struct EditNameSheet: View {
         !isSaving && !trimmedName.isEmpty && trimmedName != currentName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// `initialError` is a snapshot seam for the error state; the app always starts without one.
-    init(currentName: String, onSave: @escaping (String) throws -> Void, initialError: String? = nil) {
+    /// `draftName` / `initialError` are snapshot seams for the error state; the app starts from the current name.
+    init(currentName: String, onSave: @escaping (String) throws -> Void, draftName: String? = nil, initialError: String? = nil) {
         self.currentName = currentName
         self.onSave = onSave
-        _name = State(initialValue: currentName)
+        _name = State(initialValue: draftName ?? currentName)
         _errorMessage = State(initialValue: initialError)
     }
 
