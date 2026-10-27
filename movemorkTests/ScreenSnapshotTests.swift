@@ -39,13 +39,21 @@ enum ScreenSnapshot {
         .image(on: $0, precision: 0.995, perceptualPrecision: 0.98)
     }
 
+    /// One set of empty stores for every hosted screen. They outlive the hosting controllers on purpose: a
+    /// store created per host was released from inside SwiftUI's teardown of an earlier snapshot, and its
+    /// main-actor deinit crashed the test host in the Swift runtime (TaskLocal scope, "pointer being freed
+    /// was not allocated") a few tests later. The screens only read these stores.
+    static let sessionManager = SessionManager()
+    static let propertyStore = PropertyStore()
+    static let subscriptionManager = SubscriptionManager()
+
     /// Hosts a screen the way the app does: in a NavigationStack, stores in the environment. Note: iOS 26
     /// navigation-bar titles and items don't render reliably in these window-less snapshots; check bars live.
     static func host<V: View>(_ view: V, inNavigation: Bool = true) -> UIViewController {
         let content = Group { if inNavigation { NavigationStack { view } } else { view } }
-            .environment(SessionManager())
-            .environment(PropertyStore())
-            .environment(SubscriptionManager())
+            .environment(sessionManager)
+            .environment(propertyStore)
+            .environment(subscriptionManager)
         return UIHostingController(rootView: content)
     }
 }
