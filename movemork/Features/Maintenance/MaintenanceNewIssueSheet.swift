@@ -87,7 +87,7 @@ struct MaintenanceNewIssueSheet: View {
             }
             .padding(.top, 18)
 
-            Text("MoveMark dates the case when you save it and keeps the photos with it.")
+            Text("MoveMark dates the case and keeps its photos with the record.")
                 .mmFont(12.5)
                 .foregroundStyle(MMInk.secondary)
                 .fixedSize(horizontal: false, vertical: true)

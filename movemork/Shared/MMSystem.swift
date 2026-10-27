@@ -392,6 +392,9 @@ struct MMField: View {
     var autocapitalization: TextInputAutocapitalization = .sentences
     var axis: Axis = .horizontal
     var accessibilityID: String? = nil
+    /// The keyboard's return key: label and what it does (next field, or the screen's primary action).
+    var submitLabel: SubmitLabel = .done
+    var onSubmit: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -410,6 +413,8 @@ struct MMField: View {
             .keyboardType(keyboard)
             .textContentType(contentType)
             .textInputAutocapitalization(autocapitalization)
+            .submitLabel(submitLabel)
+            .onSubmit { onSubmit?() }
             .padding(.horizontal, 14)
             .padding(.vertical, 13)
             .frame(minHeight: 50)

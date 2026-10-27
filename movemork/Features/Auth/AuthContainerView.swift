@@ -21,6 +21,8 @@ struct AuthContainerView: View {
     let onDismiss: () -> Void
 
     @State private var mode: Mode
+    private enum Field: Hashable { case email, password, confirm }
+    @FocusState private var focusedField: Field?
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
@@ -178,25 +180,35 @@ struct AuthContainerView: View {
                 text: $email,
                 keyboard: .emailAddress,
                 autocapitalization: .never,
-                accessibilityID: "auth.email"
+                accessibilityID: "auth.email",
+                submitLabel: .next,
+                onSubmit: { focusedField = .password }
             )
             .autocorrectionDisabled()
+            .focused($focusedField, equals: .email)
 
+            // Return signs in (or moves on): the primary action can sit under the keyboard on smaller phones.
             MMField(
                 title: "Password",
                 placeholder: mode == .signIn ? "Your password" : "At least 6 characters",
                 text: $password,
                 isSecure: true,
-                accessibilityID: "auth.password"
+                accessibilityID: "auth.password",
+                submitLabel: mode == .signIn ? .go : .next,
+                onSubmit: { if mode == .signIn { submit() } else { focusedField = .confirm } }
             )
+            .focused($focusedField, equals: .password)
 
             if mode == .signUp {
                 MMField(
                     title: "Confirm password",
                     placeholder: "Same as above",
                     text: $confirmPassword,
-                    isSecure: true
+                    isSecure: true,
+                    submitLabel: .go,
+                    onSubmit: { submit() }
                 )
+                .focused($focusedField, equals: .confirm)
                 .transition(fieldTransition)
             }
 

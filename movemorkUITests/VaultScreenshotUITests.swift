@@ -202,6 +202,29 @@ final class VaultScreenshotUITests: XCTestCase {
         attach(app, "account-5-deleted")
     }
 
+    /// Maintenance live chrome: the log's back button on its dark bar, and the Record an issue sheet's title and
+    /// Cancel (window-less snapshots can't render navigation bars).
+    func testMaintenanceTour() throws {
+        let app = try signedIn()
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Maintenance'")).firstMatch
+        for _ in 0..<4 where !row.isHittable { app.swipeUp() }
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "Maintenance next action")
+        row.tap()
+        sleep(3)
+        attach(app, "maint-1-log")
+        let add = app.buttons["Record an issue"].firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 10), "Record an issue")
+        add.tap()
+        sleep(2)
+        attach(app, "maint-2-sheet")
+        app.buttons["Cancel"].firstMatch.tap()
+        sleep(1)
+        attach(app, "maint-3-after-cancel")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        sleep(2)
+        attach(app, "maint-4-back-to-proof")
+    }
+
     /// Swipes until the scroll settles at its end (momentum included), so the shot shows the real bottom.
     private func scrollToBottom(_ app: XCUIApplication) {
         for _ in 0..<6 { app.swipeUp() }
@@ -239,8 +262,8 @@ final class VaultScreenshotUITests: XCTestCase {
             emailField.typeText(email)
             let passwordField = app.secureTextFields["auth.password"]
             passwordField.tap()
-            passwordField.typeText(password)
-            app.buttons["auth.primaryAction"].tap()
+            // Return signs in — the button can sit under the keyboard on smaller phones.
+            passwordField.typeText(password + "\n")
             XCTAssertTrue(app.staticTexts["YOUR PROOF"].waitForExistence(timeout: 40))
             app.terminate()
             app.launch()
