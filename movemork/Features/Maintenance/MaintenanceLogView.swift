@@ -104,6 +104,8 @@ struct MaintenanceLogView: View {
             .padding(.trailing, -6)
         }
         .frame(height: 44)
+        // MMScreen's pushed row puts a Spacer (8pt minimum) before this; pull the wordmark back to the inset.
+        .padding(.leading, -8)
     }
 
     @ViewBuilder
