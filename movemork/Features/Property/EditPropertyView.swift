@@ -2,7 +2,7 @@
 //  EditPropertyView.swift
 //  movemork
 //
-//  MoveMark — Edit active property. Sheet from Vault; save to DB and refresh.
+//  MoveMark — Edit rental: a plain utility form (same fields as setup), Save. Sheet from the rental record.
 //
 
 import SwiftUI
@@ -64,8 +64,6 @@ struct EditPropertyView: View {
         selectedCountryOption == "Other" ? customCountry : selectedCountryOption
     }
 
-    private let supportedCountries = ["CA", "US", "GB", "AU", "NZ"]
-
     private var input: CreatePropertyInput {
         CreatePropertyInput(
             name: name,
@@ -88,56 +86,18 @@ struct EditPropertyView: View {
 
     var body: some View {
         MMSheetScaffold(title: "Edit rental") {
-            Text("Changes are saved to this rental. Rooms and evidence are unchanged.")
+            Text("Rooms, photos and records stay exactly as they are.")
                 .mmFont(15)
                 .foregroundStyle(MMInk.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            fieldSection("Rental") {
-                MMField(title: "Nickname or label", placeholder: "e.g. Downtown Condo or 123 Main St", text: $name)
-            }
-            fieldSection("Address") {
-                MMField(title: "Street address", placeholder: "123 Main St", text: $addressLine1, contentType: .streetAddressLine1)
-                MMField(title: "Unit", placeholder: "Optional", text: $unit, contentType: .streetAddressLine2)
-                MMField(title: "City", placeholder: "San Francisco", text: $city, contentType: .addressCity)
-                MMField(title: "Province / state", placeholder: "CA", text: $region, contentType: .addressState)
-                MMField(title: "Postal / ZIP code", placeholder: "94102", text: $postalCode,
-                        contentType: .postalCode, autocapitalization: .characters)
-            }
-            MMGroup(title: "Move-in & lease") {
-                dateRow("Move-in date", $moveInDate)
-                MMRowDivider()
-                dateRow("Lease start", $leaseStartDate)
-                MMRowDivider()
-                dateRow("Lease end", $leaseEndDate)
-            }
-            .padding(.top, 26)
-            fieldSection("Landlord") {
-                MMField(title: "Name", placeholder: "Property manager or landlord", text: $landlordName, contentType: .name)
-                MMField(title: "Email", placeholder: "Optional", text: $landlordEmail, keyboard: .emailAddress,
-                        contentType: .emailAddress, autocapitalization: .never)
-                MMField(title: "Phone", placeholder: "Optional", text: $landlordPhone, keyboard: .phonePad,
-                        contentType: .telephoneNumber)
-            }
-            fieldSection("Deposit & rent") {
-                MMField(title: "Deposit amount", placeholder: "e.g. 1500", text: $depositAmount, keyboard: .decimalPad)
-                MMField(title: "Monthly rent", placeholder: "Optional", text: $rentAmount, keyboard: .decimalPad)
-            }
-            MMGroup(title: "Country") {
-                Picker("Country", selection: $selectedCountryOption) {
-                    ForEach(supportedCountries + ["Other"], id: \.self) { Text($0).tag($0) }
-                }
-                .pickerStyle(.menu)
-                .tint(MMInk.text)
-                .mmFont(16)
-                .padding(.horizontal, 16)
-                .frame(minHeight: MMMetrics.rowHeight)
-            }
-            .padding(.top, 26)
-            if selectedCountryOption == "Other" {
-                MMField(title: "Country code", placeholder: "e.g. FR, DE", text: $customCountry, autocapitalization: .characters)
-                    .padding(.top, 12)
-            }
+            RentalFormFields(
+                name: $name, addressLine1: $addressLine1, unit: $unit, city: $city, region: $region,
+                postalCode: $postalCode, selectedCountryOption: $selectedCountryOption, customCountry: $customCountry,
+                moveInDate: $moveInDate, leaseStartDate: $leaseStartDate, leaseEndDate: $leaseEndDate,
+                landlordName: $landlordName, landlordEmail: $landlordEmail, landlordPhone: $landlordPhone,
+                depositAmount: $depositAmount, rentAmount: $rentAmount, optionalStartsExpanded: true
+            )
 
             if !errorMessage.isEmpty {
                 MMNotice(message: errorMessage).padding(.top, 22)
@@ -146,27 +106,13 @@ struct EditPropertyView: View {
                             isDisabled: input.validationError != nil || isLoading) { submit() }
                 .padding(.top, 26)
         }
-    }
-
-    private func fieldSection<Fields: View>(_ title: String, @ViewBuilder _ fields: () -> Fields) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title.uppercased())
-                .mmFont(12, .medium)
-                .tracking(0.3)
-                .foregroundStyle(MMInk.secondary)
-                .accessibilityAddTraits(.isHeader)
-            fields()
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") { submit() }
+                    .fontWeight(.semibold)
+                    .disabled(input.validationError != nil || isLoading)
+            }
         }
-        .padding(.top, 26)
-    }
-
-    private func dateRow(_ title: String, _ date: Binding<Date>) -> some View {
-        DatePicker(title, selection: date, displayedComponents: .date)
-            .mmFont(16)
-            .foregroundStyle(MMInk.text)
-            .tint(MMInk.text)
-            .padding(.horizontal, 16)
-            .frame(minHeight: MMMetrics.rowHeight)
     }
 
     private func submit() {
