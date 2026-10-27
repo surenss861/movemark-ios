@@ -85,9 +85,13 @@ struct ProPaywallView: View {
                     plansLoadSection
                         .padding(.top, 30)
 
-                    if dynamicTypeSize.isAccessibilitySize {
-                        VStack(spacing: 0) { quietActions }
-                            .padding(.top, 22)
+                    // Below the fold with the other plan: the pinned bar carries only price and the one action.
+                    if !paywallPlansUnavailable || dynamicTypeSize.isAccessibilitySize {
+                        Group {
+                            if dynamicTypeSize.isAccessibilitySize { VStack(spacing: 0) { quietActions } }
+                            else { HStack(spacing: 0) { quietActions } }
+                        }
+                        .padding(.top, 22)
                     }
 
                     legalSection
@@ -303,6 +307,24 @@ struct ProPaywallView: View {
                     }
                 )
             } else {
+                // The price is part of the first screen, read before the action: "$49.99 / year".
+                if let selectedPackage {
+                    VStack(spacing: 2) {
+                        Text(priceCaption(for: selectedPackage, product: selectedPackage.storeProduct))
+                            .mmFont(17, .semibold)
+                            .monospacedDigit()
+                            .foregroundStyle(.white)
+                        if selectedPackage.packageType == .annual, let monthly = selectedPackage.storeProduct.localizedPricePerMonth {
+                            Text("\(monthly) / month, billed yearly")
+                                .mmFont(13)
+                                .monospacedDigit()
+                                .foregroundStyle(MMInk.heroSecondary)
+                        }
+                    }
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityElement(children: .combine)
+                }
                 MMPrimaryButton(
                     title: selectedPackage.map { primaryPurchaseButtonTitle(for: $0) } ?? "Continue with Pro",
                     isLoading: subscriptionManager.isStoreKitBusy && !showPurchaseSuccess,
@@ -313,9 +335,7 @@ struct ProPaywallView: View {
                     action: { if let selectedPackage { startPurchase(selectedPackage) } }
                 )
 
-                // The chosen plan's App Store price stays beside the action even when the plan rows are below.
-                Text([selectedPackage.map { priceCaption(for: $0, product: $0.storeProduct) },
-                      "Cancel anytime · Managed by Apple"].compactMap { $0 }.joined(separator: " · "))
+                Text("Cancel anytime · Managed by Apple")
                     .mmFont(12.5)
                     .monospacedDigit()
                     .foregroundStyle(MMInk.heroSecondary)
@@ -323,8 +343,8 @@ struct ProPaywallView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            // At accessibility sizes the quiet actions move to the end of the page so the pinned bar stays small.
-            if !dynamicTypeSize.isAccessibilitySize {
+            // Plans didn't load: the way out stays beside Try again.
+            if paywallPlansUnavailable, !dynamicTypeSize.isAccessibilitySize {
                 HStack(spacing: 0) { quietActions }
             }
         }

@@ -461,6 +461,46 @@ struct MoveOutMissingCard: View {
     }
 }
 
+// MARK: - Missing move-out proof (quiet row)
+
+/// A room after the first one still waiting for move-out proof: a quiet row, not another empty spread.
+/// "Bedroom" · "Move-out proof needed · Move-in Oct 26" · camera chevron; tapping opens capture.
+struct MoveOutMissingRow: View {
+    let comparison: MoveOutComparison
+    var onCapture: () -> Void = {}
+
+    private var detail: String {
+        let moveIn = MoveOutComparison.day(comparison.moveInDate).map { "Move-in \($0)" } ?? "No move-in photos"
+        return "Move-out proof needed · \(moveIn)"
+    }
+
+    var body: some View {
+        Button(action: onCapture) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(comparison.roomName).mmFont(16, .medium).foregroundStyle(MMInk.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(detail).mmFont(13).foregroundStyle(MMInk.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "camera").font(.system(size: 15, weight: .medium)).foregroundStyle(MMInk.text)
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(MMInk.secondary.opacity(0.6))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(minHeight: 56)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(MMLightPressStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(comparison.roomName), \(detail)")
+        .accessibilityHint("Capture move-out proof")
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
 // MARK: - Compact row (unchanged / not compared)
 
 /// A room that reads the same at both ends, compressed: "Kitchen · ✓ Unchanged", then both dates. Tapping

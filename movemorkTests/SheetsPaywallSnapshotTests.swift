@@ -51,7 +51,7 @@ final class SheetsPaywallSnapshotTests: XCTestCase {
     // MARK: Edit evidence
 
     private func editEvidence(_ evidence: EvidenceRecord) -> some View {
-        withPhotos(EditEvidenceSheet(evidence: evidence, roomName: "Living Room", onSave: { _, _, _, _ in nil }, onDismiss: {}))
+        withPhotos(EditEvidenceSheet(evidence: evidence, roomName: "Living Room", onSave: { _, _, _, _ in nil }, onDelete: {}, onDismiss: {}))
     }
 
     func testEditEvidenceTagsAndNotes() {

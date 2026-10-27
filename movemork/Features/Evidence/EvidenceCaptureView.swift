@@ -239,6 +239,10 @@ struct EvidenceCaptureView: View {
                 onSave: { title, notes, tags, condition in
                     await saveEditedEvidence(entryId: entry.id, title: title, notes: notes, tags: tags, condition: condition)
                 },
+                onDelete: {
+                    editingEntry = nil
+                    Task { await deleteEntry(entry.id) }
+                },
                 onDismiss: { editingEntry = nil }
             )
         }
@@ -386,8 +390,11 @@ struct EditEvidenceSheet: View {
     let evidence: EvidenceRecord
     let roomName: String
     let onSave: (String, String, [String], RoomRecord.ConditionRating) async -> String?
+    /// Removes the entry after the native confirmation; nil hides Delete.
+    var onDelete: (() -> Void)?
     let onDismiss: () -> Void
 
+    @State private var confirmDelete = false
     @State private var title: String
     @State private var notes: String
     @State private var selectedTags: Set<String>
@@ -399,11 +406,13 @@ struct EditEvidenceSheet: View {
         evidence: EvidenceRecord,
         roomName: String,
         onSave: @escaping (String, String, [String], RoomRecord.ConditionRating) async -> String?,
+        onDelete: (() -> Void)? = nil,
         onDismiss: @escaping () -> Void
     ) {
         self.evidence = evidence
         self.roomName = roomName
         self.onSave = onSave
+        self.onDelete = onDelete
         self.onDismiss = onDismiss
         _title = State(initialValue: evidence.title)
         _notes = State(initialValue: evidence.notes)
@@ -479,9 +488,25 @@ struct EditEvidenceSheet: View {
                     .padding(.top, 20)
                 }
             } footer: {
-                MMPrimaryButton(title: isSaving ? "Saving…" : "Save changes", isLoading: isSaving, isDisabled: isSaving) {
-                    Task { await commitSave() }
+                VStack(spacing: 6) {
+                    MMPrimaryButton(title: isSaving ? "Saving…" : "Save changes", isLoading: isSaving, isDisabled: isSaving) {
+                        Task { await commitSave() }
+                    }
+                    if onDelete != nil {
+                        // Quiet and well below Save; the native alert is the safety, not a danger panel.
+                        Button("Delete evidence") { confirmDelete = true }
+                            .mmFont(15, .medium)
+                            .foregroundStyle(MMInk.danger)
+                            .frame(minHeight: 44)
+                            .disabled(isSaving)
+                    }
                 }
+            }
+            .alert("Delete this evidence?", isPresented: $confirmDelete) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) { onDelete?() }
+            } message: {
+                Text("Photos and notes for this entry will be removed. This can't be undone.")
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

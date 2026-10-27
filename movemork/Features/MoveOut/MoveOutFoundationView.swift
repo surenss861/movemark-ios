@@ -212,9 +212,19 @@ struct MoveOutFoundationView: View {
             if !missing.isEmpty {
                 section(title: "Move-out proof needed", count: missing.count,
                         caption: "Capture from the same angles as move-in.") {
-                    ForEach(missing) { item in
-                        // Lime on the first missing room only: while rooms are missing, capture is the one action.
-                        missingCard(item, isPrimary: item.id == missing.first?.id)
+                    // The next room gets the card and the one lime action; the rest wait as quiet rows.
+                    if let next = missing.first { missingCard(next, isPrimary: true) }
+                    if missing.count > 1 {
+                        VStack(spacing: 0) {
+                            ForEach(Array(missing.dropFirst().enumerated()), id: \.element.id) { index, item in
+                                if index > 0 { MMRowDivider() }
+                                MoveOutMissingRow(comparison: item,
+                                                  onCapture: { path.append(.moveOutRoomDetail(roomID: item.id)) })
+                            }
+                        }
+                        .background(MMInk.card, in: RoundedRectangle(cornerRadius: MMMetrics.cardRadius, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: MMMetrics.cardRadius, style: .continuous)
+                            .strokeBorder(MMInk.cardStroke, lineWidth: 1))
                     }
                 }
                 .id("missing")
