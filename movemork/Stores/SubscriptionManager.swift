@@ -14,7 +14,7 @@ import RevenueCat
 private let subscriptionLog = Logger(subsystem: "movemark.movemork", category: "Subscription")
 
 /// Holds the RevenueCat `customerInfoStream` task so `SubscriptionManager.deinit` can cancel without actor violations.
-private final class SubscriptionCustomerInfoListenerBox: @unchecked Sendable {
+private nonisolated final class SubscriptionCustomerInfoListenerBox: @unchecked Sendable {
     private let lock = NSLock()
     nonisolated(unsafe) private var task: Task<Void, Never>?
 
@@ -40,7 +40,7 @@ private final class SubscriptionCustomerInfoListenerBox: @unchecked Sendable {
 @MainActor
 @Observable
 final class SubscriptionManager {
-    deinit {
+    nonisolated deinit {
         customerInfoListenerBox.cancel()
     }
 

@@ -11,6 +11,10 @@ import Observation
 @MainActor
 @Observable
 final class PropertyStore {
+    /// Nothing to tear down on the main actor; a nonisolated deinit skips the executor hop, which aborted in the
+    /// Swift runtime (TaskLocal scope) when SwiftUI released a store from trait-collection teardown.
+    nonisolated deinit {}
+
     var currentProperty: PropertyRecord?
     /// All properties for the current user (for switching). Updated by fetchAll.
     var properties: [PropertyRow] = []

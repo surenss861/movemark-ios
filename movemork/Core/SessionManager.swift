@@ -11,7 +11,7 @@ import Observation
 import PostgREST
 
 /// Holds the session-expiry notification observer so `deinit` can remove it off the main actor.
-private final class SessionExpiryObserverBox: @unchecked Sendable {
+private nonisolated final class SessionExpiryObserverBox: @unchecked Sendable {
     private let lock = NSLock()
     nonisolated(unsafe) private var token: NSObjectProtocol?
 
@@ -82,7 +82,7 @@ final class SessionManager {
         }
     }
 
-    deinit {
+    nonisolated deinit {
         sessionExpiryObserverBox.remove()
     }
 
