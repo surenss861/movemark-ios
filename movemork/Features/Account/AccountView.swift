@@ -150,41 +150,73 @@ struct EditNameSheet: View {
     @State private var name: String
     @State private var isSaving = false
     @State private var errorMessage: String? = nil
+    @FocusState private var fieldFocused: Bool
 
     private var trimmedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    init(currentName: String, onSave: @escaping (String) throws -> Void) {
+    private var canSave: Bool {
+        !isSaving && !trimmedName.isEmpty && trimmedName != currentName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// `initialError` is a snapshot seam for the error state; the app always starts without one.
+    init(currentName: String, onSave: @escaping (String) throws -> Void, initialError: String? = nil) {
         self.currentName = currentName
         self.onSave = onSave
         _name = State(initialValue: currentName)
+        _errorMessage = State(initialValue: initialError)
     }
 
     var body: some View {
         NavigationStack {
-            MMSheetScaffold(title: "Edit name") {
-                MMField(title: "Full name", placeholder: "Enter your full name", text: $name,
-                        contentType: .name, autocapitalization: .words)
-                    .padding(.top, 12)
+            MMSheetScaffold(title: "") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("YOUR NAME")
+                        .mmFont(11, .semibold)
+                        .tracking(0.8)
+                        .foregroundStyle(MMInk.secondary)
+                        .accessibilityHidden(true)
+                    TextField("Full name", text: $name)
+                        .mmFont(17)
+                        .foregroundStyle(MMInk.text)
+                        .tint(MMInk.text)
+                        .textContentType(.name)
+                        .textInputAutocapitalization(.words)
+                        .autocorrectionDisabled()
+                        .submitLabel(.done)
+                        .onSubmit { if canSave { saveName() } }
+                        .focused($fieldFocused)
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 52)
+                        .background(MMInk.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(errorMessage == nil ? MMInk.cardStroke : MMInk.danger.opacity(0.6), lineWidth: 1))
+                        .accessibilityLabel("Your name")
+                        .accessibilityIdentifier("Full name")
+                    Text("Used on your MoveMark account.")
+                        .mmFont(13)
+                        .foregroundStyle(MMInk.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.top, 12)
 
                 if let errorMessage {
                     MMNotice(message: errorMessage)
-                        .padding(.top, 18)
+                        .padding(.top, 16)
                 }
+
+                MMPrimaryButton(title: isSaving ? "Saving…" : "Save", isLoading: isSaving, isDisabled: !canSave) {
+                    saveName()
+                }
+                .padding(.top, 24)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
-
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        saveName()
-                    }
-                    .disabled(isSaving || trimmedName.isEmpty || trimmedName == currentName.trimmingCharacters(in: .whitespacesAndNewlines))
-                }
             }
+            .onAppear { fieldFocused = true }
         }
     }
 
