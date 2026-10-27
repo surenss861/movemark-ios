@@ -41,11 +41,14 @@ final class AuthScreenSnapshotTests: XCTestCase {
     }
 
     func testAuthSignInError() {
-        assertScreen(AuthContainerView(previewMode: .signIn, error: "Email or password is incorrect."), inNavigation: false)
+        assertScreen(AuthContainerView(previewMode: .signIn, error: "Email or password doesn’t match."),
+                     devices: all, inNavigation: false)
     }
 
+    /// Sign-up needs the address confirmed: the form is replaced by "Check your email", not a banner in it.
     func testAuthSignUpConfirmEmail() {
-        assertScreen(AuthContainerView(previewMode: .signUp, info: "Check your email to confirm your account, then sign in."), inNavigation: false)
+        assertScreen(AuthContainerView(previewMode: .signUp, confirmationEmail: "alex@example.com"),
+                     devices: all, inNavigation: false)
     }
 
     // MARK: Password reset
@@ -75,12 +78,11 @@ final class AuthScreenSnapshotTests: XCTestCase {
     }
 
     func testPropertyLoadFailure() {
-        assertScreen(PropertyLoadFailureView(message: nil, isRetrying: false, onRetry: {}), devices: all, inNavigation: false)
+        assertScreen(PropertyLoadFailureView(isRetrying: false, onRetry: {}), devices: all, inNavigation: false)
     }
 
     func testPropertyLoadFailureRetrying() {
-        assertScreen(PropertyLoadFailureView(message: "You appear to be offline. Your proof is safe on MoveMark.",
-                                             isRetrying: true, onRetry: {}), inNavigation: false)
+        assertScreen(PropertyLoadFailureView(isRetrying: true, onRetry: {}), inNavigation: false)
     }
 
     // MARK: First run
@@ -94,12 +96,18 @@ final class AuthScreenSnapshotTests: XCTestCase {
     }
 
     func testFirstRunSetup() {
-        assertScreen(FirstRunPropertySetupView(requiresOnboarding: true, onCreated: { _ in }), devices: all, inNavigation: false)
+        assertScreen(FirstRunPropertySetupView(onCreated: { _ in }), devices: all, inNavigation: false)
+    }
+
+    func testFirstRunSetupFilled() {
+        assertScreen(FirstRunPropertySetupView(previewStreet: "88 Harbour St", previewUnit: "1204",
+                                               previewCity: "Toronto", previewProvince: "ON"),
+                     devices: all, inNavigation: false)
     }
 
     func testFirstRunSetupError() {
-        assertScreen(FirstRunPropertySetupView(requiresOnboarding: false, moment: .foundDamage,
-                                               previewError: "Couldn’t open your new vault. Try again."),
+        assertScreen(FirstRunPropertySetupView(previewStreet: "88 Harbour St", previewCity: "Toronto",
+                                               previewError: "No connection. Check your internet and try again."),
                      inNavigation: false)
     }
 
@@ -108,12 +116,16 @@ final class AuthScreenSnapshotTests: XCTestCase {
     }
 
     func testFirstRunRoomError() {
-        assertScreen(FirstRunRoomPickerView(propertyId: UUID(), moment: .depositQuestioned, previewSelection: .bathroom,
-                                            previewError: "Couldn’t load your vault. Try again."),
+        assertScreen(FirstRunRoomPickerView(propertyId: UUID(), previewSelection: .bathroom,
+                                            previewError: "Couldn’t open your rental record. Try again."),
                      inNavigation: false)
     }
 
     func testFirstRunOtherRoomSheet() {
         assertScreen(FirstRunOtherRoomSheet(otherRoomName: .constant(""), onUse: {}), devices: all)
+    }
+
+    func testFirstRunOtherRoomSheetFilled() {
+        assertScreen(FirstRunOtherRoomSheet(otherRoomName: .constant("Laundry"), onUse: {}))
     }
 }

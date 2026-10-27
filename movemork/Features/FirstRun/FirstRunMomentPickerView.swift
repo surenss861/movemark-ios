@@ -2,14 +2,14 @@
 //  FirstRunMomentPickerView.swift
 //  movemork
 //
-//  "What are you documenting today?" — routes first run to the renter's moment.
+//  "What are you documenting?" — the stage of the rental, two paths only (moving in / moving out).
 //
 
 import SwiftUI
 
 struct FirstRunMomentPickerView: View {
-    /// True while vaults are still loading — selecting early could create a
-    /// duplicate vault for someone who already has one.
+    /// True while rentals are still loading — selecting early could create a duplicate rental for someone
+    /// who already has one.
     let isPreparing: Bool
     let onSelect: (RentalMoment) -> Void
 
@@ -18,44 +18,32 @@ struct FirstRunMomentPickerView: View {
             title: MoveMarkGrowthCopy.firstRunMomentTitle,
             subtitle: MoveMarkGrowthCopy.firstRunMomentSubtitle
         ) {
-            MMGroup {
-                ForEach(Array(RentalMoment.allCases.enumerated()), id: \.element) { index, moment in
-                    if index > 0 { MMRowDivider(leading: 52) }
-                    momentRow(moment)
+            VStack(spacing: 12) {
+                ForEach(RentalMoment.allCases) { moment in
+                    MMChoiceCard(
+                        title: moment.title,
+                        subtitle: moment.blurb,
+                        icon: moment.iconName,
+                        isDisabled: isPreparing,
+                        accessibilityID: "firstRun.moment.\(moment.rawValue)"
+                    ) {
+                        MMHaptics.selection()
+                        onSelect(moment)
+                    }
                 }
             }
 
-            HStack(spacing: 8) {
-                if isPreparing {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(MMInk.secondary)
+            if isPreparing {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small).tint(MMInk.secondary)
+                    Text("Loading your rentals…")
+                        .mmFont(13)
+                        .foregroundStyle(MMInk.secondary)
                 }
-
-                Text(
-                    isPreparing
-                        ? "Loading your vaults…"
-                        : MoveMarkGrowthCopy.firstRunMomentFootnote
-                )
-                .mmFont(13)
-                .foregroundStyle(MMInk.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 4)
+                .padding(.top, 14)
+                .accessibilityElement(children: .combine)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
         }
-    }
-
-    private func momentRow(_ moment: RentalMoment) -> some View {
-        MMRow(
-            title: moment.title,
-            subtitle: moment.blurb,
-            icon: moment.iconName,
-            isDisabled: isPreparing
-        ) {
-            MMHaptics.selection()
-            onSelect(moment)
-        }
-        .accessibilityLabel("\(moment.title). \(moment.blurb)")
     }
 }

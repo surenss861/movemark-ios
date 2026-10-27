@@ -251,7 +251,7 @@ enum MoveMarkFlowMessage {
         if error is URLError { return "No connection. Check your internet and try again." }
         let raw = error.localizedDescription.lowercased()
         if raw.contains("invalid login") || raw.contains("invalid credentials") || raw.contains("invalid email or password") {
-            return "Couldn’t sign in. Check your email and password."
+            return "Email or password doesn’t match."
         }
         if raw.contains("email not confirmed") {
             return "Please confirm your email, then try again."

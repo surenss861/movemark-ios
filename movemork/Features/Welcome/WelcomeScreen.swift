@@ -2,7 +2,8 @@
 //  WelcomeScreen.swift
 //  movemork
 //
-//  MoveMark — “Before they blame you” welcome (fixed zones, evidence capture hero).
+//  MoveMark — Welcome: outcome (headline) → trust (a compact Proof Slip, the record the vault will hold) →
+//  action (lime Start move-in proof, a quiet way back into an existing vault).
 //
 
 import SwiftUI
@@ -15,7 +16,6 @@ struct WelcomeScreen: View {
     @State private var launchCTAPressed = false
 
     @State private var cardVisible = false
-    @State private var tagsVisible = false
     @State private var copyVisible = false
     @State private var ctaVisible = false
     /// False only in snapshot tests (see `init(previewSettled:)`); production always layers the video.
@@ -158,29 +158,31 @@ struct WelcomeScreen: View {
         dockSideInset: CGFloat,
         pinsDockToBottom: Bool
     ) -> some View {
+        // Outcome → trust → action: the headline leads, the slip shows the record it produces, the dock acts.
+        // The rental footage owns the top of the screen; the words sit low over the darkest part of it.
         VStack(alignment: .leading, spacing: 0) {
             brandIdentityRow
-                .padding(.bottom, layout.brandToHeroGap)
-
-            WelcomeDepositCaseFile(
-                maxWidth: cardWidth,
-                cardVisible: cardVisible,
-                tagsVisible: tagsVisible,
-                compactHeight: layout.isCompactHeight
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            primaryCopyBlock
-                .padding(.top, layout.heroToCopyGap)
 
             if pinsDockToBottom {
-                Spacer(minLength: 8)
+                Spacer(minLength: layout.brandToHeroGap)
             } else {
-                Color.clear.frame(height: layout.heroToCopyGap)
+                Color.clear.frame(height: layout.brandToHeroGap * 2)
             }
+
+            primaryCopyBlock
+
+            WelcomeProofSlip(isCompact: layout.isCompactHeight || usesAccessibilityScrollLayout)
+                // Subordinate to the headline: narrower than the copy column, never full bleed.
+                .frame(maxWidth: 300, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, layout.heroToCopyGap)
+                .opacity(cardVisible ? 1 : 0)
+                .offset(y: cardVisible ? 0 : 10)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.48).delay(0.3), value: cardVisible)
 
             bottomLaunchDock
                 .padding(.horizontal, dockSideInset)
+                .padding(.top, layout.slipToDockGap)
         }
         .padding(.horizontal, contentPadding)
         .padding(.top, layout.topPadding)
@@ -306,38 +308,30 @@ struct WelcomeScreen: View {
             .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82), value: launchCTAPressed)
             .accessibilityIdentifier("welcome.primaryCTA")
 
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 6) {
-                    signInPrompt
-                    signInButton
-                }
-                VStack(spacing: 2) {
-                    signInPrompt
-                    signInButton
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 10)
+            signInButton
+                .padding(.top, 4)
+
+            Text(MoveMarkGrowthCopy.welcomeTrustLine)
+                .mmFont(12.5)
+                .foregroundStyle(.white.opacity(0.5))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 2)
         }
         .opacity(ctaVisible ? 1 : 0)
         .offset(y: ctaVisible ? 0 : 10)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.42).delay(0.32), value: ctaVisible)
     }
 
-    private var signInPrompt: some View {
-        Text("Already have an account?")
-            .mmFont(15)
-            .foregroundStyle(.white.opacity(0.62))
-    }
-
     private var signInButton: some View {
         Button {
             launchAuth(mode: .signIn)
         } label: {
-            Text("Sign in")
-                .mmFont(15, .semibold)
+            Text(MoveMarkGrowthCopy.welcomeSecondaryCTA)
+                .mmFont(15.5, .semibold)
                 .foregroundStyle(.white)
-                .frame(minHeight: 44)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, minHeight: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -347,7 +341,6 @@ struct WelcomeScreen: View {
     private func playEntrance() {
         if reduceMotion {
             cardVisible = true
-            tagsVisible = true
             copyVisible = true
             ctaVisible = true
             return
@@ -357,7 +350,6 @@ struct WelcomeScreen: View {
             cardVisible = true
         }
         withAnimation(.spring(response: 0.38, dampingFraction: 0.82).delay(0.14)) {
-            tagsVisible = true
         }
         withAnimation(.easeOut(duration: 0.44).delay(0.22)) {
             copyVisible = true
@@ -375,7 +367,6 @@ extension WelcomeScreen {
         self.init()
         showsVideo = false
         _cardVisible = State(initialValue: true)
-        _tagsVisible = State(initialValue: true)
         _copyVisible = State(initialValue: true)
         _ctaVisible = State(initialValue: true)
     }
@@ -387,6 +378,7 @@ private struct WelcomeZoneLayout {
     let topPadding: CGFloat
     let brandToHeroGap: CGFloat
     let heroToCopyGap: CGFloat
+    let slipToDockGap: CGFloat
     /// Drives the proof artifact's density. Only the card responds to this — the zone gaps are
     /// identical on every device, so the screen keeps one spacing rhythm.
     let isCompactHeight: Bool
@@ -395,11 +387,12 @@ private struct WelcomeZoneLayout {
         topPadding = max(4, safeTop - 71)
         brandToHeroGap = 14
         heroToCopyGap = 22
+        slipToDockGap = 26
         // Available vertical space, not a device check: an SE is short because of what it
         // leaves the layout, and a model list would be wrong again on the next phone. This is
         // the safe-area-excluded height, so the measured split is SE 647 and 13 mini 728 on the
         // compact side, iPhone 16 759 and 17 Pro Max 860 on the regular side.
-        isCompactHeight = screenHeight < 750
+        isCompactHeight = screenHeight < 700
     }
 
     func bottomDockPadding(safeBottom: CGFloat) -> CGFloat {

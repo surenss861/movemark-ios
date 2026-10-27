@@ -41,6 +41,8 @@ struct PasswordResetView: View {
     @State private var errorMessage = ""
     @State private var isSaving = false
     @State private var didReset = false
+    private enum Field: Hashable { case password, confirm }
+    @FocusState private var focusedField: Field?
 
     init(token: String, onDone: @escaping () -> Void) {
         self.token = token
@@ -55,50 +57,62 @@ struct PasswordResetView: View {
         _errorMessage = State(initialValue: previewError)
     }
 
+    /// Entry's dark header (wordmark, title, close) over the light sheet — the same surface as sign in, so a
+    /// reset link lands inside MoveMark rather than in a generic form. Reachable only from the link itself.
     var body: some View {
-        NavigationStack {
-            MMSheetScaffold(title: didReset ? "Password updated" : "Choose a new password") {
-                if didReset {
-                    Text("Sign in with your new password.")
-                        .mmFont(15)
-                        .foregroundStyle(MMInk.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    MMPrimaryButton(title: "Done", action: onDone)
-                        .accessibilityIdentifier("passwordReset.done")
-                        .padding(.top, 22)
-                } else {
-                    VStack(alignment: .leading, spacing: 14) {
-                        MMField(title: "New password", placeholder: "At least 8 characters", text: $password,
-                                isSecure: true, accessibilityID: "passwordReset.password")
-                        MMField(title: "Confirm password", placeholder: "Same as above", text: $confirmPassword,
-                                isSecure: true, accessibilityID: "passwordReset.confirm")
-                    }
-                    .padding(.top, 8)
-
-                    if !errorMessage.isEmpty {
-                        MMNotice(message: errorMessage)
-                            .accessibilityIdentifier("passwordReset.error")
-                            .padding(.top, 18)
-                    }
-
-                    MMPrimaryButton(title: "Save new password", isLoading: isSaving, action: save)
-                        .accessibilityIdentifier("passwordReset.save")
-                        .padding(.top, 22)
+        MMScreen(
+            title: didReset ? "Password updated" : "Choose a new password",
+            subtitle: didReset ? "Sign in with your new password." : "Use at least 8 characters."
+        ) {
+            if !didReset {
+                Button(action: onDone) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .frame(width: 34, height: 34)
+                        .background(Color.white.opacity(0.10), in: Circle())
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(MMLightPressStyle())
+                .accessibilityLabel("Cancel")
+                .accessibilityIdentifier("passwordReset.cancel")
+                .disabled(isSaving)
             }
-            .toolbar {
-                if !didReset {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel", action: onDone)
-                    }
+        } content: {
+            if didReset {
+                MMPrimaryButton(title: "Done", action: onDone)
+                    .accessibilityIdentifier("passwordReset.done")
+            } else {
+                VStack(alignment: .leading, spacing: 14) {
+                    MMField(title: "New password", placeholder: "At least 8 characters", text: $password,
+                            isSecure: true, contentType: .newPassword, accessibilityID: "passwordReset.password",
+                            submitLabel: .next, onSubmit: { focusedField = .confirm })
+                        .focused($focusedField, equals: .password)
+                    MMField(title: "Confirm password", placeholder: "Same as above", text: $confirmPassword,
+                            isSecure: true, contentType: .newPassword, accessibilityID: "passwordReset.confirm",
+                            submitLabel: .go, onSubmit: save)
+                        .focused($focusedField, equals: .confirm)
                 }
+
+                if !errorMessage.isEmpty {
+                    MMNotice(message: errorMessage)
+                        .accessibilityIdentifier("passwordReset.error")
+                        .padding(.top, 18)
+                }
+
+                MMPrimaryButton(title: "Save new password", isLoading: isSaving, action: save)
+                    .accessibilityIdentifier("passwordReset.save")
+                    .padding(.top, 22)
             }
         }
+        .presentationBackground(MMInk.sheet)
         .interactiveDismissDisabled(isSaving)
     }
 
     private func save() {
         guard !isSaving else { return }
+        focusedField = nil
         isSaving = true
         errorMessage = ""
         Task { @MainActor in

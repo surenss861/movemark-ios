@@ -11,10 +11,10 @@ import Testing
 @testable import MoveMark
 
 struct AuthErrorMessageTests {
-    @Test func wrongCredentialsPointNewUsersToSignUp() {
+    @Test func wrongCredentialsAreOneCalmMessage() {
         let message = MoveMarkFlowMessage.authOperationFailed(
             NeonAuthError.rejected(code: "INVALID_EMAIL_OR_PASSWORD", message: "Invalid email or password"))
-        #expect(message == "Email or password is incorrect. New to MoveMark? Create a private vault instead.")
+        #expect(message == "Email or password doesn’t match.")
     }
 
     @Test func throttlingAndConnectionFailuresAreNamed() {

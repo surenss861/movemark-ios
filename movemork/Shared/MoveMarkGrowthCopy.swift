@@ -17,7 +17,9 @@ enum MoveMarkGrowthCopy {
     /// `welcomeHeadline` stays the spoken form for VoiceOver.
     static let welcomeHeadlineLead = "Prove what was"
     static let welcomeHeadlineTail = "already there."
-    static let welcomeBody = "Document move-in condition before you unpack. Turn photos into a shareable record when you need proof."
+    static let welcomeBody = "Photograph your rental before you unpack. MoveMark keeps the photos, dates and records together so you can show how the place looked when you arrived."
+    static let welcomeSecondaryCTA = "I already have a vault"
+    static let welcomeTrustLine = "Private evidence · Original files preserved"
     static let welcomePainLine = "Don’t get blamed for damage you didn’t cause."
     static let welcomeCTA = "Start move-in proof"
 
@@ -46,15 +48,16 @@ enum MoveMarkGrowthCopy {
         ),
     ]
 
-    static let firstRunMomentTitle = "What are you documenting today?"
-    static let firstRunMomentSubtitle = "MoveMark will guide you based on what’s happening with your rental."
-    static let firstRunMomentFootnote = "Takes about 5 minutes for your first room."
+    static let firstRunMomentTitle = "What are you documenting?"
+    static let firstRunMomentSubtitle = "We’ll start you in the right proof flow."
 
-    static let firstRunSetupTitle = "Protect this rental."
-    static let firstRunSetupSubtitle = "Add your apartment, then document each room before you unpack."
+    static let firstRunSetupEyebrow = "Your rental"
+    static let firstRunSetupTitle = "Where are you documenting?"
+    static let firstRunSetupSubtitle = "This address appears on your proof record and reports."
+    static let firstRunSetupCTA = "Create rental record"
 
-    static let firstRunRoomTitle = "Start with one room."
-    static let firstRunRoomSubtitle = "Kitchen works well — save what was already there."
+    static let firstRunRoomTitle = "Start with the first room"
+    static let firstRunRoomSubtitle = "Photograph each room before boxes and furniture cover anything."
 
     /// Pro is sold by its outcome; the benefits list underneath is evidence for it.
     static let proOutcomeLine = "Keep a complete rental record from move-in to move-out."

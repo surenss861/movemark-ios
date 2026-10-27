@@ -19,7 +19,7 @@ enum FirstRunRoomOption: String, CaseIterable, Identifiable {
         switch self {
         case .kitchen: return "Kitchen"
         case .livingRoom: return "Living room"
-        case .bedroom: return "Bedroom"
+        case .bedroom: return "Primary bedroom"
         case .bathroom: return "Bathroom"
         case .hallway: return "Hallway"
         case .other: return "Other"
@@ -54,7 +54,7 @@ struct FirstRunRoomPickerView: View {
     @State private var isLoading = false
 
     var body: some View {
-        MMScreen(title: moment.roomTitle, subtitle: moment.roomSubtitle) {
+        MMScreen(title: MoveMarkGrowthCopy.firstRunRoomTitle, subtitle: MoveMarkGrowthCopy.firstRunRoomSubtitle) {
             MMGroup {
                 ForEach(Array(FirstRunRoomOption.allCases.enumerated()), id: \.element) { index, option in
                     if index > 0 { MMRowDivider() }
@@ -68,6 +68,7 @@ struct FirstRunRoomPickerView: View {
             }
 
             MMPrimaryButton(title: "Start room proof", isLoading: isLoading) { startRoomProof() }
+                .accessibilityIdentifier("firstRun.startRoomProof")
                 .padding(.top, 26)
         }
         .sheet(isPresented: $showOtherSheet) {
@@ -97,7 +98,7 @@ struct FirstRunRoomPickerView: View {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
     }
 
     private func ensurePropertyLoaded() async {
@@ -131,7 +132,7 @@ struct FirstRunRoomPickerView: View {
                     await propertyStore.selectProperty(id: propertyId, userId: userId)
                 }
                 guard let property = propertyStore.currentProperty, property.id == propertyId else {
-                    errorMessage = "Couldn’t load your vault. Try again."
+                    errorMessage = "Couldn’t open your rental record. Try again."
                     return
                 }
 
@@ -188,34 +189,41 @@ struct FirstRunRoomPickerView: View {
 extension FirstRunRoomPickerView {
     /// Snapshot tests only: open on a given selection, optionally with an error showing. In an extension so
     /// the memberwise init the flow uses stays as it is.
-    init(propertyId: UUID, moment: RentalMoment, previewSelection: FirstRunRoomOption, previewError: String = "") {
+    init(propertyId: UUID, moment: RentalMoment = .justMovedIn, previewSelection: FirstRunRoomOption, previewError: String = "") {
         self.init(propertyId: propertyId, moment: moment, onStartProof: { _, _ in })
         _selected = State(initialValue: previewSelection)
         _errorMessage = State(initialValue: previewError)
     }
 }
 
-/// The "Other" room sheet: name the room, then start its proof.
+/// The "Other" room sheet: name the room, then go straight into its capture.
 struct FirstRunOtherRoomSheet: View {
     @Binding var otherRoomName: String
     let onUse: () -> Void
+
+    private static let examples = ["Office", "Balcony", "Laundry", "Storage"]
 
     private var isNameEmpty: Bool {
         otherRoomName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
-        MMSheetScaffold(title: "Other room") {
-            Text("Name this room")
-                .mmFont(20, .semibold)
-                .foregroundStyle(MMInk.text)
-                .accessibilityAddTraits(.isHeader)
-
-            MMField(title: "Room name", placeholder: "e.g. Office", text: $otherRoomName, autocapitalization: .never)
+        MMSheetScaffold(title: "Add another room") {
+            MMField(title: "Room name", placeholder: "Office", text: $otherRoomName,
+                    autocapitalization: .words, accessibilityID: "firstRun.otherRoomName",
+                    submitLabel: .done, onSubmit: { if !isNameEmpty { onUse() } })
                 .autocorrectionDisabled()
-                .padding(.top, 16)
+                .padding(.top, 8)
 
-            MMPrimaryButton(title: "Use this room", isDisabled: isNameEmpty, action: onUse)
+            Text(Self.examples.joined(separator: " · "))
+                .mmFont(13)
+                .foregroundStyle(MMInk.secondary)
+                .padding(.top, 8)
+                .padding(.leading, 2)
+                .accessibilityLabel("For example: \(Self.examples.joined(separator: ", "))")
+
+            MMPrimaryButton(title: "Add room", isDisabled: isNameEmpty, action: onUse)
+                .accessibilityIdentifier("firstRun.addOtherRoom")
                 .padding(.top, 22)
         }
     }

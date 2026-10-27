@@ -2,36 +2,61 @@
 //  FirstRunPropertySetupView.swift
 //  movemork
 //
-//  Minimal rental setup — framed by the selected rental moment.
+//  Establish the rental record: the address and move-in date that appear on every proof record and report.
+//  No nickname and no personal name here — the rental is titled from its address, identity lives in Account.
 //
 
 import SwiftUI
 
 struct FirstRunPropertySetupView: View {
-    let requiresOnboarding: Bool
     var moment: RentalMoment = .justMovedIn
     let onCreated: (UUID) -> Void
-    var onOnboardingNameCaptured: ((String) -> Void)? = nil
 
     @Environment(PropertyStore.self) private var propertyStore
     @Environment(SessionManager.self) private var sessionManager
 
-    @State private var yourName = ""
-    @State private var rentalName = "My apartment"
+    private enum Field: Hashable { case street, unit, city, province }
+    @FocusState private var focusedField: Field?
+
+    @State private var street = ""
+    @State private var unit = ""
     @State private var city = ""
+    @State private var province = ""
     @State private var moveInDate = Date()
     @State private var errorMessage = ""
     @State private var isLoading = false
 
+    private var trimmedStreet: String { street.trimmingCharacters(in: .whitespacesAndNewlines) }
+
     var body: some View {
-        MMScreen(title: moment.setupTitle, subtitle: moment.setupSubtitle) {
+        MMScreen(
+            eyebrow: MoveMarkGrowthCopy.firstRunSetupEyebrow,
+            title: MoveMarkGrowthCopy.firstRunSetupTitle,
+            subtitle: MoveMarkGrowthCopy.firstRunSetupSubtitle
+        ) {
             VStack(alignment: .leading, spacing: 14) {
-                if requiresOnboarding {
-                    field("Your name", placeholder: "Optional", text: $yourName)
-                }
-                field("Rental name", placeholder: "My apartment", text: $rentalName)
-                field("City / location", placeholder: "Optional", text: $city)
+                MMField(title: "Street address", placeholder: "88 Harbour St", text: $street,
+                        contentType: .streetAddressLine1, autocapitalization: .words,
+                        accessibilityID: "setup.street", submitLabel: .next,
+                        onSubmit: { focusedField = .unit })
+                    .focused($focusedField, equals: .street)
+                MMField(title: "Unit", placeholder: "Optional", text: $unit,
+                        contentType: .streetAddressLine2, autocapitalization: .characters,
+                        accessibilityID: "setup.unit", submitLabel: .next,
+                        onSubmit: { focusedField = .city })
+                    .focused($focusedField, equals: .unit)
+                MMField(title: "City", placeholder: "Toronto", text: $city,
+                        contentType: .addressCity, autocapitalization: .words,
+                        accessibilityID: "setup.city", submitLabel: .next,
+                        onSubmit: { focusedField = .province })
+                    .focused($focusedField, equals: .city)
+                MMField(title: "Province", placeholder: "ON", text: $province,
+                        contentType: .addressState, autocapitalization: .characters,
+                        accessibilityID: "setup.province", submitLabel: .done,
+                        onSubmit: { focusedField = nil })
+                    .focused($focusedField, equals: .province)
             }
+            .autocorrectionDisabled()
 
             MMGroup {
                 DatePicker("Move-in date", selection: $moveInDate, displayedComponents: .date)
@@ -48,50 +73,46 @@ struct FirstRunPropertySetupView: View {
                     .padding(.top, 22)
             }
 
-            MMPrimaryButton(title: moment.setupCTA, isLoading: isLoading) { createVault() }
+            MMPrimaryButton(title: MoveMarkGrowthCopy.firstRunSetupCTA, isLoading: isLoading,
+                            isDisabled: trimmedStreet.isEmpty) { createRental() }
+                .accessibilityIdentifier("setup.create")
                 .padding(.top, 26)
         }
     }
 
-    /// Same input behaviour as before the system pass: no auto-capitalisation, no autocorrect.
-    private func field(_ title: String, placeholder: String, text: Binding<String>) -> some View {
-        MMField(title: title, placeholder: placeholder, text: text, autocapitalization: .never)
-            .autocorrectionDisabled()
+    /// "88 Harbour St, Unit 1204" — the rental's title when there is no nickname.
+    static func title(street: String, unit: String) -> String {
+        let s = street.trimmingCharacters(in: .whitespacesAndNewlines)
+        let u = unit.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !u.isEmpty else { return s }
+        let hasPrefix = ["unit", "apt", "suite", "#"].contains { u.lowercased().hasPrefix($0) }
+        return "\(s), \(hasPrefix ? u : "Unit \(u)")"
     }
 
-    private func createVault() {
+    private func createRental() {
         guard !isLoading else { return }
         guard let userId = sessionManager.userId else {
             errorMessage = MoveMarkFlowMessage.signInRequired
             return
         }
-
-        let label = rentalName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !label.isEmpty else {
-            errorMessage = "Enter a name for this rental."
+        guard !trimmedStreet.isEmpty else {
+            errorMessage = "Enter the street address."
             return
         }
 
-        let location = city.trimmingCharacters(in: .whitespacesAndNewlines)
-        let address = location.isEmpty ? label : location
-
+        focusedField = nil
         isLoading = true
         errorMessage = ""
 
         Task { @MainActor in
             defer { isLoading = false }
             do {
-                if requiresOnboarding {
-                    let name = yourName.trimmingCharacters(in: .whitespacesAndNewlines)
-                    onOnboardingNameCaptured?(name.isEmpty ? "Renter" : name)
-                }
-
                 let input = CreatePropertyInput(
-                    name: label,
-                    addressLine1: address,
-                    unit: "",
-                    city: location,
-                    region: "",
+                    name: Self.title(street: street, unit: unit),
+                    addressLine1: trimmedStreet,
+                    unit: unit.trimmingCharacters(in: .whitespacesAndNewlines),
+                    city: city.trimmingCharacters(in: .whitespacesAndNewlines),
+                    region: province.trimmingCharacters(in: .whitespacesAndNewlines),
                     postalCode: "",
                     country: "CA",
                     moveInDate: moveInDate,
@@ -107,7 +128,7 @@ struct FirstRunPropertySetupView: View {
                 try await propertyStore.createProperty(input: input, userId: userId)
 
                 guard let propertyId = propertyStore.activePropertyId else {
-                    errorMessage = "Couldn’t open your new vault. Try again."
+                    errorMessage = "Couldn’t open your rental record. Try again."
                     return
                 }
 
@@ -123,10 +144,15 @@ struct FirstRunPropertySetupView: View {
 }
 
 extension FirstRunPropertySetupView {
-    /// Snapshot tests only: open with an error already showing. In an extension so the memberwise init
-    /// the flow uses stays as it is.
-    init(requiresOnboarding: Bool, moment: RentalMoment, previewError: String) {
-        self.init(requiresOnboarding: requiresOnboarding, moment: moment, onCreated: { _ in })
+    /// Snapshot tests only: open filled in and/or with an error showing. In an extension so the memberwise
+    /// init the flow uses stays as it is.
+    init(previewStreet: String = "", previewUnit: String = "", previewCity: String = "", previewProvince: String = "",
+         previewError: String = "") {
+        self.init(onCreated: { _ in })
+        _street = State(initialValue: previewStreet)
+        _unit = State(initialValue: previewUnit)
+        _city = State(initialValue: previewCity)
+        _province = State(initialValue: previewProvince)
         _errorMessage = State(initialValue: previewError)
     }
 }

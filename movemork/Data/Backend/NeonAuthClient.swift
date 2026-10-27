@@ -43,7 +43,7 @@ enum NeonAuthError: LocalizedError, Equatable {
             // One message for an unknown email and a wrong password: telling them apart would let anyone
             // find out which addresses have a MoveMark account.
             case "INVALID_EMAIL_OR_PASSWORD":
-                return "Email or password is incorrect. New to MoveMark? Create a private vault instead."
+                return "Email or password doesn’t match."
             case "RATE_LIMITED": return "Too many attempts. Wait a minute, then try again."
             case "USER_ALREADY_EXISTS", "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL":
                 return "An account with this email already exists. Sign in instead."

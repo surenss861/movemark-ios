@@ -2,8 +2,10 @@
 //  AuthContainerView.swift
 //  movemork
 //
-//  Proof-first auth — save Welcome proof into a private vault. Dark header (title, close) over the light
-//  working sheet: what the vault holds, light fields, one lime action.
+//  Sign in / create account — "your evidence has a private home". Dark header (title, close) over the light
+//  working sheet: fields, one lime action, the other mode quietly below. No feature cards, no persuasion.
+//  Password reset is reachable only from its deep link (PasswordResetView): email delivery is deferred, so
+//  there is no "Forgot password?" here that would send a mail that can't arrive.
 //
 
 import SwiftUI
@@ -28,6 +30,9 @@ struct AuthContainerView: View {
     @State private var confirmPassword = ""
     @State private var errorMessage = ""
     @State private var infoMessage = ""
+    /// Set when sign-up succeeded but Neon Auth wants the address confirmed first: the form is replaced by
+    /// a "Check your email" state for this address.
+    @State private var confirmationEmail: String? = nil
     @State private var isLoading = false
     @State private var surfaceAppeared = false
     @State private var formFieldsAppeared = false
@@ -46,13 +51,15 @@ struct AuthContainerView: View {
     }
 
     private var headerTitle: String {
-        mode == .signIn ? "Welcome back." : "Create your proof vault"
+        if confirmationEmail != nil { return "Check your email" }
+        return mode == .signIn ? "Welcome back." : "Create your private vault"
     }
 
     private var headerSubtitle: String {
-        mode == .signIn
+        if confirmationEmail != nil { return "One more step to finish your vault." }
+        return mode == .signIn
             ? "Continue your proof vault."
-            : "Save room photos, lease docs, and reports under one rental."
+            : "Your rental proof stays tied to your account."
     }
 
     init(initialMode: Mode, onDismiss: @escaping () -> Void = {}) {
@@ -62,12 +69,13 @@ struct AuthContainerView: View {
 
     /// Snapshot tests only: the settled surface (no entrance), optionally with a status message showing.
     /// Production uses the init above.
-    init(previewMode: Mode, error: String = "", info: String = "") {
+    init(previewMode: Mode, error: String = "", info: String = "", confirmationEmail: String? = nil) {
         self.init(initialMode: previewMode)
         _surfaceAppeared = State(initialValue: true)
         _formFieldsAppeared = State(initialValue: true)
         _errorMessage = State(initialValue: error)
         _infoMessage = State(initialValue: info)
+        _confirmationEmail = State(initialValue: confirmationEmail)
     }
 
     var body: some View {
@@ -79,16 +87,24 @@ struct AuthContainerView: View {
             dismissButton
         } content: {
             VStack(alignment: .leading, spacing: 0) {
-                AuthProofVaultStrip(mode: mode)
-                    .padding(.bottom, 24)
-                    .opacity(surfaceAppeared ? 1 : 0)
-                    .offset(y: surfaceAppeared ? 0 : 8)
-
-                authForm
-                    .opacity(formFieldsAppeared ? 1 : 0)
-                    .offset(y: formFieldsAppeared ? 0 : 8)
+                if let confirmationEmail {
+                    MMResolvedBlock(
+                        icon: "envelope",
+                        title: "Check your email",
+                        message: "We sent a confirmation link to \(confirmationEmail). Open it to finish creating your vault.",
+                        actionTitle: "Back to sign in",
+                        action: backToSignInAfterConfirmation
+                    )
+                    .accessibilityIdentifier("auth.confirmation")
+                    .padding(.top, 4)
+                } else {
+                    authForm
+                        .opacity(formFieldsAppeared ? 1 : 0)
+                        .offset(y: formFieldsAppeared ? 0 : 8)
+                }
             }
             .animation(authSpring, value: mode)
+            .animation(authSpring, value: confirmationEmail)
         }
         .offset(y: surfaceAppeared ? 0 : 28)
         .opacity(surfaceAppeared ? 1 : 0)
@@ -190,7 +206,7 @@ struct AuthContainerView: View {
             // Return signs in (or moves on): the primary action can sit under the keyboard on smaller phones.
             MMField(
                 title: "Password",
-                placeholder: mode == .signIn ? "Your password" : "At least 6 characters",
+                placeholder: mode == .signIn ? "Your password" : "At least 8 characters",
                 text: $password,
                 isSecure: true,
                 accessibilityID: "auth.password",
@@ -205,24 +221,11 @@ struct AuthContainerView: View {
                     placeholder: "Same as above",
                     text: $confirmPassword,
                     isSecure: true,
+                    accessibilityID: "auth.confirmPassword",
                     submitLabel: .go,
                     onSubmit: { submit() }
                 )
                 .focused($focusedField, equals: .confirm)
-                .transition(fieldTransition)
-            }
-
-            if mode == .signIn {
-                HStack {
-                    Spacer()
-                    MMTextAction(title: "Forgot password?", size: 13.5, tint: MMInk.secondary) {
-                        Task { @MainActor in
-                            await requestPasswordReset()
-                        }
-                    }
-                    .accessibilityIdentifier("auth.forgotPassword")
-                }
-                .padding(.top, -8)
                 .transition(fieldTransition)
             }
         }
@@ -239,13 +242,13 @@ struct AuthContainerView: View {
                     MMNotice(message: errorMessage)
                 }
             }
-            .padding(.top, mode == .signIn ? 4 : 18)
+            .padding(.top, 18)
         }
     }
 
     private var primaryActionButton: some View {
         MMPrimaryButton(
-            title: mode == .signIn ? "Continue proof vault" : "Create private vault",
+            title: mode == .signIn ? "Continue" : "Create vault",
             isLoading: isLoading
         ) { submit() }
         .accessibilityIdentifier("auth.primaryAction")
@@ -274,7 +277,7 @@ struct AuthContainerView: View {
     }
 
     private var modeSwitchPrompt: some View {
-        Text(mode == .signIn ? "New to MoveMark?" : "Already have an account?")
+        Text(mode == .signIn ? "New to MoveMark?" : "Already have a vault?")
             .mmFont(14)
             .foregroundStyle(MMInk.secondary)
             .multilineTextAlignment(.center)
@@ -336,19 +339,18 @@ struct AuthContainerView: View {
         }
     }
 
-    private func requestPasswordReset() async {
-        guard mode == .signIn else { return }
-        guard !isLoading else { return }
-        isLoading = true
-        errorMessage = ""
-        infoMessage = ""
-        defer { isLoading = false }
-        do {
-            try await sessionManager.sendPasswordReset(email: email)
-            infoMessage = "If an account exists for that email, you’ll get a reset link shortly."
-        } catch {
-            errorMessage = MoveMarkFlowMessage.authOperationFailed(error)
+    /// Leaves the confirmation state for sign-in with the address already filled in.
+    private func backToSignInAfterConfirmation() {
+        let update = {
+            if let confirmationEmail { email = confirmationEmail }
+            confirmationEmail = nil
+            mode = .signIn
+            password = ""
+            confirmPassword = ""
+            errorMessage = ""
+            infoMessage = ""
         }
+        if reduceMotion { update() } else { withAnimation(authSpring) { update() } }
     }
 
     private func submit() {
@@ -372,7 +374,8 @@ struct AuthContainerView: View {
                     // No session means no account to route into yet. The phase stays
                     // `.signedOut`, so this surface remains up and says why.
                     if result == .emailConfirmationRequired {
-                        infoMessage = "Check your email to confirm your account, then sign in."
+                        focusedField = nil
+                        confirmationEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
                     }
                 }
             } catch {

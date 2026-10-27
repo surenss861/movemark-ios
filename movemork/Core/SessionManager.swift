@@ -284,46 +284,45 @@ final class SessionManager {
     /// Records onboarding as complete on the profile without changing `authPhase`, so the current
     /// first-run screen (the saved-proof receipt) stays up. Called as soon as the first proof is saved:
     /// if the app is closed on the receipt, the next launch must open the app, not first-run onboarding.
-    func recordOnboardingCompleted(firstName name: String) async throws {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard MoveMarkBackendConfig.isConfigured, !trimmed.isEmpty, let uid = userId else { return }
+    /// Marks onboarding complete. A name is optional — Account owns identity, so first run no longer asks
+    /// for one; without a name only `onboarding_completed_at` is written and any existing `full_name` stays.
+    func recordOnboardingCompleted(firstName name: String? = nil) async throws {
+        guard MoveMarkBackendConfig.isConfigured, let uid = userId else { return }
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         try await dataAPI
             .from("profiles")
             .update(
                 OnboardingUpdate(
-                    fullName: trimmed,
+                    fullName: trimmed.isEmpty ? nil : trimmed,
                     onboardingCompletedAt: ISO8601DateFormatter().string(from: Date())
                 )
             )
             .eq("id", value: uid)
             .execute()
-        self.firstName = trimmed
+        if !trimmed.isEmpty { self.firstName = trimmed }
     }
 
-    func completeOnboarding(firstName name: String) async throws {
+    func completeOnboarding(firstName name: String? = nil) async throws {
         guard MoveMarkBackendConfig.isConfigured else {
             throw AuthError.validation("This build is not configured to reach MoveMark’s servers.")
-        }
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            throw AuthError.validation("Enter your name.")
         }
         guard let uid = userId else {
             throw AuthError.validation("Not authenticated.")
         }
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
         try await dataAPI
             .from("profiles")
             .update(
                 OnboardingUpdate(
-                    fullName: trimmed,
+                    fullName: trimmed.isEmpty ? nil : trimmed,
                     onboardingCompletedAt: ISO8601DateFormatter().string(from: Date())
                 )
             )
             .eq("id", value: uid)
             .execute()
 
-        self.firstName = trimmed
+        if !trimmed.isEmpty { self.firstName = trimmed }
         authPhase = .signedIn
     }
 
@@ -481,8 +480,9 @@ private struct ProfileInsert: Codable {
     }
 }
 
+/// `fullName` nil is omitted from the update (synthesized `encodeIfPresent`), so an existing name is kept.
 private struct OnboardingUpdate: Codable {
-    let fullName: String
+    let fullName: String?
     let onboardingCompletedAt: String
 
     enum CodingKeys: String, CodingKey {

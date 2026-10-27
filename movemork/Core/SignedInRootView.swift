@@ -19,9 +19,9 @@ struct SignedInRootView: View {
                 MMLaunchWait()
             } else if shouldShowLoadFailure {
                 PropertyLoadFailureView(
-                    message: propertyStore.errorMessage,
                     isRetrying: isRetrying,
-                    onRetry: { Task { await retry() } }
+                    onRetry: { Task { await retry() } },
+                    onSignOut: { Task { await sessionManager.signOut() } }
                 )
             } else if shouldShowFirstRunProof {
                 FirstRunProofFlowView(requiresOnboarding: false)
@@ -94,23 +94,35 @@ struct SignedInRootView: View {
 
 // MARK: - Recoverable load failure
 
-/// Authentication succeeded; only the property load failed. The user stays signed in.
+/// Authentication succeeded; only the property load failed. The user stays signed in, and the copy never
+/// implies the proof is gone — it is stored; it just couldn't be reached.
 struct PropertyLoadFailureView: View {
-    let message: String?
     let isRetrying: Bool
     let onRetry: () -> Void
+    var onSignOut: () -> Void = {}
 
     var body: some View {
         MMScreen(
-            title: "Can’t load your vault",
-            subtitle: message ?? "Your proof is safe. We couldn’t reach MoveMark to load it just now."
+            title: "Your vault couldn’t load",
+            subtitle: "Your proof is still stored. MoveMark couldn’t reach it right now."
         ) {
             MMPrimaryButton(
                 title: isRetrying ? "Trying again…" : "Try again",
-                icon: "arrow.clockwise",
                 isLoading: isRetrying,
                 action: onRetry
             )
+            .accessibilityIdentifier("loadFailure.retry")
+
+            Text("Check your connection and try again.")
+                .mmFont(13.5)
+                .foregroundStyle(MMInk.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 12)
+
+            MMSecondaryButton(title: "Sign out", tint: MMInk.secondary, isDisabled: isRetrying, action: onSignOut)
+                .accessibilityIdentifier("loadFailure.signOut")
+                .padding(.top, 18)
         }
     }
 }

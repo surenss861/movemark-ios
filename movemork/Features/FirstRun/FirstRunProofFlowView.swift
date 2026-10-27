@@ -13,7 +13,6 @@ struct FirstRunProofFlowView: View {
     @Environment(PropertyStore.self) private var propertyStore
     @Environment(SessionManager.self) private var sessionManager
 
-    @State private var onboardingName = "Renter"
     @State private var selectedMoment: RentalMoment = .justMovedIn
     @State private var isPreparingVaults = true
 
@@ -42,12 +41,10 @@ struct FirstRunProofFlowView: View {
 
             case .setup:
                 FirstRunPropertySetupView(
-                    requiresOnboarding: requiresOnboarding,
                     moment: selectedMoment,
                     onCreated: { propertyId in
                         step = .pickRoom(propertyId)
-                    },
-                    onOnboardingNameCaptured: { onboardingName = $0 }
+                    }
                 )
 
             case .pickRoom(let propertyId):
@@ -68,7 +65,7 @@ struct FirstRunProofFlowView: View {
                             propertyStore.firstRunAwaitingReceiptDismissal = true
                             // Proof exists now: onboarding is done even if the app closes on the receipt.
                             if requiresOnboarding {
-                                Task { try? await sessionManager.recordOnboardingCompleted(firstName: onboardingName) }
+                                Task { try? await sessionManager.recordOnboardingCompleted() }
                             }
                             let saved = FirstRunSavedSummary(
                                 propertyId: propertyId,
@@ -136,7 +133,7 @@ struct FirstRunProofFlowView: View {
             _ = await propertyStore.refreshActivePropertyHydration(userId: userId)
 
             if requiresOnboarding, sessionManager.authPhase == .needsOnboarding {
-                try? await sessionManager.completeOnboarding(firstName: onboardingName)
+                try? await sessionManager.completeOnboarding()
             }
         }
     }
