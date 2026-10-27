@@ -2,7 +2,7 @@
 //  MaintenanceCaseSnapshotTests.swift
 //  movemorkTests
 //
-//  @file Goldens for Maintenance as a case file (the case log, the issue case — open, resolved, no photos,
+//  @file Goldens for Maintenance as a case file (the case archive (log), the Record-an-issue sheet, the issue case — open, resolved, no photos,
 //        error, loading, not found) and the dark evidence viewer (room photos with their record, maintenance
 //        photos), on the Pro phone, the small phone and AX3. Photos come from Fixtures/snap-*.jpg through
 //        mmEvidenceImageOverride, so renders are deterministic and show real evidence material.
@@ -163,6 +163,16 @@ final class MaintenanceCaseSnapshotTests: XCTestCase {
         assertScreen(withPhotos(MaintenanceLogView(path: .constant([]), initialError: MoveMarkFlowMessage.maintenanceListSyncFailed,
                                                    initialCovers: covers).environment(logStore(log))),
                      devices: [("pro", ScreenSnapshot.pro), ("small", ScreenSnapshot.small)])
+    }
+
+    // MARK: Record an issue (sheet)
+
+    func testNewIssueSheet() {
+        assertScreen(MaintenanceNewIssueSheet(onSaved: { _ in }, onCancel: {}), devices: devices)
+    }
+
+    func testNewIssueSheetError() {
+        assertScreen(MaintenanceNewIssueSheet(initialError: "Enter an issue title.", onSaved: { _ in }, onCancel: {}))
     }
 
     // MARK: Evidence viewer

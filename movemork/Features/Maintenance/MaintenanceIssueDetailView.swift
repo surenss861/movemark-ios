@@ -223,7 +223,7 @@ struct MaintenanceIssueDetailView: View {
         }
         if let recorded = reported ?? discovered {
             let method = issue.reportMethod?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            dated.append(CaseEvent(id: "recorded", title: "Issue recorded", date: recorded.date,
+            dated.append(CaseEvent(id: "recorded", title: "Case recorded", date: recorded.date,
                                    dateText: MMCaseDate.text(recorded.date, time: recorded.hasTime),
                                    detail: method.isEmpty ? nil : "Reported to landlord by \(method.lowercased())"))
         }

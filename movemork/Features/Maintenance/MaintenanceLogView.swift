@@ -2,30 +2,22 @@
 //  MaintenanceLogView.swift
 //  movemork
 //
-//  MoveMark — Maintenance log: the rental's cases (open first), each read as a case — evidence thumbnail when it
-//  has one, title, category, reported date, photo count, calm status — then the composer (native PhotosPicker).
+//  MoveMark — Maintenance log: the rental's case archive. Open cases first, then resolved, each read as a case —
+//  evidence thumbnail when it has one, title, category, reported date, photo count, calm status. Recording a new
+//  issue happens in its own sheet (MaintenanceNewIssueSheet), opened from the header's "+" or the empty state.
 //
 
 import SwiftUI
-import PhotosUI
 
 struct MaintenanceLogView: View {
     @Binding var path: [AppRoute]
     @Environment(PropertyStore.self) private var propertyStore
-    @Environment(SessionManager.self) private var sessionManager
 
-    @State private var title = ""
-    @State private var selectedCategory: MaintenanceCategory = .other
-    @State private var details = ""
-    @State private var selectedPhotos: [PhotosPickerItem] = []
-    @State private var loadedImages: [UIImage] = []
-    /// Source evidence for each pending photo (index-aligned with the `loadedImages` previews).
-    @State private var loadedSources: [MMEvidenceSource] = []
     @State private var isLoading = false
-    @State private var isSubmitting = false
     @State private var errorMessage: String? = nil
     @State private var errorRetryAction: (() -> Void)? = nil
     @State private var softNotice: String? = nil
+    @State private var isRecording = false
     /// Newest photo per case, for the row thumbnails (best effort; a case without one shows no photo).
     @State private var covers: [UUID: EvidencePhoto] = [:]
 
@@ -52,10 +44,10 @@ struct MaintenanceLogView: View {
 
     var body: some View {
         MMScreen(
-            eyebrow: propertyStore.currentProperty.map { $0.title.isEmpty ? $0.addressLine1 : $0.title },
             title: "Maintenance",
-            subtitle: "Every issue you record becomes a dated case with its photos.",
-            isPushed: true
+            subtitle: "Issues recorded for this rental.",
+            isPushed: true,
+            trailing: { headerBar }
         ) {
             if let errorMessage {
                 MMNotice(
@@ -68,19 +60,54 @@ struct MaintenanceLogView: View {
                 MMNotice(message: softNotice, tone: .info).padding(.bottom, 18)
             }
 
-            issueList
-
-            composer
-                .padding(.top, log.isEmpty && !isLoading ? 22 : 30)
+            caseList
         }
         // Re-sync when the active vault changes; list reads `propertyStore.maintenanceLog` (hydrated on switch + refreshed here).
         .task(id: propertyStore.currentProperty?.id) { await syncMaintenanceLogFromServer() }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $isRecording) {
+            NavigationStack {
+                MaintenanceNewIssueSheet(
+                    onSaved: { notice in
+                        isRecording = false
+                        errorMessage = nil
+                        errorRetryAction = nil
+                        softNotice = notice
+                        if let id = propertyStore.currentProperty?.id {
+                            Task { await loadCovers(propertyId: id) }
+                        }
+                    },
+                    onCancel: { isRecording = false }
+                )
+            }
+        }
+    }
+
+    /// The pushed header's top row: MoveMark wordmark on the left, the "+" (Proof header language) on the right.
+    private var headerBar: some View {
+        HStack {
+            Text("MoveMark")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.85))
+            Spacer()
+            Button { isRecording = true } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background(Color.white.opacity(0.12), in: Circle())
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Record an issue")
+            .padding(.trailing, -6)
+        }
+        .frame(height: 44)
     }
 
     @ViewBuilder
-    private var issueList: some View {
+    private var caseList: some View {
         if log.isEmpty && isLoading {
             HStack(spacing: 10) {
                 ProgressView().tint(MMInk.secondary)
@@ -92,12 +119,14 @@ struct MaintenanceLogView: View {
             MMEmptyBlock(
                 icon: "doc.text.magnifyingglass",
                 title: "No cases recorded",
-                message: "When something breaks or needs your landlord, record it below with photos. Each one is kept as a dated case."
+                message: "When something happens, record it with photos and a date.",
+                actionTitle: "Record an issue",
+                action: { isRecording = true }
             )
         } else {
             VStack(alignment: .leading, spacing: 26) {
-                issueSection(title: "Open", rows: openIssues)
-                issueSection(title: "Resolved", rows: resolvedIssues)
+                caseSection(title: "Open", rows: openIssues)
+                caseSection(title: "Resolved", rows: resolvedIssues)
             }
             if isLoading {
                 ProgressView().tint(MMInk.secondary).frame(maxWidth: .infinity).padding(.top, 14)
@@ -105,81 +134,8 @@ struct MaintenanceLogView: View {
         }
     }
 
-    private var composer: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            MMSectionTitle(title: "Record a new issue")
-            Text("Add it while it's fresh. MoveMark dates it and keeps the photos with it.")
-                .mmFont(14)
-                .foregroundStyle(MMInk.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 4)
-
-            VStack(alignment: .leading, spacing: 14) {
-                MMField(title: "Issue title", placeholder: "Bathroom leak", text: $title)
-                categoryPicker
-                MMField(title: "Details", placeholder: "What happened, where, and what was reported", text: $details, axis: .vertical)
-            }
-            .padding(.top, 16)
-
-            MMGroup {
-                PhotosPicker(
-                    selection: $selectedPhotos,
-                    maxSelectionCount: 10,
-                    matching: .images,
-                    preferredItemEncoding: .current
-                ) {
-                    MMPhotoPickerLabel(
-                        title: loadedImages.isEmpty ? "Attach photos" : "\(loadedImages.count) photo\(loadedImages.count == 1 ? "" : "s") selected",
-                        icon: "camera"
-                    )
-                }
-                .buttonStyle(MMLightPressStyle())
-                .onChange(of: selectedPhotos) { _, newItems in
-                    loadPhotos(newItems)
-                }
-
-                if !loadedImages.isEmpty {
-                    MMRowDivider()
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(loadedImages.indices, id: \.self) { index in
-                                Image(uiImage: loadedImages[index])
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 64, height: 64)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            }
-                        }
-                        .padding(12)
-                    }
-                }
-            }
-            .padding(.top, 16)
-
-            MMPrimaryButton(title: "Save issue", isLoading: isSubmitting, isDisabled: isSubmitting) { addIncident() }
-                .padding(.top, 22)
-        }
-    }
-
-    private var categoryPicker: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Category").mmFont(13, .medium).foregroundStyle(MMInk.secondary)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(MaintenanceCategory.allCases, id: \.self) { cat in
-                        MMChip(title: cat.rawValue, isSelected: selectedCategory == cat) {
-                            selectedCategory = cat
-                        }
-                        .clipShape(Capsule())
-                    }
-                }
-                .padding(.vertical, 1)
-            }
-        }
-    }
-
     @ViewBuilder
-    private func issueSection(title: String, rows: [MaintenanceRecord]) -> some View {
+    private func caseSection(title: String, rows: [MaintenanceRecord]) -> some View {
         if !rows.isEmpty {
             MMGroup(title: "\(title) · \(rows.count)") {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, entry in
@@ -234,82 +190,6 @@ struct MaintenanceLogView: View {
         if !ok {
             errorMessage = MoveMarkFlowMessage.maintenanceListSyncFailed
             errorRetryAction = { Task { await syncMaintenanceLogFromServer() } }
-        }
-    }
-
-    private func loadPhotos(_ items: [PhotosPickerItem]) {
-        Task { @MainActor in
-            let selection = await MMEvidencePicker.load(items)
-            loadedSources = selection.sources
-            loadedImages = selection.previews
-            if let message = selection.rejectionMessage {
-                errorMessage = message
-            }
-        }
-    }
-
-    private func addIncident() {
-        guard let property = propertyStore.currentProperty,
-              let userId = sessionManager.userId else {
-            errorMessage = MoveMarkFlowMessage.noPropertyOrAuth
-            return
-        }
-
-        guard !isSubmitting else { return }
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedTitle.isEmpty {
-            errorMessage = "Enter an issue title."
-            return
-        }
-
-        isSubmitting = true
-        errorMessage = nil
-        errorRetryAction = nil
-        softNotice = nil
-
-        let record = MaintenanceRecord(
-            title: trimmedTitle,
-            category: selectedCategory.rawValue,
-            details: details,
-            status: .open,
-            landlordResponse: "",
-            photoCount: loadedImages.count
-        )
-
-        let photoData = loadedSources
-
-        Task { @MainActor in
-            defer { isSubmitting = false }
-
-            do {
-                let outcome = try await propertyStore.addMaintenance(
-                    record,
-                    photos: photoData,
-                    propertyId: property.id,
-                    userId: userId
-                )
-
-                title = ""
-                selectedCategory = .other
-                details = ""
-                selectedPhotos = []
-                loadedImages = []
-                loadedSources = []
-
-                if outcome.hadPartialPhotoLoss && outcome.listRefreshFailed {
-                    softNotice =
-                        "\(MoveMarkFlowMessage.maintenancePartialPhotosSaved) If the list looks wrong, open Maintenance again."
-                } else if outcome.hadPartialPhotoLoss {
-                    softNotice = MoveMarkFlowMessage.maintenancePartialPhotosSaved
-                } else if outcome.listRefreshFailed {
-                    softNotice = MoveMarkFlowMessage.incidentSavedRefreshStale
-                }
-                MMHaptics.success()
-            } catch {
-                errorMessage = MoveMarkFlowMessage.maintenanceComposerFailed(error)
-                errorRetryAction = { addIncident() }
-                MMHaptics.error()
-            }
         }
     }
 }
