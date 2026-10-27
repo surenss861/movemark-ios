@@ -116,8 +116,9 @@ struct MoveOutComparison: Identifiable, Hashable {
         return nil
     }
 
+    /// "Oct 24": the two ends of one tenancy read best as short dates side by side.
     static func day(_ date: Date?) -> String? {
-        date?.formatted(.dateTime.month(.abbreviated).day().year())
+        date?.formatted(.dateTime.month(.abbreviated).day())
     }
 
     /// The note under a side: condition first, then the renter's words.
@@ -130,12 +131,15 @@ struct MoveOutComparison: Identifiable, Hashable {
     var changeSentence: String? {
         switch state {
         case .newIssue:
-            let list = newTags.prefix(3).joined(separator: ", ")
-            let more = newTags.count > 3 ? " and \(newTags.count - 3) more" : ""
-            return "Recorded at move-out, not in the move-in record: \(list)\(more)."
+            // Built only from the move-out tags the move-in record doesn't carry.
+            let shown = Array(newTags.prefix(3))
+            var list = shown.count > 1 ? shown.dropLast().joined(separator: ", ") + " and " + shown[shown.count - 1]
+                : (shown.first ?? "")
+            if newTags.count > 3 { list = shown.joined(separator: ", ") + " and \(newTags.count - 3) more" }
+            return "\(list) not present at move-in."
         case .changed:
             guard let a = moveInCondition, let b = moveOutCondition else { return nil }
-            return "Condition recorded as \(a.rawValue) at move-in and \(b.rawValue) at move-out."
+            return "Condition recorded as \(b.rawValue) at move-out, down from \(a.rawValue) at move-in."
         default:
             return nil
         }
@@ -182,22 +186,36 @@ struct MoveOutComparisonCard: View {
     let resolve: (String) async -> URL?
     var onOpenPhoto: (MoveOutSide) -> Void = { _ in }
     var onCapture: () -> Void = {}
+    /// The room gained its move-out side while this screen was open.
+    var justCompared = false
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var photoHeight: CGFloat {
-        comparison.state == .missing ? 150 : (dynamicTypeSize.isAccessibilitySize ? 170 : 196)
+        comparison.state == .missing ? 128 : (dynamicTypeSize.isAccessibilitySize ? 170 : 196)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            MoveOutStateMark(state: comparison.state)
+            HStack(alignment: .firstTextBaseline) {
+                MoveOutStateMark(state: comparison.state)
+                Spacer(minLength: 8)
+                if justCompared { MoveOutJustCompared() }
+            }
             Text(comparison.roomName)
                 .mmFont(20, .semibold)
                 .foregroundStyle(MMInk.text)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 6)
                 .accessibilityAddTraits(.isHeader)
+            if let sentence = comparison.changeSentence {
+                // The plain difference sits with the state, before the photos: the first thing read.
+                Text(sentence)
+                    .mmFont(14.5)
+                    .foregroundStyle(MMInk.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 3)
+            }
 
             MMComparisonPair(
                 title: comparison.roomName, change: .unchanged,
@@ -211,23 +229,11 @@ struct MoveOutComparisonCard: View {
             )
             .padding(.top, 14)
 
-            if let sentence = comparison.changeSentence {
-                Text(sentence)
-                    .mmFont(13.5)
-                    .foregroundStyle(MMInk.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(MMInk.field, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .padding(.top, 14)
-            }
-
             if comparison.state == .missing {
                 Button(action: onCapture) {
                     HStack(spacing: 7) {
                         Image(systemName: "camera").font(.system(size: 14, weight: .medium))
-                        Text("Capture move-out").mmFont(15, .medium)
+                        Text("Capture move-out proof").mmFont(15, .medium)
                         Spacer(minLength: 0)
                         Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(MMInk.secondary.opacity(0.6))
@@ -250,7 +256,7 @@ struct MoveOutComparisonCard: View {
         .accessibilityActions {
             if comparison.moveInPhoto != nil { Button("View move-in photo") { onOpenPhoto(.moveIn) } }
             if comparison.moveOutPhoto != nil { Button("View move-out photo") { onOpenPhoto(.moveOut) } }
-            if comparison.state == .missing { Button("Capture move-out") { onCapture() } }
+            if comparison.state == .missing { Button("Capture move-out proof") { onCapture() } }
         }
     }
 
@@ -285,80 +291,142 @@ struct MoveOutComparisonCard: View {
     }
 }
 
+// MARK: - Just compared
+
+/// What the renter just gained: a room that now has its move-out side. Quiet ink, no celebration.
+struct MoveOutJustCompared: View {
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "checkmark").font(.system(size: 10.5, weight: .bold))
+            Text("Compared just now").mmFont(12, .medium)
+        }
+        .foregroundStyle(MMInk.text)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 // MARK: - Compact row
 
-/// A room that reads the same at both ends: both photos small and side by side, the room and one quiet line.
-/// The row opens the room's move-out capture; each thumbnail opens the viewer.
+/// A room that reads the same at both ends: small paired thumbnails, the room, "✓ Unchanged" and both dates.
+/// Tapping expands it to the full move-in | move-out pair; each photo there opens the viewer.
 struct MoveOutCompactRow: View {
     let comparison: MoveOutComparison
     let resolve: (String) async -> URL?
+    var justCompared = false
     var onOpenPhoto: (MoveOutSide) -> Void = { _ in }
-    var onOpen: () -> Void = {}
 
+    @State private var isExpanded: Bool
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    private var detail: String {
-        switch comparison.state {
-        case .noBaseline:
-            return "No move-in photos to compare against"
-        default:
-            let condition = comparison.moveOutCondition.map { "\($0.rawValue) at both ends" } ?? "Same as move-in"
-            if let date = MoveOutComparison.day(comparison.moveOutDate) { return "\(condition) · \(date)" }
-            return condition
-        }
+    init(comparison: MoveOutComparison, resolve: @escaping (String) async -> URL?, justCompared: Bool = false,
+         initiallyExpanded: Bool = false, onOpenPhoto: @escaping (MoveOutSide) -> Void = { _ in }) {
+        self.comparison = comparison
+        self.resolve = resolve
+        self.justCompared = justCompared
+        self.onOpenPhoto = onOpenPhoto
+        _isExpanded = State(initialValue: initiallyExpanded)
+    }
+
+    private var dateParts: [String] {
+        let moveIn = MoveOutComparison.day(comparison.moveInDate).map { "Move-in \($0)" }
+            ?? (comparison.state == .noBaseline ? "No move-in photos" : nil)
+        let moveOut = MoveOutComparison.day(comparison.moveOutDate).map { "Move-out \($0)" }
+        return [moveIn, moveOut].compactMap { $0 }
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 4) {
-                thumb(.moveIn)
-                thumb(.moveOut)
+        VStack(alignment: .leading, spacing: 0) {
+            Button { withAnimation(.easeOut(duration: 0.2)) { isExpanded.toggle() } } label: { summary }
+                .buttonStyle(MMLightPressStyle())
+                .accessibilityHint(isExpanded ? "Hides the photos." : "Shows move-in and move-out photos side by side.")
+            if isExpanded {
+                MMComparisonPair(
+                    title: comparison.roomName, change: .unchanged,
+                    beforeNote: MoveOutComparison.note(comparison.moveInCondition, comparison.moveInText),
+                    beforeDate: MoveOutComparison.day(comparison.moveInDate),
+                    afterNote: MoveOutComparison.note(comparison.moveOutCondition, comparison.moveOutText),
+                    afterDate: MoveOutComparison.day(comparison.moveOutDate),
+                    photoHeight: 150, showsHeader: false,
+                    before: { photo(.moveIn) },
+                    after: { photo(.moveOut) }
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+                .accessibilityActions {
+                    if comparison.moveInPhoto != nil { Button("View move-in photo") { onOpenPhoto(.moveIn) } }
+                    if comparison.moveOutPhoto != nil { Button("View move-out photo") { onOpenPhoto(.moveOut) } }
+                }
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(comparison.roomName).mmFont(16, .medium).foregroundStyle(MMInk.text)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
-                Text(detail).mmFont(13).foregroundStyle(MMInk.secondary)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 4 : 2)
-            }
-            Spacer(minLength: 6)
-            Button(action: onOpen) {
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(MMInk.secondary.opacity(0.6))
-                    .frame(width: 32, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(MMLightPressStyle())
-            .accessibilityLabel("Open \(comparison.roomName) move-out")
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onOpen)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction { onOpen() }
-        .accessibilityActions {
-            if comparison.moveInPhoto != nil { Button("View move-in photo") { onOpenPhoto(.moveIn) } }
-            if comparison.moveOutPhoto != nil { Button("View move-out photo") { onOpenPhoto(.moveOut) } }
         }
     }
 
+    private var summary: some View {
+        HStack(spacing: 12) {
+            if !dynamicTypeSize.isAccessibilitySize {
+                HStack(spacing: 3) {
+                    thumb(.moveIn)
+                    thumb(.moveOut)
+                }
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(comparison.roomName).mmFont(16, .medium).foregroundStyle(MMInk.text)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
+                HStack(spacing: 4) {
+                    if comparison.state == .unchanged {
+                        Image(systemName: "checkmark").font(.system(size: 10.5, weight: .bold))
+                    }
+                    Text(comparison.state.label).mmFont(13, .medium)
+                    if justCompared { Text("· Compared just now").mmFont(13) }
+                }
+                .foregroundStyle(MMInk.text)
+                // One line when it fits; otherwise one end per line, never a date split across lines.
+                ViewThatFits(in: .horizontal) {
+                    Text(dateParts.joined(separator: " · ")).lineLimit(1)
+                    VStack(alignment: .leading, spacing: 1) {
+                        ForEach(dateParts, id: \.self) { Text($0).fixedSize(horizontal: false, vertical: true) }
+                    }
+                }
+                .mmFont(12.5).monospacedDigit().foregroundStyle(MMInk.secondary)
+            }
+            Spacer(minLength: 6)
+            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(MMInk.secondary.opacity(0.6))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
     @ViewBuilder
+    private func photo(_ side: MoveOutSide) -> some View {
+        if let photo = side == .moveIn ? comparison.moveInPhoto : comparison.moveOutPhoto {
+            Button { onOpenPhoto(side) } label: {
+                MMEvidenceImage(path: photo.filePath, resolve: resolve, size: CGSize(width: 170, height: 150),
+                                placeholder: MMInk.field)
+            }
+            .buttonStyle(MMLightPressStyle())
+        } else {
+            MMMissingPhotoFrame(label: "No photo")
+        }
+    }
+
     private func thumb(_ side: MoveOutSide) -> some View {
         let photo = side == .moveIn ? comparison.moveInPhoto : comparison.moveOutPhoto
-        let size = CGSize(width: 48, height: 48)
-        Group {
+        return Group {
             if let photo {
-                MMEvidenceImage(path: photo.thumbnailPath ?? photo.filePath, resolve: resolve, size: size, placeholder: MMInk.field)
-                    .onTapGesture { onOpenPhoto(side) }
+                MMEvidenceImage(path: photo.thumbnailPath ?? photo.filePath, resolve: resolve,
+                                size: CGSize(width: 44, height: 44), placeholder: MMInk.field)
             } else {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .strokeBorder(MMInk.secondary.opacity(0.45), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
                     .background(MMInk.field)
             }
         }
-        .frame(width: size.width, height: size.height)
+        .frame(width: 44, height: 44)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .accessibilityHidden(true)
     }
 }

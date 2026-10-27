@@ -23,6 +23,8 @@ struct MoveOutFoundationView: View {
     @State private var lastErrorFromExport = false
     @State private var queuedNotice: String? = nil
     @State private var viewer: ViewerTarget? = nil
+    /// Rooms that gained move-out photos while this screen was open: what the renter just added.
+    @State private var justCompared: Set<UUID> = []
 
     private struct ViewerTarget: Identifiable {
         var id: UUID { startID }
@@ -64,8 +66,10 @@ struct MoveOutFoundationView: View {
         initialChecklist: MoveOutChecklistRow? = nil,
         initiallyExporting: Bool = false,
         initialError: String? = nil,
-        initialQueuedNotice: String? = nil
+        initialQueuedNotice: String? = nil,
+        initialJustCompared: Set<UUID> = []
     ) {
+        _justCompared = State(initialValue: initialJustCompared)
         _path = path
         _checklist = State(initialValue: initialChecklist)
         _isExporting = State(initialValue: initiallyExporting)
@@ -75,15 +79,20 @@ struct MoveOutFoundationView: View {
 
     var body: some View {
         MMScreen(
-            eyebrow: "Move-out",
+            eyebrow: "Move-out proof",
             title: rentalName,
-            subtitle: hasBaseline ? "Your move-in record is the baseline. Each room’s move-out photos sit beside it." : nil,
+            subtitle: "Compare move-in to move-out. Show what changed — and what didn’t.",
             isPushed: true,
             showsWordmark: true,
-            headerAccessory: rooms.isEmpty ? nil : AnyView(
-                MMProgressStrip(label: "Move-out proof", done: roomsWithMoveOutPhotos, total: rooms.count, onDark: true)
+            headerAccessory: rooms.isEmpty || !hasBaseline ? nil : AnyView(
+                MMProgressStrip(label: "Before and after", done: roomsWithMoveOutPhotos, total: rooms.count,
+                                unit: "rooms compared", onDark: true)
             )
         ) {
+            if let gained = justComparedLine {
+                MMNotice(message: gained, tone: .success).padding(.bottom, 18)
+            }
+
             if let errorMessage {
                 MMNotice(
                     message: errorMessage,
@@ -104,9 +113,11 @@ struct MoveOutFoundationView: View {
             } else {
                 MMEmptyBlock(
                     icon: "square.split.2x1",
-                    title: rooms.isEmpty ? "Add rooms and move-in proof first" : "Capture move-in proof first",
-                    message: "Move-out compares each room with how it looked when you moved in. Photograph your rooms in Room proof, then come back to capture them again before you leave.",
-                    actionTitle: "Open room proof",
+                    title: "No move-in proof to compare yet",
+                    message: rooms.isEmpty
+                        ? "Add your rooms and photograph each one as it is now. Before you leave, you’ll capture them again here and see what changed — and what didn’t."
+                        : "Photograph each room as it is now. Before you leave, you’ll capture them again here and see what changed — and what didn’t.",
+                    actionTitle: "Capture move-in proof",
                     action: { path.append(.walkthrough) }
                 )
             }
@@ -114,8 +125,11 @@ struct MoveOutFoundationView: View {
             checklistSection
                 .padding(.top, 30)
 
-            exportSection
-                .padding(.top, 30)
+            // Without a baseline there is nothing to report on yet; the empty block says what to do.
+            if hasBaseline {
+                exportSection
+                    .padding(.top, 30)
+            }
         }
         .sheet(isPresented: $showPaywall) {
             ProPaywallView(
@@ -128,6 +142,22 @@ struct MoveOutFoundationView: View {
                             onClose: { viewer = nil })
         }
         .task { await loadChecklist() }
+        // A room that gains its move-out side while this screen is open (back from capture) reads as compared.
+        .onChange(of: missingRoomIDs) { old, new in
+            justCompared.formUnion(old.subtracting(new))
+        }
+    }
+
+    private var missingRoomIDs: Set<UUID> { Set(rooms.filter { $0.moveOutPhotoTotal == 0 }.map(\.id)) }
+
+    private var justComparedLine: String? {
+        let names = rooms.filter { justCompared.contains($0.id) && $0.moveOutPhotoTotal > 0 }.map(\.name)
+        guard let first = names.first else { return nil }
+        switch names.count {
+        case 1: return "\(first) now has proof at both ends, compared with your move-in record."
+        case 2: return "\(first) and \(names[1]) now have proof at both ends, compared with your move-in record."
+        default: return "\(names.count) more rooms now have proof at both ends, compared with your move-in record."
+        }
     }
 
     // MARK: - Comparisons
@@ -154,7 +184,7 @@ struct MoveOutFoundationView: View {
             }
 
             if !missing.isEmpty {
-                section(title: "Still to capture", count: missing.count,
+                section(title: "Move-out proof missing", count: missing.count,
                         caption: "Photograph these from the same angles as at move-in.") {
                     ForEach(missing) { card($0) }
                 }
@@ -162,9 +192,9 @@ struct MoveOutFoundationView: View {
 
             if !unchanged.isEmpty {
                 MMGroup(title: "Unchanged · \(unchanged.count)",
-                        footer: "Photographed at both ends with no new issue and no lower condition.") {
+                        footer: "Photographed at both ends: no new issue and no lower condition. Tap a room to see both photos.") {
                     ForEach(Array(unchanged.enumerated()), id: \.element.id) { index, item in
-                        if index > 0 { MMRowDivider(leading: 128) }
+                        if index > 0 { MMRowDivider() }
                         compactRow(item)
                     }
                 }
@@ -174,7 +204,7 @@ struct MoveOutFoundationView: View {
                 MMGroup(title: "Not compared · \(notCompared.count)",
                         footer: "These rooms have move-out photos but no move-in photos, so there is nothing to compare them with.") {
                     ForEach(Array(notCompared.enumerated()), id: \.element.id) { index, item in
-                        if index > 0 { MMRowDivider(leading: 128) }
+                        if index > 0 { MMRowDivider() }
                         compactRow(item)
                     }
                 }
@@ -185,8 +215,8 @@ struct MoveOutFoundationView: View {
     /// While rooms are missing, capturing the next one is the screen's one primary action.
     private func nextCapture(next: MoveOutComparison, remaining: Int) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(remaining == 1 ? "One room still needs move-out photos."
-                 : "\(remaining) rooms still need move-out photos.")
+            Text(remaining == 1 ? "One room still needs move-out proof before it can be compared."
+                 : "\(remaining) rooms still need move-out proof before they can be compared.")
                 .mmFont(14.5)
                 .foregroundStyle(MMInk.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -214,15 +244,15 @@ struct MoveOutFoundationView: View {
         MoveOutComparisonCard(
             comparison: item, resolve: resolvePhotoURL,
             onOpenPhoto: { openViewer(item, $0) },
-            onCapture: { path.append(.moveOutRoomDetail(roomID: item.id)) }
+            onCapture: { path.append(.moveOutRoomDetail(roomID: item.id)) },
+            justCompared: justCompared.contains(item.id)
         )
     }
 
     private func compactRow(_ item: MoveOutComparison) -> some View {
         MoveOutCompactRow(
-            comparison: item, resolve: resolvePhotoURL,
-            onOpenPhoto: { openViewer(item, $0) },
-            onOpen: { path.append(.moveOutRoomDetail(roomID: item.id)) }
+            comparison: item, resolve: resolvePhotoURL, justCompared: justCompared.contains(item.id),
+            onOpenPhoto: { openViewer(item, $0) }
         )
     }
 
@@ -272,22 +302,27 @@ struct MoveOutFoundationView: View {
     private var exportSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             MMSectionTitle(title: "Move-out report")
-            Text("Each room’s move-in and move-out proof side by side in one dated PDF. Keep it, share it, or attach it to a dispute.")
+            Text("Turn your comparison into one organized PDF: each room’s move-in and move-out proof side by side, dated.")
                 .mmFont(14)
                 .foregroundStyle(MMInk.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 4)
 
             if let queuedNotice {
+                // What the renter gained: the report is on its way; Reports is where it lands (and can be redone).
                 MMNotice(message: queuedNotice, tone: .success).padding(.top, 16)
-                MMSecondaryButton(title: "Open Reports", icon: "doc.text") { path.append(.exports) }
-                    .padding(.top, 6)
-            }
-
-            // Lime only once every room is captured; until then capturing the next room is the primary action.
-            if isComplete {
+                if isComplete {
+                    MMPrimaryButton(title: "Open Reports", icon: "doc.text") { path.append(.exports) }
+                        .padding(.top, 14)
+                } else {
+                    // Rooms still missing keep capture as the one lime action.
+                    MMSecondaryButton(title: "Open Reports", icon: "doc.text") { path.append(.exports) }
+                        .padding(.top, 6)
+                }
+            } else if isComplete {
+                // Lime only once every room is captured; until then capturing the next room is the primary action.
                 MMPrimaryButton(
-                    title: isExporting ? "Queuing report…" : "Create move-out report",
+                    title: isExporting ? "Queuing report…" : "Generate move-out report",
                     isLoading: isExporting,
                     isDisabled: isExporting,
                     action: handleMoveOutExportTap
@@ -315,7 +350,7 @@ struct MoveOutFoundationView: View {
     }
 
     private var partialExportTitle: String {
-        roomsWithMoveOutPhotos > 0 ? "Create report with \(roomsWithMoveOutPhotos) of \(rooms.count) rooms" : "Create move-out report"
+        roomsWithMoveOutPhotos > 0 ? "Generate report with \(roomsWithMoveOutPhotos) of \(rooms.count) rooms" : "Generate move-out report"
     }
 
     private var moveOutExportFootnote: String {
@@ -323,7 +358,7 @@ struct MoveOutFoundationView: View {
             return "Add rooms in Room proof first"
         }
         if roomsWithMoveOutPhotos == 0 {
-            return "Capture move-out photos before creating the report"
+            return "Capture move-out proof before generating the report"
         }
         if subscriptionManager.hasPro {
             return "Included with Pro"

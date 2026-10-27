@@ -146,6 +146,31 @@ final class MoveOutSnapshotTests: XCTestCase {
                        as: ScreenSnapshot.strategy(tall), named: "tall")
     }
 
+    /// Back from capturing the last two rooms: they now read as compared, and the report is the next step.
+    func testMoveOutJustCompared() {
+        let ids: Set<UUID> = [Self.allStateRooms[1].id, Self.allStateRooms[5].id]
+        assertScreen(MoveOutFoundationView(path: .constant([]), initialChecklist: checklist, initialJustCompared: ids)
+            .environment(store(Self.completeRooms))
+            .environment(\.mmEvidenceImageOverride, { path in
+                Self.photo((path as NSString).deletingPathExtension.components(separatedBy: "/").last ?? path)
+            }))
+    }
+
+    /// An unchanged room expanded to its full pair.
+    func testUnchangedRowExpanded() {
+        let row = MoveOutCompactRow(comparison: MoveOutComparison.make(room: Self.allStateRooms[3]), resolve: { _ in nil },
+                                    initiallyExpanded: true)
+            .background(MMInk.card)
+            .padding(20)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .background(MMInk.sheet)
+            .environment(\.mmEvidenceImageOverride, { path in
+                Self.photo((path as NSString).deletingPathExtension.components(separatedBy: "/").last ?? path)
+            })
+        let config = ViewImageConfig(safeArea: .zero, size: CGSize(width: 402, height: 400), traits: ScreenSnapshot.pro.traits)
+        assertSnapshot(of: UIHostingController(rootView: row), as: ScreenSnapshot.strategy(config), named: "pro")
+    }
+
     /// The report states sit at the end of the page, so these render the full page.
     private var reportPage: ViewImageConfig {
         ViewImageConfig(safeArea: ScreenSnapshot.pro.safeArea, size: CGSize(width: 402, height: 2600), traits: ScreenSnapshot.pro.traits)
