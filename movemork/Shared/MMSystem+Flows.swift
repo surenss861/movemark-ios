@@ -16,8 +16,18 @@ import SwiftUI
 /// A sheet on the evidence surface: #111312, white text, white/12% strokes, native dark bar (Cancel / title).
 struct MMEvidenceSheetScaffold<Content: View, Footer: View>: View {
     var title: String
-    @ViewBuilder var content: () -> Content
-    @ViewBuilder var footer: () -> Footer
+    /// False hides the pinned footer bar entirely (e.g. Add photos before anything is chosen).
+    var showsFooter: Bool
+    var content: () -> Content
+    var footer: () -> Footer
+
+    init(title: String, showsFooter: Bool = true, @ViewBuilder content: @escaping () -> Content,
+         @ViewBuilder footer: @escaping () -> Footer) {
+        self.title = title
+        self.showsFooter = showsFooter
+        self.content = content
+        self.footer = footer
+    }
 
     var body: some View {
         ScrollView {
@@ -30,14 +40,16 @@ struct MMEvidenceSheetScaffold<Content: View, Footer: View>: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            footer()
-                .padding(.horizontal, MMMetrics.inset)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
-                .frame(maxWidth: .infinity)
-                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
-                .background(MMInk.evidence.ignoresSafeArea(edges: .bottom))
-                .overlay(alignment: .top) { Rectangle().fill(MMInk.evidenceStroke).frame(height: 0.5) }
+            if showsFooter {
+                footer()
+                    .padding(.horizontal, MMMetrics.inset)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+                    .frame(maxWidth: .infinity)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                    .background(MMInk.evidence.ignoresSafeArea(edges: .bottom))
+                    .overlay(alignment: .top) { Rectangle().fill(MMInk.evidenceStroke).frame(height: 0.5) }
+            }
         }
         .background(MMInk.evidence.ignoresSafeArea())
         .navigationTitle(title)

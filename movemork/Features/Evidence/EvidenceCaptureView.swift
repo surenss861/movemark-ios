@@ -411,30 +411,64 @@ struct EditEvidenceSheet: View {
         _condition = State(initialValue: evidence.condition)
     }
 
+    private let inspectionRepo = InspectionRepository()
+
+    /// "Living Room · Move-in" — the record being edited.
+    private var subject: String { "\(roomName) · \(evidence.stage.rawValue)" }
+
+    private var meta: String {
+        let when = evidence.createdAt.formatted(.dateTime.month(.abbreviated).day().year().hour().minute())
+        let photos = evidence.photoCount == 1 ? "1 photo" : "\(evidence.photoCount) photos"
+        return evidence.photoCount > 0 ? "Recorded \(when) · \(photos)" : "Recorded \(when)"
+    }
+
     var body: some View {
         NavigationStack {
-            MMEvidenceSheetScaffold(title: "Edit proof") {
-                Text("Update the title, notes, issue tags and condition of this saved entry in \(roomName).")
-                    .mmFont(14.5)
-                    .foregroundStyle(MMInk.heroSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            MMEvidenceSheetScaffold(title: "") {
+                MMEvidenceSheetHeader(eyebrow: "Edit evidence", subject: subject, meta: meta)
 
                 if evidence.photoCount > 0 {
-                    VStack(alignment: .leading, spacing: 8) {
-                        MMEvidenceCaption(title: "Photos on file", detail: evidence.photoCount == 1 ? "1 photo" : "\(evidence.photoCount) photos")
-                        MMEvidencePhotoStrip(placeholderCount: evidence.photoCount)
-                    }
-                    .padding(.top, 20)
+                    MMEvidenceRecordPhotos(photos: evidence.photos, photoCount: evidence.photoCount,
+                                           resolve: { try? await inspectionRepo.signedURL(bucket: "inspection-media", path: $0) })
+                        .padding(.top, 18)
                 }
 
-                VStack(alignment: .leading, spacing: 20) {
-                    MMEvidenceField(title: "Entry title", placeholder: "e.g. North wall", text: $title)
-                    MMEvidenceField(title: "Notes", placeholder: "What matters, where it is", text: $notes, axis: .vertical)
-                    MMEvidenceTagPicker(tags: fixedIssueTags, selected: $selectedTags, onToggle: { MMHaptics.selection() })
-                    MMEvidenceConditionPicker(condition: $condition)
+                VStack(alignment: .leading, spacing: 28) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        MMEvidenceSectionLabel(title: "Condition")
+                        FlowLayout(spacing: 8) {
+                            // Best → worst, every stored value (incl. "Below fair") so a record never loses its rating.
+                            ForEach(RoomRecord.ConditionRating.allCases.reversed(), id: \.self) { rating in
+                                MMEvidenceChip(title: rating.rawValue, isSelected: condition == rating) {
+                                    MMHaptics.selection()
+                                    condition = rating
+                                }
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        MMEvidenceSectionLabel(title: "What was observed",
+                                               detail: selectedTags.isEmpty ? "Only if relevant" : "\(selectedTags.count) noted")
+                        FlowLayout(spacing: 8) {
+                            ForEach(fixedIssueTags, id: \.self) { tag in
+                                MMEvidenceChip(title: tag, isSelected: selectedTags.contains(tag)) {
+                                    MMHaptics.selection()
+                                    if selectedTags.contains(tag) { selectedTags.remove(tag) } else { selectedTags.insert(tag) }
+                                }
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        MMEvidenceSectionLabel(title: "Notes")
+                        MMEvidenceField(title: "Label", placeholder: "e.g. North wall", text: $title,
+                                        accessibilityID: "Entry title")
+                        MMEvidenceField(title: "Notes", placeholder: "What you saw, and where", text: $notes, axis: .vertical)
+                    }
                 }
                 .disabled(isSaving)
-                .padding(.top, 22)
+                .padding(.top, 26)
 
                 if let localEditError {
                     MMEvidenceNotice(
@@ -493,61 +527,55 @@ struct AppendPhotosSheet: View {
     /// they're saved, so photos already added can't be picked up and sent again.
     @State private var retryPending: [MMPendingEvidence]? = nil
 
+    init(
+        entry: EvidenceRecord,
+        onAdd: @escaping ([MMPendingEvidence]) async -> (pending: [MMPendingEvidence], message: String?),
+        onDismiss: @escaping () -> Void,
+        previewImages: [UIImage] = []
+    ) {
+        self.entry = entry
+        self.onAdd = onAdd
+        self.onDismiss = onDismiss
+        // Snapshot seam only: pending previews without sources (the app always loads both from the picker).
+        _loadedImages = State(initialValue: previewImages)
+    }
+
+    /// "North wall · Move-in evidence" — the record the photos join (the sheet knows the entry, not the room).
+    private var subject: String { "\(entry.title) · \(entry.stage.rawValue) evidence" }
+
+    private var meta: String? {
+        guard entry.photoCount > 0 else { return nil }
+        return entry.photoCount == 1 ? "1 photo on this record" : "\(entry.photoCount) photos on this record"
+    }
+
+    private var hasPending: Bool { !loadedImages.isEmpty }
+
     var body: some View {
         NavigationStack {
-            MMEvidenceSheetScaffold(title: "Add photos") {
-                Text("Add to “\(entry.title)”. New photos are saved with this entry’s record.")
-                    .mmFont(14.5)
-                    .foregroundStyle(MMInk.heroSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            MMEvidenceSheetScaffold(title: "", showsFooter: hasPending || isUploading) {
+                MMEvidenceSheetHeader(eyebrow: "Add photos", subject: subject, meta: meta)
 
-                if entry.photoCount > 0 {
-                    VStack(alignment: .leading, spacing: 8) {
-                        MMEvidenceCaption(title: "On this entry", detail: entry.photoCount == 1 ? "1 photo" : "\(entry.photoCount) photos")
-                        MMEvidencePhotoStrip(placeholderCount: entry.photoCount)
-                    }
-                    .padding(.top, 20)
-                }
-
+                // No camera path reaches this sheet today, so the only choice is the library (never a fake one).
                 PhotosPicker(selection: $selectedItems, maxSelectionCount: 20, matching: .images, preferredItemEncoding: .current) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "photo.on.rectangle.angled")
-                            .font(.system(size: 16))
-                            .frame(width: 24)
-                        Text(loadedImages.isEmpty ? "Choose photos from library" : "Change selection")
-                            .mmFont(16)
-                        Spacer(minLength: 8)
-                        Image(systemName: "plus")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(MMInk.heroSecondary)
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity, minHeight: MMMetrics.rowHeight)
-                    .background(MMInk.evidenceRaised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(MMInk.evidenceStroke, lineWidth: 1))
-                    .contentShape(Rectangle())
+                    MMEvidenceChoiceLabel(
+                        icon: "photo.on.rectangle",
+                        title: hasPending ? "Choose different photos" : "Choose from Photos",
+                        detail: hasPending ? "Replace the photos below." : "Add existing photos from your library."
+                    )
                 }
                 .buttonStyle(MMLightPressStyle())
                 .disabled(isUploading || retryPending != nil)
                 .onChange(of: selectedItems) { _, new in
                     loadItems(new)
                 }
-                .padding(.top, 22)
+                .padding(.top, 24)
 
-                if loadedImages.isEmpty {
-                    MMEvidenceNotice(
-                        message: "No new photos selected. Pick one or more — they’re saved as part of this entry.",
-                        tone: .info
-                    )
-                    .padding(.top, 14)
-                } else {
-                    VStack(alignment: .leading, spacing: 8) {
-                        MMEvidenceCaption(title: "Ready to add", detail: loadedImages.count == 1 ? "1 new photo" : "\(loadedImages.count) new photos")
-                        MMEvidencePhotoStrip(images: loadedImages)
+                if hasPending {
+                    VStack(alignment: .leading, spacing: 12) {
+                        MMEvidenceSectionLabel(title: loadedImages.count == 1 ? "1 photo ready" : "\(loadedImages.count) photos ready")
+                        MMPendingPhotoGrid(images: loadedImages, isUploading: isUploading)
                     }
-                    .padding(.top, 18)
+                    .padding(.top, 28)
                 }
 
                 if let localError {
@@ -556,20 +584,15 @@ struct AppendPhotosSheet: View {
                         actionTitle: MMCopy.tryAgain,
                         action: { Task { await commitAppend() } }
                     )
-                    .padding(.top, 14)
+                    .padding(.top, 18)
                 }
             } footer: {
-                VStack(spacing: 8) {
-                    Text(bottomPrimaryLine)
-                        .mmFont(13)
-                        .foregroundStyle(MMInk.heroSecondary)
-                    MMPrimaryButton(
-                        title: isUploading ? "Adding…" : "Add to entry",
-                        isLoading: isUploading,
-                        isDisabled: loadedImages.isEmpty || isUploading
-                    ) {
-                        Task { await commitAppend() }
-                    }
+                MMPrimaryButton(
+                    title: isUploading ? "Adding…" : "Add to evidence",
+                    isLoading: isUploading,
+                    isDisabled: loadedImages.isEmpty || isUploading
+                ) {
+                    Task { await commitAppend() }
                 }
             }
             .toolbar {
@@ -580,12 +603,6 @@ struct AppendPhotosSheet: View {
             }
             .interactiveDismissDisabled(isUploading)
         }
-    }
-
-    private var bottomPrimaryLine: String {
-        if isUploading { return "Adding photos…" }
-        if loadedImages.isEmpty { return "Select photos to continue" }
-        return "\(loadedImages.count) photo\(loadedImages.count == 1 ? "" : "s") ready to add"
     }
 
     private func commitAppend() async {
