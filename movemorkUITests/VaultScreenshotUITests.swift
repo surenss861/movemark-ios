@@ -225,6 +225,43 @@ final class VaultScreenshotUITests: XCTestCase {
         attach(app, "maint-4-back-to-proof")
     }
 
+    /// Move-out live: reached from the rental record; a real before/after pair, the evidence viewer from either
+    /// photo, the header and back on a real nav bar, and the report section while rooms remain.
+    func testMoveOutTour() throws {
+        let app = try signedIn()
+        let moveOut = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Move-out'")).firstMatch
+        if !moveOut.waitForExistence(timeout: 5) {
+            let rental = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Move-in proof'")).firstMatch
+            XCTAssertTrue(rental.waitForExistence(timeout: 10), "rental on Proof")
+            rental.tap()
+            sleep(3)
+            attach(app, "moveout-0-rental")
+        }
+        for _ in 0..<6 where !moveOut.isHittable { app.swipeUp() }
+        XCTAssertTrue(moveOut.waitForExistence(timeout: 10), "Move-out row")
+        moveOut.tap()
+        sleep(4)
+        attach(app, "moveout-1-top")
+        // Kitchen's move-out photo (right side of the first spread) opens the evidence viewer.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.71, dy: 0.82)).tap()
+        sleep(3)
+        attach(app, "moveout-3-viewer")
+        app.swipeLeft()
+        sleep(2)
+        attach(app, "moveout-3b-viewer-next")
+        let close = app.buttons.matching(NSPredicate(format: "label == 'Close' OR label == 'Done'")).firstMatch
+        if close.exists { close.tap() } else { app.swipeDown() }
+        sleep(2)
+        app.swipeUp()
+        sleep(2)
+        attach(app, "moveout-2-scrolled")
+        scrollToBottom(app)
+        attach(app, "moveout-4-bottom")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        sleep(2)
+        attach(app, "moveout-5-back")
+    }
+
     /// Swipes until the scroll settles at its end (momentum included), so the shot shows the real bottom.
     private func scrollToBottom(_ app: XCUIApplication) {
         for _ in 0..<6 { app.swipeUp() }

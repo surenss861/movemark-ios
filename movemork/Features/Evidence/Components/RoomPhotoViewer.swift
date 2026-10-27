@@ -175,7 +175,9 @@ struct RoomPhotoViewer: View {
     }
 
     private var heading: String? {
-        let parts = [subject, caption?.entryTitle].compactMap { $0 }.filter { !$0.isEmpty }
+        var parts = [subject, caption?.entryTitle].compactMap { $0 }.filter { !$0.isEmpty }
+        // An entry titled after its room says the room once.
+        if parts.count == 2, parts[0].caseInsensitiveCompare(parts[1]) == .orderedSame { parts.removeLast() }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 

@@ -30,6 +30,8 @@ struct MoveOutFoundationView: View {
         var id: UUID { startID }
         let photos: [EvidencePhoto]
         let startID: UUID
+        let subject: String
+        let captions: [UUID: RoomPhotoViewer.Caption]
     }
 
     private let checklistRepo = ChecklistRepository()
@@ -147,8 +149,8 @@ struct MoveOutFoundationView: View {
             )
         }
         .fullScreenCover(item: $viewer) { target in
-            RoomPhotoViewer(photos: target.photos, startID: target.startID, resolvePhotoURL: resolvePhotoURL,
-                            onClose: { viewer = nil })
+            RoomPhotoViewer(photos: target.photos, startID: target.startID, subject: target.subject,
+                            captions: target.captions, resolvePhotoURL: resolvePhotoURL, onClose: { viewer = nil })
         }
         .task { await loadChecklist() }
         // A room that gains its move-out side while this screen is open (back from capture) reads as compared.
@@ -277,7 +279,10 @@ struct MoveOutFoundationView: View {
     private func openViewer(_ item: MoveOutComparison, _ side: MoveOutSide) {
         let photos = side == .moveIn ? item.moveInPhotos : item.moveOutPhotos
         guard let first = photos.first else { return }
-        viewer = ViewerTarget(photos: photos, startID: first.id)
+        let room = rooms.first { $0.id == item.id }
+        let entries = side == .moveIn ? room?.evidence : room?.moveOutEvidence
+        viewer = ViewerTarget(photos: photos, startID: first.id, subject: room?.name ?? "",
+                              captions: RoomPhotoViewer.captions(for: entries ?? []))
     }
 
     private func resolvePhotoURL(_ path: String) async -> URL? {
