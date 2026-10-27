@@ -289,17 +289,17 @@ struct MoveOutFoundationView: View {
     private var checklistSection: some View {
         if let checklist {
             MMGroup(title: "Closeout checklist · \(checklist.completedCount) of 6", footer: "Check off as you go. Each step adds to your move-out record.") {
-                checklistToggle("Cabinets cleared", keyPath: \.cabinetsClear)
+                checklistRow("Cabinets cleared", keyPath: \.cabinetsClear)
                 MMRowDivider()
-                checklistToggle("Appliances cleaned", keyPath: \.appliancesClean)
+                checklistRow("Appliances cleaned", keyPath: \.appliancesClean)
                 MMRowDivider()
-                checklistToggle("Keys returned", keyPath: \.keysReturned)
+                checklistRow("Keys returned", keyPath: \.keysReturned)
                 MMRowDivider()
-                checklistToggle("Utilities cancelled", keyPath: \.utilitiesCancelled)
+                checklistRow("Utilities cancelled", keyPath: \.utilitiesCancelled)
                 MMRowDivider()
-                checklistToggle("Cleaning receipt uploaded", keyPath: \.cleaningReceiptUploaded)
+                checklistRow("Cleaning receipt uploaded", keyPath: \.cleaningReceiptUploaded)
                 MMRowDivider()
-                checklistToggle("Forwarding address noted", keyPath: \.forwardingAddressNoted)
+                checklistRow("Forwarding address noted", keyPath: \.forwardingAddressNoted)
             }
         } else if isLoadingChecklist {
             MMGroup(title: "Closeout checklist") {
@@ -346,16 +346,15 @@ struct MoveOutFoundationView: View {
                 )
                 .padding(.top, 18)
             } else {
-                MMSecondaryButton(
-                    title: isExporting ? "Queuing report…" : partialExportTitle,
-                    icon: "doc.text",
-                    isDisabled: isExporting || roomsWithMoveOutPhotos == 0,
-                    action: handleMoveOutExportTap
-                )
-                .padding(.top, 12)
+                // Before completion: what's left, stated plainly — no pseudo-action button.
+                Text(remainingRoomsLine)
+                    .mmFont(14.5, .medium)
+                    .foregroundStyle(MMInk.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 12)
             }
 
-            if queuedNotice == nil {
+            if queuedNotice == nil && isComplete {
                 Text(moveOutExportFootnote)
                     .mmFont(12.5)
                     .foregroundStyle(MMInk.secondary)
@@ -366,17 +365,13 @@ struct MoveOutFoundationView: View {
         }
     }
 
-    private var partialExportTitle: String {
-        roomsWithMoveOutPhotos > 0 ? "Generate report with \(roomsWithMoveOutPhotos) of \(rooms.count) rooms" : "Generate move-out report"
+    private var remainingRoomsLine: String {
+        let remaining = rooms.count - roomsWithMoveOutPhotos
+        return remaining == 1 ? "Complete the remaining room to generate the comparison report."
+            : "Complete the remaining \(remaining) rooms to generate the comparison report."
     }
 
     private var moveOutExportFootnote: String {
-        if rooms.isEmpty {
-            return "Add rooms in Room proof first"
-        }
-        if roomsWithMoveOutPhotos == 0 {
-            return "Capture move-out proof before generating the report"
-        }
         if subscriptionManager.hasPro {
             return "Included with Pro"
         }
@@ -384,33 +379,49 @@ struct MoveOutFoundationView: View {
     }
 
     @ViewBuilder
-    private func checklistToggle(_ title: String, keyPath: WritableKeyPath<MoveOutChecklistRow, Bool>) -> some View {
+    private func checklistRow(_ title: String, keyPath: WritableKeyPath<MoveOutChecklistRow, Bool>) -> some View {
         if let checklist {
-            Toggle(isOn: Binding(
-                get: { checklist[keyPath: keyPath] },
-                set: { newValue in
-                    guard let before = self.checklist else { return }
-                    var updated = before
-                    updated[keyPath: keyPath] = newValue
-                    self.checklist = updated
-                    Task { @MainActor in
-                        do {
-                            try await checklistRepo.upsertChecklist(updated)
-                        } catch {
-                            self.checklist = before
-                            errorMessage = MoveMarkFlowMessage.moveOutChecklistSaveFailed(error)
-                            lastErrorFromExport = false
-                        }
+            let isDone = checklist[keyPath: keyPath]
+            // A quiet check row: lime check when done, thin grey ring when not. Tap toggles and saves.
+            Button {
+                guard let before = self.checklist else { return }
+                var updated = before
+                updated[keyPath: keyPath] = !isDone
+                self.checklist = updated
+                MMHaptics.selection()
+                Task { @MainActor in
+                    do {
+                        try await checklistRepo.upsertChecklist(updated)
+                    } catch {
+                        self.checklist = before
+                        errorMessage = MoveMarkFlowMessage.moveOutChecklistSaveFailed(error)
+                        lastErrorFromExport = false
                     }
                 }
-            )) {
-                Text(title)
-                    .mmFont(16)
-                    .foregroundStyle(MMInk.text)
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        if isDone {
+                            Circle().fill(MMInk.limeMark)
+                            Image(systemName: "checkmark").font(.system(size: 10.5, weight: .bold)).foregroundStyle(MMInk.onLime)
+                        } else {
+                            Circle().strokeBorder(MMInk.secondary.opacity(0.5), lineWidth: 1.25)
+                        }
+                    }
+                    .frame(width: 22, height: 22)
+                    Text(title).mmFont(16).foregroundStyle(MMInk.text)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity, minHeight: MMMetrics.rowHeight, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .tint(MMInk.text)
-            .padding(.horizontal, 16)
-            .frame(minHeight: MMMetrics.rowHeight)
+            .buttonStyle(MMLightPressStyle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(title)
+            .accessibilityValue(isDone ? "Done" : "Not done")
+            .accessibilityAddTraits(isDone ? [.isButton, .isSelected] : .isButton)
+            .accessibilityHint("Double-tap to \(isDone ? "uncheck" : "check").")
         }
     }
 
