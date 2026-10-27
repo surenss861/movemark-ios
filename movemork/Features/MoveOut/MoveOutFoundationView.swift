@@ -200,15 +200,15 @@ struct MoveOutFoundationView: View {
 
             if !changed.isEmpty {
                 section(title: "What changed", count: changed.count,
-                        caption: "Recorded differences from your move-in record. Tap a photo to see it full size.") {
+                        caption: "Compare move-in and move-out proof room by room.") {
                     ForEach(changed) { spread($0) }
                 }
                 .id("changed")
             }
 
             if !missing.isEmpty {
-                section(title: "Move-out proof missing", count: missing.count,
-                        caption: "Photograph these from the same angles as at move-in.") {
+                section(title: "Move-out proof needed", count: missing.count,
+                        caption: "Capture from the same angles as move-in.") {
                     ForEach(missing) { item in
                         // Lime on the first missing room only: while rooms are missing, capture is the one action.
                         missingCard(item, isPrimary: item.id == missing.first?.id)

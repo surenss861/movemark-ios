@@ -27,7 +27,7 @@ struct MoveOutComparison: Identifiable, Hashable {
             switch self {
             case .newIssue: "New issue"
             case .changed: "Changed"
-            case .missing: "Move-out proof missing"
+            case .missing: "Move-out proof needed"
             case .unchanged: "Unchanged"
             case .noBaseline: "No move-in baseline"
             }
