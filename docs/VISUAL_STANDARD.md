@@ -16,6 +16,8 @@ tags: [movemark, design-system, visual-standard, ios, android]
 
 # MoveMark Visual Standard: Editorial Evidence Archive
 
+> **North star: MoveMark should make renters feel more protected every time they use it.** Every screen answers what MoveMark just helped the renter protect, prove, understand or preserve; every important action ends by showing what they gained ("3 photos recorded", "Case recorded", "Room compared", "Report ready"). Full bar, patterns, states and the seven review questions: [[MoveMark Design Standard]] (Obsidian vault, `MoveMark Product/`).
+
 MoveMark should feel like a premium native app crossed with an editorial evidence archive. The goal is intentional composition, not more cards or more decoration. This standard applies to iOS and Android equally. iOS is the reference implementation, and Android matches its hierarchy, copy and states. The only differences allowed are platform conventions (back navigation, share sheet, permissions, system dialogs).
 
 It builds on [[PRODUCT_DOCTRINE]]. Screen-level specs: [[ROOM_EVIDENCE_RECORD]]. Art-direction reference: Figma "MoveMark — Inspo V2". It is treated as the floor, not the ceiling.
