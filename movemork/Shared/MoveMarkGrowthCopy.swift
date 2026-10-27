@@ -75,7 +75,7 @@ enum MoveMarkGrowthCopy {
     static let paywallBenefits: [(title: String, subtitle: String)] = [
         ("Unlimited proof vaults", "Protect more than one rental over time."),
         ("Move-in & move-out reports", "PDF proof when your deposit is questioned."),
-        ("Move-out room re-capture", "Before-and-after record when you return keys."),
+        ("Move-out comparison report", "Move-in and move-out proof side by side, dated."),
         ("Dispute-ready packet", "Organize photos and docs for a stronger case."),
     ]
 

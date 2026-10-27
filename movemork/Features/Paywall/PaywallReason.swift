@@ -41,7 +41,7 @@ enum PaywallReason: Equatable {
         case .disputePacket:
             return "Organize photos and docs when your deposit is questioned."
         case .moveOutExport:
-            return "Re-capture rooms and export move-out PDFs with Pro."
+            return "The move-out report is part of Pro."
         case .reportPack:
             return "One polished move-in report — no subscription required."
         }
