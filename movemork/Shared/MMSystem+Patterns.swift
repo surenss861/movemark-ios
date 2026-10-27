@@ -274,6 +274,8 @@ struct MMComparisonPair<Before: View, After: View>: View {
     var afterNote: String?
     var afterDate: String?
     var photoHeight: CGFloat = 150
+    /// Off when the host draws its own title and state above the pair (Move-out leads with the state).
+    var showsHeader = true
     @ViewBuilder var before: () -> Before
     @ViewBuilder var after: () -> After
 
@@ -288,10 +290,12 @@ struct MMComparisonPair<Before: View, After: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title).mmFont(17, .semibold).foregroundStyle(MMInk.text)
-                Spacer()
-                Text(changeLabel.0).mmFont(12.5, .medium).foregroundStyle(changeLabel.1)
+            if showsHeader {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(title).mmFont(17, .semibold).foregroundStyle(MMInk.text)
+                    Spacer()
+                    Text(changeLabel.0).mmFont(12.5, .medium).foregroundStyle(changeLabel.1)
+                }
             }
             HStack(alignment: .top, spacing: 10) {
                 side("MOVE-IN", note: beforeNote, date: beforeDate, content: before)

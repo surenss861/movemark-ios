@@ -56,6 +56,10 @@ struct MMScreen<Trailing: View, Content: View>: View {
     var isPushed: Bool = false
     /// Extra space at the end of the scroll (e.g. the dock's footprint on a root tab).
     var tail: CGFloat = 32
+    /// Shows the MoveMark wordmark on a pushed screen too (root screens always show it).
+    var showsWordmark = false
+    /// Quiet content under the title inside the dark header (e.g. a dark Progress Strip).
+    var headerAccessory: AnyView? = nil
     @ViewBuilder var trailing: () -> Trailing
     @ViewBuilder var content: () -> Content
 
@@ -96,7 +100,7 @@ struct MMScreen<Trailing: View, Content: View>: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if !isPushed {
+            if !isPushed || showsWordmark {
                 HStack {
                     Text("MoveMark")
                         .font(.system(size: 17, weight: .semibold))
@@ -104,7 +108,7 @@ struct MMScreen<Trailing: View, Content: View>: View {
                     Spacer()
                     trailing()
                 }
-                .frame(height: 44)
+                .frame(height: isPushed ? 30 : 44)
             } else {
                 HStack { Spacer(); trailing() }
             }
@@ -129,6 +133,9 @@ struct MMScreen<Trailing: View, Content: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 6)
             }
+            if let headerAccessory {
+                headerAccessory.padding(.top, 20)
+            }
         }
         .padding(.horizontal, MMMetrics.inset)
         .padding(.bottom, 28 + MMMetrics.sheetRadius)
@@ -142,8 +149,10 @@ struct MMScreen<Trailing: View, Content: View>: View {
 
 extension MMScreen where Trailing == EmptyView {
     init(eyebrow: String? = nil, title: String, subtitle: String? = nil, isPushed: Bool = false, tail: CGFloat = 32,
+         showsWordmark: Bool = false, headerAccessory: AnyView? = nil,
          @ViewBuilder content: @escaping () -> Content) {
         self.init(eyebrow: eyebrow, title: title, subtitle: subtitle, isPushed: isPushed, tail: tail,
+                  showsWordmark: showsWordmark, headerAccessory: headerAccessory,
                   trailing: { EmptyView() }, content: content)
     }
 }

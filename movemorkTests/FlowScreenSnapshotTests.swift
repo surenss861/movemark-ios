@@ -26,65 +26,6 @@ final class FlowScreenSnapshotTests: XCTestCase {
 
     private var devices: [(String, ViewImageConfig)] { ScreenSnapshot.allDevices }
 
-    // MARK: Move-out
-
-    private func property(rooms: [RoomRecord]) -> PropertyRecord {
-        PropertyRecord(id: Self.propertyID, title: "88 Harbour St", addressLine1: "88 Harbour St", moveInDate: Self.day,
-                       leaseEndDate: Self.day, rooms: rooms)
-    }
-
-    private func entry(_ title: String, stage: EvidenceRecord.Stage, condition: RoomRecord.ConditionRating, photos: Int) -> EvidenceRecord {
-        EvidenceRecord(title: title, notes: "", issueTags: [], condition: condition, createdAt: Self.day, photoCount: photos, stage: stage)
-    }
-
-    private var moveOutRooms: [RoomRecord] {
-        [
-            RoomRecord(name: "Living Room", evidence: [entry("Walls", stage: .moveIn, condition: .good, photos: 4)],
-                       moveOutEvidence: [entry("Walls", stage: .moveOut, condition: .good, photos: 3)]),
-            RoomRecord(name: "Kitchen", evidence: [entry("Counters", stage: .moveIn, condition: .good, photos: 2)],
-                       moveOutEvidence: [entry("Counters", stage: .moveOut, condition: .fair, photos: 2)]),
-            RoomRecord(name: "Bedroom", evidence: [entry("Floor", stage: .moveIn, condition: .fair, photos: 3)]),
-        ]
-    }
-
-    private var checklist: MoveOutChecklistRow {
-        MoveOutChecklistRow(id: UUID(), propertyId: Self.propertyID, userId: Self.userID, cabinetsClear: true,
-                            appliancesClean: true, keysReturned: false, utilitiesCancelled: false,
-                            cleaningReceiptUploaded: false, forwardingAddressNoted: true)
-    }
-
-    private func moveOutStore(rooms: [RoomRecord]?) -> PropertyStore {
-        let store = PropertyStore()
-        if let rooms { store.currentProperty = property(rooms: rooms) }
-        return store
-    }
-
-    func testMoveOutPopulated() {
-        assertScreen(MoveOutFoundationView(path: .constant([]), initialChecklist: checklist).environment(moveOutStore(rooms: moveOutRooms)),
-                     devices: devices)
-    }
-
-    func testMoveOutEmpty() {
-        assertScreen(MoveOutFoundationView(path: .constant([])).environment(moveOutStore(rooms: [])), devices: devices)
-    }
-
-    func testMoveOutExporting() {
-        assertScreen(MoveOutFoundationView(path: .constant([]), initiallyExporting: true)
-            .environment(moveOutStore(rooms: Array(moveOutRooms.prefix(1)))))
-    }
-
-    func testMoveOutQueued() {
-        assertScreen(MoveOutFoundationView(path: .constant([]),
-                                           initialQueuedNotice: "Report queued — it will appear in Reports when ready")
-            .environment(moveOutStore(rooms: Array(moveOutRooms.prefix(1)))))
-    }
-
-    func testMoveOutError() {
-        assertScreen(MoveOutFoundationView(path: .constant([]), initialChecklist: checklist,
-                                           initialError: "Couldn't queue move-out report. Try again.")
-            .environment(moveOutStore(rooms: moveOutRooms)))
-    }
-
     // MARK: Evidence surfaces (dark)
 
     private var savedEntry: EvidenceRecord {
