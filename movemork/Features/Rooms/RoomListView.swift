@@ -2,9 +2,10 @@
 //  RoomListView.swift
 //  movemork
 //
-//  MoveMark — Proof Sprint. Rooms are the only progress model; lease, deposit and
-//  maintenance sit after the rooms as supporting proof and never count toward
-//  "rooms documented".
+//  MoveMark — The rental's rooms as proof coverage: how many rooms are documented, the next room with the
+//  one capture action, then every room with what it holds. Lease, deposit, maintenance, move-out and the
+//  report sit after the rooms as supporting proof and never count toward "rooms documented". Adding a room
+//  happens in its own sheet.
 //
 
 import SwiftUI
@@ -23,46 +24,42 @@ struct RoomListView: View {
         rooms.filter { MMRoomProofMetrics.isDocumented($0) }.count
     }
 
-    private var progress: Double {
-        guard !rooms.isEmpty else { return 0 }
-        return Double(completedCount) / Double(rooms.count)
-    }
-
     private var nextRoom: RoomRecord? {
         rooms.first(where: { !MMRoomProofMetrics.isDocumented($0) })
     }
 
-    private var allRoomsDocumented: Bool {
-        !rooms.isEmpty && completedCount >= rooms.count
-    }
-
-    private var headerTitle: String {
-        let title = propertyStore.currentProperty?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return title.isEmpty ? "Rooms" : title
-    }
-
-    private var headerSubtitle: String {
-        rooms.isEmpty
-            ? "Document every room before you move in."
-            : "\(completedCount) of \(rooms.count) rooms documented"
+    private var headerSubtitle: String? {
+        guard let property = propertyStore.currentProperty else { return nil }
+        let title = PropertyVaultModel.displayTitle(for: property)
+        return [title, PropertyVaultModel.addressLine(for: property)].compactMap { $0 }.joined(separator: " · ")
     }
 
     var body: some View {
-        MMScreen(eyebrow: "Proof sprint", title: headerTitle, subtitle: headerSubtitle, isPushed: true) {
+        MMScreen(eyebrow: "Move-in proof", title: "Rooms", subtitle: headerSubtitle, isPushed: true) {
             if rooms.isEmpty {
                 MMEmptyBlock(
                     icon: "door.left.hand.open",
-                    title: "Add your first room",
-                    message: "Start with the room you are in — Kitchen works well. Then photograph walls, floors, and anything already damaged.",
-                    actionTitle: MMNextBestAction.addRoom.title,
+                    title: "No rooms yet",
+                    message: "Add each room you'll document — start with the one you're standing in. Photos taken before you unpack become your move-in record.",
+                    actionTitle: "Add a room",
                     action: { showAddRoom = true }
                 )
             } else {
-                progressPanel
-                roomsSection.padding(.top, 30)
+                MMProgressStrip(label: "Rooms documented", done: completedCount, total: rooms.count, unit: "rooms")
+                    .padding(.horizontal, 4)
+                MMRentalRoomsBlock(
+                    rooms: rooms.map { MMRentalRoom($0) },
+                    nextID: nextRoom?.id,
+                    completeTitle: "Every room documented",
+                    completeActionTitle: "Generate move-in report",
+                    completeAction: { path.append(.exports) },
+                    onCapture: openNextRoom,
+                    onOpenRoom: { path.append(.roomDetail(roomID: $0)) },
+                    onAddRoom: { showAddRoom = true }
+                )
+                .padding(.top, 18)
             }
             supportingProofSection
-            moveInReportSection
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
@@ -85,48 +82,6 @@ struct RoomListView: View {
         }
     }
 
-    /// The next room and the one capture action, with the count it moves.
-    private var progressPanel: some View {
-        MMPanel {
-            if let nextRoom {
-                Text("Next room").mmFont(12.5).foregroundStyle(MMInk.secondary)
-                Text(nextRoom.name).mmFont(20, .semibold).foregroundStyle(MMInk.text).padding(.top, 2)
-            } else {
-                Text("Move-in proof").mmFont(12.5).foregroundStyle(MMInk.secondary)
-                Text(progressNextLine).mmFont(20, .semibold).foregroundStyle(MMInk.text).padding(.top, 2)
-            }
-            MMProgressLine(fraction: progress).padding(.top, 12)
-            Text("\(completedCount) of \(rooms.count) rooms documented")
-                .mmFont(13).monospacedDigit().foregroundStyle(MMInk.secondary)
-                .padding(.top, 10)
-            MMPrimaryButton(title: progressPrimaryTitle, icon: nextRoom != nil ? "camera.fill" : nil) {
-                MMHaptics.soft()
-                openNextRoom()
-            }
-            .padding(.top, 16)
-        }
-    }
-
-    private var progressNextLine: String {
-        if allRoomsDocumented {
-            return "All rooms documented"
-        }
-        if let nextRoom {
-            return "Next: \(nextRoom.name)"
-        }
-        return "Add a room to start."
-    }
-
-    private var progressPrimaryTitle: String {
-        if allRoomsDocumented {
-            return "Review your rooms"
-        }
-        if let nextRoom {
-            return "Capture \(nextRoom.name)"
-        }
-        return MMNextBestAction.addRoom.title
-    }
-
     private func openNextRoom() {
         if let nextRoom {
             path.append(.roomDetail(roomID: nextRoom.id))
@@ -135,113 +90,65 @@ struct RoomListView: View {
         }
     }
 
-    private var roomsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                MMSectionTitle(title: "Rooms")
-                Text("\(completedCount) of \(rooms.count)")
-                    .mmFont(13).monospacedDigit().foregroundStyle(MMInk.secondary)
-            }
-            MMGroup {
-                ForEach(Array(rooms.enumerated()), id: \.element.id) { idx, room in
-                    if idx > 0 { MMRowDivider(leading: 52) }
-                    roomProofRow(room: room)
-                }
-            }
-        }
-    }
-
-    private func roomProofRow(room: RoomRecord) -> some View {
-        let photoCount = MMRoomProofMetrics.photoCount(for: room)
-        let issueCount = MMRoomProofMetrics.issueCount(for: room)
-        let isNext = nextRoom?.id == room.id
-        let state: MMRoomRow.RoomState = photoCount > 0 ? .documented : (isNext ? .next : .todo)
-        // The check says "documented"; the line says what the room holds.
-        let detail = photoCount > 0
-            ? MMProofTimelineBuilder.photoIssueLine(photos: photoCount, issues: issueCount)
-            : "Needs proof"
-
-        return Button {
-            path.append(.roomDetail(roomID: room.id))
-        } label: {
-            MMRoomRow(name: room.name, detail: detail, state: state)
-        }
-        .buttonStyle(MMLightPressStyle())
-        .accessibilityElement(children: .combine)
-    }
-
-    /// Lease, deposit and maintenance — shown after rooms, outside the room count.
+    /// Lease, deposit, maintenance, move-out and the report — after rooms, outside the room count.
     @ViewBuilder
     private var supportingProofSection: some View {
         if let property = propertyStore.currentProperty {
             let issues = propertyStore.openIssueCount(for: property)
-            VStack(alignment: .leading, spacing: 12) {
-                MMSectionTitle(title: "Supporting proof")
-                MMGroup {
+            VStack(alignment: .leading, spacing: 10) {
+                MMRecordSectionHeader(title: "Supporting proof")
+                MMGroup(footer: "Supporting proof backs up your rooms; it doesn't count toward rooms documented.") {
                     ForEach(ProofSprint.documentTargets) { target in
                         let added = ProofSprint.isDocumentUploaded(target.documentType, in: property)
-                        supportingRow(
-                            title: target.title,
-                            subtitle: added ? "Saved to your vault" : target.reason,
-                            icon: added ? "doc.text.fill" : "doc.text",
-                            status: added ? "Added" : "Needed",
-                            tone: added ? .done : .needed
-                        ) { path.append(.vaultDetail(propertyId: property.id)) }
+                        Button { path.append(.vaultDetail(propertyId: property.id)) } label: {
+                            MMRecordRow(title: target.title, icon: PropertyVaultContent.recordIcon(target.documentType),
+                                        isPresent: added, detail: added ? "to your rental record" : target.reason) {
+                                MMRowChevron()
+                            }
+                        }
+                        .buttonStyle(MMLightPressStyle())
+                        .accessibilityElement(children: .combine)
                         MMRowDivider(leading: 52)
                     }
                     supportingRow(
-                        title: "Maintenance issues",
+                        title: "Maintenance log",
                         subtitle: issues == 0
-                            ? "Timestamp repairs and problems."
-                            : (issues == 1 ? "1 open issue" : "\(issues) open issues"),
-                        icon: "wrench.and.screwdriver",
-                        status: issues > 0 ? "\(issues) open" : nil,
-                        tone: .neutral
+                            ? "Record repairs and problems with photos and a date."
+                            : (issues == 1 ? "1 open case" : "\(issues) open cases"),
+                        icon: "wrench.and.screwdriver"
                     ) { path.append(.maintenance) }
                     MMRowDivider(leading: 52)
                     supportingRow(
-                        title: "Move-out proof",
-                        subtitle: "Re-capture the same rooms when you leave.",
+                        title: "Move-out",
+                        subtitle: "Compare move-in to move-out when you leave.",
                         icon: "arrow.2.circlepath"
                     ) { path.append(.moveOut) }
+                    if !rooms.isEmpty && completedCount < rooms.count {
+                        MMRowDivider(leading: 52)
+                        supportingRow(
+                            title: "Move-in report",
+                            subtitle: reportGuidance(remaining: rooms.count - completedCount),
+                            icon: "doc.richtext"
+                        ) { path.append(.exports) }
+                    }
                 }
             }
-            .padding(.top, 30)
+            .padding(.top, 32)
         }
     }
 
-    private func supportingRow(title: String, subtitle: String, icon: String, status: String? = nil,
-                               tone: MMRowStatusTone = .neutral, action: @escaping () -> Void) -> some View {
+    private func supportingRow(title: String, subtitle: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            MMStatusRow(title: title, subtitle: subtitle, icon: icon, status: status, tone: tone)
+            MMStatusRow(title: title, subtitle: subtitle, icon: icon)
         }
         .buttonStyle(MMLightPressStyle())
         .accessibilityElement(children: .combine)
     }
 
-    @ViewBuilder
-    private var moveInReportSection: some View {
-        if !rooms.isEmpty {
-            let remaining = rooms.count - completedCount
-            VStack(alignment: .leading, spacing: 12) {
-                MMSectionTitle(title: "Move-in report")
-                MMGroup {
-                    supportingRow(
-                        title: "View reports",
-                        subtitle: reportGuidance(remaining: remaining),
-                        icon: "doc.richtext"
-                    ) { path.append(.exports) }
-                }
-            }
-            .padding(.top, 30)
-        }
-    }
-
     private func reportGuidance(remaining: Int) -> String {
-        if remaining <= 0 { return "Every room is documented. Your report is ready to make." }
         if completedCount == 0 { return "Document a room to make your first report." }
         let rooms = remaining == 1 ? "1 room still needs proof" : "\(remaining) rooms still need proof"
-        return "A report can already be made — \(rooms)."
+        return "Ready to make now — \(rooms)."
     }
 }
 
@@ -260,9 +167,15 @@ struct AddRoomSheetView: View {
         _errorMessage = State(initialValue: errorMessage)
     }
 
-    private let suggestedRoomNames = [
-        "Office", "Hallway", "Balcony", "Storage", "Den",
+    private static let suggestedRoomNames = [
+        "Kitchen", "Living Room", "Bedroom", "Bathroom", "Hallway", "Closet", "Laundry", "Balcony", "Office", "Storage",
     ]
+
+    /// Suggestions the rental doesn't already have.
+    private var suggestions: [String] {
+        let existing = Set((propertyStore.currentProperty?.rooms ?? []).map { $0.name.lowercased() })
+        return Self.suggestedRoomNames.filter { !existing.contains($0.lowercased()) }
+    }
 
     private var trimmedName: String {
         roomName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -275,26 +188,27 @@ struct AddRoomSheetView: View {
     var body: some View {
         NavigationStack {
             MMSheetScaffold(title: "Add a room") {
-                Text("Add any space you want documented before move-in.")
+                Text("Name the space. You'll photograph it next.")
                     .mmFont(15)
                     .foregroundStyle(MMInk.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                MMField(title: "Room name", placeholder: "Office", text: $roomName)
-                    .padding(.top, 20)
+                MMField(title: "Room name", placeholder: "e.g. Primary Bedroom", text: $roomName,
+                        autocapitalization: .words, submitLabel: .done, onSubmit: { if canSubmit { submit() } })
+                    .padding(.top, 18)
 
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Suggested").mmFont(13, .medium).foregroundStyle(MMInk.secondary)
+                if !suggestions.isEmpty {
                     FlowLayout(spacing: 8) {
-                        ForEach(suggestedRoomNames, id: \.self) { name in
+                        ForEach(suggestions, id: \.self) { name in
                             MMChip(title: name, isSelected: trimmedName.caseInsensitiveCompare(name) == .orderedSame) {
                                 roomName = name
                             }
                             .fixedSize()
                         }
                     }
+                    .padding(.top, 14)
+                    .accessibilityLabel("Suggestions")
                 }
-                .padding(.top, 18)
 
                 if let errorMessage {
                     MMNotice(message: errorMessage, actionTitle: MMCopy.tryAgain, action: { submit() })
