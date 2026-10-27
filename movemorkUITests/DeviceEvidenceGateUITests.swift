@@ -60,14 +60,14 @@ final class DeviceEvidenceGateUITests: XCTestCase {
         let fields = app.textFields
         // A tap during the Save Password sheet's dismissal animation is swallowed: retry until the form opens.
         for _ in 0..<3 where !fields.element(boundBy: 0).exists {
-            tapButton(containing: "I just moved in")
+            tapButton(containing: "Moving into a rental")
             _ = fields.element(boundBy: 0).waitForExistence(timeout: 6)
         }
         XCTAssertTrue(fields.element(boundBy: 0).exists, "rental form never opened")
-        typeInto(fields.element(boundBy: 0), "QA A")
-        replaceText(fields.element(boundBy: 1), "QA ONLY device gate")
+        // First-run setup: street, unit, city, province (no name, no nickname — the title comes from the street).
+        typeInto(fields.element(boundBy: 0), "QA ONLY device gate")
         typeInto(fields.element(boundBy: 2), "Toronto")
-        tapButton(containing: "Start move-in proof")
+        tapButton(containing: "Create rental record")
         tapButton(containing: "Start room proof")
         tapButton(containing: "Choose from gallery")
         let photo = app.images.matching(identifier: "PXGGridLayout-Info").firstMatch
@@ -125,7 +125,7 @@ final class DeviceEvidenceGateUITests: XCTestCase {
         app.terminate()
         app.launch()
         XCTAssertTrue(app.buttons["Account"].firstMatch.waitForExistence(timeout: 30), "relaunch did not open the app")
-        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS 'I just moved in'")).firstMatch.exists,
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS 'Moving into a rental'")).firstMatch.exists,
                        "relaunch went back to first-run onboarding")
     }
 
@@ -219,7 +219,7 @@ final class DeviceEvidenceGateUITests: XCTestCase {
         }
         // On devices iOS 26 shows it from the Passwords service, which XCUITest can't query: if the first
         // screen is still covered, tap where its "Not Now" button sits (left button, ~62% down the screen).
-        let firstChoice = app.buttons.matching(NSPredicate(format: "label CONTAINS 'I just moved in'")).firstMatch
+        let firstChoice = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Moving into a rental'")).firstMatch
         if firstChoice.waitForExistence(timeout: 10) && !firstChoice.isHittable {
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.33, dy: 0.617)).tap()
             sleep(2)

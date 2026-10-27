@@ -90,7 +90,6 @@ struct AuthContainerView: View {
                 if let confirmationEmail {
                     MMResolvedBlock(
                         icon: "envelope",
-                        title: "Check your email",
                         message: "We sent a confirmation link to \(confirmationEmail). Open it to finish creating your vault.",
                         actionTitle: "Back to sign in",
                         action: backToSignInAfterConfirmation

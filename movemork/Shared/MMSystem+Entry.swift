@@ -72,7 +72,8 @@ struct MMChoiceCard: View {
 /// happened, what to do next, and one secondary action.
 struct MMResolvedBlock: View {
     let icon: String
-    let title: String
+    /// Nil when the screen's header already says it (no title repeated twice).
+    var title: String? = nil
     let message: String
     var actionTitle: String? = nil
     var action: (() -> Void)? = nil
@@ -83,21 +84,21 @@ struct MMResolvedBlock: View {
                 .font(.system(size: 22, weight: .regular))
                 .foregroundStyle(MMInk.text.opacity(0.7))
                 .accessibilityHidden(true)
-            Text(title)
-                .mmFont(20, .semibold)
-                .foregroundStyle(MMInk.text)
-                .accessibilityAddTraits(.isHeader)
-                .padding(.top, 12)
+            if let title {
+                Text(title)
+                    .mmFont(20, .semibold)
+                    .foregroundStyle(MMInk.text)
+                    .accessibilityAddTraits(.isHeader)
+                    .padding(.top, 12)
+            }
             Text(message)
-                .mmFont(15)
-                .foregroundStyle(MMInk.secondary)
+                .mmFont(16)
+                .foregroundStyle(MMInk.text)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 6)
+                .padding(.top, title == nil ? 12 : 6)
             if let actionTitle, let action {
                 MMSecondaryButton(title: actionTitle, action: action)
-                    .background(MMInk.card, in: Capsule())
-                    .overlay(Capsule().strokeBorder(MMInk.cardStroke, lineWidth: 1))
-                    .padding(.top, 22)
+                    .padding(.top, 18)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

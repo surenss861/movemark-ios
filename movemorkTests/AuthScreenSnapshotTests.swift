@@ -20,6 +20,8 @@ import SnapshotTesting
 @MainActor
 final class AuthScreenSnapshotTests: XCTestCase {
     private let all = ScreenSnapshot.allDevices
+    /// A fixed move-in date so the setup goldens don't change with the calendar.
+    private static let moveIn = DateComponents(calendar: .init(identifier: .gregorian), year: 2026, month: 4, day: 14).date!
 
     // MARK: Welcome
 
@@ -96,18 +98,18 @@ final class AuthScreenSnapshotTests: XCTestCase {
     }
 
     func testFirstRunSetup() {
-        assertScreen(FirstRunPropertySetupView(onCreated: { _ in }), devices: all, inNavigation: false)
+        assertScreen(FirstRunPropertySetupView(previewMoveIn: Self.moveIn), devices: all, inNavigation: false)
     }
 
     func testFirstRunSetupFilled() {
         assertScreen(FirstRunPropertySetupView(previewStreet: "88 Harbour St", previewUnit: "1204",
-                                               previewCity: "Toronto", previewProvince: "ON"),
+                                               previewCity: "Toronto", previewProvince: "ON", previewMoveIn: Self.moveIn),
                      devices: all, inNavigation: false)
     }
 
     func testFirstRunSetupError() {
         assertScreen(FirstRunPropertySetupView(previewStreet: "88 Harbour St", previewCity: "Toronto",
-                                               previewError: "No connection. Check your internet and try again."),
+                                               previewMoveIn: Self.moveIn, previewError: "No connection. Check your internet and try again."),
                      inNavigation: false)
     }
 

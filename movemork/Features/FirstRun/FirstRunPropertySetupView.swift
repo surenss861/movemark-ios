@@ -26,6 +26,8 @@ struct FirstRunPropertySetupView: View {
     @State private var errorMessage = ""
     @State private var isLoading = false
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     private var trimmedStreet: String { street.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
@@ -45,26 +47,38 @@ struct FirstRunPropertySetupView: View {
                         accessibilityID: "setup.unit", submitLabel: .next,
                         onSubmit: { focusedField = .city })
                     .focused($focusedField, equals: .unit)
-                MMField(title: "City", placeholder: "Toronto", text: $city,
-                        contentType: .addressCity, autocapitalization: .words,
-                        accessibilityID: "setup.city", submitLabel: .next,
-                        onSubmit: { focusedField = .province })
-                    .focused($focusedField, equals: .city)
-                MMField(title: "Province", placeholder: "ON", text: $province,
-                        contentType: .addressState, autocapitalization: .characters,
-                        accessibilityID: "setup.province", submitLabel: .done,
-                        onSubmit: { focusedField = nil })
-                    .focused($focusedField, equals: .province)
+                // City and province share a row (as on an envelope) until text sizes need the width.
+                if dynamicTypeSize.isAccessibilitySize {
+                    cityField
+                    provinceField
+                } else {
+                    HStack(alignment: .top, spacing: 12) {
+                        cityField
+                        provinceField.frame(width: 112)
+                    }
+                }
             }
             .autocorrectionDisabled()
 
             MMGroup {
-                DatePicker("Move-in date", selection: $moveInDate, displayedComponents: .date)
-                    .mmFont(16)
-                    .foregroundStyle(MMInk.text)
-                    .tint(MMInk.text)
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: MMMetrics.rowHeight)
+                // At accessibility sizes the label sits above the date rather than breaking mid-word beside it.
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Move-in date").mmFont(16).foregroundStyle(MMInk.text)
+                        DatePicker("Move-in date", selection: $moveInDate, displayedComponents: .date)
+                            .labelsHidden()
+                            .tint(MMInk.text)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    DatePicker("Move-in date", selection: $moveInDate, displayedComponents: .date)
+                        .mmFont(16)
+                        .foregroundStyle(MMInk.text)
+                        .tint(MMInk.text)
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: MMMetrics.rowHeight)
+                }
             }
             .padding(.top, 22)
 
@@ -78,6 +92,22 @@ struct FirstRunPropertySetupView: View {
                 .accessibilityIdentifier("setup.create")
                 .padding(.top, 26)
         }
+    }
+
+    private var cityField: some View {
+        MMField(title: "City", placeholder: "Toronto", text: $city,
+                contentType: .addressCity, autocapitalization: .words,
+                accessibilityID: "setup.city", submitLabel: .next,
+                onSubmit: { focusedField = .province })
+            .focused($focusedField, equals: .city)
+    }
+
+    private var provinceField: some View {
+        MMField(title: "Province", placeholder: "ON", text: $province,
+                contentType: .addressState, autocapitalization: .characters,
+                accessibilityID: "setup.province", submitLabel: .done,
+                onSubmit: { focusedField = nil })
+            .focused($focusedField, equals: .province)
     }
 
     /// "88 Harbour St, Unit 1204" — the rental's title when there is no nickname.
@@ -147,8 +177,9 @@ extension FirstRunPropertySetupView {
     /// Snapshot tests only: open filled in and/or with an error showing. In an extension so the memberwise
     /// init the flow uses stays as it is.
     init(previewStreet: String = "", previewUnit: String = "", previewCity: String = "", previewProvince: String = "",
-         previewError: String = "") {
+         previewMoveIn: Date? = nil, previewError: String = "") {
         self.init(onCreated: { _ in })
+        if let previewMoveIn { _moveInDate = State(initialValue: previewMoveIn) }
         _street = State(initialValue: previewStreet)
         _unit = State(initialValue: previewUnit)
         _city = State(initialValue: previewCity)
