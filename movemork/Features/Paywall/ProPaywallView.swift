@@ -23,6 +23,7 @@ struct ProPaywallView: View {
     @State private var restoreOutcomeMessage: String? = nil
     /// False until the first `refresh()` tied to this paywall presentation finishes (avoids a one-frame “fake” plan placeholder).
     @State private var initialOfferingsFetchCompleted = false
+    private let startsWithFetchedOfferings: Bool
     @State private var proofToast: MMProofToastMessage? = nil
     @State private var proofToastVisible = false
     @State private var showPurchaseSuccess = false
@@ -48,6 +49,8 @@ struct ProPaywallView: View {
         self.reason = reason
         self.onClose = onClose
         _initialOfferingsFetchCompleted = State(initialValue: initialOfferingsFetchCompleted)
+        // Only snapshot seams start with a finished fetch; the app always presents with the default (false).
+        self.startsWithFetchedOfferings = initialOfferingsFetchCompleted
         _showPurchaseSuccess = State(initialValue: showPurchaseSuccess)
         _purchaseSuccessWasReportPack = State(initialValue: purchaseSuccessWasReportPack)
         _restoreOutcomeMessage = State(initialValue: restoreOutcomeMessage)
@@ -107,11 +110,13 @@ struct ProPaywallView: View {
                 }
             }
             .task {
-                initialOfferingsFetchCompleted = false
                 MoveMarkAnalytics.track(
                     .paywallViewed,
                     properties: ["reason": String(describing: reason)]
                 )
+                // A seeded state (snapshot goldens) keeps its offering: no store round trip piling up across tests.
+                guard !startsWithFetchedOfferings else { return }
+                initialOfferingsFetchCompleted = false
                 await subscriptionManager.refresh()
                 initialOfferingsFetchCompleted = true
             }
