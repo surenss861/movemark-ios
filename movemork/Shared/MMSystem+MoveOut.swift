@@ -155,7 +155,7 @@ struct MoveOutHeaderProgress: View {
 
     var body: some View {
         let fraction = total == 0 ? 0 : Double(done) / Double(total)
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Move-out proof").mmFont(12.5, .medium).foregroundStyle(.white)
                 Spacer()

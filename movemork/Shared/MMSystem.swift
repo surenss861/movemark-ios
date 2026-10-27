@@ -60,6 +60,8 @@ struct MMScreen<Trailing: View, Content: View>: View {
     var showsWordmark = false
     /// Quiet content under the title inside the dark header (e.g. a dark Progress Strip).
     var headerAccessory: AnyView? = nil
+    /// Tighter header rhythm (same type sizes) so the sheet's first content arrives sooner.
+    var compactHeader = false
     @ViewBuilder var trailing: () -> Trailing
     @ViewBuilder var content: () -> Content
 
@@ -131,14 +133,14 @@ struct MMScreen<Trailing: View, Content: View>: View {
                     .mmFont(14.5)
                     .foregroundStyle(MMInk.heroSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 6)
+                    .padding(.top, compactHeader ? 4 : 6)
             }
             if let headerAccessory {
-                headerAccessory.padding(.top, 20)
+                headerAccessory.padding(.top, compactHeader ? 14 : 20)
             }
         }
         .padding(.horizontal, MMMetrics.inset)
-        .padding(.bottom, 28 + MMMetrics.sheetRadius)
+        .padding(.bottom, (compactHeader ? 18 : 28) + MMMetrics.sheetRadius)
         .frame(maxWidth: .infinity, alignment: .leading)
         // The header's dark runs up past the top so pulling down never shows the light sheet colour above it;
         // below a short sheet there is only the sheet colour (no dark band).
@@ -149,10 +151,10 @@ struct MMScreen<Trailing: View, Content: View>: View {
 
 extension MMScreen where Trailing == EmptyView {
     init(eyebrow: String? = nil, title: String, subtitle: String? = nil, isPushed: Bool = false, tail: CGFloat = 32,
-         showsWordmark: Bool = false, headerAccessory: AnyView? = nil,
+         showsWordmark: Bool = false, headerAccessory: AnyView? = nil, compactHeader: Bool = false,
          @ViewBuilder content: @escaping () -> Content) {
         self.init(eyebrow: eyebrow, title: title, subtitle: subtitle, isPushed: isPushed, tail: tail,
-                  showsWordmark: showsWordmark, headerAccessory: headerAccessory,
+                  showsWordmark: showsWordmark, headerAccessory: headerAccessory, compactHeader: compactHeader,
                   trailing: { EmptyView() }, content: content)
     }
 }

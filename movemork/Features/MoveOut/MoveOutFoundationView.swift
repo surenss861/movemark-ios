@@ -95,7 +95,8 @@ struct MoveOutFoundationView: View {
             showsWordmark: true,
             headerAccessory: rooms.isEmpty || !hasBaseline ? nil : AnyView(
                 MoveOutHeaderProgress(done: roomsWithMoveOutPhotos, total: rooms.count)
-            )
+            ),
+            compactHeader: true
         ) {
             if let gained = justComparedLine {
                 MMNotice(message: gained, tone: .success).padding(.bottom, 18)
