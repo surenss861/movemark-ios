@@ -335,7 +335,7 @@ struct MoveOutSpreadCard: View {
                 before: { side(.moveIn) },
                 after: { side(.moveOut) }
             )
-            .padding(.top, 14)
+            .padding(.top, 18)
 
             if !details.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
@@ -347,10 +347,10 @@ struct MoveOutSpreadCard: View {
                 .padding(.vertical, 10)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(MMInk.field, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .padding(.top, 12)
+                .padding(.top, 14)
             }
         }
-        .padding(14)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(MMInk.card, in: RoundedRectangle(cornerRadius: MMMetrics.cardRadius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: MMMetrics.cardRadius, style: .continuous)
@@ -362,13 +362,12 @@ struct MoveOutSpreadCard: View {
         }
     }
 
-    /// The renter's own words from each end, quoted as recorded, plus a lower condition when the headline is
-    /// about a new issue.
+    /// What the move-out record adds to the comparison: the renter's move-out note, quoted as recorded, plus
+    /// a lower condition when the headline is about a new issue.
     private var details: [String] {
         var lines: [String] = []
         if comparison.state == .newIssue, let condition = comparison.conditionLine { lines.append(condition) }
         if let note = comparison.moveOutText { lines.append("Move-out note: “\(note)”") }
-        if let note = comparison.moveInText { lines.append("Move-in note: “\(note)”") }
         return lines
     }
 

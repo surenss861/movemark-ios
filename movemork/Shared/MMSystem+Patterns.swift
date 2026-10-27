@@ -309,8 +309,10 @@ struct MMComparisonPair<Before: View, After: View>: View {
 
     private func side<V: View>(_ label: String, note: String?, date: String?, @ViewBuilder content: () -> V) -> some View {
         VStack(alignment: .leading, spacing: 6) {
+            // In a spread the side labels carry the dates, so they read a touch stronger.
             Text(datesInLabel && date != nil ? "\(label) · \(date!.uppercased())" : label)
-                .mmFont(10.5, .semibold).tracking(0.8).monospacedDigit().foregroundStyle(MMInk.secondary)
+                .mmFont(datesInLabel ? 11 : 10.5, .semibold).tracking(0.8).monospacedDigit()
+                .foregroundStyle(datesInLabel ? MMInk.text.opacity(0.78) : MMInk.secondary)
             content()
                 .frame(maxWidth: .infinity)
                 .frame(height: photoHeight)
