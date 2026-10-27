@@ -62,13 +62,19 @@ struct ProPaywallView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     header
 
+                    // Came for one report: the Report Pack is the first answer, before the Pro story.
+                    if reason == .reportPack {
+                        reportPackSection
+                            .padding(.top, 26)
+                    }
+
                     timeline
                         .padding(.top, 30)
 
                     truthLines
                         .padding(.top, 4)
 
-                    if reason.prefersReportPackFirst {
+                    if reason.prefersReportPackFirst, reason != .reportPack {
                         reportPackSection
                             .padding(.top, 30)
                     }
@@ -109,7 +115,18 @@ struct ProPaywallView: View {
                 await subscriptionManager.refresh()
                 initialOfferingsFetchCompleted = true
             }
-            .mmProofToast(message: proofToast, isVisible: proofToastVisible)
+            .overlay(alignment: .top) {
+                // The proof toast as a calm, opaque notice on the dark surface (same message and presenter).
+                if proofToastVisible, let proofToast {
+                    MMEvidenceNotice(message: [proofToast.title, proofToast.message].compactMap { $0 }.joined(separator: ". "),
+                                     tone: proofToast.kind.lightTone)
+                        .background(Self.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
+                        .padding(.horizontal, MMMetrics.inset)
+                        .padding(.top, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
             .onChange(of: paywallPlansUnavailable) { wasUnavailable, isUnavailable in
                 guard isUnavailable, !wasUnavailable else { return }
                 MMProofToastPresenter.show(
@@ -178,7 +195,7 @@ struct ProPaywallView: View {
         case .unlimitedExports: "You’ve used your free move-in report."
         case .disputePacket: "The evidence packet is part of Pro."
         case .moveOutExport: "The move-out report is part of Pro."
-        case .reportPack: "Need just one report? A Report Pack covers one move-in report."
+        case .reportPack: nil   // the Report Pack row right below says it
         }
     }
 
@@ -264,6 +281,8 @@ struct ProPaywallView: View {
             }
 
             if paywallPlansUnavailable {
+                // What failed sits right above its recovery, not below the fold.
+                plansUnavailableNotice
                 MMPrimaryButton(
                     title: subscriptionManager.isRefreshingOfferings
                         ? "Trying…"
@@ -411,17 +430,10 @@ struct ProPaywallView: View {
                     .mmFont(14)
                     .foregroundStyle(MMInk.heroSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                #if DEBUG
-                Text(plansUnavailableTechnicalDetail)
-                    .mmFont(12)
-                    .foregroundStyle(MMInk.heroSecondary.opacity(0.85))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 4)
-                #endif
             }
             Spacer(minLength: 0)
         }
-        .padding(16)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(MMInk.evidenceRaised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(MMInk.evidenceStroke, lineWidth: 0.75))
@@ -430,9 +442,7 @@ struct ProPaywallView: View {
 
     private var plansLoadSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if paywallPlansUnavailable {
-                plansUnavailableNotice
-            } else {
+            if !paywallPlansUnavailable {
                 MMEvidenceSectionLabel(title: planGroupTitle)
                 if !displayPackages.isEmpty {
                     ForEach(displayPackages, id: \.identifier) { package in
@@ -452,6 +462,14 @@ struct ProPaywallView: View {
                     }
                     .accessibilityElement(children: .combine)
                 }
+            } else {
+                #if DEBUG
+                // Diagnostics for builders only; the renter sees the notice above the recovery action.
+                Text(plansUnavailableTechnicalDetail)
+                    .mmFont(12)
+                    .foregroundStyle(MMInk.heroSecondary.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+                #endif
             }
         }
     }
@@ -516,27 +534,31 @@ struct ProPaywallView: View {
                 Button {
                     startPurchase(pack, isReportPack: true)
                 } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "doc.text")
-                            .font(.system(size: 17))
-                            .foregroundStyle(.white)
-                            .frame(width: 24)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Report Pack").mmFont(16, .semibold).foregroundStyle(.white)
-                            Text("One move-in report · no subscription")
-                                .mmFont(13)
-                                .foregroundStyle(MMInk.heroSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                    let price = Text(pack.storeProduct.localizedPriceString)
+                        .mmFont(16, .semibold)
+                        .monospacedDigit()
+                        .foregroundStyle(.white)
+                    let copy = VStack(alignment: .leading, spacing: 2) {
+                        Text("Report Pack").mmFont(16, .semibold).foregroundStyle(.white)
+                        Text("One move-in report · no subscription")
+                            .mmFont(13)
+                            .foregroundStyle(MMInk.heroSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Group {
+                        if dynamicTypeSize.isAccessibilitySize {
+                            VStack(alignment: .leading, spacing: 8) { copy; price }
+                        } else {
+                            HStack(spacing: 12) {
+                                Image(systemName: "doc.text")
+                                    .font(.system(size: 17))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 24)
+                                copy
+                                Spacer(minLength: 8)
+                                price.layoutPriority(1)
+                            }
                         }
-                        Spacer(minLength: 8)
-                        Text(pack.storeProduct.localizedPriceString)
-                            .mmFont(16, .semibold)
-                            .monospacedDigit()
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
-                            .layoutPriority(1)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)

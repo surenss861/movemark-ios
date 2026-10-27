@@ -2,10 +2,9 @@
 //  FlowScreenSnapshotTests.swift
 //  movemorkTests
 //
-//  @file Goldens for the flow screens on the final system (area C): Move-out, the evidence sheets (edit proof,
-//        add photos, capture form), the Pro
-//        paywall (loading, plans, unavailable, report pack, success, restore, toast), Edit name and the toast —
-//        on the Pro phone, the small phone and AX3.
+//  @file Goldens for the flow screens on the final system (area C): Move-out, the capture form and the toast —
+//        on the Pro phone, the small phone and AX3. Edit evidence, Add photos, the paywall and Edit name moved to
+//        SheetsPaywallSnapshotTests (round 2).
 //  @domain design-system
 //  @see [[MMSystem+Flows.swift]] — Maintenance and the evidence viewer: MaintenanceCaseSnapshotTests
 //
@@ -14,7 +13,6 @@
 
 import XCTest
 import SwiftUI
-import RevenueCat
 import SnapshotTesting
 @testable import MoveMark
 
@@ -27,21 +25,6 @@ final class FlowScreenSnapshotTests: XCTestCase {
     private var devices: [(String, ViewImageConfig)] { ScreenSnapshot.allDevices }
 
     // MARK: Evidence surfaces (dark)
-
-    private var savedEntry: EvidenceRecord {
-        EvidenceRecord(title: "North wall", notes: "Two scratches beside the window.", issueTags: ["Scratch", "Chipped paint"],
-                       condition: .fair, createdAt: Self.day, photoCount: 5, stage: .moveIn)
-    }
-
-    func testEditEvidenceSheet() {
-        assertScreen(EditEvidenceSheet(evidence: savedEntry, roomName: "Living Room", onSave: { _, _, _, _ in nil }, onDismiss: {}),
-                     devices: devices, inNavigation: false)
-    }
-
-    func testAppendPhotosSheet() {
-        assertScreen(AppendPhotosSheet(entry: savedEntry, onAdd: { _ in ([], nil) }, onDismiss: {}),
-                     devices: devices, inNavigation: false)
-    }
 
     private func captureForm(error: String? = nil, success: String? = nil) -> some View {
         ScrollView {
@@ -67,73 +50,7 @@ final class FlowScreenSnapshotTests: XCTestCase {
                      inNavigation: false)
     }
 
-    // MARK: Paywall
-
-    private func package(_ id: String, _ type: PackageType, price: Decimal, label: String, unit: SubscriptionPeriod.Unit?) -> Package {
-        let product = TestStoreProduct(
-            localizedTitle: "", price: price, localizedPriceString: label, productIdentifier: id,
-            productType: unit == nil ? .nonConsumable : .autoRenewableSubscription, localizedDescription: "",
-            subscriptionPeriod: unit.map { SubscriptionPeriod(value: 1, unit: $0) }
-        )
-        return Package(identifier: id, packageType: type, storeProduct: product.toStoreProduct(), offeringIdentifier: "default",
-                       webCheckoutUrl: nil)
-    }
-
-    private func subscriptions(plans: Bool, reportPack: Bool = false) -> SubscriptionManager {
-        let manager = SubscriptionManager()
-        guard plans else { return manager }
-        var packages = [
-            package("monthly_subscription", .monthly, price: 7.99, label: "$7.99", unit: .month),
-            package("yearly_subscription", .annual, price: 49.99, label: "$49.99", unit: .year),
-        ]
-        if reportPack { packages.append(package("report_pack", .lifetime, price: 9.99, label: "$9.99", unit: nil)) }
-        manager.currentOffering = Offering(identifier: "default", serverDescription: "Default", availablePackages: packages,
-                                           webCheckoutUrl: nil)
-        return manager
-    }
-
-    private func paywall(_ reason: PaywallReason = .moveOutExport, plans: Bool = true, reportPack: Bool = false,
-                         fetched: Bool = true, success: Bool = false, restore: String? = nil, error: String? = nil,
-                         toast: MMProofToastMessage? = nil) -> some View {
-        ProPaywallView(reason: reason, onClose: {}, initialOfferingsFetchCompleted: fetched, showPurchaseSuccess: success,
-                       restoreOutcomeMessage: restore, localErrorMessage: error, toast: toast)
-            .environment(subscriptions(plans: plans, reportPack: reportPack))
-    }
-
-    func testPaywallPlans() {
-        assertScreen(paywall(), devices: devices, inNavigation: false)
-    }
-
-    func testPaywallLoading() {
-        assertScreen(paywall(plans: false, fetched: false), inNavigation: false)
-    }
-
-    func testPaywallUnavailable() {
-        assertScreen(paywall(plans: false), devices: [("pro", ScreenSnapshot.pro), ("small", ScreenSnapshot.small)], inNavigation: false)
-    }
-
-    func testPaywallReportPack() {
-        assertScreen(paywall(.reportPack, reportPack: true), inNavigation: false)
-    }
-
-    func testPaywallPurchaseSuccess() {
-        assertScreen(paywall(success: true), inNavigation: false)
-    }
-
-    func testPaywallRestoreResultAndError() {
-        assertScreen(paywall(restore: "No active subscription or Report Pack was found for this Apple ID.",
-                             error: "Purchase didn’t go through. Try again."), inNavigation: false)
-    }
-
-    func testPaywallToast() {
-        assertScreen(paywall(plans: false, toast: .plansDidNotLoad()), inNavigation: false)
-    }
-
-    // MARK: Account / toast
-
-    func testEditNameSheet() {
-        assertScreen(EditNameSheet(currentName: "Suren Kumar", onSave: { _ in }), devices: devices, inNavigation: false)
-    }
+    // MARK: Toast
 
     func testProofToastSuccess() {
         let toasts = VStack(spacing: 12) {
