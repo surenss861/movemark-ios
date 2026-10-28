@@ -30,6 +30,12 @@ final class AuthScreenSnapshotTests: XCTestCase {
         assertScreen(WelcomeScreen(previewSettled: ()), devices: all, inNavigation: false)
     }
 
+    /// The system Reduce Motion setting: no video, no entrance movement — the composition must not change.
+    func testWelcomeReduceMotion() {
+        assertScreen(WelcomeScreen(previewSettled: (), reduceMotion: true), devices: [("pro", ScreenSnapshot.pro)],
+                     inNavigation: false)
+    }
+
     // MARK: Auth
 
     func testAuthSignUp() {

@@ -4,8 +4,9 @@
 //
 //  @file Welcome-only — a compact Proof Slip: the kind of dated record the renter's vault will hold. It is
 //        the bridge from Welcome into the product (same paper, stamp and quiet metadata as MMProofSlip),
-//        kept small so the headline stays the star. At compact heights and accessibility sizes it drops
-//        the metadata lines first (MOVE-IN RECORD / Kitchen / Recorded) rather than shrinking type.
+//        kept small so the headline stays the star. It supports, never competes: when space runs short it
+//        drops its lowest-value metadata first (the "Original files preserved" foot, then the date line)
+//        rather than shrinking any type on the screen.
 //  @domain welcome
 //  @see [[MMSystem+Patterns.swift]] — MMProofSlip
 //
@@ -13,84 +14,95 @@
 import SwiftUI
 
 struct WelcomeProofSlip: View {
-    /// Drops the date line and the "Original files preserved" foot (short screens, AX sizes).
-    var isCompact = false
+    enum Density {
+        /// Everything: MOVE-IN RECORD, Kitchen, Apr 14 · 12 photos, Recorded, Original files preserved.
+        case regular
+        /// Short screens (SE): drops the "Original files preserved" foot.
+        case compact
+        /// Accessibility sizes: also drops the date line; the stamp drops under the title.
+        case minimal
+    }
+
+    var density: Density = .regular
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private static let paper = Color(red: 0.980, green: 0.976, blue: 0.965)   // #FAF9F6, as MMProofSlip
 
+    private var showsDate: Bool { density != .minimal }
+    private var showsFoot: Bool { density == .regular }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text("MOVE-IN RECORD")
-                    .mmFont(10.5, .semibold)
+                    .mmFont(10, .semibold)
                     .tracking(1.0)
                     .foregroundStyle(MMInk.secondary)
                 Spacer(minLength: 8)
-                if !isCompact { stamp }
+                if !dynamicTypeSize.isAccessibilitySize { stamp }
             }
+
+            Text("Kitchen")
+                .mmFont(19, .semibold)
+                .foregroundStyle(MMInk.text)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                .padding(.top, 4)
 
             if dynamicTypeSize.isAccessibilitySize {
-                Text("Kitchen")
-                    .mmFont(isCompact ? 19 : 21, .semibold)
-                    .foregroundStyle(MMInk.text)
-                    .padding(.top, 6)
-                if isCompact { stamp.padding(.top, 8) }
-            } else {
-                HStack(alignment: .center, spacing: 12) {
-                    Text("Kitchen")
-                        .mmFont(isCompact ? 19 : 21, .semibold)
-                        .foregroundStyle(MMInk.text)
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    if isCompact { stamp }
-                }
-                .padding(.top, isCompact ? 6 : 8)
+                stamp.padding(.top, 6)
             }
 
-            if !isCompact {
+            if showsDate {
                 Text("Apr 14 · 12 photos")
-                    .mmFont(13)
+                    .mmFont(12.5)
                     .monospacedDigit()
                     .foregroundStyle(MMInk.secondary)
-                    .padding(.top, 2)
+                    .padding(.top, 1)
+            }
 
+            if showsFoot {
                 DashedRule()
                     .stroke(MMInk.secondary.opacity(0.45), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
                     .frame(height: 1)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 9)
 
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Image(systemName: "lock")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 10.5, weight: .medium))
                     Text("Original files preserved")
-                        .mmFont(12.5)
+                        .mmFont(12)
                 }
                 .foregroundStyle(MMInk.secondary)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, isCompact ? 13 : 15)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Self.paper, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color.black.opacity(0.06), lineWidth: 0.75))
         .environment(\.colorScheme, .light)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(isCompact
-            ? "Example record: move-in record, Kitchen, recorded."
-            : "Example record: move-in record, Kitchen, April 14, 12 photos, recorded. Original files preserved.")
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private var accessibilityText: String {
+        switch density {
+        case .regular: "Example record: move-in record, Kitchen, April 14, 12 photos, recorded. Original files preserved."
+        case .compact: "Example record: move-in record, Kitchen, April 14, 12 photos, recorded."
+        case .minimal: "Example record: move-in record, Kitchen, recorded."
+        }
     }
 
     /// The RECORDED stamp of the Proof Slip, in its compact form.
     private var stamp: some View {
         HStack(spacing: 4) {
-            Image(systemName: "checkmark").font(.system(size: 9.5, weight: .bold))
-            Text("Recorded").mmFont(11.5, .semibold)
+            Image(systemName: "checkmark").font(.system(size: 9, weight: .bold))
+            Text("Recorded").mmFont(11, .semibold)
         }
         .foregroundStyle(MMInk.text)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2.5)
         .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(MMInk.text, lineWidth: 1.1))
         .rotationEffect(.degrees(-2))
         .fixedSize()
