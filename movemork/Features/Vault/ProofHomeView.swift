@@ -178,11 +178,9 @@ struct ProofHomeView: View {
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
-    /// Text only: identity without a brand lockup.
+    /// The compact lockup: small mark + "MoveMark", as on every dark header.
     private var wordmark: some View {
-        Text("MoveMark")
-            .font(.system(size: 17 * k, weight: .semibold))
-            .foregroundStyle(.white.opacity(0.85))
+        MMWordmark(size: 17 * k)
     }
 
     /// Add a rental, or switch to another one.
@@ -529,11 +527,9 @@ struct ProofHomeEmptyView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                // Same quiet dark field as the Vault header, with the text-only wordmark.
+                // Same quiet dark field as the Vault header, with the compact wordmark lockup.
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("MoveMark")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.85))
+                    MMWordmark()
                         .frame(height: 44)
                     Spacer(minLength: 0)
                 }

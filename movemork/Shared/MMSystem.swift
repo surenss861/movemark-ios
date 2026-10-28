@@ -44,6 +44,30 @@ enum MMMetrics {
     static let ctaHeight: CGFloat = 50
 }
 
+// MARK: - Wordmark
+
+/// The compact MoveMark lockup on dark headers: the brand mark sitting on the text baseline at about cap
+/// height, then "MoveMark" in the header type. Only the text is read by VoiceOver (the mark is decorative),
+/// so the lockup reads "MoveMark" once. Light art: dark surfaces only.
+struct MMWordmark: View {
+    var size: CGFloat = 17
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: size * 0.38) {
+            Image("MoveMarkLogo")
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(height: size * 0.74)
+                .alignmentGuide(.firstTextBaseline) { $0[.bottom] }
+                .accessibilityHidden(true)
+            Text("MoveMark")
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.85))
+        }
+    }
+}
+
 // MARK: - Screen scaffold
 
 /// A screen in the system: the dark header (eyebrow, title, optional line) running under the status bar,
@@ -104,9 +128,7 @@ struct MMScreen<Trailing: View, Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             if !isPushed || showsWordmark {
                 HStack {
-                    Text("MoveMark")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.85))
+                    MMWordmark()
                     Spacer()
                     trailing()
                 }

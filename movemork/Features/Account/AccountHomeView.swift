@@ -91,9 +91,7 @@ struct AccountHomeView: View {
 
     private var hero: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("MoveMark")
-                .font(.system(size: 17 * k, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.85))
+            MMWordmark(size: 17 * k)
                 .frame(height: 44 * k)
             if !isAX {
                 Text("ACCOUNT")
