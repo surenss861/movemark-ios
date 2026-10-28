@@ -232,7 +232,8 @@ struct FirstRunOtherRoomSheet: View {
                 }
             }
             .padding(.top, 14)
-            .accessibilityLabel("Suggestions")
+            .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Suggestions")
 
             MMPrimaryButton(title: "Add room", isDisabled: isNameEmpty, action: onUse)
                 .accessibilityIdentifier("firstRun.addOtherRoom")

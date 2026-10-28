@@ -284,6 +284,28 @@ final class VaultScreenshotUITests: XCTestCase {
         attach(app, "paywall-4-closed")
     }
 
+    /// Dispute packet live: Reports › Dispute packet opens the builder on the rental's real evidence; a room
+    /// that differs at move-out starts involved with its before/after; Generate on Free opens the paywall.
+    func testDisputeTour() throws {
+        let app = try signedIn()
+        app.buttons["Reports"].firstMatch.tap()
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Dispute packet'")).firstMatch
+        for _ in 0..<4 where !row.isHittable { app.swipeUp() }
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "Dispute packet row")
+        row.tap()
+        sleep(4)
+        attach(app, "dispute-1-top")
+        // Rooms that differ at move-out start selected: their before/after is already in the packet.
+        app.swipeUp()
+        sleep(3)
+        attach(app, "dispute-2-rooms-involved")
+        XCTAssertTrue(app.buttons["Kitchen"].firstMatch.exists, "room chips reachable by VoiceOver")
+        scrollToBottom(app)
+        attach(app, "dispute-3-bottom")
+        let generate = app.buttons.matching(NSPredicate(format: "label CONTAINS 'evidence packet'")).firstMatch
+        if generate.exists { generate.tap(); sleep(3); attach(app, "dispute-4-after-generate") }
+    }
+
     /// Swipes until the scroll settles at its end (momentum included), so the shot shows the real bottom.
     private func scrollToBottom(_ app: XCUIApplication) {
         for _ in 0..<6 { app.swipeUp() }

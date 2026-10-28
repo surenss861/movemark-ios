@@ -85,6 +85,10 @@ struct AuthenticatedTabShellView: View {
                     onOpenMoveOutProof: {
                         selectedTab = .vaults
                         vaultPath = [.moveOut]
+                    },
+                    onOpenDisputePacket: {
+                        selectedTab = .vaults
+                        vaultPath = [.disputePacket]
                     }
                 )
                 .navigationTitle("")

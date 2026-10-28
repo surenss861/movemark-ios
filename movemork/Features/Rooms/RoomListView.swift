@@ -156,6 +156,7 @@ struct AddRoomSheetView: View {
                         }
                     }
                     .padding(.top, 14)
+                    .accessibilityElement(children: .contain)
                     .accessibilityLabel("Suggestions")
                 }
 

@@ -26,6 +26,8 @@ struct ExportHistoryView: View {
     var onOpenVaults: (() -> Void)? = nil
     var onContinueRoomProof: (() -> Void)? = nil
     var onOpenMoveOutProof: (() -> Void)? = nil
+    /// The dispute row opens the evidence packet builder, which generates, views and shares the packet.
+    var onOpenDisputePacket: (() -> Void)? = nil
 
     @State private var exports: [ExportRow] = []
     @State private var isLoading = false
@@ -349,6 +351,10 @@ struct ExportHistoryView: View {
 
     private func openOtherReport(_ other: ReportsHomeModel.OtherReport) {
         let isMoveOut = other.id == Self.moveOutID
+        if !isMoveOut, let onOpenDisputePacket {
+            onOpenDisputePacket()
+            return
+        }
         if subscriptionManager.hasPro, (isMoveOut ? moveOutReadiness : disputeReadiness) == .readyToShare {
             otherReportMenu = other
             return
