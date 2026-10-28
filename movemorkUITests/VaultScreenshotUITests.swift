@@ -262,6 +262,28 @@ final class VaultScreenshotUITests: XCTestCase {
         attach(app, "moveout-5-back")
     }
 
+    /// Paywall live: opened from Account › Subscription; the close button on its bar, the first screen, and
+    /// the timeline fully reachable by scrolling above the pinned purchase bar.
+    func testPaywallTour() throws {
+        let app = try signedIn()
+        app.buttons["Account"].firstMatch.tap()
+        let subscription = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Subscription'")).firstMatch
+        XCTAssertTrue(subscription.waitForExistence(timeout: 10), "Subscription row")
+        subscription.tap()
+        sleep(4)
+        attach(app, "paywall-1-first-screen")
+        app.swipeUp()
+        sleep(2)
+        attach(app, "paywall-2-scrolled")
+        scrollToBottom(app)
+        attach(app, "paywall-3-bottom")
+        let close = app.buttons.matching(NSPredicate(format: "label == 'Close' OR label == 'Not now'")).firstMatch
+        XCTAssertTrue(close.waitForExistence(timeout: 5), "a way out")
+        close.tap()
+        sleep(2)
+        attach(app, "paywall-4-closed")
+    }
+
     /// Swipes until the scroll settles at its end (momentum included), so the shot shows the real bottom.
     private func scrollToBottom(_ app: XCUIApplication) {
         for _ in 0..<6 { app.swipeUp() }
