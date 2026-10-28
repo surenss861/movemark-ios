@@ -113,6 +113,13 @@ struct VaultRootView: View {
             onRetry: { Task { await reload() } }
         )
         .toolbar(.hidden, for: .navigationBar)
+        // Photos still only on this iPhone (not uploaded yet): one quiet row that opens their room.
+        .mmPendingUploads(
+            count: pendingRooms.reduce(0) { $0 + $1.count },
+            failed: pendingRooms.contains { $0.failedCount > 0 },
+            onOpen: { if let first = pendingRooms.first { openPendingRoom(first) } }
+        )
+        .task(id: sessionManager.userId) { await PendingEvidenceCenter.shared.refresh(userId: sessionManager.userId) }
         .task { await loadPreviewURLs() }
         .task(id: featuredPropertyId) { await ensureFeaturedPropertyLoaded() }
         .task(id: otherProperties.map(\.id)) { await loadOtherRentalSummaries() }
@@ -124,6 +131,26 @@ struct VaultRootView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await loadPreviewURLs() } }
+        }
+    }
+
+    /// Rooms (any rental of this user) with photos not uploaded yet, newest first.
+    private var pendingRooms: [PendingEvidenceRoomSummary] {
+        PendingEvidenceCenter.shared.summaries(userId: sessionManager.userId, propertyId: nil)
+            .filter { summary in propertyStore.properties.contains { $0.id == summary.key.propertyId } }
+    }
+
+    private func openPendingRoom(_ summary: PendingEvidenceRoomSummary) {
+        let route: AppRoute = summary.key.stage == .moveOut
+            ? .moveOutRoomDetail(roomID: summary.key.roomId)
+            : .roomDetail(roomID: summary.key.roomId)
+        guard propertyStore.currentProperty?.id != summary.key.propertyId, let userId = sessionManager.userId else {
+            path.append(route)
+            return
+        }
+        Task {
+            await propertyStore.selectProperty(id: summary.key.propertyId, userId: userId)
+            path.append(route)
         }
     }
 

@@ -21,14 +21,32 @@ import AVFoundation
 import SwiftUI
 import UIKit
 
+/// One shot, prepared off the main actor: the camera's file as source evidence (bytes untouched) plus
+/// display-only images, so the shutter never waits on hashing or decoding.
+nonisolated struct MMCameraCapture: Sendable {
+    let source: MMEvidenceSource
+    let preview: UIImage
+    let thumbnail: UIImage
+
+    /// Nil when the file can't become evidence (unreadable / unsupported).
+    static func prepare(_ data: Data) -> MMCameraCapture? {
+        guard let source = try? MMEvidenceImport.source(from: data, captureSource: .camera),
+              let preview = MMEvidenceImport.preview(from: source)
+        else { return nil }
+        let thumbnail = preview.preparingThumbnail(of: CGSize(width: 120, height: 120)) ?? preview
+        return MMCameraCapture(source: source, preview: preview, thumbnail: thumbnail)
+    }
+}
+
 struct CameraCaptureView: UIViewControllerRepresentable {
     var roomName: String = ""
     /// Photos already pending for this entry before the camera opened.
     var pendingCount: Int = 0
     /// Suggested shots, in order; the next one is shown above the preview.
     var prompts: [String] = []
-    /// The encoded capture file's bytes; returns whether it joined the pending photos.
-    var onCapture: (Data) -> Bool
+    /// The prepared shot (its source is the encoded capture file's bytes); returns whether it joined the
+    /// pending photos. Called on the main actor, in shutter order.
+    var onCapture: (MMCameraCapture) -> Bool
     /// Back to the room with the photos taken (Done, or the thumbnail to review them).
     var onDone: () -> Void = {}
     var onCancel: () -> Void
@@ -44,7 +62,7 @@ struct CameraCaptureView: UIViewControllerRepresentable {
 final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
     private let roomName: String
     private let prompts: [String]
-    private let onCapture: (Data) -> Bool
+    private let onCapture: (MMCameraCapture) -> Bool
     private let onDone: () -> Void
     private let onCancel: () -> Void
     private var total: Int
@@ -76,7 +94,7 @@ final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptur
     private static let onLime = UIColor(red: 0.067, green: 0.086, blue: 0.035, alpha: 1)
 
     init(roomName: String, pendingCount: Int, prompts: [String],
-         onCapture: @escaping (Data) -> Bool, onDone: @escaping () -> Void, onCancel: @escaping () -> Void) {
+         onCapture: @escaping (MMCameraCapture) -> Bool, onDone: @escaping () -> Void, onCancel: @escaping () -> Void) {
         self.roomName = roomName
         self.total = pendingCount
         self.prompts = prompts
@@ -192,15 +210,19 @@ final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptur
         #if DEBUG
         if let data { MMEvidenceAuditLog.record("camera.fileDataRepresentation", data) }
         #endif
+        // The shutter is free again before this shot is prepared: hashing and decoding happen here, on
+        // the capture delegate's (serial) queue, never on the main actor. Re-entrancy: the shutter stays
+        // disabled from tap until this callback, so a double tap can't capture twice.
+        DispatchQueue.main.async { self.shutterButton.isEnabled = true }
+        let capture = data.flatMap(MMCameraCapture.prepare)
         DispatchQueue.main.async {
-            self.shutterButton.isEnabled = true
-            guard let data, let preview = UIImage(data: data), self.onCapture(data) else {
+            guard let capture, self.onCapture(capture) else {
                 self.flash(message: "Couldn’t add that photo. Try again.")
                 return
             }
             self.total += 1
             self.takenHere += 1
-            self.thumbnailButton.setImage(preview.preparingThumbnail(of: CGSize(width: 120, height: 120)) ?? preview, for: .normal)
+            self.thumbnailButton.setImage(capture.thumbnail, for: .normal)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             self.flash(message: "Photo added")
             self.refreshProgress()

@@ -47,8 +47,21 @@ struct EvidenceCaptureView: View {
     @State var selectedItems: [PhotosPickerItem] = []
     @State var loadedImages: [UIImage] = []
     /// Source evidence for each pending photo (index-aligned with `loadedImages`, which are previews only).
-    @State var loadedSources: [MMEvidenceSource] = []
+    /// Each keeps one id from capture on: its file in the pending store and its `evidence_files` row id.
+    @State var loadedSources: [MMPendingEvidence] = []
+    /// Ids of the pending photos that came from the current Photos picker selection (in selection order);
+    /// camera shots and photos restored from this iPhone are not part of it.
+    @State var pickerItemIDs: [UUID] = []
     @State var isUploading = false
+    /// How many photos the running save is sending (the status line's count).
+    @State var uploadingCount = 0
+    /// The last save attempt didn't confirm the photos still pending (or the app stopped during one).
+    @State var uploadFailed = false
+    /// Restored partial save being checked against the server (no upload yet).
+    @State var isCheckingSaved = false
+    /// The pending set restored for this key already (restore runs once per room open).
+    @State var restoredKey: PendingEvidenceKey? = nil
+    var pendingCenter: PendingEvidenceCenter { PendingEvidenceCenter.shared }
     static let newEntryAnchor = "evidence.newEntry"
     @State var isLoadingHistory = false
     /// Set after a save where not every photo made it; cleared once the rest are saved.
@@ -109,7 +122,25 @@ struct EvidenceCaptureView: View {
     }
 
     /// Photos picked or shot but not saved yet, or a partial save still waiting for its retry.
-    private var hasUnsavedPhotos: Bool { !loadedImages.isEmpty || pendingRetry != nil }
+    var hasUnsavedPhotos: Bool { !loadedImages.isEmpty || pendingRetry != nil }
+
+    /// This room's pending store: per user, rental, room and phase.
+    var pendingKey: PendingEvidenceKey? {
+        guard let userId = sessionManager.userId, let propertyId = propertyStore.currentProperty?.id else { return nil }
+        return PendingEvidenceKey(userId: userId, propertyId: propertyId, roomId: roomID, stage: moveOutMode ? .moveOut : .moveIn)
+    }
+
+    /// The one factual line about the unsaved photos: on this iPhone, uploading, or failed.
+    var syncState: MMEvidenceSyncState? {
+        if isUploading { return .uploading(count: max(uploadingCount, 1)) }
+        guard hasUnsavedPhotos else { return nil }
+        if uploadFailed || pendingRetry != nil { return .failed }
+        return .savedLocally
+    }
+
+    var currentDraft: PendingEvidenceDraft {
+        PendingEvidenceDraft(title: title, notes: notes, tags: selectedTags, condition: selectedCondition)
+    }
 
     /// Back asks before leaving: only where there is a system back to replace.
     private var guardsBack: Bool { hasUnsavedPhotos && isPresented }
@@ -255,15 +286,13 @@ struct EvidenceCaptureView: View {
                 roomName: roomName,
                 pendingCount: loadedImages.count,
                 prompts: RoomCapturePrompts.items,
-                onCapture: { fileData in
-                    // The camera's encoded capture file is the source evidence, untouched; the camera stays
-                    // open for the next shot.
-                    guard let source = try? MMEvidenceImport.source(from: fileData, captureSource: .camera) else { return false }
-                    var selection = MMEvidenceSelection(sources: loadedSources, previews: loadedImages)
-                    selection.append(source)
-                    guard selection.sources.count > loadedSources.count else { return false }
-                    loadedSources = selection.sources
-                    loadedImages = selection.previews
+                onCapture: { capture in
+                    // The camera's encoded capture file is the source evidence, untouched; it is written to this
+                    // iPhone at once, and the camera stays open for the next shot.
+                    let item = MMPendingEvidence(source: capture.source)
+                    loadedSources.append(item)
+                    loadedImages.append(capture.preview)
+                    persistPending([item])
                     return true
                 },
                 onDone: { showCamera = false },
@@ -324,7 +353,10 @@ struct EvidenceCaptureView: View {
             isPresented: $showDiscardConfirm,
             titleVisibility: .visible
         ) {
-            Button("Discard", role: .destructive) { if let onBack { onBack() } else { dismiss() } }
+            Button("Discard", role: .destructive) {
+                discardPendingCaptures()
+                if let onBack { onBack() } else { dismiss() }
+            }
             Button("Keep editing", role: .cancel) {}
         }
         .toolbar {
@@ -372,6 +404,9 @@ struct EvidenceCaptureView: View {
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .mmProofToast(message: proofToast, isVisible: proofToastVisible)
+        // Photos left on this iPhone by an earlier visit (or a crash / kill) come back into the form.
+        .task(id: pendingKey) { await restorePendingCaptures() }
+        .onChange(of: currentDraft) { _, draft in persistDraft(draft) }
         .onAppear {
             wasDocumentedOnLoad = isRoomCurrentlyDocumented
             MoveMarkAnalytics.track(
@@ -389,19 +424,8 @@ struct EvidenceCaptureView: View {
             if !existingEntries.isEmpty {
                 Rectangle().fill(MoveMarkTheme.Colors.divider).frame(height: 0.5)
             }
-            HStack {
-                Text(moveOutMode ? "New move-out entry" : "New entry")
-                    .font(MoveMarkTheme.Typography.kicker)
-                    .tracking(1.0)
-                    .textCase(.uppercase)
-                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                Spacer()
-                if !loadedImages.isEmpty {
-                    Text(loadedImages.count == 1 ? "1 photo" : "\(loadedImages.count) photos")
-                        .font(MoveMarkTheme.Typography.monoMeta)
-                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                }
-            }
+            EvidenceNewEntryHeader(moveOutMode: moveOutMode, photoCount: loadedImages.count,
+                                   syncState: syncState, onRetry: { saveEvidence() })
             if !loadedImages.isEmpty {
                 ProofPhotoGridView(images: loadedImages, isUploading: isUploading,
                                    onRemove: { removePendingPhoto(at: $0) })
@@ -491,6 +515,7 @@ struct EditEvidenceSheet: View {
     @State private var condition: RoomRecord.ConditionRating
     @State private var isSaving = false
     @State private var localEditError: String?
+    @State private var confirmDiscard = false
 
     init(
         evidence: EvidenceRecord,
@@ -511,6 +536,12 @@ struct EditEvidenceSheet: View {
     }
 
     private let inspectionRepo = InspectionRepository()
+
+    /// Anything differs from the saved record: Cancel and swipe-down ask before dropping it.
+    private var hasChanges: Bool {
+        title != evidence.title || notes != evidence.notes
+            || selectedTags != Set(evidence.issueTags) || condition != evidence.condition
+    }
 
     /// "Living Room · Move-in" — the record being edited.
     private var subject: String { "\(roomName) · \(evidence.stage.rawValue)" }
@@ -600,11 +631,12 @@ struct EditEvidenceSheet: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { onDismiss() }
+                    Button("Cancel") { if hasChanges { confirmDiscard = true } else { onDismiss() } }
                         .disabled(isSaving)
                 }
             }
-            .interactiveDismissDisabled(isSaving)
+            .mmDiscardChangesConfirmation(isPresented: $confirmDiscard, onDiscard: onDismiss)
+            .interactiveDismissDisabled(isSaving || hasChanges)
         }
     }
 
@@ -641,6 +673,7 @@ struct AppendPhotosSheet: View {
     /// After a partial append: exactly the photos that didn't make it. Picker changes are ignored until
     /// they're saved, so photos already added can't be picked up and sent again.
     @State private var retryPending: [MMPendingEvidence]? = nil
+    @State private var confirmDiscard = false
 
     init(
         entry: EvidenceRecord,
@@ -664,6 +697,9 @@ struct AppendPhotosSheet: View {
     }
 
     private var hasPending: Bool { !loadedImages.isEmpty }
+
+    /// Photos chosen (or left over from a partial add) that aren't on the record yet.
+    private var hasChanges: Bool { hasPending || retryPending != nil }
 
     var body: some View {
         NavigationStack {
@@ -712,11 +748,12 @@ struct AppendPhotosSheet: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { onDismiss() }
+                    Button("Cancel") { if hasChanges { confirmDiscard = true } else { onDismiss() } }
                         .disabled(isUploading)
                 }
             }
-            .interactiveDismissDisabled(isUploading)
+            .mmDiscardChangesConfirmation(isPresented: $confirmDiscard, onDiscard: onDismiss)
+            .interactiveDismissDisabled(isUploading || hasChanges)
         }
     }
 
@@ -754,6 +791,16 @@ struct AppendPhotosSheet: View {
             loadedSources = selection.sources
             loadedImages = selection.previews
             localError = selection.rejectionMessage
+        }
+    }
+}
+
+extension View {
+    /// The native "Discard changes?" question for a sheet with unsaved edits (Keep editing / Discard).
+    func mmDiscardChangesConfirmation(isPresented: Binding<Bool>, onDiscard: @escaping () -> Void) -> some View {
+        confirmationDialog("Discard changes?", isPresented: isPresented, titleVisibility: .visible) {
+            Button("Discard", role: .destructive, action: onDiscard)
+            Button("Keep editing", role: .cancel) {}
         }
     }
 }

@@ -19,6 +19,9 @@ struct AccountView: View {
     @State private var showPaywall = false
     @State private var showDeleteAccount = false
     @State private var restoreFeedback: AccountHomeModel.Feedback? = nil
+    /// Photos only on this iPhone (not uploaded yet) when Sign out was tapped; > 0 asks first.
+    @State private var unsavedPhotoCount = 0
+    @State private var confirmSignOut = false
 
     private static let appleSubscriptionsURL = URL(string: "https://apps.apple.com/account/subscriptions")!
 
@@ -65,6 +68,16 @@ struct AccountView: View {
                     }
                 )
             }
+            .confirmationDialog(
+                unsavedPhotoCount == 1
+                    ? "1 photo hasn’t been saved yet. Signing out removes it from this iPhone."
+                    : "\(unsavedPhotoCount) photos haven’t been saved yet. Signing out removes them from this iPhone.",
+                isPresented: $confirmSignOut,
+                titleVisibility: .visible
+            ) {
+                Button("Sign out", role: .destructive) { signOut() }
+                Button("Cancel", role: .cancel) {}
+            }
             .sheet(isPresented: $showDeleteAccount) {
                 NavigationStack {
                     DeleteAccountView()
@@ -91,10 +104,23 @@ struct AccountView: View {
         case .terms:
             if let termsURL { openURL(termsURL) }
         case .signOut:
-            propertyStore.clear()
-            Task { await sessionManager.signOut() }
+            guard let userId = sessionManager.userId else { signOut(); return }
+            Task {
+                unsavedPhotoCount = await PendingEvidenceCenter.shared.pendingCount(userId: userId)
+                if unsavedPhotoCount > 0 { confirmSignOut = true } else { signOut() }
+            }
         case .deleteAccount:
             showDeleteAccount = true
+        }
+    }
+
+    /// Signing out on purpose clears this user's pending (not uploaded) photos from the phone.
+    private func signOut() {
+        let userId = sessionManager.userId
+        propertyStore.clear()
+        Task {
+            if let userId { await PendingEvidenceCenter.shared.clearUser(userId) }
+            await sessionManager.signOut()
         }
     }
 

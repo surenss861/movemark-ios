@@ -272,7 +272,10 @@ extension PropertyStore {
         await fetchAll(userId: userId)
     }
 
-    func addEvidence(to roomID: UUID, evidence: EvidenceRecord, photos: [MMPendingEvidence], propertyId: UUID, userId: UUID) async throws -> PropertyMutationOutcome {
+    /// `onEntryCreated` runs as soon as the entry exists (before any photo is sent), so a save interrupted by
+    /// the app being stopped can still find the entry its photos may already be linked to.
+    func addEvidence(to roomID: UUID, evidence: EvidenceRecord, photos: [MMPendingEvidence], propertyId: UUID, userId: UUID,
+                     onEntryCreated: ((UUID) async -> Void)? = nil) async throws -> PropertyMutationOutcome {
         let inspectionId = try await inspectionRepo.upsertInspection(
             propertyId: propertyId,
             userId: userId,
@@ -294,6 +297,7 @@ extension PropertyStore {
             notes: "\(evidence.title)\n\(evidence.notes)",
             conditionRating: conditionInt
         )
+        await onEntryCreated?(itemId)
 
         let pipeline = await saveInspectionPhotos(
             photos: photos,
@@ -349,7 +353,10 @@ extension PropertyStore {
         return PropertyMutationOutcome(hydrationRefreshFailed: !ok, tagInsertFailed: tagInsertFailed, entryId: itemId, photoResult: pipeline)
     }
 
-    func addMoveOutEvidence(to roomID: UUID, evidence: EvidenceRecord, photos: [MMPendingEvidence], propertyId: UUID, userId: UUID) async throws -> PropertyMutationOutcome {
+    /// `onEntryCreated` runs as soon as the entry exists (before any photo is sent), so a save interrupted by
+    /// the app being stopped can still find the entry its photos may already be linked to.
+    func addMoveOutEvidence(to roomID: UUID, evidence: EvidenceRecord, photos: [MMPendingEvidence], propertyId: UUID, userId: UUID,
+                     onEntryCreated: ((UUID) async -> Void)? = nil) async throws -> PropertyMutationOutcome {
         let inspectionId = try await inspectionRepo.upsertInspection(
             propertyId: propertyId,
             userId: userId,
@@ -371,6 +378,7 @@ extension PropertyStore {
             notes: "\(evidence.title)\n\(evidence.notes)",
             conditionRating: conditionInt
         )
+        await onEntryCreated?(itemId)
 
         let pipeline = await saveInspectionPhotos(
             photos: photos,
@@ -488,6 +496,35 @@ extension PropertyStore {
             minimumPhotoCount: priorTotal + result.saved.count
         )
         return PropertyMutationOutcome(hydrationRefreshFailed: !ok, entryId: entryId, photoResult: result)
+    }
+
+    /// What the server says about photos that may already be linked to `entryId` — asked before photos
+    /// restored after a relaunch are sent again, so a photo whose row exists is never re-uploaded.
+    enum EntryPhotoCheck: Equatable {
+        /// The server couldn't be asked (offline, hydration failed).
+        case unknown
+        /// The entry no longer exists (it was emptied and removed, or deleted).
+        case entryMissing
+        /// The entry exists; these of the asked ids have rows.
+        case present(saved: Set<UUID>)
+    }
+
+    func checkEntryPhotos(entryId: UUID, roomId: UUID, isMoveOut: Bool, photoIds: Set<UUID>, userId: UUID) async -> EntryPhotoCheck {
+        func entry() -> EvidenceRecord? {
+            currentProperty?.rooms.first(where: { $0.id == roomId })
+                .flatMap { (isMoveOut ? $0.moveOutEvidence : $0.evidence).first(where: { $0.id == entryId }) }
+        }
+        guard await refreshActivePropertyHydration(userId: userId),
+              currentProperty?.rooms.contains(where: { $0.id == roomId }) == true
+        else { return .unknown }
+        guard entry() != nil else { return .entryMissing }
+        do {
+            try await loadAllPhotos(entryId: entryId, roomID: roomId, moveOut: isMoveOut)
+        } catch {
+            return .unknown
+        }
+        guard let photos = entry()?.photos else { return .unknown }
+        return .present(saved: photoIds.intersection(photos.map(\.id)))
     }
 
     @discardableResult
