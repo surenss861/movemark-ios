@@ -13,3 +13,9 @@ BILLING_MODE=mock
 
 # RevenueCat Android public SDK key (when enabling Play Billing)
 REVENUECAT_PUBLIC_KEY=
+
+# Release upload signing (Play App Signing upload key). Keep the keystore outside the repo.
+MOVEMARK_UPLOAD_STORE_FILE=/Users/YOUR_USER/.movemark-android/movemark-upload.jks
+MOVEMARK_UPLOAD_STORE_PASSWORD=
+MOVEMARK_UPLOAD_KEY_ALIAS=movemark-upload
+MOVEMARK_UPLOAD_KEY_PASSWORD=
