@@ -57,11 +57,14 @@ struct MMProofTabBarV4: View {
         return Button {
             guard selectedTab != tab else { return }
             MMHaptics.selection()
-            withAnimation(reduceMotion ? nil : MMMotion.tabSwitch) { selectedTab = tab }
+            withAnimation(reduceMotion ? nil : MMMotion.tabIndicator) { selectedTab = tab }
         } label: {
             VStack(spacing: 4) {
+                // The active icon morphs in (outline → filled, a hair larger); idle icons sit back slightly.
                 Image(systemName: isSelected ? filled : outline)
                     .font(.system(size: 21, weight: .regular))
+                    .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+                    .scaleEffect(isSelected || reduceMotion ? 1 : 0.96)
                     .frame(height: 24)
                 Text(title)
                     .mmFont(11.5, .semibold)

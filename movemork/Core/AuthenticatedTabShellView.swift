@@ -23,6 +23,15 @@ struct AuthenticatedTabShellView: View {
     @State private var selectedTab: RootTab = .vaults
     /// Vault-tab navigation only; non-empty means workspace/task screens — hide root tab bar.
     @State private var vaultPath: [AppRoute] = []
+    /// Tabs stay alive once opened, so switching never rebuilds a page (scroll, loaded data and navigation
+    /// survive) and the outgoing page stays solid under the incoming one instead of two half-faded screens.
+    @State private var visitedTabs: Set<RootTab> = [.vaults]
+    /// The page being left: kept visible underneath until the incoming page has resolved.
+    @State private var outgoingTab: RootTab?
+    /// The incoming page's settle (0 = in place).
+    @State private var incomingRise: CGFloat = 0
+    @State private var incomingOpacity: Double = 1
+    @State private var transitionToken = 0
 
     private var showsRootTabBar: Bool {
         switch selectedTab {
@@ -34,24 +43,16 @@ struct AuthenticatedTabShellView: View {
     }
 
     private var selectedTabBinding: Binding<RootTab> {
-        Binding(
-            get: { selectedTab },
-            set: { new in
-                guard new != selectedTab else { return }
-                MMHaptics.selection()
-                withAnimation(reduceMotion ? nil : MMMotion.tabSwitch) {
-                    selectedTab = new
-                }
-            }
-        )
+        Binding(get: { selectedTab }, set: { switchTo($0) })
     }
 
     var body: some View {
         ZStack {
-            tabContent
-                .id(selectedTab)
-                .transition(tabTransition)
-                .animation(reduceMotion ? nil : MMMotion.tabSwitch, value: selectedTab)
+            ForEach([RootTab.vaults, .exports, .account], id: \.self) { tab in
+                if visitedTabs.contains(tab) {
+                    page(for: tab)
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .environment(\.mmRootTabBarVisible, showsRootTabBar)
@@ -68,27 +69,71 @@ struct AuthenticatedTabShellView: View {
         }
     }
 
+    /// One root page. Only the selected page (and, mid-switch, the one being left) is visible, hit-testable
+    /// and in the accessibility tree; the incoming page sits on top while it resolves.
+    private func page(for tab: RootTab) -> some View {
+        let isSelected = tab == selectedTab
+        let isOutgoing = tab == outgoingTab
+        return tabContent(tab)
+            .opacity(isSelected ? incomingOpacity : (isOutgoing ? 1 : 0))
+            .offset(y: isSelected ? incomingRise : 0)
+            .zIndex(isSelected ? 2 : (isOutgoing ? 1 : 0))
+            .allowsHitTesting(isSelected)
+            .accessibilityHidden(!isSelected)
+    }
+
+    /// Old tab stays put → the new page fades in over it with a small settle → the old page is hidden.
+    /// The dock and the screen frame never move.
+    private func switchTo(_ new: RootTab) {
+        guard new != selectedTab else { return }
+        let previous = selectedTab
+        transitionToken += 1
+        let token = transitionToken
+        visitedTabs.insert(new)
+        if new == .exports {
+            // Reports was kept alive: refresh it quietly instead of rebuilding it.
+            NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
+        }
+        var setup = Transaction()
+        setup.disablesAnimations = true
+        withTransaction(setup) {
+            outgoingTab = previous
+            selectedTab = new
+            incomingOpacity = 0
+            incomingRise = reduceMotion ? 0 : MMMotion.tabContentRise
+        }
+        withAnimation(reduceMotion ? MMMotion.tabContentFadeReduced : MMMotion.tabContentFade) {
+            incomingOpacity = 1
+            incomingRise = 0
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 220_000_000)
+            guard token == transitionToken else { return }
+            outgoingTab = nil
+        }
+    }
+
     @ViewBuilder
-    private var tabContent: some View {
-        switch selectedTab {
+    private func tabContent(_ tab: RootTab) -> some View {
+        switch tab {
         case .vaults:
             AuthenticatedShellView(path: $vaultPath)
         case .exports:
             NavigationStack {
                 ExportHistoryView(
                     showOpenVaultsCTA: true,
-                    onOpenVaults: { selectedTab = .vaults },
+                    onOpenVaults: { switchTo(.vaults) },
                     onContinueRoomProof: {
-                        selectedTab = .vaults
                         vaultPath = [.walkthrough]
+                        switchTo(.vaults)
                     },
                     onOpenMoveOutProof: {
-                        selectedTab = .vaults
                         vaultPath = [.moveOut]
+                        switchTo(.vaults)
                     },
                     onOpenDisputePacket: {
-                        selectedTab = .vaults
                         vaultPath = [.disputePacket]
+                        switchTo(.vaults)
                     }
                 )
                 .navigationTitle("")
@@ -101,17 +146,10 @@ struct AuthenticatedTabShellView: View {
         }
     }
 
-    private var tabTransition: AnyTransition {
-        if reduceMotion {
-            return .opacity
-        }
-        return .opacity.combined(with: .offset(y: MMMotion.tabContentRise))
-    }
-
     private func consumePendingFirstRunExit() {
         guard let exit = propertyStore.pendingFirstRunExit else { return }
         propertyStore.pendingFirstRunExit = nil
-        selectedTab = .vaults
+        if selectedTab != .vaults { switchTo(.vaults) }
         switch exit {
         case .continueNextRoom:
             vaultPath = [.walkthrough]

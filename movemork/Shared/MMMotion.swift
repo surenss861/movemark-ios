@@ -17,9 +17,16 @@ enum MMMotion {
     static let screenTransition = Animation.easeOut(duration: 0.26)
     static let expand = Animation.spring(response: 0.34, dampingFraction: 0.88)
     static let tabSwitch = Animation.easeOut(duration: 0.2)
+    /// Root tabs: the dock's lime signal and active icon glide (tactile, no bounce).
+    static let tabIndicator = Animation.spring(response: 0.28, dampingFraction: 0.88)
+    /// Root tabs: the incoming page resolves over the outgoing one, which stays put underneath.
+    static let tabContentFade = Animation.easeOut(duration: 0.18)
+    /// Reduce Motion: a plain short fade, no settle.
+    static let tabContentFadeReduced = Animation.easeOut(duration: 0.12)
     /// Legacy horizontal shift (prefer tabContentRise for root tabs).
     static let tabContentShift: CGFloat = 6
-    static let tabContentRise: CGFloat = 2
+    /// Root tabs: the incoming page settles up into place by this much.
+    static let tabContentRise: CGFloat = 8
     /// Proof strength / walkthrough progress — ease only, no bounce.
     static let proofProgress = Animation.easeOut(duration: 0.42)
     static let proofToastIn = Animation.easeOut(duration: 0.28)
