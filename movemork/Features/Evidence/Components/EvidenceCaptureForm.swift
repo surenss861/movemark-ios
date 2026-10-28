@@ -60,10 +60,11 @@ struct EvidenceCaptureForm: View {
             }
 
             if let errorMessage {
+                // "Try again" only when there is something to retry (the caller decides what it repeats).
                 MMEvidenceNotice(
                     message: errorMessage,
-                    actionTitle: MMCopy.tryAgain,
-                    action: onRetry ?? {}
+                    actionTitle: onRetry == nil ? nil : MMCopy.tryAgain,
+                    action: onRetry
                 )
             }
 

@@ -22,6 +22,9 @@ fileprivate let fixedIssueTags = [
 struct EvidenceCaptureView: View {
     @Environment(PropertyStore.self) var propertyStore
     @Environment(SessionManager.self) var sessionManager
+    @Environment(\.dismiss) private var dismiss
+    /// True when pushed (there is a system back to guard); false as a stack root (first run has its own Back).
+    @Environment(\.isPresented) private var isPresented
 
     let roomID: UUID
     let roomName: String
@@ -34,6 +37,8 @@ struct EvidenceCaptureView: View {
     /// "View move-in report". Without them the receipt just returns to this room.
     var onOpenRoom: ((UUID) -> Void)? = nil
     var onOpenReport: (() -> Void)? = nil
+    /// First run's own Back (this view is a stack root there); it asks first when photos are unsaved.
+    var onBack: (() -> Void)? = nil
 
     @State var title = ""
     @State var notes = ""
@@ -49,6 +54,10 @@ struct EvidenceCaptureView: View {
     /// Set after a save where not every photo made it; cleared once the rest are saved.
     @State var pendingRetry: EvidenceRetryState? = nil
     @State var errorMessage: String? = nil
+    /// What raised `errorMessage`, so its "Try again" repeats that (save, delete, history load) or is hidden.
+    @State var errorSource: EvidenceErrorSource = .none
+    @State var isDeleting = false
+    @State private var showDiscardConfirm = false
     @State var successMessage: String? = nil
     @State var showCamera = false
     @State var editingEntry: EvidenceRecord? = nil
@@ -99,6 +108,29 @@ struct EvidenceCaptureView: View {
         !loadedImages.isEmpty || isUploading || didJustSave
     }
 
+    /// Photos picked or shot but not saved yet, or a partial save still waiting for its retry.
+    private var hasUnsavedPhotos: Bool { !loadedImages.isEmpty || pendingRetry != nil }
+
+    /// Back asks before leaving: only where there is a system back to replace.
+    private var guardsBack: Bool { hasUnsavedPhotos && isPresented }
+
+    private var unsavedPhotoCount: Int { loadedImages.count + (pendingRetry?.pending.count ?? 0) }
+
+    /// "Try again" for the current notice; nil hides the button.
+    private var retryAction: (() -> Void)? {
+        if errorMessage != nil {
+            switch errorSource {
+            case .save: return { saveEvidence() }
+            case .delete(let id): return { Task { await deleteEntry(id) } }
+            case .history(let load): return { loadHistory(load) }
+            case .none: break
+            }
+        }
+        // A partial save's status line retries its remaining photos.
+        guard pendingRetry != nil else { return nil }
+        return { saveEvidence() }
+    }
+
     private func resolvePhotoURL(_ path: String) async -> URL? {
         try? await inspectionRepo.signedURL(bucket: "inspection-media", path: path)
     }
@@ -121,7 +153,8 @@ struct EvidenceCaptureView: View {
                         resolvePhotoURL: resolvePhotoURL,
                         onOpenPhoto: { openPreview($0) },
                         hasPendingPhotos: !loadedImages.isEmpty,
-                        isBusy: isUploading,
+                        // A new save would replace a partial save's retry state: finish that first.
+                        isBusy: isUploading || pendingRetry != nil,
                         onTakePhotos: { presentCameraIfAllowed() },
                         pickerSelection: $selectedItems,
                         compareLine: compareLine
@@ -132,7 +165,7 @@ struct EvidenceCaptureView: View {
                             RoomEvidenceBody(
                                 entries: existingEntries,
                                 moveOutMode: moveOutMode,
-                                isBusy: isUploading,
+                                isBusy: isUploading || isDeleting,
                                 onEdit: { editingEntry = $0 },
                                 onAddPhotos: { appendPhotosEntry = $0 },
                                 onDelete: { deleteConfirmEntry = $0 },
@@ -147,10 +180,14 @@ struct EvidenceCaptureView: View {
                             .padding(.top, 10)
                         }
 
-                        if !loadedImages.isEmpty || errorMessage != nil || successMessage != nil || pendingRetry != nil {
+                        if hasUnsavedPhotos {
                             newEntrySection
                                 .id(Self.newEntryAnchor)
                                 .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        } else if errorMessage != nil || successMessage != nil {
+                            // A message alone never brings up the empty New entry form.
+                            standaloneNotices
+                                .padding(.vertical, 18)
                         }
                     }
                     .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
@@ -159,6 +196,7 @@ struct EvidenceCaptureView: View {
                 }
             }
             .ignoresSafeArea(edges: .top)
+            .scrollDismissesKeyboard(.interactively)
             // A hard edge under the save bar: iOS's soft scroll-edge effect let the page show through it.
             .scrollEdgeEffectStyle(.hard, for: .bottom)
             .onScrollGeometryChange(for: Bool.self) { g in
@@ -194,7 +232,7 @@ struct EvidenceCaptureView: View {
         }
         .animation(MMMotion.cardReveal, value: showsSaveBar)
         .fullScreenCover(item: $savedReceipt) { receipt in
-            SavedRoomReceiptScreen(receipt: receipt) { action in
+            SavedRoomReceiptScreen(receipt: receipt, resolvePhotoURL: resolvePhotoURL) { action in
                 savedReceipt = nil
                 handleReceiptAction(action, receipt: receipt)
             }
@@ -278,7 +316,37 @@ struct EvidenceCaptureView: View {
         }
         .navigationTitle(roomName)
         .navigationBarTitleDisplayMode(.inline)
+        // Unsaved photos are never dropped silently: the system back (and its swipe) gives way to a Back
+        // that asks first.
+        .navigationBarBackButtonHidden(guardsBack)
+        .confirmationDialog(
+            unsavedPhotoCount == 1 ? "Discard 1 unsaved photo?" : "Discard \(unsavedPhotoCount) unsaved photos?",
+            isPresented: $showDiscardConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Discard", role: .destructive) { if let onBack { onBack() } else { dismiss() } }
+            Button("Keep editing", role: .cancel) {}
+        }
         .toolbar {
+            if let onBack {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Back") {
+                        if hasUnsavedPhotos { showDiscardConfirm = true } else { onBack() }
+                    }
+                    .foregroundStyle(.white)
+                    .disabled(isUploading)
+                }
+            } else if guardsBack {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showDiscardConfirm = true
+                    } label: {
+                        Image(systemName: "chevron.backward")
+                    }
+                    .accessibilityLabel("Back")
+                    .disabled(isUploading)
+                }
+            }
             // The room name lives in the hero; keep the bar clear over the photo.
             ToolbarItem(placement: .principal) {
                 Text(roomName)
@@ -354,10 +422,26 @@ struct EvidenceCaptureView: View {
                 successMessage: successMessage,
                 moveOutMode: moveOutMode,
                 fixedIssueTags: fixedIssueTags,
-                onRetry: { saveEvidence() }
+                onRetry: retryAction
             )
         }
         .padding(.vertical, 18)
+    }
+
+    /// The form's notices, on their own when there is nothing to save (history load, delete, camera).
+    private var standaloneNotices: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let errorMessage {
+                MMEvidenceNotice(
+                    message: errorMessage,
+                    actionTitle: retryAction == nil ? nil : MMCopy.tryAgain,
+                    action: retryAction
+                )
+            }
+            if let successMessage {
+                MMEvidenceNotice(message: successMessage, tone: .success)
+            }
+        }
     }
 
     /// Older entries / remaining photos, loaded on demand (snapshot v2 loads the newest first).
@@ -366,7 +450,13 @@ struct EvidenceCaptureView: View {
         isLoadingHistory = true
         Task { @MainActor in
             defer { isLoadingHistory = false }
-            do { try await load() } catch { errorMessage = MoveMarkFlowMessage.proofHistoryLoadFailed(error) }
+            do {
+                try await load()
+                if case .history = errorSource { errorMessage = nil; errorSource = .none }
+            } catch {
+                errorMessage = MoveMarkFlowMessage.proofHistoryLoadFailed(error)
+                errorSource = .history(load)
+            }
         }
     }
 
@@ -374,7 +464,7 @@ struct EvidenceCaptureView: View {
         MoveMarkCameraPermission.requestPresentationIfEligible(
             onPresentCamera: { showCamera = true },
             onNeedsSettingsAlert: { showCameraPermissionAlert = true },
-            onUnavailableMessage: { errorMessage = $0 }
+            onUnavailableMessage: { errorMessage = $0; errorSource = .none }
         )
     }
 

@@ -71,13 +71,6 @@ enum MoveMarkGrowthCopy {
     static let disputePacketReady = "Your evidence packet is ready."
     static let disputePacketReadyDetail = "Your saved rental evidence organized into one shareable record."
 
-    static let paywallBenefits: [(title: String, subtitle: String)] = [
-        ("Unlimited proof vaults", "Protect more than one rental over time."),
-        ("Move-in & move-out reports", "PDF proof when your deposit is questioned."),
-        ("Move-out comparison report", "Move-in and move-out proof side by side, dated."),
-        ("Dispute-ready packet", "Organize photos and docs for a stronger case."),
-    ]
-
     static let reportPackBenefits: [(title: String, subtitle: String)] = [
         ("One polished move-in report", "Export a timestamped PDF when you need it."),
         ("Shareable proof", "Send records to a landlord, parent, or roommate."),

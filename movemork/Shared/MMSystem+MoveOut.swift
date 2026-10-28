@@ -169,10 +169,10 @@ struct MoveOutHeaderProgress: View {
                 }
             }
             .frame(height: 4)
-            Text("\(done) of \(total) rooms compared").mmFont(12.5).monospacedDigit().foregroundStyle(MMInk.heroSecondary)
+            Text("\(done) of \(total) rooms captured").mmFont(12.5).monospacedDigit().foregroundStyle(MMInk.heroSecondary)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Move-out proof: \(done) of \(total) rooms compared")
+        .accessibilityLabel("Move-out proof: \(done) of \(total) rooms captured")
     }
 }
 
@@ -261,6 +261,7 @@ struct MoveOutJustCompared: View {
 
 /// One side's photo: fills the frame the pair gives it, opens the viewer, shows the side's photo count.
 private struct MoveOutPhoto: View {
+    let side: MoveOutSide
     let photo: EvidencePhoto?
     let count: Int
     let size: CGSize
@@ -284,6 +285,7 @@ private struct MoveOutPhoto: View {
                     }
             }
             .buttonStyle(MMLightPressStyle())
+            .accessibilityLabel(side == .moveIn ? "Move-in photo" : "Move-out photo")
         } else {
             MMMissingPhotoFrame(label: count > 0 ? "\(count) photos" : missingLabel)
         }
@@ -372,7 +374,7 @@ struct MoveOutSpreadCard: View {
     }
 
     private func side(_ side: MoveOutSide) -> some View {
-        MoveOutPhoto(photo: side == .moveIn ? comparison.moveInPhoto : comparison.moveOutPhoto,
+        MoveOutPhoto(side: side, photo: side == .moveIn ? comparison.moveInPhoto : comparison.moveOutPhoto,
                      count: side == .moveIn ? comparison.moveInPhotoCount : comparison.moveOutPhotoCount,
                      size: CGSize(width: 180, height: photoHeight), resolve: resolve, missingLabel: "No photo",
                      onOpen: { onOpenPhoto(side) })
@@ -404,7 +406,7 @@ struct MoveOutMissingCard: View {
             // that doesn't exist yet — never an empty photo-sized slot competing with real evidence.
             sideLabel("MOVE-IN", date: MoveOutComparison.day(comparison.moveInDate))
                 .padding(.top, 12)
-            MoveOutPhoto(photo: comparison.moveInPhoto, count: comparison.moveInPhotoCount,
+            MoveOutPhoto(side: .moveIn, photo: comparison.moveInPhoto, count: comparison.moveInPhotoCount,
                          size: CGSize(width: 340, height: 150), resolve: resolve, missingLabel: "No photo",
                          onOpen: { onOpenPhoto(.moveIn) })
                 .frame(maxWidth: .infinity)
@@ -594,7 +596,7 @@ struct MoveOutCompactRow: View {
     }
 
     private func side(_ side: MoveOutSide) -> some View {
-        MoveOutPhoto(photo: side == .moveIn ? comparison.moveInPhoto : comparison.moveOutPhoto,
+        MoveOutPhoto(side: side, photo: side == .moveIn ? comparison.moveInPhoto : comparison.moveOutPhoto,
                      count: side == .moveIn ? comparison.moveInPhotoCount : comparison.moveOutPhotoCount,
                      size: CGSize(width: 170, height: 170), resolve: resolve, missingLabel: "No photo",
                      onOpen: { onOpenPhoto(side) })

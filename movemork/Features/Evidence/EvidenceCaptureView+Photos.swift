@@ -34,6 +34,7 @@ extension EvidenceCaptureView {
             loadedImages = camera.map(\.1) + selection.previews
             if let message = selection.rejectionMessage {
                 errorMessage = message
+                errorSource = .none   // nothing to retry: the user picks again
             }
         }
     }

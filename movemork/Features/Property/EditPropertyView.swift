@@ -33,31 +33,74 @@ struct EditPropertyView: View {
     @State private var errorMessage = ""
     @State private var isLoading = false
 
+    /// The rental had lease dates when the sheet opened (an epoch end means none was entered).
+    private let hadLease: Bool
+    /// The form as it opened, to tell whether anything was edited.
+    private let initialFieldValues: [String]
+    private let initialDateValues: [Date]
+
     init(property: PropertyRecord) {
         self.property = property
-        _name = State(initialValue: property.title.isEmpty ? property.addressLine1 : property.title)
-        _addressLine1 = State(initialValue: property.addressLine1)
-        _unit = State(initialValue: property.addressLine2)
-        _city = State(initialValue: RentalLocation.meaningful(property.city) ?? "")
-        _region = State(initialValue: RentalLocation.meaningful(property.provinceState) ?? "")
-        _postalCode = State(initialValue: property.postalCode)
+        // A title that is just the street address stays blank here, so it keeps following the address if the
+        // street is edited (blank saves as the address).
+        let title = property.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let street = property.addressLine1.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = title == street ? "" : property.title
+        let city = RentalLocation.meaningful(property.city) ?? ""
+        let region = RentalLocation.meaningful(property.provinceState) ?? ""
+        let postalCode = RentalLocation.meaningful(property.postalCode) ?? ""
         let storedCountry = property.country.isEmpty ? "CA" : property.country
         let fixedOptions = ["CA", "US", "GB", "AU", "NZ"]
-        if fixedOptions.contains(storedCountry) {
-            _selectedCountryOption = State(initialValue: storedCountry)
-            _customCountry = State(initialValue: "")
-        } else {
-            _selectedCountryOption = State(initialValue: "Other")
-            _customCountry = State(initialValue: storedCountry)
-        }
+        let countryOption = fixedOptions.contains(storedCountry) ? storedCountry : "Other"
+        let customCountry = fixedOptions.contains(storedCountry) ? "" : storedCountry
+        let hadLease = property.leaseEndDate.timeIntervalSince1970 > 0 || property.leaseStartDate != nil
+        let leaseStart = property.leaseStartDate ?? property.moveInDate
+        // No lease yet: the pickers still need a value, but it's only saved if the renter sets one.
+        let leaseEnd = property.leaseEndDate.timeIntervalSince1970 > 0
+            ? property.leaseEndDate
+            : (Calendar.current.date(byAdding: .year, value: 1, to: leaseStart) ?? leaseStart)
+        let deposit = property.depositAmount.filter { $0.isNumber || $0 == "." }
+        let rent = property.rentAmount.filter { $0.isNumber || $0 == "." }
+
+        _name = State(initialValue: name)
+        _addressLine1 = State(initialValue: property.addressLine1)
+        _unit = State(initialValue: property.addressLine2)
+        _city = State(initialValue: city)
+        _region = State(initialValue: region)
+        _postalCode = State(initialValue: postalCode)
+        _selectedCountryOption = State(initialValue: countryOption)
+        _customCountry = State(initialValue: customCountry)
         _moveInDate = State(initialValue: property.moveInDate)
-        _leaseStartDate = State(initialValue: property.leaseStartDate ?? property.moveInDate)
-        _leaseEndDate = State(initialValue: property.leaseEndDate)
+        _leaseStartDate = State(initialValue: leaseStart)
+        _leaseEndDate = State(initialValue: leaseEnd)
         _landlordName = State(initialValue: property.landlordName)
         _landlordEmail = State(initialValue: property.landlordEmail)
         _landlordPhone = State(initialValue: property.landlordPhone)
-        _depositAmount = State(initialValue: property.depositAmount.filter { $0.isNumber || $0 == "." })
-        _rentAmount = State(initialValue: property.rentAmount.filter { $0.isNumber || $0 == "." })
+        _depositAmount = State(initialValue: deposit)
+        _rentAmount = State(initialValue: rent)
+
+        self.hadLease = hadLease
+        initialFieldValues = [name, property.addressLine1, property.addressLine2, city, region, postalCode,
+                              countryOption, customCountry, property.landlordName, property.landlordEmail,
+                              property.landlordPhone, deposit, rent]
+        initialDateValues = [property.moveInDate, leaseStart, leaseEnd]
+    }
+
+    private var fieldValues: [String] {
+        [name, addressLine1, unit, city, region, postalCode, selectedCountryOption, customCountry,
+         landlordName, landlordEmail, landlordPhone, depositAmount, rentAmount]
+    }
+
+    private var dateValues: [Date] { [moveInDate, leaseStartDate, leaseEndDate] }
+
+    /// Unsaved edits: the sheet can't be swiped away while there are any.
+    private var hasChanges: Bool {
+        fieldValues != initialFieldValues || dateValues != initialDateValues
+    }
+
+    /// Lease dates are saved when the rental had a lease or the renter changed either date.
+    private var savesLease: Bool {
+        hadLease || leaseStartDate != initialDateValues[1] || leaseEndDate != initialDateValues[2]
     }
 
     private var countryValue: String {
@@ -74,8 +117,8 @@ struct EditPropertyView: View {
             postalCode: postalCode,
             country: countryValue,
             moveInDate: moveInDate,
-            leaseStartDate: leaseStartDate,
-            leaseEndDate: leaseEndDate,
+            leaseStartDate: savesLease ? leaseStartDate : nil,
+            leaseEndDate: savesLease ? leaseEndDate : nil,
             landlordName: landlordName,
             landlordEmail: landlordEmail,
             landlordPhone: landlordPhone,
@@ -101,6 +144,8 @@ struct EditPropertyView: View {
 
             if !errorMessage.isEmpty {
                 MMNotice(message: errorMessage).padding(.top, 22)
+            } else if let leaseError = input.leaseDatesError {
+                MMNotice(message: leaseError).padding(.top, 22)
             }
             MMPrimaryButton(title: "Save changes", isLoading: isLoading,
                             isDisabled: input.validationError != nil || isLoading) { submit() }
@@ -113,6 +158,7 @@ struct EditPropertyView: View {
                     .disabled(input.validationError != nil || isLoading)
             }
         }
+        .interactiveDismissDisabled(hasChanges)
     }
 
     private func submit() {

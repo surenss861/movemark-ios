@@ -77,12 +77,14 @@ struct RoomPhotoViewer: View {
             topBar
             TabView(selection: $selection) {
                 ForEach(Array(photos.enumerated()), id: \.element.id) { offset, photo in
-                    MMEvidenceImage(path: photo.filePath, resolve: resolvePhotoURL, placeholder: MMInk.evidence, fit: true)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .accessibilityElement()
-                        .accessibilityLabel(pageLabel(offset: offset, photo: photo))
-                        .accessibilityAddTraits(.isImage)
-                        .tag(photo.id)
+                    ZoomablePhotoPage(isCurrent: photo.id == selection) {
+                        MMEvidenceImage(path: photo.filePath, resolve: resolvePhotoURL, placeholder: MMInk.evidence, fit: true)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityElement()
+                    .accessibilityLabel(pageLabel(offset: offset, photo: photo))
+                    .accessibilityAddTraits(.isImage)
+                    .tag(photo.id)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
@@ -237,6 +239,92 @@ struct RoomPhotoViewer: View {
             }
         }
         .padding(.bottom, 10)
+    }
+}
+
+/// One viewer page with pinch-to-zoom (1×–4×), pan while zoomed and double-tap to toggle. At 1× it lays
+/// out exactly like the bare image and adds no drag, so the TabView still pages; leaving the page resets it.
+private struct ZoomablePhotoPage<Content: View>: View {
+    let isCurrent: Bool
+    let content: Content
+
+    init(isCurrent: Bool, @ViewBuilder content: () -> Content) {
+        self.isCurrent = isCurrent
+        self.content = content()
+    }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var scale: CGFloat = 1
+    @State private var baseScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var baseOffset: CGSize = .zero
+
+    private var maxScale: CGFloat { 4 }
+    private var doubleTapScale: CGFloat { 2.5 }
+
+    var body: some View {
+        GeometryReader { geo in
+            content
+                .frame(width: geo.size.width, height: geo.size.height)
+                .scaleEffect(scale)
+                .offset(offset)
+                .contentShape(Rectangle())
+                .gesture(
+                    MagnifyGesture()
+                        .onChanged { value in
+                            scale = min(max(baseScale * value.magnification, 1), maxScale)
+                            offset = clamped(baseOffset, in: geo.size)
+                        }
+                        .onEnded { _ in
+                            if scale <= 1 {
+                                reset()
+                            } else {
+                                baseScale = scale
+                                offset = clamped(offset, in: geo.size)
+                                baseOffset = offset
+                            }
+                        }
+                )
+                // Panning only while zoomed: at 1× the drag is off and the swipe goes to the TabView.
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            offset = clamped(CGSize(width: baseOffset.width + value.translation.width,
+                                                    height: baseOffset.height + value.translation.height), in: geo.size)
+                        }
+                        .onEnded { _ in baseOffset = offset },
+                    including: scale > 1 ? .all : .subviews
+                )
+                .onTapGesture(count: 2) {
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
+                        if scale > 1 {
+                            reset()
+                        } else {
+                            scale = doubleTapScale
+                            baseScale = scale
+                        }
+                    }
+                }
+        }
+        .clipped()
+        .onChange(of: isCurrent) { _, current in
+            if !current { reset() }
+        }
+    }
+
+    private func reset() {
+        scale = 1
+        baseScale = 1
+        offset = .zero
+        baseOffset = .zero
+    }
+
+    /// Keeps the zoomed photo covering the page: no panning past its scaled edges.
+    private func clamped(_ proposed: CGSize, in size: CGSize) -> CGSize {
+        let maxX = size.width * (scale - 1) / 2
+        let maxY = size.height * (scale - 1) / 2
+        return CGSize(width: min(max(proposed.width, -maxX), maxX),
+                      height: min(max(proposed.height, -maxY), maxY))
     }
 }
 

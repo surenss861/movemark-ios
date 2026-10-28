@@ -52,6 +52,11 @@ struct ExportListItem: Codable, Identifiable {
     let createdAt: String?
 }
 
+/// `GET /api/account/report-credits` — remaining Report Pack credits on the server.
+struct ReportCreditsResponse: Codable {
+    let balance: Int
+}
+
 struct ExportDownloadResponse: Codable {
     let exportId: String
     let status: ExportJobStatus
@@ -69,6 +74,8 @@ enum APIClientError: LocalizedError {
     case exportNotReady
     /// Server marked the export row failed (e.g. PDF generation). Distinct from still processing.
     case exportFailed
+    /// An export POST refused with 402 (`pro_required` / `quota_exhausted`) or 409 (`export_already_active`).
+    case exportRequestRefused(status: Int, code: String?, message: String)
 
     var errorDescription: String? {
         switch self {
@@ -86,6 +93,8 @@ enum APIClientError: LocalizedError {
             return "Export is still processing."
         case .exportFailed:
             return "This report failed on the server. Try making a new report."
+        case .exportRequestRefused(_, _, let message):
+            return message
         }
     }
 }
@@ -150,6 +159,14 @@ final class ExportAPIClient {
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidResponse
+        }
+
+        if httpResponse.statusCode == 402 || httpResponse.statusCode == 409 {
+            struct RefusalBody: Decodable { let code: String? }
+            let code = (try? Self.decoder.decode(RefusalBody.self, from: data))?.code
+            throw APIClientError.exportRequestRefused(
+                status: httpResponse.statusCode, code: code, message: Self.serverMessage(from: data)
+            )
         }
 
         guard 200..<300 ~= httpResponse.statusCode else {
@@ -313,6 +330,15 @@ final class ExportAPIClient {
             )
             throw APIClientError.decodingFailed
         }
+    }
+
+    /// Server source of truth for the Report Pack consumable balance (`GET /api/account/report-credits`).
+    func fetchReportCredits() async throws -> ReportCreditsResponse {
+        try await getJSON(
+            path: "api/account/report-credits",
+            queryItems: [],
+            as: ReportCreditsResponse.self
+        )
     }
 
     /// Permanently deletes the authenticated account and owned cloud data.

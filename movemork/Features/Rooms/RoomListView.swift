@@ -109,6 +109,8 @@ struct AddRoomSheetView: View {
     @State private var roomName = ""
     @State private var isAdding = false
     @State private var errorMessage: String? = nil
+    /// False for a validation error (a duplicate name): retrying the same name fails the same way.
+    @State private var errorIsRetryable = true
 
     init(onDismiss: @escaping () -> Void, roomName: String = "", errorMessage: String? = nil) {
         self.onDismiss = onDismiss
@@ -161,7 +163,8 @@ struct AddRoomSheetView: View {
                 }
 
                 if let errorMessage {
-                    MMNotice(message: errorMessage, actionTitle: MMCopy.tryAgain, action: { submit() })
+                    MMNotice(message: errorMessage, actionTitle: errorIsRetryable ? MMCopy.tryAgain : nil,
+                             action: errorIsRetryable ? { submit() } : nil)
                         .padding(.top, 18)
                 }
 
@@ -171,6 +174,10 @@ struct AddRoomSheetView: View {
                 .padding(.top, 22)
             }
             .scrollBounceBehavior(.basedOnSize)
+            // A new name answers the error; don't leave it showing.
+            .onChange(of: roomName) { _, _ in
+                if !isAdding { errorMessage = nil }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: onDismiss)
@@ -195,6 +202,7 @@ struct AddRoomSheetView: View {
 
         isAdding = true
         errorMessage = nil
+        errorIsRetryable = true
 
         Task { @MainActor in
             defer { isAdding = false }
@@ -202,6 +210,8 @@ struct AddRoomSheetView: View {
                 try await propertyStore.addRoom(named: trimmedName, propertyId: property.id, userId: userId)
                 onDismiss()
             } catch {
+                let raw = error.localizedDescription.lowercased()
+                errorIsRetryable = !(raw.contains("duplicate") || raw.contains("already") || raw.contains("enter a room name"))
                 errorMessage = MoveMarkFlowMessage.roomAddFailed(error)
             }
         }

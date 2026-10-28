@@ -25,6 +25,11 @@ struct MaintenanceNewIssueSheet: View {
     @State private var loadedImages: [UIImage] = []
     /// Source evidence for each pending photo (index-aligned with the `loadedImages` previews).
     @State private var loadedSources: [MMEvidenceSource] = []
+    @State private var isLoadingPhotos = false
+    /// The in-flight photo load; a newer pick cancels it so an older load can't overwrite the newer selection.
+    @State private var photoLoadTask: Task<Void, Never>? = nil
+    /// One id per case being recorded: a retried save reuses it, so a save that reached the server isn't duplicated.
+    @State private var recordID = UUID()
     @State private var isSubmitting = false
     @State private var errorMessage: String? = nil
     @State private var errorRetryAction: (() -> Void)? = nil
@@ -60,8 +65,10 @@ struct MaintenanceNewIssueSheet: View {
                     preferredItemEncoding: .current
                 ) {
                     MMPhotoPickerLabel(
-                        title: loadedImages.isEmpty ? "Attach photos" : "\(loadedImages.count) photo\(loadedImages.count == 1 ? "" : "s") selected",
-                        icon: "camera"
+                        title: isLoadingPhotos ? "Loading photos…"
+                            : (loadedImages.isEmpty ? "Attach photos" : "\(loadedImages.count) photo\(loadedImages.count == 1 ? "" : "s") selected"),
+                        icon: "camera",
+                        isBusy: isLoadingPhotos
                     )
                 }
                 .buttonStyle(MMLightPressStyle())
@@ -94,7 +101,7 @@ struct MaintenanceNewIssueSheet: View {
                 .padding(.top, 10)
                 .padding(.horizontal, 4)
 
-            MMPrimaryButton(title: "Save issue", isLoading: isSubmitting, isDisabled: isSubmitting) { addIncident() }
+            MMPrimaryButton(title: "Save issue", isLoading: isSubmitting, isDisabled: isSubmitting || isLoadingPhotos) { addIncident() }
                 .padding(.top, 22)
         }
         .toolbar {
@@ -122,10 +129,14 @@ struct MaintenanceNewIssueSheet: View {
     }
 
     private func loadPhotos(_ items: [PhotosPickerItem]) {
-        Task { @MainActor in
+        photoLoadTask?.cancel()
+        isLoadingPhotos = true
+        photoLoadTask = Task { @MainActor in
             let selection = await MMEvidencePicker.load(items)
+            guard !Task.isCancelled else { return }
             loadedSources = selection.sources
             loadedImages = selection.previews
+            isLoadingPhotos = false
             if let message = selection.rejectionMessage {
                 errorMessage = message
             }
@@ -139,7 +150,7 @@ struct MaintenanceNewIssueSheet: View {
             return
         }
 
-        guard !isSubmitting else { return }
+        guard !isSubmitting, !isLoadingPhotos else { return }
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedTitle.isEmpty {
             errorMessage = "Enter an issue title."
@@ -151,6 +162,7 @@ struct MaintenanceNewIssueSheet: View {
         errorRetryAction = nil
 
         let record = MaintenanceRecord(
+            id: recordID,
             title: trimmedTitle,
             category: selectedCategory.rawValue,
             details: details,

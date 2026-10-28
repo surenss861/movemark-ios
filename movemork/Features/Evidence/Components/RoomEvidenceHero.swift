@@ -169,7 +169,8 @@ struct RoomEvidenceHero: View {
     private var heroHeight: CGFloat { Self.heroHeight(container: containerSize, topInset: topInset) }
 
     /// The room's action, in the same lime as every MoveMark action (dark text on lime reads as clearly as
-    /// black on white over the photo). Opens camera or library.
+    /// black on white over the photo). Opens camera or library. Once photos are picked the save bar holds
+    /// the lime, so this turns neutral (same rule as the empty-state "Take photos").
     private var addEvidencePill: some View {
         Button {
             MMHaptics.soft()
@@ -177,10 +178,11 @@ struct RoomEvidenceHero: View {
         } label: {
             Label("Add evidence", systemImage: "camera.fill")
                 .font(MoveMarkTheme.Typography.subheadlineMedium)
-                .foregroundStyle(Self.onLime)
+                .foregroundStyle(hasPendingPhotos ? MoveMarkTheme.Colors.textPrimary : Self.onLime)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 50)
-                .background(Self.lime, in: Capsule())
+                .background(hasPendingPhotos ? AnyShapeStyle(MoveMarkTheme.Surface.interactive) : AnyShapeStyle(Self.lime),
+                            in: Capsule())
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -428,7 +430,8 @@ private struct LibraryPickerModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         if let selection {
-            content.photosPicker(isPresented: $isPresented, selection: selection, maxSelectionCount: 20, matching: .images)
+            content.photosPicker(isPresented: $isPresented, selection: selection, maxSelectionCount: 20, matching: .images,
+                                 preferredItemEncoding: .current)
         } else {
             content
         }

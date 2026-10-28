@@ -161,17 +161,94 @@ final class SubscriptionManager {
         }.count
     }
 
+    // MARK: - Server report credits (`GET /api/account/report-credits`)
+
+    /// Shown when the server still refuses an export (402) shortly after a purchase: the RevenueCat webhook that
+    /// tells the API about Pro / Report Pack may not have landed yet.
+    static let purchaseStillSyncingMessage = "Your purchase is still syncing. Try again in a minute."
+
+    /// How long after a purchase a server 402 is treated as "still syncing" rather than "buy again".
+    private static let purchaseSyncWindow: TimeInterval = 10 * 60
+
+    /// Last Report Pack balance the server reported, and the user it belongs to. `nil` until fetched.
+    private(set) var serverReportCreditBalance: Int? = nil
+    private var serverReportCreditUserId: UUID? = nil
+    /// When the last successful purchase (Pro or Report Pack) finished on this device.
+    private(set) var lastPurchaseCompletedAt: Date? = nil
+
+    /// True for a short window after a purchase, while the server may not know about it yet.
+    /// Export call sites: on a 402 while this is true, show ``purchaseStillSyncingMessage`` instead of the paywall.
+    var isPurchaseLikelySyncing: Bool {
+        guard let lastPurchaseCompletedAt else { return false }
+        return Date().timeIntervalSince(lastPurchaseCompletedAt) < Self.purchaseSyncWindow
+    }
+
+    private func serverBalance(forUser userId: UUID) -> Int? {
+        guard serverReportCreditUserId == userId else { return nil }
+        return serverReportCreditBalance
+    }
+
+    /// Fetches the server's Report Pack balance and caches it for ``canExportMoveIn(forUser:)``.
+    /// Call on sign-in, after purchase / restore, on paywall / Reports appearance, and after a 402 `quota_exhausted`.
+    /// Returns the balance, or nil when the request failed (the previous cache is kept).
+    @discardableResult
+    func refreshServerReportCredits(forUser userId: UUID?) async -> Int? {
+        guard let userId else {
+            // Signed out: nothing cached may leak into the next account.
+            serverReportCreditBalance = nil
+            serverReportCreditUserId = nil
+            lastPurchaseCompletedAt = nil
+            return nil
+        }
+        guard let base = MoveMarkBackendConfig.apiBaseURLString else { return nil }
+        do {
+            let response = try await ExportAPIClient(baseURLString: base).fetchReportCredits()
+            let balance = max(0, response.balance)
+            serverReportCreditBalance = balance
+            serverReportCreditUserId = userId
+            return balance
+        } catch {
+            subscriptionLog.error(
+                "report credits fetch failed error=\(String(describing: error), privacy: .public)"
+            )
+            return nil
+        }
+    }
+
+    /// Move-in reports still available to a free user. Server balance wins once fetched; local counters are the
+    /// fallback. The free report itself is tracked locally (the credits endpoint only reports the pack balance).
+    private func remainingMoveInExports(forUser userId: UUID) -> Int {
+        let used = freeMoveInExportCount(forUser: userId)
+        let localRemaining = max(0, 1 + reportPackCredits(forUser: userId) - used)
+        guard let balance = serverBalance(forUser: userId) else { return localRemaining }
+        let serverRemaining = (used < 1 ? 1 : 0) + balance
+        // Right after a purchase the webhook may lag; don't bounce the renter back to the paywall to buy twice.
+        if isPurchaseLikelySyncing { return max(serverRemaining, localRemaining) }
+        return serverRemaining
+    }
+
     /// Total move-in exports allowed on free tier (1 included) plus any Report Pack credits.
     func moveInExportAllowance(forUser userId: UUID?) -> Int {
         if hasPro { return .max }
         guard let userId else { return 0 }
-        return 1 + reportPackCredits(forUser: userId)
+        return freeMoveInExportCount(forUser: userId) + remainingMoveInExports(forUser: userId)
     }
 
     func canExportMoveIn(forUser userId: UUID?) -> Bool {
         if hasPro { return true }
         guard let userId else { return false }
-        return freeMoveInExportCount(forUser: userId) < moveInExportAllowance(forUser: userId)
+        return remainingMoveInExports(forUser: userId) > 0
+    }
+
+    /// A Report Pack credit that can still be spent (server balance when known; otherwise a purchased pack
+    /// whose report hasn't been made yet). Used to decide whether a restore actually restored anything.
+    func hasUsableReportPackCredit(forUser userId: UUID?) -> Bool {
+        guard let userId else { return false }
+        if let balance = serverBalance(forUser: userId) {
+            return balance > 0
+        }
+        return reportPackCredits(forUser: userId) > 0
+            && freeMoveInExportCount(forUser: userId) < 1 + reportPackCredits(forUser: userId)
     }
 
     func remainingFreeMoveInExportsText(forUser userId: UUID?) -> String {
@@ -183,9 +260,7 @@ final class SubscriptionManager {
             return "Sign in to use your free move-in report"
         }
 
-        let used = freeMoveInExportCount(forUser: userId)
-        let allowance = moveInExportAllowance(forUser: userId)
-        let remaining = max(0, allowance - used)
+        let remaining = remainingMoveInExports(forUser: userId)
         if remaining == 1 {
             return "1 move-in report left"
         }
@@ -487,12 +562,17 @@ final class SubscriptionManager {
     func syncAuth(appUserID: String?) async {
         // Pass user into initial configure when possible; RevenueCat truth still comes from logIn + refresh.
         configure(appUserID: appUserID)
-        guard Purchases.isConfigured else { return }
 
         let normalizedID: String? = {
             guard let appUserID, !appUserID.isEmpty else { return nil }
             return appUserID
         }()
+
+        guard Purchases.isConfigured else {
+            // The API's quota doesn't depend on RevenueCat being configured.
+            await refreshServerReportCredits(forUser: normalizedID.flatMap(UUID.init(uuidString:)))
+            return
+        }
 
         do {
             if let normalizedID {
@@ -510,6 +590,7 @@ final class SubscriptionManager {
         } catch {
             offeringsLoadErrorMessage = Self.userFacingRevenueCatOperationError(error)
         }
+        await refreshServerReportCredits(forUser: normalizedID.flatMap(UUID.init(uuidString:)))
     }
 
     /// - Parameter showLoading: When false, skips toggling `isRefreshingOfferings` (use after purchase/restore to avoid UI flicker).
@@ -617,6 +698,7 @@ final class SubscriptionManager {
                 return false
             }
             hasPro = Self.hasActiveProEntitlement(result.customerInfo)
+            lastPurchaseCompletedAt = Date()
             Task { @MainActor in
                 await self.refresh(showLoading: false)
             }
@@ -630,7 +712,8 @@ final class SubscriptionManager {
     }
 
     /// Restores purchases, updates `hasPro`, rehydrates Report Pack credits, and refreshes offerings.
-    /// Returns true when Pro is active or at least one Report Pack credit is available after restore.
+    /// Returns true when Pro is active or a Report Pack credit can still be spent after restore (server balance
+    /// when reachable) — an already-used pack is not "restored".
     @discardableResult
     func restorePurchases(forUser userId: UUID? = nil) async -> Bool {
         lastRestoreErrorMessage = nil
@@ -647,12 +730,13 @@ final class SubscriptionManager {
         do {
             let customerInfo = try await Purchases.shared.restorePurchases()
             hasPro = Self.hasActiveProEntitlement(customerInfo)
-            let packCredits = syncReportPackCredits(from: customerInfo, userId: userId)
+            syncReportPackCredits(from: customerInfo, userId: userId)
             offeringsLoadErrorMessage = nil
             Task { @MainActor in
                 await self.refresh(showLoading: false)
             }
-            return hasPro || packCredits > 0
+            await refreshServerReportCredits(forUser: userId)
+            return hasPro || hasUsableReportPackCredit(forUser: userId)
         } catch {
             lastRestoreErrorMessage = Self.userFacingRestoreError(error)
             return false

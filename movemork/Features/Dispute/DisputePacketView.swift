@@ -13,6 +13,8 @@ struct DisputePacketView: View {
     @Binding var path: [AppRoute]
     @Environment(PropertyStore.self) private var propertyStore
     @Environment(SubscriptionManager.self) private var subscriptionManager
+    @Environment(SessionManager.self) private var sessionManager
+    @Environment(\.scenePhase) private var scenePhase
 
     private struct PreviewItem: Identifiable {
         let id = UUID()
@@ -41,6 +43,13 @@ struct DisputePacketView: View {
     @State private var showPaywall = false
     @State private var viewer: ViewerTarget?
     @State private var restored = false
+    /// Share from inside the packet preview: a sheet on the root can't present over the full-screen cover.
+    @State private var previewShareItems: [Any] = []
+    @State private var showPreviewShareSheet = false
+    /// The single status poll; replaced (never doubled) when a refresh restarts it.
+    @State private var pollTask: Task<Void, Never>?
+    /// The poll budget ran out with the packet still queued or processing.
+    @State private var pollTimedOut = false
 
     private let inspectionRepo = InspectionRepository()
 
@@ -52,7 +61,7 @@ struct DisputePacketView: View {
                     question: $question,
                     amount: $amount,
                     resolve: resolvePhotoURL,
-                    errorMessage: errorMessage,
+                    errorMessage: errorMessage ?? (pollTimedOut && isGenerating ? "Taking longer than usual." : nil),
                     isDownloading: isDownloading,
                     onToggleRoom: { id in
                         if selectedRoomIDs.contains(id) { selectedRoomIDs.remove(id) } else { selectedRoomIDs.insert(id) }
@@ -70,12 +79,19 @@ struct DisputePacketView: View {
                     onGenerate: generate,
                     onView: { open(share: false) },
                     onShare: { open(share: true) },
-                    onRetry: { Task { await loadExports() } }
+                    onRetry: { Task { await refreshAndPoll() } },
+                    errorActionTitle: errorMessage == nil && pollTimedOut && isGenerating ? "Check again" : MMCopy.tryAgain
                 )
                 .task(id: property.id) {
                     restoreDraft(propertyID: property.id)
-                    await loadExports()
-                    await pollWhileGenerating()
+                    await refreshAndPoll()
+                }
+                .onDisappear {
+                    pollTask?.cancel()
+                    pollTask = nil
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { Task { await refreshAndPoll() } }
                 }
                 .onChange(of: question) { saveDraft(propertyID: property.id) }
                 .onChange(of: amount) { saveDraft(propertyID: property.id) }
@@ -90,7 +106,11 @@ struct DisputePacketView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showPaywall) {
-            ProPaywallView(reason: .disputePacket, onClose: { showPaywall = false })
+            ProPaywallView(
+                reason: .disputePacket,
+                onClose: { showPaywall = false },
+                moveInRecorded: propertyStore.currentProperty.map { propertyStore.totalPhotoCount(for: $0) > 0 } ?? false
+            )
         }
         .sheet(isPresented: $showShareSheet) {
             if !shareItems.isEmpty { ReportPDFShareSheet(activityItems: shareItems) }
@@ -103,6 +123,12 @@ struct DisputePacketView: View {
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) { Button("Done") { preview = nil } }
+                        ToolbarItem(placement: .primaryAction) {
+                            Button("Share") { sharePreview(item) }
+                        }
+                    }
+                    .sheet(isPresented: $showPreviewShareSheet) {
+                        if !previewShareItems.isEmpty { ReportPDFShareSheet(activityItems: previewShareItems) }
                     }
             }
         }
@@ -196,15 +222,38 @@ struct DisputePacketView: View {
         }
     }
 
+    private var isGenerating: Bool {
+        exports.contains {
+            ($0.exportType == "dispute_packet" || $0.exportType == "dispute_summary") && statuses[$0.id] == .active
+        }
+    }
+
+    /// Reloads, then (re)starts the one status poll.
+    private func refreshAndPoll() async {
+        await loadExports()
+        startPolling()
+    }
+
+    /// Cancels any running poll and starts a fresh one, so two loops never run at once.
+    private func startPolling() {
+        pollTask?.cancel()
+        pollTimedOut = false
+        pollTask = Task { await pollWhileGenerating() }
+    }
+
+    /// After the budget the builder offers "Check again" instead of spinning forever.
     private func pollWhileGenerating() async {
         for _ in 0..<48 {
-            let generating = exports.contains {
-                ($0.exportType == "dispute_packet" || $0.exportType == "dispute_summary") && statuses[$0.id] == .active
+            guard !Task.isCancelled, isGenerating else { return }
+            do {
+                try await Task.sleep(nanoseconds: 2_500_000_000)
+            } catch {
+                return
             }
-            guard generating else { return }
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            guard !Task.isCancelled else { return }
             await loadExports()
         }
+        if !Task.isCancelled, isGenerating { pollTimedOut = true }
     }
 
     private func generate() {
@@ -223,12 +272,26 @@ struct DisputePacketView: View {
                 await loadExports()
                 MMHaptics.success()
             } catch {
-                errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(
-                    error, fallback: "Couldn't start the evidence packet. Try again.", intent: .mutate)
-                MMHaptics.error()
-                return
+                switch ExportRequestRefusal(error) {
+                case .paywall:
+                    _ = await subscriptionManager.refreshServerReportCredits(forUser: sessionManager.userId)
+                    if subscriptionManager.isPurchaseLikelySyncing {
+                        errorMessage = SubscriptionManager.purchaseStillSyncingMessage
+                    } else {
+                        showPaywall = true
+                    }
+                    return
+                case .alreadyActive:
+                    // The packet is already being built: show it generating.
+                    await loadExports()
+                case nil:
+                    errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(
+                        error, fallback: "Couldn't start the evidence packet. Try again.", intent: .mutate)
+                    MMHaptics.error()
+                    return
+                }
             }
-            await pollWhileGenerating()
+            startPolling()
         }
     }
 
@@ -261,6 +324,19 @@ struct DisputePacketView: View {
                     ?? MoveMarkFlowMessage.documentPreviewFailed(error)
                 MMHaptics.error()
             }
+        }
+    }
+
+    private func sharePreview(_ item: PreviewItem) {
+        let exportType = latestPacket()?.exportType ?? "dispute_packet"
+        do {
+            previewShareItems = [try ReportFileDownloader.makeShareItem(for: item.fileURL, exportType: exportType)]
+            showPreviewShareSheet = true
+            MoveMarkAnalytics.track(.reportShared, properties: ["type": exportType])
+        } catch {
+            errorMessage = (error as? ReportFileError)?.localizedDescription
+                ?? "Couldn't share the packet. Try again."
+            MMHaptics.error()
         }
     }
 

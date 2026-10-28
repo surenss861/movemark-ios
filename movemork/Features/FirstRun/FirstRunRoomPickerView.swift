@@ -43,6 +43,8 @@ struct FirstRunRoomPickerView: View {
     let propertyId: UUID
     var moment: RentalMoment = .justMovedIn
     let onStartProof: (UUID, String) -> Void
+    /// Back out of the room pick (to the moment picker, or setup when no rental exists yet).
+    var onBack: (() -> Void)? = nil
 
     @Environment(PropertyStore.self) private var propertyStore
     @Environment(SessionManager.self) private var sessionManager
@@ -55,6 +57,10 @@ struct FirstRunRoomPickerView: View {
 
     var body: some View {
         MMScreen(title: MoveMarkGrowthCopy.firstRunRoomTitle, subtitle: MoveMarkGrowthCopy.firstRunRoomSubtitle) {
+            if let onBack {
+                FirstRunBackButton(action: onBack).disabled(isLoading)
+            }
+        } content: {
             MMGroup {
                 ForEach(Array(FirstRunRoomOption.allCases.enumerated()), id: \.element) { index, option in
                     if index > 0 { MMRowDivider() }
@@ -144,7 +150,11 @@ struct FirstRunRoomPickerView: View {
                 MMHaptics.success()
                 onStartProof(roomId, roomName)
             } catch {
-                errorMessage = error.localizedDescription
+                // Our own guidance (below) reads as written; anything from the server goes through the room mapper.
+                let nsError = error as NSError
+                errorMessage = nsError.domain == "FirstRun"
+                    ? nsError.localizedDescription
+                    : MoveMarkFlowMessage.roomAddFailed(error)
                 MMHaptics.error()
             }
         }
@@ -190,7 +200,7 @@ extension FirstRunRoomPickerView {
     /// Snapshot tests only: open on a given selection, optionally with an error showing. In an extension so
     /// the memberwise init the flow uses stays as it is.
     init(propertyId: UUID, moment: RentalMoment = .justMovedIn, previewSelection: FirstRunRoomOption, previewError: String = "") {
-        self.init(propertyId: propertyId, moment: moment, onStartProof: { _, _ in })
+        self.init(propertyId: propertyId, moment: moment, onStartProof: { _, _ in }, onBack: {})
         _selected = State(initialValue: previewSelection)
         _errorMessage = State(initialValue: previewError)
     }

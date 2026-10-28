@@ -21,10 +21,12 @@ struct MaintenanceIssueDetailView: View {
     @State private var evidenceFiles: [EvidenceFileRow] = []
     @State private var hasLoadedEvidence = false
     @State private var isLoadingEvidence = false
+    @State private var evidenceLoadFailed = false
     @State private var errorMessage: String? = nil
     @State private var softNotice: String? = nil
     @State private var retryAction: (() -> Void)? = nil
     @State private var isResolving = false
+    @State private var isConfirmingResolve = false
     @State private var viewerTarget: ViewerTarget? = nil
 
     private let inspectionRepo = InspectionRepository()
@@ -68,7 +70,10 @@ struct MaintenanceIssueDetailView: View {
                 detailsSection(details).padding(.top, 30)
             }
 
-            followUpSection.padding(.top, 32)
+            // A resolved case is closed: no further entries, so its resolution date holds.
+            if !isResolved {
+                followUpSection.padding(.top, 32)
+            }
 
             resolveSection.padding(.top, 22)
         }
@@ -176,7 +181,7 @@ struct MaintenanceIssueDetailView: View {
                     .accessibilityElement()
                     .accessibilityLabel("Loading evidence")
             } else {
-                MMMissingPhotoFrame(label: "No photos recorded for this case")
+                MMMissingPhotoFrame(label: evidenceLoadFailed ? "Photos couldn't load" : "No photos recorded for this case")
                     .frame(height: 120)
             }
 
@@ -227,15 +232,20 @@ struct MaintenanceIssueDetailView: View {
                                    dateText: MMCaseDate.text(recorded.date, time: recorded.hasTime),
                                    detail: method.isEmpty ? nil : "Reported to landlord by \(method.lowercased())"))
         }
-        let response = issue.landlordResponse?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if let followUp = MMCaseDate.parse(issue.followUpDate) {
-            dated.append(CaseEvent(id: "followup", title: "Landlord follow-up", date: followUp.date,
-                                   dateText: MMCaseDate.text(followUp.date, time: followUp.hasTime),
-                                   detail: response.isEmpty ? nil : response))
-        } else if !response.isEmpty {
-            dated.append(CaseEvent(id: "followup", title: "Landlord response", date: nil, dateText: nil, detail: response))
-        }
         dated.sort { ($0.date ?? .distantFuture) < ($1.date ?? .distantFuture) }
+        // Each dated follow-up entry is its own step, in the order written; the latest carries the stored follow-up time.
+        let entries = MaintenanceFollowUpLog.entries(issue.landlordResponse)
+        let followUp = MMCaseDate.parse(issue.followUpDate)
+        if entries.isEmpty, let followUp {
+            dated.append(CaseEvent(id: "followup", title: "Landlord follow-up", date: followUp.date,
+                                   dateText: MMCaseDate.text(followUp.date, time: followUp.hasTime)))
+        }
+        for (index, entry) in entries.enumerated() {
+            let isLatest = index == entries.count - 1
+            let dateText = isLatest ? (followUp.map { MMCaseDate.text($0.date, time: $0.hasTime) } ?? entry.day) : entry.day
+            dated.append(CaseEvent(id: "followup-\(index)", title: dateText == nil ? "Landlord response" : "Landlord follow-up",
+                                   date: nil, dateText: dateText, detail: entry.text))
+        }
         if isResolved {
             let resolved = MMCaseDate.parse(issue.updatedAt)
             dated.append(CaseEvent(id: "resolved", title: "Repair completed", date: resolved?.date,
@@ -298,7 +308,8 @@ struct MaintenanceIssueDetailView: View {
             )
             .padding(.top, 16)
 
-            MMPrimaryButton(title: "Save follow-up", isLoading: isSavingFollowUp, isDisabled: isSavingFollowUp, action: saveFollowUp)
+            MMPrimaryButton(title: "Save follow-up", isLoading: isSavingFollowUp,
+                            isDisabled: isSavingFollowUp || trimmedFollowUp.isEmpty, action: saveFollowUp)
                 .padding(.top, 18)
         }
     }
@@ -314,13 +325,17 @@ struct MaintenanceIssueDetailView: View {
         } else {
             VStack(spacing: 2) {
                 MMSecondaryButton(title: isResolving ? "Marking resolved…" : "Mark resolved", icon: "checkmark",
-                                  isDisabled: isResolving, action: markResolved)
+                                  isDisabled: isResolving, action: { isConfirmingResolve = true })
                 Text("Once it's fixed. The case and its photos stay preserved.")
                     .mmFont(12.5)
                     .foregroundStyle(MMInk.secondary)
                     .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
+            .confirmationDialog("Mark this case resolved?", isPresented: $isConfirmingResolve, titleVisibility: .visible) {
+                Button("Mark resolved", action: markResolved)
+                Button("Cancel", role: .cancel) {}
+            }
         }
     }
 
@@ -328,14 +343,18 @@ struct MaintenanceIssueDetailView: View {
 
     private func loadEvidence() async {
         softNotice = nil
+        errorMessage = nil
+        retryAction = nil
         isLoadingEvidence = true
         defer { isLoadingEvidence = false }
         do {
             let files = try await inspectionRepo.fetchEvidenceFilesByMaintenanceIssue(issueId: issue.id)
             remember(files)
             evidenceFiles = files
+            evidenceLoadFailed = false
             hasLoadedEvidence = true
         } catch {
+            evidenceLoadFailed = true
             hasLoadedEvidence = true
             errorMessage = MoveMarkFlowMessage.maintenanceEvidenceLoadFailed(error)
             retryAction = { Task { await loadEvidence() } }
@@ -354,13 +373,16 @@ struct MaintenanceIssueDetailView: View {
             let files = try await inspectionRepo.fetchEvidenceFilesByMaintenanceIssue(issueId: issue.id)
             remember(files)
             evidenceFiles = files
+            evidenceLoadFailed = false
             return true
         } catch {
             return false
         }
     }
 
-    private func uploadPhotos(_ items: [PhotosPickerItem]) {
+    /// Uploads in order and stops at the first failure; Try again picks up from the photo that failed, so saved
+    /// photos aren't uploaded twice. `skipped` carries photos that couldn't be read across retries.
+    private func uploadPhotos(_ items: [PhotosPickerItem], skipped previouslySkipped: Int = 0) {
         guard !items.isEmpty else { return }
 
         isUploadingPhotos = true
@@ -371,17 +393,23 @@ struct MaintenanceIssueDetailView: View {
         Task { @MainActor in
             defer { isUploadingPhotos = false }
 
-            for item in items {
-                guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+            var skipped = previouslySkipped
+            for (index, item) in items.enumerated() {
                 // The picked file is the source evidence (its real type, never relabelled); the derivative
                 // and thumbnail are made from it and the whole set is verified before the row is written.
+                guard let data = try? await item.loadTransferable(type: Data.self),
+                      let source = try? MMEvidenceImport.source(from: data, captureSource: .library) else {
+                    skipped += 1
+                    continue
+                }
+                let remaining = Array(items[index...])
                 let upload: MoveMarkUpload
                 do {
-                    let source = try MMEvidenceImport.source(from: data, captureSource: .library)
                     upload = try await maintenanceRepo.uploadAttachment(source, propertyId: issue.propertyId, issueId: issue.id)
                 } catch {
                     errorMessage = MoveMarkFlowMessage.maintenancePhotoUploadFailed(error)
-                    retryAction = { uploadPhotos(items) }
+                    retryAction = { [skipped] in uploadPhotos(remaining, skipped: skipped) }
+                    _ = await reloadEvidence()
                     return
                 }
 
@@ -399,20 +427,31 @@ struct MaintenanceIssueDetailView: View {
                 } catch {
                     await maintenanceRepo.abandonUpload(upload)
                     errorMessage = MoveMarkFlowMessage.maintenancePhotoRecordFailed(error)
-                    retryAction = { uploadPhotos(items) }
+                    retryAction = { [skipped] in uploadPhotos(remaining, skipped: skipped) }
+                    _ = await reloadEvidence()
                     return
                 }
             }
             selectedPhotos = []
             let reloaded = await reloadEvidence()
-            if !reloaded {
-                softNotice = MoveMarkFlowMessage.maintenanceEvidencePreviewHint
+            var notices: [String] = []
+            if skipped > 0 {
+                notices.append(skipped == 1 ? "1 photo couldn't be read." : "\(skipped) photos couldn't be read.")
             }
+            if !reloaded {
+                notices.append(MoveMarkFlowMessage.maintenanceEvidencePreviewHint.trimmingCharacters(in: .whitespaces))
+            }
+            softNotice = notices.isEmpty ? nil : notices.joined(separator: " ")
         }
     }
 
+    private var trimmedFollowUp: String {
+        followUpNote.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func saveFollowUp() {
-        guard !isSavingFollowUp else { return }
+        let note = trimmedFollowUp
+        guard !isSavingFollowUp, !note.isEmpty else { return }
 
         isSavingFollowUp = true
         errorMessage = nil
@@ -422,10 +461,11 @@ struct MaintenanceIssueDetailView: View {
             defer { isSavingFollowUp = false }
 
             do {
-                try await maintenanceRepo.updateFollowUp(id: issue.id, note: followUpNote)
+                let response = try await maintenanceRepo.updateFollowUp(id: issue.id, note: note,
+                                                                        fallbackExisting: issue.landlordResponse)
                 var updated = issue
                 let now = ISO8601DateFormatter().string(from: Date())
-                updated.landlordResponse = followUpNote
+                updated.landlordResponse = response
                 updated.followUpDate = now
                 updated.updatedAt = now
                 issue = updated

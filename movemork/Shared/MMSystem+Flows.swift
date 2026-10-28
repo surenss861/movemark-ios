@@ -190,7 +190,13 @@ struct MMEvidenceNotice: View {
             Text(message).mmFont(14).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
             if let actionTitle, let action {
-                Button(actionTitle, action: action).mmFont(14, .semibold).foregroundStyle(.white)
+                // 44pt tap target without growing the notice: the extra height overlaps the padding.
+                Button(action: action) {
+                    Text(actionTitle).mmFont(14, .semibold).foregroundStyle(.white)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .padding(.vertical, -12)
             }
         }
         .padding(12)

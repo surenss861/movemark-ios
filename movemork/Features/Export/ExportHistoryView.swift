@@ -14,6 +14,7 @@ struct ExportHistoryView: View {
     @Environment(SubscriptionManager.self) private var subscriptionManager
     @Environment(\.mmRootTabBarVisible) private var rootTabBarVisible
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     private struct ReportPreviewItem: Identifiable {
         let id = UUID()
@@ -47,6 +48,19 @@ struct ExportHistoryView: View {
     @State private var activePaywallReason: PaywallReason = .unlimitedExports
     /// A ready move-out report or dispute packet: view, share, or generate a new one.
     @State private var otherReportMenu: ReportsHomeModel.OtherReport?
+    /// Share from inside the PDF preview: a sheet on the root can't present over the full-screen cover.
+    @State private var previewShareItems: [Any] = []
+    @State private var showPreviewShareSheet = false
+    /// The property whose exports last loaded successfully; `nil` until the first good load.
+    @State private var loadedPropertyId: UUID?
+    /// The last list fetch failed (previous rows, if any, are kept).
+    @State private var loadFailed = false
+    /// The single status poll; replaced (never doubled) when a refresh restarts it.
+    @State private var pollTask: Task<Void, Never>?
+    /// The poll budget ran out with a job still queued or processing.
+    @State private var pollTimedOut = false
+    /// Tags this view's refresh notifications so it doesn't reload twice for its own request.
+    @State private var instanceID = UUID()
 
     // MARK: - Export status (polled while a report is queued or processing)
 
@@ -96,6 +110,7 @@ struct ExportHistoryView: View {
             onPrimary: performPrimaryAction,
             onShare: { if let row = latestReadyRow(of: ["move_in_report"]) { share(row) } },
             onViewLastReport: { if let row = latestReadyRow(of: ["move_in_report"]) { viewReport(row) } },
+            onGenerateNew: { requestMoveInExport() },
             onHistory: { item, action in
                 guard let row = exports.first(where: { $0.id == item.id }) else { return }
                 switch action {
@@ -105,10 +120,10 @@ struct ExportHistoryView: View {
                 }
             },
             onOther: openOtherReport,
-            onRetry: { Task { await loadExports() } }
+            onRetry: { Task { await refreshAndPoll() } }
         )
         .refreshable {
-            await loadExports()
+            await refreshAndPoll()
         }
         // At the root the dark header runs under the status bar; pushed (from a saved room's receipt), the
         // back button sits on the same dark band.
@@ -159,6 +174,11 @@ struct ExportHistoryView: View {
                             }
                         }
                     }
+                    .sheet(isPresented: $showPreviewShareSheet) {
+                        if !previewShareItems.isEmpty {
+                            ReportPDFShareSheet(activityItems: previewShareItems)
+                        }
+                    }
             }
         }
         .overlay {
@@ -173,18 +193,28 @@ struct ExportHistoryView: View {
         .sheet(isPresented: $showPaywall) {
             ProPaywallView(
                 reason: activePaywallReason,
-                onClose: { showPaywall = false }
+                onClose: { showPaywall = false },
+                moveInRecorded: resolvedPropertyRecord.map { propertyStore.totalPhotoCount(for: $0) > 0 } ?? false
             )
         }
-        .task(id: resolvedExportPropertyId) {
-            await loadExports()
-            await pollActiveExportsWhileNeeded()
+        .task {
+            _ = await subscriptionManager.refreshServerReportCredits(forUser: sessionManager.userId)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .moveMarkExportsShouldRefresh)) { _ in
-            Task {
-                await loadExports()
-                await pollActiveExportsWhileNeeded()
-            }
+        .task(id: resolvedExportPropertyId) {
+            await refreshAndPoll()
+        }
+        .onDisappear {
+            pollTask?.cancel()
+            pollTask = nil
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Back from the background: a job may have finished (or the poll was suspended mid-wait).
+            if phase == .active { Task { await refreshAndPoll() } }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .moveMarkExportsShouldRefresh)) { note in
+            // This view's own requests already reload and poll inline.
+            if (note.userInfo?[Self.refreshSourceKey] as? UUID) == instanceID { return }
+            Task { await refreshAndPoll() }
         }
     }
 
@@ -192,6 +222,15 @@ struct ExportHistoryView: View {
 
     private static let moveOutID = "move_out"
     private static let disputeID = "dispute"
+    private static let refreshSourceKey = "source"
+    private static let unavailableMessage = "Reports aren’t available right now. Try again later."
+    private static let slowMessage = "Taking longer than usual."
+
+    /// The list has never loaded for this rental and the last attempt failed: nothing about the reports
+    /// is known, so nothing is derived from the (empty) list.
+    private var isListUnavailable: Bool {
+        loadFailed && (loadedPropertyId == nil || loadedPropertyId != resolvedExportPropertyId)
+    }
 
     private static func exportTypes(forOther id: String) -> Set<String> {
         id == moveOutID ? ["move_out_report"] : ["dispute_packet", "dispute_summary"]
@@ -208,8 +247,12 @@ struct ExportHistoryView: View {
         }
         model.primaryTitle = primaryTitle
         model.history = historyItems
-        model.others = hasActiveVault ? otherReports : []
+        model.others = hasActiveVault && !isListUnavailable ? otherReports : []
         model.errorMessage = errorMessage
+        if errorMessage == nil, pollTimedOut, hasActiveExportJob {
+            model.errorMessage = Self.slowMessage
+            model.errorActionTitle = "Check again"
+        }
         return model
     }
 
@@ -219,9 +262,17 @@ struct ExportHistoryView: View {
             .sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
     }
 
+    /// The newest finished report of the types. A row whose last download failed is still a finished
+    /// report on the server, so it stays openable (the retry downloads it again).
     private func latestReadyRow(of types: Set<String>) -> ExportRow? {
-        exports.filter { types.contains($0.exportType) && verificationStatus[$0.id] == .ready }
-            .max { ($0.createdAt ?? "") < ($1.createdAt ?? "") }
+        exports.filter { row in
+            guard types.contains(row.exportType) else { return false }
+            switch verificationStatus[row.id] {
+            case .ready, .invalidURL, .verificationFailed: return true
+            default: return false
+            }
+        }
+        .max { ($0.createdAt ?? "") < ($1.createdAt ?? "") }
     }
 
     /// The move-in report's state, from its newest attempt: an older failure never hides a newer report,
@@ -229,6 +280,7 @@ struct ExportHistoryView: View {
     private var primaryState: ReportsHomeModel.Primary {
         guard hasActiveVault else { return isLoading ? .loading : .noRental }
         if isExporting { return .generating }
+        if isListUnavailable { return isLoading ? .loading : .unavailable }
         guard let latest = moveInRows.first else {
             if isLoading { return .loading }
             if isExportReadyForResolvedVault == true { return .canGenerate }
@@ -283,6 +335,8 @@ struct ExportHistoryView: View {
             if let row = latestReadyRow(of: ["move_in_report"]) { viewReport(row) }
         case .failed:
             if let row = moveInRows.first { retryExport(row) }
+        case .unavailable:
+            Task { await refreshAndPoll() }
         case .loading, .generating:
             break
         }
@@ -363,25 +417,40 @@ struct ExportHistoryView: View {
         if cta.enabled { cta.action() }
     }
 
+    /// Reloads the list, then (re)starts the one status poll.
+    private func refreshAndPoll() async {
+        await loadExports()
+        startPolling()
+    }
+
+    /// Cancels any running poll and starts a fresh one, so two loops never run at once.
+    private func startPolling() {
+        pollTask?.cancel()
+        pollTimedOut = false
+        pollTask = Task { await pollActiveExportsWhileNeeded() }
+    }
+
+    private var hasActiveExportJob: Bool {
+        verificationStatus.values.contains { isActiveExportJob($0) }
+    }
+
     /// Polls while any export is queued/processing, so a finished or failed report shows up without a
     /// manual refresh. (There is no push channel on the Neon backend; the worker usually finishes within
-    /// seconds.)
+    /// seconds.) After the budget, Reports offers "Check again" instead of spinning forever.
     private func pollActiveExportsWhileNeeded() async {
         let intervalNanos: UInt64 = 2_500_000_000
 
         for _ in 0..<40 {
-            let hasActive = verificationStatus.values.contains { status in
-                switch status {
-                case .queued, .processing, .verifying:
-                    return true
-                default:
-                    return false
-                }
+            guard !Task.isCancelled, hasActiveExportJob else { return }
+            do {
+                try await Task.sleep(nanoseconds: intervalNanos)
+            } catch {
+                return
             }
-            guard hasActive else { return }
-            try? await Task.sleep(nanoseconds: intervalNanos)
+            guard !Task.isCancelled else { return }
             await loadExportsQuietly()
         }
+        if !Task.isCancelled, hasActiveExportJob { pollTimedOut = true }
     }
 
     private func loadExportsQuietly() async {
@@ -389,35 +458,43 @@ struct ExportHistoryView: View {
         guard let currentPropertyId = resolvedExportPropertyId else { return }
         do {
             let items = try await apiClient.fetchExports(propertyId: currentPropertyId)
-            var nextVerification: [UUID: ExportVerificationStatus] = [:]
-            for item in items {
-                switch item.status {
-                case .queued:
-                    nextVerification[item.id] = .queued
-                case .processing:
-                    nextVerification[item.id] = .processing
-                case .failed:
-                    nextVerification[item.id] = .serverFailed
-                case .completed:
-                    let fp = (item.filePath ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                    nextVerification[item.id] = fp.isEmpty ? .missingPath : .ready
-                }
-            }
-            exports = items.map { item in
-                ExportRow(
-                    id: item.id,
-                    disputeId: nil,
-                    propertyId: item.propertyId,
-                    userId: item.userId,
-                    exportType: item.type,
-                    filePath: item.filePath,
-                    createdAt: item.requestedAt ?? item.createdAt
-                )
-            }
-            verificationStatus = nextVerification
+            guard !Task.isCancelled, currentPropertyId == resolvedExportPropertyId else { return }
+            apply(items, for: currentPropertyId)
         } catch {
             // Quiet poll — keep existing list; user can pull to refresh.
         }
+    }
+
+    /// Replaces the list and its statuses with a successful fetch.
+    private func apply(_ items: [ExportListItem], for propertyId: UUID) {
+        var nextVerification: [UUID: ExportVerificationStatus] = [:]
+        for item in items {
+            switch item.status {
+            case .queued:
+                nextVerification[item.id] = .queued
+            case .processing:
+                nextVerification[item.id] = .processing
+            case .failed:
+                nextVerification[item.id] = .serverFailed
+            case .completed:
+                let fp = (item.filePath ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                nextVerification[item.id] = fp.isEmpty ? .missingPath : .ready
+            }
+        }
+        exports = items.map { item in
+            ExportRow(
+                id: item.id,
+                disputeId: nil,
+                propertyId: item.propertyId,
+                userId: item.userId,
+                exportType: item.type,
+                filePath: item.filePath,
+                createdAt: item.requestedAt ?? item.createdAt
+            )
+        }
+        verificationStatus = nextVerification
+        loadedPropertyId = propertyId
+        loadFailed = false
     }
 
     /// Drives readiness transitions (unlock haptic + toast).
@@ -481,11 +558,7 @@ struct ExportHistoryView: View {
         guard let property = resolvedPropertyRecord else { return .noProof }
         let photos = propertyStore.moveOutPhotoCount(for: property)
         if photos <= 0 { return .noProof }
-        let moveOutExports = exports.filter { $0.exportType == "move_out_report" }
-        if moveOutExports.contains(where: { verificationStatus[$0.id] == .serverFailed }) { return .failed }
-        if moveOutExports.contains(where: { isActiveExportJob(verificationStatus[$0.id] ?? .unknown) }) { return .processing }
-        if moveOutExports.contains(where: { verificationStatus[$0.id] == .ready }) { return .readyToShare }
-        return .readyToMake
+        return secondaryReadiness(of: ["move_out_report"])
     }
 
     private var disputeReadiness: SecondaryReportReadiness {
@@ -495,11 +568,24 @@ struct ExportHistoryView: View {
             $0.exportType == "move_in_report" && verificationStatus[$0.id] == .ready
         }
         if !hasProof { return .noProof }
-        let disputeExports = exports.filter { $0.exportType == "dispute_packet" || $0.exportType == "dispute_summary" }
-        if disputeExports.contains(where: { verificationStatus[$0.id] == .serverFailed }) { return .failed }
-        if disputeExports.contains(where: { isActiveExportJob(verificationStatus[$0.id] ?? .unknown) }) { return .processing }
-        if disputeExports.contains(where: { verificationStatus[$0.id] == .ready }) { return .readyToShare }
-        return .readyToMake
+        return secondaryReadiness(of: ["dispute_packet", "dispute_summary"])
+    }
+
+    /// Decided by the newest attempt of the type, as ``primaryState`` is: an older failure never hides a
+    /// newer report, and a newer failure reads as failed.
+    private func secondaryReadiness(of types: Set<String>) -> SecondaryReportReadiness {
+        guard let newest = exports.filter({ types.contains($0.exportType) })
+            .max(by: { ($0.createdAt ?? "") < ($1.createdAt ?? "") }) else { return .readyToMake }
+        let status = verificationStatus[newest.id] ?? .unknown
+        if isActiveExportJob(status) { return .processing }
+        switch status {
+        case .serverFailed, .missingPath:
+            return .failed
+        case .ready, .invalidURL, .verificationFailed:
+            return .readyToShare
+        default:
+            return latestReadyRow(of: types) != nil ? .readyToShare : .readyToMake
+        }
     }
 
     private var moveOutPrimaryCTA: (title: String, enabled: Bool, action: () -> Void) {
@@ -516,7 +602,7 @@ struct ExportHistoryView: View {
             return (isMoveOutExporting ? "Making report…" : "Make move-out report", !isMoveOutExporting, { requestMoveOutExport() })
         case .readyToShare:
             return ("View / Share", true, {
-                if let row = exports.first(where: { $0.exportType == "move_out_report" && verificationStatus[$0.id] == .ready }) {
+                if let row = latestReadyRow(of: ["move_out_report"]) {
                     viewReport(row)
                 }
             })
@@ -547,10 +633,7 @@ struct ExportHistoryView: View {
             return (isDisputeExporting ? "Building packet…" : "Build dispute packet", !isDisputeExporting, { requestDisputePacketExport() })
         case .readyToShare:
             return ("View / Share", true, {
-                if let row = exports.first(where: {
-                    ($0.exportType == "dispute_packet" || $0.exportType == "dispute_summary") &&
-                    verificationStatus[$0.id] == .ready
-                }) {
+                if let row = latestReadyRow(of: ["dispute_packet", "dispute_summary"]) {
                     viewReport(row)
                 }
             })
@@ -579,7 +662,7 @@ struct ExportHistoryView: View {
             return
         }
         guard let baseURL = apiBaseURL else {
-            errorMessage = "API base URL is missing. Set MoveMarkAPIBaseURL in build settings."
+            errorMessage = Self.unavailableMessage
             return
         }
 
@@ -592,15 +675,12 @@ struct ExportHistoryView: View {
                 let apiClient = try ExportAPIClient(baseURLString: baseURL)
                 _ = try await apiClient.requestMoveOutExport(propertyId: property.id)
                 MMProofToastPresenter.show(.reportQueued(), message: $proofToast, isVisible: $proofToastVisible)
-                NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
+                postExportsShouldRefresh()
                 await loadExports()
+                startPolling()
             } catch {
-                errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(
-                    error,
-                    fallback: "Couldn't queue move-out report. Try again.",
-                    intent: .mutate
-                )
-                MMHaptics.error()
+                await handleExportRequestError(error, paywallReason: .moveOutExport,
+                                               fallback: "Couldn't queue move-out report. Try again.")
             }
         }
     }
@@ -614,7 +694,7 @@ struct ExportHistoryView: View {
             return
         }
         guard let baseURL = apiBaseURL else {
-            errorMessage = "API base URL is missing. Set MoveMarkAPIBaseURL in build settings."
+            errorMessage = Self.unavailableMessage
             return
         }
 
@@ -627,15 +707,12 @@ struct ExportHistoryView: View {
                 let apiClient = try ExportAPIClient(baseURLString: baseURL)
                 _ = try await apiClient.requestDisputePacketExport(propertyId: property.id)
                 MMProofToastPresenter.show(.reportQueued(), message: $proofToast, isVisible: $proofToastVisible)
-                NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
+                postExportsShouldRefresh()
                 await loadExports()
+                startPolling()
             } catch {
-                errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(
-                    error,
-                    fallback: "Couldn't queue dispute packet. Try again.",
-                    intent: .mutate
-                )
-                MMHaptics.error()
+                await handleExportRequestError(error, paywallReason: .disputePacket,
+                                               fallback: "Couldn't queue dispute packet. Try again.")
             }
         }
     }
@@ -669,62 +746,42 @@ struct ExportHistoryView: View {
         errorMessage = nil
         defer { isLoading = false }
 
-        await MainActor.run {
-            verificationStatus = [:]
-        }
+        // Statuses are kept while the fetch runs (no pull-to-refresh flicker) and when it fails.
 
         guard let apiClient = try? makeAPIClient() else {
-            errorMessage = "API base URL is missing. Set MoveMarkAPIBaseURL in build settings."
-            exports = []
+            errorMessage = Self.unavailableMessage
+            loadFailed = true
             return
         }
 
         guard let currentPropertyId = resolvedExportPropertyId else {
             exports = []
+            verificationStatus = [:]
+            loadedPropertyId = nil
+            loadFailed = false
             errorMessage = nil
             return
         }
 
+        // Another rental's reports never stand in for this one's.
+        if let loadedPropertyId, loadedPropertyId != currentPropertyId {
+            exports = []
+            verificationStatus = [:]
+            self.loadedPropertyId = nil
+        }
+
         do {
             let items = try await apiClient.fetchExports(propertyId: currentPropertyId)
-
-            var nextVerification: [UUID: ExportVerificationStatus] = [:]
-            for item in items {
-                switch item.status {
-                case .queued:
-                    nextVerification[item.id] = .queued
-                case .processing:
-                    nextVerification[item.id] = .processing
-                case .failed:
-                    nextVerification[item.id] = .serverFailed
-                case .completed:
-                    let fp = (item.filePath ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                    if fp.isEmpty {
-                        nextVerification[item.id] = .missingPath
-                    } else {
-                        nextVerification[item.id] = .ready
-                    }
-                }
-            }
-            let rows = items.map { item in
-                ExportRow(
-                    id: item.id,
-                    disputeId: nil,
-                    propertyId: item.propertyId,
-                    userId: item.userId,
-                    exportType: item.type,
-                    filePath: item.filePath,
-                    createdAt: item.requestedAt ?? item.createdAt
-                )
-            }
-            exports = rows
-            verificationStatus = nextVerification
+            guard currentPropertyId == resolvedExportPropertyId else { return }
+            apply(items, for: currentPropertyId)
         } catch {
+            guard currentPropertyId == resolvedExportPropertyId else { return }
+            // Keep the previous list and statuses; the error row offers Try again.
             errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(
                 error,
                 fallback: "Couldn’t load exports. Try again."
             )
-            exports = []
+            loadFailed = true
             MMHaptics.error()
         }
     }
@@ -732,7 +789,8 @@ struct ExportHistoryView: View {
     private func retryExport(_ row: ExportRow) {
         switch row.exportType {
         case "move_in_report":
-            requestMoveInExport()
+            // A failed export never used the free report: the server decides (402 opens the paywall).
+            requestMoveInExport(checkLocalQuota: false)
         case "move_out_report":
             requestMoveOutExport()
         case "dispute_packet", "dispute_summary":
@@ -792,8 +850,8 @@ struct ExportHistoryView: View {
     private func shareCachedReport(at fileURL: URL, exportType: String) {
         do {
             let item = try ReportFileDownloader.makeShareItem(for: fileURL, exportType: exportType)
-            shareItems = [item]
-            showShareSheet = true
+            previewShareItems = [item]
+            showPreviewShareSheet = true
             MoveMarkAnalytics.track(.reportShared, properties: ["type": exportType])
         } catch {
             errorMessage = (error as? ReportFileError)?.localizedDescription
@@ -870,7 +928,9 @@ struct ExportHistoryView: View {
         }
     }
 
-    private func requestMoveInExport() {
+    /// `checkLocalQuota` is off for a retry of a failed report: failed exports don't count against the free
+    /// report on the server, but they did bump the local counter when they were queued.
+    private func requestMoveInExport(checkLocalQuota: Bool = true) {
         guard let property = resolvedPropertyRecord ?? propertyStore.currentProperty else { return }
         guard !isExporting else { return }
         guard !hasActiveMoveInExportJob else {
@@ -883,13 +943,13 @@ struct ExportHistoryView: View {
             return
         }
         guard isExportReadyForResolvedVault == true else { return }
-        guard subscriptionManager.canExportMoveIn(forUser: sessionManager.userId) else {
+        guard !checkLocalQuota || subscriptionManager.canExportMoveIn(forUser: sessionManager.userId) else {
             activePaywallReason = .unlimitedExports
             showPaywall = true
             return
         }
         guard let baseURL = apiBaseURL else {
-            errorMessage = "API base URL is missing. Set MoveMarkAPIBaseURL in build settings."
+            errorMessage = Self.unavailableMessage
             return
         }
 
@@ -903,7 +963,8 @@ struct ExportHistoryView: View {
                 let apiClient = try ExportAPIClient(baseURLString: baseURL)
                 _ = try await apiClient.requestMoveInExport(propertyId: property.id)
 
-                if !subscriptionManager.hasPro, let uid = sessionManager.userId {
+                // A retry re-uses the report the failed attempt already counted.
+                if checkLocalQuota, !subscriptionManager.hasPro, let uid = sessionManager.userId {
                     subscriptionManager.incrementFreeMoveInExportCount(forUser: uid)
                 }
 
@@ -914,17 +975,40 @@ struct ExportHistoryView: View {
                     message: $proofToast,
                     isVisible: $proofToastVisible
                 )
-                NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
+                postExportsShouldRefresh()
                 await loadExports()
-                await pollActiveExportsWhileNeeded()
+                startPolling()
             } catch {
-                errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(
-                    error,
-                    fallback: "Couldn’t queue move-in report. Try again.",
-                    intent: .mutate
-                )
-                MMHaptics.error()
+                await handleExportRequestError(error, paywallReason: .unlimitedExports,
+                                               fallback: "Couldn’t queue move-in report. Try again.")
             }
+        }
+    }
+
+    /// Tells other Reports screens to reload; this one reloads and polls inline.
+    private func postExportsShouldRefresh() {
+        NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil,
+                                        userInfo: [Self.refreshSourceKey: instanceID])
+    }
+
+    /// 402 → the paywall (or "still syncing" right after a purchase); 409 → the job already exists, so show
+    /// it generating; anything else → the error row.
+    private func handleExportRequestError(_ error: Error, paywallReason: PaywallReason, fallback: String) async {
+        switch ExportRequestRefusal(error) {
+        case .paywall:
+            _ = await subscriptionManager.refreshServerReportCredits(forUser: sessionManager.userId)
+            if subscriptionManager.isPurchaseLikelySyncing {
+                errorMessage = SubscriptionManager.purchaseStillSyncingMessage
+            } else {
+                activePaywallReason = paywallReason
+                showPaywall = true
+            }
+        case .alreadyActive:
+            await loadExports()
+            startPolling()
+        case nil:
+            errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(error, fallback: fallback, intent: .mutate)
+            MMHaptics.error()
         }
     }
 
@@ -933,6 +1017,26 @@ struct ExportHistoryView: View {
         return try ExportAPIClient(baseURLString: apiBaseURL)
     }
 
+}
+
+/// How Reports and the packet builder handle an export POST the server refused.
+enum ExportRequestRefusal {
+    /// 402 `pro_required` / `quota_exhausted`.
+    case paywall
+    /// 409 `export_already_active`: a job for this report is already queued or processing.
+    case alreadyActive
+
+    init?(_ error: Error) {
+        guard let api = error as? APIClientError,
+              case .exportRequestRefused(let status, let code, _) = api else { return nil }
+        if status == 402 || code == "pro_required" || code == "quota_exhausted" {
+            self = .paywall
+        } else if status == 409 || code == "export_already_active" {
+            self = .alreadyActive
+        } else {
+            return nil
+        }
+    }
 }
 
 extension Notification.Name {

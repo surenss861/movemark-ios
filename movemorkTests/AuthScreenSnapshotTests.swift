@@ -90,11 +90,11 @@ final class AuthScreenSnapshotTests: XCTestCase {
     // MARK: First run
 
     func testFirstRunMoment() {
-        assertScreen(FirstRunMomentPickerView(isPreparing: false) { _ in }, devices: all, inNavigation: false)
+        assertScreen(FirstRunMomentPickerView(isPreparing: false, onSelect: { _ in }, onSignOut: {}), devices: all, inNavigation: false)
     }
 
     func testFirstRunMomentPreparing() {
-        assertScreen(FirstRunMomentPickerView(isPreparing: true) { _ in }, inNavigation: false)
+        assertScreen(FirstRunMomentPickerView(isPreparing: true, onSelect: { _ in }, onSignOut: {}), inNavigation: false)
     }
 
     func testFirstRunSetup() {
@@ -114,7 +114,7 @@ final class AuthScreenSnapshotTests: XCTestCase {
     }
 
     func testFirstRunRoom() {
-        assertScreen(FirstRunRoomPickerView(propertyId: UUID(), onStartProof: { _, _ in }), devices: all, inNavigation: false)
+        assertScreen(FirstRunRoomPickerView(propertyId: UUID(), onStartProof: { _, _ in }, onBack: {}), devices: all, inNavigation: false)
     }
 
     func testFirstRunRoomError() {

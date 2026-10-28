@@ -313,7 +313,7 @@ struct DeleteAccountContent: View {
                     .mmFont(26, .semibold)
                     .foregroundStyle(Ink.text)
                     .accessibilityAddTraits(.isHeader)
-                Text("This permanently deletes your MoveMark account, proof vaults, reports, photos and stored evidence. It cannot be undone.")
+                Text("This permanently deletes your MoveMark account, proof vaults, reports, photos and stored evidence. Unused Report Pack credits are also removed. It cannot be undone.")
                     .mmFont(16)
                     .foregroundStyle(Ink.text)
                     .fixedSize(horizontal: false, vertical: true)

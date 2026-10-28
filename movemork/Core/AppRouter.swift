@@ -65,6 +65,7 @@ struct AppRouter: View {
 /// The build has no usable server address. Nothing to retry from here, so there is no primary action.
 struct BackendMisconfigurationView: View {
     var body: some View {
+        #if DEBUG
         MMScreen(
             title: "Can’t connect to MoveMark",
             subtitle: "This build is missing a valid MoveMark server address (often from an unset or mis-merged Secrets.xcconfig). The app won’t crash, but sign-in and sync won’t work until you fix the app target’s build settings."
@@ -74,5 +75,14 @@ struct BackendMisconfigurationView: View {
                 tone: .warning
             )
         }
+        #else
+        // Customers never see build instructions: one plain line.
+        MMScreen(
+            title: "Can’t connect to MoveMark",
+            subtitle: "MoveMark can’t connect right now. Try again later."
+        ) {
+            EmptyView()
+        }
+        #endif
     }
 }

@@ -22,6 +22,8 @@ struct MoveOutFoundationView: View {
     @State private var errorMessage: String? = nil
     @State private var lastErrorFromExport = false
     @State private var queuedNotice: String? = nil
+    /// Checklist rows with a save in flight: a second tap waits, so a failed save can't roll back over it.
+    @State private var savingChecklistRows: Set<String> = []
     @State private var viewer: ViewerTarget? = nil
     /// Rooms that gained move-out photos while this screen was open: what the renter just added.
     @State private var justCompared: Set<UUID> = []
@@ -77,6 +79,7 @@ struct MoveOutFoundationView: View {
         initialChecklist: MoveOutChecklistRow? = nil,
         initiallyExporting: Bool = false,
         initialError: String? = nil,
+        initialErrorFromExport: Bool = false,
         initialQueuedNotice: String? = nil,
         initialJustCompared: Set<UUID> = []
     ) {
@@ -85,6 +88,7 @@ struct MoveOutFoundationView: View {
         _checklist = State(initialValue: initialChecklist)
         _isExporting = State(initialValue: initiallyExporting)
         _errorMessage = State(initialValue: initialError)
+        _lastErrorFromExport = State(initialValue: initialErrorFromExport)
         _queuedNotice = State(initialValue: initialQueuedNotice)
     }
 
@@ -104,17 +108,12 @@ struct MoveOutFoundationView: View {
                 MMNotice(message: gained, tone: .success).padding(.bottom, 18)
             }
 
-            if let errorMessage {
+            // Export errors sit beside the report action instead (exportSection), where the renter just tapped.
+            if let errorMessage, !lastErrorFromExport {
                 MMNotice(
                     message: errorMessage,
                     actionTitle: MMCopy.tryAgain,
-                    action: {
-                        if lastErrorFromExport {
-                            exportMoveOutReport()
-                        } else {
-                            Task { await loadChecklist() }
-                        }
-                    }
+                    action: { Task { await loadChecklist() } }
                 )
                 .padding(.bottom, 18)
             }
@@ -145,7 +144,8 @@ struct MoveOutFoundationView: View {
         .sheet(isPresented: $showPaywall) {
             ProPaywallView(
                 reason: activePaywallReason,
-                onClose: { showPaywall = false }
+                onClose: { showPaywall = false },
+                moveInRecorded: propertyStore.currentProperty.map { propertyStore.totalPhotoCount(for: $0) > 0 } ?? false
             )
         }
         .fullScreenCover(item: $viewer) { target in
@@ -162,7 +162,9 @@ struct MoveOutFoundationView: View {
     private var missingRoomIDs: Set<UUID> { Set(rooms.filter { $0.moveOutPhotoTotal == 0 }.map(\.id)) }
 
     private var justComparedLine: String? {
-        let names = rooms.filter { justCompared.contains($0.id) && $0.moveOutPhotoTotal > 0 }.map(\.name)
+        // A room without move-in photos has nothing to be compared with, so it isn't announced as compared.
+        let names = rooms.filter { justCompared.contains($0.id) && $0.moveOutPhotoTotal > 0 && $0.moveInPhotoTotal > 0 }
+            .map(\.name)
         guard let first = names.first else { return nil }
         switch names.count {
         case 1: return "\(first) now has proof at both ends, compared with your move-in record."
@@ -281,7 +283,8 @@ struct MoveOutFoundationView: View {
 
     private func compactRow(_ item: MoveOutComparison) -> some View {
         MoveOutCompactRow(
-            comparison: item, resolve: resolvePhotoURL, justCompared: justCompared.contains(item.id),
+            comparison: item, resolve: resolvePhotoURL,
+            justCompared: item.state != .noBaseline && justCompared.contains(item.id),
             onOpenPhoto: { openViewer(item, $0) }
         )
     }
@@ -304,7 +307,7 @@ struct MoveOutFoundationView: View {
     @ViewBuilder
     private var checklistSection: some View {
         if let checklist {
-            MMGroup(title: "Closeout checklist · \(checklist.completedCount) of 6", footer: "Check off as you go. Each step adds to your move-out record.") {
+            MMGroup(title: "Closeout checklist · \(checklist.completedCount) of 6", footer: "Check off as you go. Saved to this rental.") {
                 checklistRow("Cabinets cleared", keyPath: \.cabinetsClear)
                 MMRowDivider()
                 checklistRow("Appliances cleaned", keyPath: \.appliancesClean)
@@ -313,7 +316,7 @@ struct MoveOutFoundationView: View {
                 MMRowDivider()
                 checklistRow("Utilities cancelled", keyPath: \.utilitiesCancelled)
                 MMRowDivider()
-                checklistRow("Cleaning receipt uploaded", keyPath: \.cleaningReceiptUploaded)
+                checklistRow("Cleaning receipt saved", keyPath: \.cleaningReceiptUploaded)
                 MMRowDivider()
                 checklistRow("Forwarding address noted", keyPath: \.forwardingAddressNoted)
             }
@@ -335,11 +338,16 @@ struct MoveOutFoundationView: View {
     private var exportSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             MMSectionTitle(title: "Move-out report")
-            Text("Turn your comparison into one organized PDF: each room’s move-in and move-out proof side by side, dated.")
+            Text("One organized, dated PDF of each room’s move-out proof.")
                 .mmFont(14)
                 .foregroundStyle(MMInk.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 4)
+
+            if lastErrorFromExport, let errorMessage {
+                MMNotice(message: errorMessage, actionTitle: MMCopy.tryAgain, action: exportMoveOutReport)
+                    .padding(.top, 16)
+            }
 
             if let queuedNotice {
                 // What the renter gained: the report is on its way; Reports is where it lands (and can be redone).
@@ -383,8 +391,8 @@ struct MoveOutFoundationView: View {
 
     private var remainingRoomsLine: String {
         let remaining = rooms.count - roomsWithMoveOutPhotos
-        return remaining == 1 ? "Complete the remaining room to generate the comparison report."
-            : "Complete the remaining \(remaining) rooms to generate the comparison report."
+        return remaining == 1 ? "Complete the remaining room to generate the move-out report."
+            : "Complete the remaining \(remaining) rooms to generate the move-out report."
     }
 
     private var moveOutExportFootnote: String {
@@ -400,16 +408,19 @@ struct MoveOutFoundationView: View {
             let isDone = checklist[keyPath: keyPath]
             // A quiet check row: lime check when done, thin grey ring when not. Tap toggles and saves.
             Button {
-                guard let before = self.checklist else { return }
-                var updated = before
+                guard var updated = self.checklist, !savingChecklistRows.contains(title) else { return }
                 updated[keyPath: keyPath] = !isDone
                 self.checklist = updated
+                savingChecklistRows.insert(title)
                 MMHaptics.selection()
                 Task { @MainActor in
+                    defer { savingChecklistRows.remove(title) }
                     do {
                         try await checklistRepo.upsertChecklist(updated)
+                        if !lastErrorFromExport { errorMessage = nil }
                     } catch {
-                        self.checklist = before
+                        // Roll back only this row, so other rows toggled meanwhile keep their state.
+                        self.checklist?[keyPath: keyPath] = isDone
                         errorMessage = MoveMarkFlowMessage.moveOutChecklistSaveFailed(error)
                         lastErrorFromExport = false
                     }
@@ -466,6 +477,7 @@ struct MoveOutFoundationView: View {
                 try await checklistRepo.upsertChecklist(created)
                 checklist = created
             }
+            if !lastErrorFromExport { errorMessage = nil }
         } catch {
             errorMessage = MoveMarkFlowMessage.moveOutChecklistSaveFailed(error)
             lastErrorFromExport = false
@@ -488,8 +500,8 @@ struct MoveOutFoundationView: View {
         guard let property = propertyStore.currentProperty else { return }
         guard roomsWithMoveOutPhotos > 0 else { return }
         guard let baseURL = apiBaseURL else {
-            errorMessage = "API base URL is missing. Set MoveMarkAPIBaseURL in build settings."
-            lastErrorFromExport = false
+            errorMessage = "Reports aren't available right now. Try again later."
+            lastErrorFromExport = true
             return
         }
 
@@ -508,13 +520,29 @@ struct MoveOutFoundationView: View {
                 NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
                 MMHaptics.success()
             } catch {
-                errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(
-                    error,
-                    fallback: "Couldn't queue move-out report. Try again.",
-                    intent: .mutate
-                )
-                lastErrorFromExport = true
-                MMHaptics.error()
+                switch ExportRequestRefusal(error) {
+                case .paywall:
+                    // The server is the source of truth for Pro; a purchase may still be syncing to it.
+                    _ = await subscriptionManager.refreshServerReportCredits(forUser: sessionManager.userId)
+                    if subscriptionManager.isPurchaseLikelySyncing {
+                        errorMessage = SubscriptionManager.purchaseStillSyncingMessage
+                        lastErrorFromExport = true
+                    } else {
+                        activePaywallReason = .moveOutExport
+                        showPaywall = true
+                    }
+                case .alreadyActive:
+                    lastErrorFromExport = false
+                    queuedNotice = "Report queued — it will appear in Reports when ready"
+                case nil:
+                    errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(
+                        error,
+                        fallback: "Couldn't queue move-out report. Try again.",
+                        intent: .mutate
+                    )
+                    lastErrorFromExport = true
+                    MMHaptics.error()
+                }
             }
         }
     }

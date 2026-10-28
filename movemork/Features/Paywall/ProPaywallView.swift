@@ -14,6 +14,9 @@ import RevenueCat
 struct ProPaywallView: View {
     let reason: PaywallReason
     let onClose: () -> Void
+    /// Whether the current rental already has move-in photos. Drives the first timeline step; when the
+    /// presenter doesn't know (default), the step reads neutrally instead of claiming "Recorded".
+    let moveInRecorded: Bool
 
     @Environment(\.openURL) private var openURL
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -39,6 +42,7 @@ struct ProPaywallView: View {
     init(
         reason: PaywallReason,
         onClose: @escaping () -> Void,
+        moveInRecorded: Bool = false,
         initialOfferingsFetchCompleted: Bool = false,
         showPurchaseSuccess: Bool = false,
         purchaseSuccessWasReportPack: Bool = false,
@@ -48,6 +52,7 @@ struct ProPaywallView: View {
     ) {
         self.reason = reason
         self.onClose = onClose
+        self.moveInRecorded = moveInRecorded
         _initialOfferingsFetchCompleted = State(initialValue: initialOfferingsFetchCompleted)
         // Only snapshot seams start with a finished fetch; the app always presents with the default (false).
         self.startsWithFetchedOfferings = initialOfferingsFetchCompleted
@@ -116,13 +121,14 @@ struct ProPaywallView: View {
             .task {
                 MoveMarkAnalytics.track(
                     .paywallViewed,
-                    properties: ["reason": String(describing: reason)]
+                    properties: ["reason": reason.analyticsValue]
                 )
                 // A seeded state (snapshot goldens) keeps its offering: no store round trip piling up across tests.
                 guard !startsWithFetchedOfferings else { return }
                 initialOfferingsFetchCompleted = false
                 await subscriptionManager.refresh()
                 initialOfferingsFetchCompleted = true
+                await subscriptionManager.refreshServerReportCredits(forUser: sessionManager.userId)
             }
             .overlay(alignment: .top) {
                 // The proof toast as a calm, opaque notice on the dark surface (same message and presenter).
@@ -205,6 +211,7 @@ struct ProPaywallView: View {
         case .disputePacket: "The evidence packet is part of Pro."
         case .moveOutExport: "The move-out report is part of Pro."
         case .reportPack: nil   // the Report Pack row right below says it
+        case .account: nil      // opened from Account: nothing was blocked
         }
     }
 
@@ -212,7 +219,7 @@ struct ProPaywallView: View {
     /// are Pro (`canExportMoveOut`, `canUseCaseBuilder`).
     private var timeline: some View {
         VStack(alignment: .leading, spacing: 0) {
-            MMDarkTimelineStep(phase: "Move-in", title: "Recorded", isRecorded: true)
+            MMDarkTimelineStep(phase: "Move-in", title: moveInRecorded ? "Recorded" : "Record every room", isRecorded: moveInRecorded)
             MMDarkTimelineStep(phase: "During rental", title: "Maintenance cases")
             MMDarkTimelineStep(phase: "Move-out", title: "Compare before and after", proPart: "Move-out report")
             MMDarkTimelineStep(phase: "If questioned", title: "Build the evidence packet", proPart: "Evidence packet", isLast: true)
@@ -780,6 +787,10 @@ struct ProPaywallView: View {
                     subscriptionManager.addReportPackCredit(forUser: userId)
                 }
                 MoveMarkAnalytics.track(.purchaseCompleted, properties: ["product": "report_pack"])
+                // The webhook may still be on its way; the sync window keeps the local credit usable meanwhile.
+                Task { @MainActor in
+                    await subscriptionManager.refreshServerReportCredits(forUser: sessionManager.userId)
+                }
                 await completePurchaseSuccess(isReportPack: true)
                 return
             }
@@ -804,7 +815,7 @@ struct ProPaywallView: View {
             let restored = await subscriptionManager.restorePurchases(forUser: sessionManager.userId)
             if restored, subscriptionManager.hasPro {
                 await completePurchaseSuccess(isReportPack: false)
-            } else if restored, subscriptionManager.reportPackCredits(forUser: sessionManager.userId) > 0 {
+            } else if restored, subscriptionManager.hasUsableReportPackCredit(forUser: sessionManager.userId) {
                 await completePurchaseSuccess(isReportPack: true)
             } else if let err = subscriptionManager.lastRestoreErrorMessage {
                 restoreOutcomeMessage = err

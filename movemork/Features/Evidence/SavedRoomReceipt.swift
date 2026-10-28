@@ -26,11 +26,15 @@ struct SavedRoomReceipt: Identifiable {
     let issueCount: Int
     let savedAt: Date
     let next: Next
+    /// Storage path (thumbnail when there is one) of a photo this save confirmed — the receipt's image.
+    /// Never another room's or a maintenance photo: with no path, the receipt shows no image.
+    var photoPath: String? = nil
 
     var primaryActionLabel: String {
         switch next {
         case .room: return "Continue to next room"
-        case .report: return phaseLabel == "Move-out" ? "View move-out report" : "View move-in report"
+        // Move-out: no report exists yet at this point — the CTA opens Reports to make one.
+        case .report: return phaseLabel == "Move-out" ? "Make move-out report" : "View move-in report"
         case .retry: return "Retry \(ProofSavedReceiptView.count(pendingCount, "photo"))"
         case .done: return "Done"
         }
@@ -44,12 +48,12 @@ struct SavedRoomReceipt: Identifiable {
     }
 }
 
-/// The receipt, with the photo just saved (the rental's newest evidence).
+/// The receipt, with the photo just saved (signed through the room's own resolver).
 struct SavedRoomReceiptScreen: View {
     let receipt: SavedRoomReceipt
+    let resolvePhotoURL: (String) async -> URL?
     let onAction: (SavedRoomReceipt.Action) -> Void
 
-    @Environment(PropertyStore.self) private var propertyStore
     @State private var imageURL: URL?
 
     var body: some View {
@@ -60,7 +64,7 @@ struct SavedRoomReceiptScreen: View {
             onAddMorePhotos: receipt.next == .retry ? nil : { onAction(.addMore) }
         )
         .task {
-            if let id = receipt.propertyId { imageURL = await propertyStore.previewImageURL(for: id) }
+            if let path = receipt.photoPath { imageURL = await resolvePhotoURL(path) }
         }
     }
 }

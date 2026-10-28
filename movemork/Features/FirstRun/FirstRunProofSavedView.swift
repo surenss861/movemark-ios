@@ -10,6 +10,10 @@ struct FirstRunProofSavedView: View {
     var moment: RentalMoment = .justMovedIn
     let onContinueNextRoom: () -> Void
     let onViewProofVault: () -> Void
+    /// Finishing onboarding is in flight: the actions ignore taps until it settles.
+    var isBusy = false
+    var errorMessage: String? = nil
+    var onRetry: (() -> Void)? = nil
 
     @Environment(PropertyStore.self) private var propertyStore
     @State private var previewURL: URL?
@@ -46,6 +50,15 @@ struct FirstRunProofSavedView: View {
             onSecondary: onViewProofVault,
             onAddMorePhotos: onContinueNextRoom
         )
+        .allowsHitTesting(!isBusy)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let errorMessage {
+                MMNotice(message: errorMessage, actionTitle: onRetry != nil ? MMCopy.tryAgain : nil, action: onRetry)
+                    .environment(\.colorScheme, .light)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
+            }
+        }
         .task {
             previewURL = await propertyStore.previewImageURL(for: summary.propertyId)
         }

@@ -11,6 +11,8 @@ import SwiftUI
 struct FirstRunPropertySetupView: View {
     var moment: RentalMoment = .justMovedIn
     let onCreated: (UUID) -> Void
+    /// Back to the moment picker.
+    var onBack: (() -> Void)? = nil
 
     @Environment(PropertyStore.self) private var propertyStore
     @Environment(SessionManager.self) private var sessionManager
@@ -36,6 +38,10 @@ struct FirstRunPropertySetupView: View {
             title: MoveMarkGrowthCopy.firstRunSetupTitle,
             subtitle: MoveMarkGrowthCopy.firstRunSetupSubtitle
         ) {
+            if let onBack {
+                FirstRunBackButton(action: onBack).disabled(isLoading)
+            }
+        } content: {
             VStack(alignment: .leading, spacing: 14) {
                 MMField(title: "Street address", placeholder: "88 Harbour St", text: $street,
                         contentType: .streetAddressLine1, autocapitalization: .words,
@@ -146,8 +152,9 @@ struct FirstRunPropertySetupView: View {
                     postalCode: "",
                     country: "CA",
                     moveInDate: moveInDate,
-                    leaseStartDate: moveInDate,
-                    leaseEndDate: Calendar.current.date(byAdding: .year, value: 1, to: moveInDate) ?? moveInDate,
+                    // First run asks for no lease: leave it unset rather than inventing one from the move-in date.
+                    leaseStartDate: nil,
+                    leaseEndDate: nil,
                     landlordName: "",
                     landlordEmail: "",
                     landlordPhone: "",
@@ -178,7 +185,7 @@ extension FirstRunPropertySetupView {
     /// init the flow uses stays as it is.
     init(previewStreet: String = "", previewUnit: String = "", previewCity: String = "", previewProvince: String = "",
          previewMoveIn: Date? = nil, previewError: String = "") {
-        self.init(onCreated: { _ in })
+        self.init(onCreated: { _ in }, onBack: {})
         if let previewMoveIn { _moveInDate = State(initialValue: previewMoveIn) }
         _street = State(initialValue: previewStreet)
         _unit = State(initialValue: previewUnit)

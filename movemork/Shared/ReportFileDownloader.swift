@@ -86,15 +86,32 @@ enum ReportFileDownloader {
         guard size > 0 else {
             throw ReportFileError.emptyFile
         }
+        // A signed-URL error page (XML/HTML) saved under a .pdf name is not a report.
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        guard let header = try handle.read(upToCount: 4), header == pdfMagic else {
+            throw ReportFileError.invalidType
+        }
     }
 
+    /// "%PDF" — the first four bytes of every PDF.
+    private static let pdfMagic = Data("%PDF".utf8)
+
+    /// Signed-URL downloads are small; fail fast instead of the 60s default when the network stalls.
+    private static let downloadTimeout: TimeInterval = 30
+
     static func downloadPDF(from signedURL: URL, exportType: String) async throws -> URL {
-        let (data, response) = try await URLSession.shared.data(from: signedURL)
+        var request = URLRequest(url: signedURL)
+        request.timeoutInterval = downloadTimeout
+        let (data, response) = try await URLSession.shared.data(for: request)
         if let http = response as? HTTPURLResponse, !(200 ... 299).contains(http.statusCode) {
             throw URLError(.badServerResponse)
         }
         guard !data.isEmpty else {
             throw ReportFileError.emptyFile
+        }
+        guard data.prefix(4) == pdfMagic else {
+            throw ReportFileError.invalidType
         }
 
         let directory = try reportsCacheDirectory()

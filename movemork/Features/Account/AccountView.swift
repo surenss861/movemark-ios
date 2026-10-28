@@ -34,7 +34,7 @@ struct AccountView: View {
             email: sessionManager.userEmail,
             name: name.isEmpty ? nil : name,
             isPro: subscriptionManager.hasPro,
-            isRestoring: subscriptionManager.isLoading,
+            isRestoring: subscriptionManager.isStoreKitBusy,
             restoreFeedback: restoreFeedback,
             hasSupport: supportURL != nil,
             hasPrivacyPolicy: privacyPolicyURL != nil,
@@ -52,15 +52,16 @@ struct AccountView: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .sheet(isPresented: $showPaywall) {
                 ProPaywallView(
-                    reason: .extraProperty,
-                    onClose: { showPaywall = false }
+                    reason: .account,
+                    onClose: { showPaywall = false },
+                    moveInRecorded: hasMoveInPhotos
                 )
             }
             .sheet(isPresented: $showEditName) {
                 EditNameSheet(
                     currentName: sessionManager.firstName,
                     onSave: { newName in
-                        try sessionManager.updateProfileFullName(newName)
+                        try await sessionManager.updateProfileFullName(newName)
                     }
                 )
             }
@@ -97,6 +98,12 @@ struct AccountView: View {
         }
     }
 
+    /// The current rental already has move-in photos (paywall timeline's first step).
+    private var hasMoveInPhotos: Bool {
+        guard let property = propertyStore.currentProperty else { return false }
+        return propertyStore.totalPhotoCount(for: property) > 0
+    }
+
     // MARK: - Legal URLs
 
     private var privacyPolicyURL: URL? {
@@ -120,7 +127,7 @@ struct AccountView: View {
             let restored = await subscriptionManager.restorePurchases(forUser: sessionManager.userId)
             if restored, subscriptionManager.hasPro {
                 restoreFeedback = .init(message: "MoveMark Pro is active on this Apple ID.")
-            } else if restored, subscriptionManager.reportPackCredits(forUser: sessionManager.userId) > 0 {
+            } else if restored, subscriptionManager.hasUsableReportPackCredit(forUser: sessionManager.userId) {
                 restoreFeedback = .init(message: "Report Pack credit restored on this Apple ID.")
             } else if let err = subscriptionManager.lastRestoreErrorMessage {
                 restoreFeedback = .init(message: err, isError: true)
@@ -144,7 +151,7 @@ struct AccountView: View {
 
 struct EditNameSheet: View {
     let currentName: String
-    let onSave: (String) throws -> Void
+    let onSave: (String) async throws -> Void
     @Environment(\.dismiss) private var dismiss
 
     @State private var name: String
@@ -161,7 +168,7 @@ struct EditNameSheet: View {
     }
 
     /// `draftName` / `initialError` are snapshot seams for the error state; the app starts from the current name.
-    init(currentName: String, onSave: @escaping (String) throws -> Void, draftName: String? = nil, initialError: String? = nil) {
+    init(currentName: String, onSave: @escaping (String) async throws -> Void, draftName: String? = nil, initialError: String? = nil) {
         self.currentName = currentName
         self.onSave = onSave
         _name = State(initialValue: draftName ?? currentName)
@@ -226,15 +233,18 @@ struct EditNameSheet: View {
             errorMessage = "Enter your full name."
             return
         }
+        guard !isSaving else { return }
         errorMessage = nil
         isSaving = true
-        defer { isSaving = false }
 
-        do {
-            try onSave(nextName)
-            dismiss()
-        } catch {
-            errorMessage = MoveMarkFlowMessage.accountProfileUpdateFailed(error)
+        Task { @MainActor in
+            defer { isSaving = false }
+            do {
+                try await onSave(nextName)
+                dismiss()
+            } catch {
+                errorMessage = MoveMarkFlowMessage.accountProfileUpdateFailed(error)
+            }
         }
     }
 }

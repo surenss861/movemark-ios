@@ -14,6 +14,8 @@ enum PaywallReason: Equatable {
     case moveOutExport
     /// One-time polished report — for renters who only need protection once.
     case reportPack
+    /// Opened from Account (plan row) — no feature was blocked, so no context line.
+    case account
 
     /// Primary paywall headline (shared across entry points).
     var headline: String {
@@ -25,9 +27,11 @@ enum PaywallReason: Equatable {
         case .disputePacket:
             return "Build a dispute-ready packet."
         case .moveOutExport:
-            return "Document move-out proof."
+            return "Turn move-out proof into a report."
         case .reportPack:
             return "Get one polished report."
+        case .account:
+            return "Protect the full rental timeline."
         }
     }
 
@@ -44,6 +48,8 @@ enum PaywallReason: Equatable {
             return "The move-out report is part of Pro."
         case .reportPack:
             return "One polished move-in report — no subscription required."
+        case .account:
+            return "Free keeps the record. Pro turns it into reports and an evidence packet."
         }
     }
 
@@ -53,6 +59,18 @@ enum PaywallReason: Equatable {
             return "Buy Report Pack"
         default:
             return "Start Pro"
+        }
+    }
+
+    /// Value for the `reason` analytics property.
+    var analyticsValue: String {
+        switch self {
+        case .extraProperty: return "extraProperty"
+        case .unlimitedExports: return "unlimitedExports"
+        case .disputePacket: return "disputePacket"
+        case .moveOutExport: return "moveOutExport"
+        case .reportPack: return "reportPack"
+        case .account: return "account"
         }
     }
 

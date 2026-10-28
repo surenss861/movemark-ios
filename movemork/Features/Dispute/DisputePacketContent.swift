@@ -16,7 +16,8 @@ struct DisputePacketModel {
         case ready
         case generating
         case generated(date: String)
-        case failed
+        /// The newest packet failed; `lastGoodDate` is set when an earlier packet can still be opened.
+        case failed(lastGoodDate: String?)
     }
 
     struct Record: Identifiable, Equatable {
@@ -107,7 +108,7 @@ struct DisputePacketModel {
                                  detail: Self.day(moveInReport.createdAt).map { "Generated \($0) · PDF" } ?? "PDF ready"))
         } else if moveInPhotos > 0 {
             missing.append(.init(id: "moveInReport", title: "Move-in report not generated",
-                                 detail: "The packet lists your room proof; the report attaches it as a PDF.", target: .reports))
+                                 detail: "The packet notes your move-in report and its date.", target: .reports))
         }
         if let moveOutReport {
             records.append(.init(id: "moveOutReport", title: "Move-out report", icon: "doc.richtext",
@@ -140,15 +141,19 @@ struct DisputePacketModel {
 
         let issueTags = Set(rooms.flatMap { room in (room.evidence + room.moveOutEvidence).flatMap { $0.issueTags } })
         let packets = exports.filter { $0.exportType == "dispute_packet" || $0.exportType == "dispute_summary" }
+        // Decided by the newest packet: an old failure never hides a newer packet, and a newer failure
+        // keeps the last good packet openable.
+        let newest = packets.max(by: { ($0.createdAt ?? "") < ($1.createdAt ?? "") })
+        let lastGood = packets.filter({ readyIDs.contains($0.id) }).max(by: { ($0.createdAt ?? "") < ($1.createdAt ?? "") })
         let packet: Packet
         if moveInPhotos == 0 && moveInReport == nil {
             packet = .needsMoveInProof
         } else if packets.contains(where: { activeIDs.contains($0.id) }) {
             packet = .generating
-        } else if let done = packets.filter({ readyIDs.contains($0.id) }).max(by: { ($0.createdAt ?? "") < ($1.createdAt ?? "") }) {
-            packet = .generated(date: Self.day(done.createdAt) ?? "")
-        } else if packets.contains(where: { failedIDs.contains($0.id) }) {
-            packet = .failed
+        } else if let newest, failedIDs.contains(newest.id) {
+            packet = .failed(lastGoodDate: lastGood.map { Self.day($0.createdAt) ?? "" })
+        } else if let lastGood {
+            packet = .generated(date: Self.day(lastGood.createdAt) ?? "")
         } else {
             packet = .ready
         }
@@ -188,6 +193,8 @@ struct DisputePacketContent: View {
     var onView: () -> Void = {}
     var onShare: () -> Void = {}
     var onRetry: () -> Void = {}
+    /// The notice's action label ("Check again" when a packet is taking longer than usual).
+    var errorActionTitle: String = MMCopy.tryAgain
 
     var body: some View {
         MMRecordScreen(
@@ -207,7 +214,7 @@ struct DisputePacketContent: View {
         ) {
             VStack(alignment: .leading, spacing: 32) {
                 if let errorMessage {
-                    MMNotice(message: errorMessage, tone: .info, actionTitle: MMCopy.tryAgain, action: onRetry)
+                    MMNotice(message: errorMessage, tone: .info, actionTitle: errorActionTitle, action: onRetry)
                 }
                 questionSection
                 evidenceSection
@@ -216,6 +223,11 @@ struct DisputePacketContent: View {
                 actionSection
             }
         }
+    }
+
+    private var isGenerated: Bool {
+        if case .generated = model.packet { return true }
+        return false
     }
 
     private var isReadyState: Bool {
@@ -231,7 +243,7 @@ struct DisputePacketContent: View {
         VStack(alignment: .leading, spacing: 12) {
             MMRecordSectionHeader(title: "What is being questioned")
             MMField(title: "Issue", placeholder: "e.g. Deduction for the kitchen counter", text: $question,
-                    autocapitalization: .sentences, submitLabel: .next)
+                    autocapitalization: .sentences)
             MMField(title: "Amount questioned (optional)", placeholder: "e.g. $350", text: $amount,
                     keyboard: .numbersAndPunctuation, autocapitalization: .never)
             Text("Kept on this iPhone for your reference. It is not added to the generated packet.")
@@ -346,7 +358,8 @@ struct DisputePacketContent: View {
 
     private var contentsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            MMRecordSectionHeader(title: "Generated packet includes")
+            // Once a packet exists, these counts are today's proof — what a new packet would state.
+            MMRecordSectionHeader(title: isGenerated ? "A new packet would include" : "Generated packet includes")
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(model.contentLines, id: \.self) { line in
                     Text(line).mmFont(15).monospacedDigit().foregroundStyle(MMInk.text)
@@ -374,12 +387,18 @@ struct DisputePacketContent: View {
             case .needsMoveInProof:
                 MMPrimaryButton(title: "Add move-in proof", icon: "camera") { onMissing(.rooms) }
             case .ready, .failed:
-                if model.packet == .failed {
+                if case .failed(let lastGoodDate) = model.packet {
                     Text("The last packet couldn't be generated. Your evidence is unchanged.")
                         .mmFont(13).foregroundStyle(MMInk.secondary).multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
+                    MMPrimaryButton(title: "Generate evidence packet", icon: "doc.richtext", action: onGenerate)
+                    if lastGoodDate != nil {
+                        MMSecondaryButton(title: isDownloading ? "Opening…" : "View last packet", icon: "doc.richtext",
+                                          isDisabled: isDownloading, action: onView)
+                    }
+                } else {
+                    MMPrimaryButton(title: "Generate evidence packet", icon: "doc.richtext", action: onGenerate)
                 }
-                MMPrimaryButton(title: "Generate evidence packet", icon: "doc.richtext", action: onGenerate)
                 if !model.hasPro {
                     Text("The evidence packet is part of Pro.")
                         .mmFont(13).foregroundStyle(MMInk.secondary)

@@ -22,7 +22,7 @@ enum VaultDocumentType: String, CaseIterable {
 
     var displayTitle: String {
         switch self {
-        case .lease: return "lease"
+        case .lease: return "Lease"
         case .depositReceipt: return "Deposit receipt"
         case .listingScreenshot: return "Listing proof"
         case .cleaningReceipt: return "Cleaning receipt"
@@ -34,6 +34,11 @@ enum VaultDocumentType: String, CaseIterable {
 
     var acceptsImage: Bool {
         self == .listingScreenshot
+    }
+
+    /// Picked from Files, these also take a JPEG or PNG (a photographed lease or receipt), not only a PDF.
+    var acceptsImageFile: Bool {
+        self == .lease || self == .depositReceipt
     }
 }
 

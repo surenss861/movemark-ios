@@ -73,6 +73,8 @@ struct NewPropertyView: View {
 
             if !errorMessage.isEmpty {
                 MMNotice(message: errorMessage).padding(.top, 22)
+            } else if let leaseError = input.leaseDatesError {
+                MMNotice(message: leaseError).padding(.top, 22)
             }
             MMPrimaryButton(title: "Create rental record", isLoading: isLoading, isDisabled: isSubmitDisabled) { submit() }
                 .padding(.top, 26)

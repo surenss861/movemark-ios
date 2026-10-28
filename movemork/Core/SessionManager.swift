@@ -326,8 +326,9 @@ final class SessionManager {
         authPhase = .signedIn
     }
 
-    /// Updates local name immediately; the profile upsert runs in a fire-and-forget task (not awaited by callers).
-    func updateProfileFullName(_ name: String) throws {
+    /// Saves the profile name to the server, then updates the local name. Throws when the upsert fails so
+    /// the caller can keep its sheet open and show the error.
+    func updateProfileFullName(_ name: String) async throws {
         guard MoveMarkBackendConfig.isConfigured else {
             throw AuthError.validation("This build is not configured to reach MoveMark’s servers.")
         }
@@ -341,16 +342,12 @@ final class SessionManager {
 
         let emailForSync: String? = userEmail.isEmpty ? nil : userEmail
 
+        try await persistProfileFullName(uid: uid, fullName: trimmed, email: emailForSync)
         firstName = trimmed
-
-        Task { @MainActor [weak self] in
-            await self?.persistProfileFullName(uid: uid, fullName: trimmed, email: emailForSync)
-        }
     }
 
-    /// Fire-and-forget profile name sync (upsert). Errors do not propagate to callers.
-    private func persistProfileFullName(uid: UUID, fullName: String, email: String?) async {
-        guard MoveMarkBackendConfig.isConfigured else { return }
+    /// Profile name sync (upsert). Errors propagate to ``updateProfileFullName(_:)``.
+    private func persistProfileFullName(uid: UUID, fullName: String, email: String?) async throws {
         #if DEBUG
         print("updateProfileFullName remote sync start")
         #endif
@@ -366,6 +363,7 @@ final class SessionManager {
             #if DEBUG
             print("updateProfileFullName remote sync failed: \(error.localizedDescription)")
             #endif
+            throw error
         }
     }
 

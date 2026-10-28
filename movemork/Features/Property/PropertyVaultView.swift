@@ -7,6 +7,7 @@
 
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 
 private struct VaultDocumentQuickLookItem: Identifiable {
     let id = UUID()
@@ -24,6 +25,11 @@ struct PropertyVaultView: View {
     @Environment(SubscriptionManager.self) private var subscriptionManager
 
     @State private var isUploading = false
+    /// The record slot being uploaded, so only its row shows busy.
+    @State private var uploadingDocType: VaultDocumentType? = nil
+    /// The photo behind a failed upload, kept for Try again; `selectedPhotoItem` is cleared on every exit so
+    /// picking the same photo again still registers.
+    @State private var lastFailedPhotoItem: PhotosPickerItem? = nil
     @State private var uploadError: String? = nil
     @State private var uploadSoftNotice: String? = nil
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
@@ -165,7 +171,8 @@ struct PropertyVaultView: View {
         .sheet(isPresented: $showPaywall) {
             ProPaywallView(
                 reason: activePaywallReason,
-                onClose: { showPaywall = false }
+                onClose: { showPaywall = false },
+                moveInRecorded: propertyStore.currentProperty.map { propertyStore.totalPhotoCount(for: $0) > 0 } ?? false
             )
         }
         .task(id: property.id) {
@@ -210,7 +217,7 @@ struct PropertyVaultView: View {
                 current: listingPreview
             )
         }
-        .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.pdf]) { result in
+        .fileImporter(isPresented: $showFilePicker, allowedContentTypes: fileImporterContentTypes) { result in
             switch result {
             case .success(let url):
                 handleFileSelection(url: url, docType: pendingFileDocType)
@@ -271,6 +278,7 @@ struct PropertyVaultView: View {
             softNotice: uploadSoftNotice,
             previewError: previewErrorMessage,
             isUploading: isUploading,
+            uploadingType: uploadingDocType,
             maintenance: maintenanceSummary,
             moveOut: moveOutSummary,
             details: PropertyVaultModel.Detail.primary(for: property),
@@ -478,7 +486,14 @@ struct PropertyVaultView: View {
         return keys.contains { property.vaultDocuments.contains($0) }
     }
 
+    /// PDF for every record; the lease and deposit receipt also take a JPEG or PNG.
+    private var fileImporterContentTypes: [UTType] {
+        VaultDocumentType(rawValue: DocumentRepository.normalizedDocumentType(pendingFileDocType))?.acceptsImageFile == true
+            ? [.pdf, .jpeg, .png] : [.pdf]
+    }
+
     private func startUpload(for docType: VaultDocumentType) {
+        guard !isUploading else { return }
         if docType.acceptsImage {
             pendingPhotoDocType = docType.rawValue
             showReplacePhotoSheet = true
@@ -608,8 +623,9 @@ struct PropertyVaultView: View {
     }
 
     private func retryDocumentUpload() {
+        guard !isUploading else { return }
         uploadSoftNotice = nil
-        if let docType = lastFailedPhotoDocType, let item = selectedPhotoItem {
+        if let docType = lastFailedPhotoDocType, let item = lastFailedPhotoItem {
             uploadError = nil
             handlePhotoSelection(item: item, docType: docType)
             return
@@ -622,15 +638,22 @@ struct PropertyVaultView: View {
     }
 
     private func handlePhotoSelection(item: PhotosPickerItem, docType: String) {
-        guard let userId = sessionManager.userId else { return }
+        // Cleared on every path (an ignored or failed pick too), so choosing the same photo again fires.
+        selectedPhotoItem = nil
+        guard !isUploading, let userId = sessionManager.userId else { return }
         uploadError = nil
         uploadSoftNotice = nil
         previewErrorMessage = nil
         lastFailedPhotoDocType = docType
+        lastFailedPhotoItem = item
         isUploading = true
+        uploadingDocType = VaultDocumentType(rawValue: DocumentRepository.normalizedDocumentType(docType))
 
         Task { @MainActor in
-            defer { isUploading = false }
+            defer {
+                isUploading = false
+                uploadingDocType = nil
+            }
             let canonicalType = DocumentRepository.normalizedDocumentType(docType)
             // Replace never removes the current copy up front: it is retired only after the
             // new file and its row are both saved.
@@ -726,20 +749,24 @@ struct PropertyVaultView: View {
 
             uploadError = nil
             lastFailedPhotoDocType = nil
-            selectedPhotoItem = nil
+            lastFailedPhotoItem = nil
         }
     }
 
     private func handleFileSelection(url: URL, docType: String) {
-        guard let userId = sessionManager.userId else { return }
+        guard !isUploading, let userId = sessionManager.userId else { return }
         uploadError = nil
         uploadSoftNotice = nil
         previewErrorMessage = nil
         lastFailedFileDocType = nil
         isUploading = true
+        uploadingDocType = VaultDocumentType(rawValue: DocumentRepository.normalizedDocumentType(docType))
 
         Task { @MainActor in
-            defer { isUploading = false }
+            defer {
+                isUploading = false
+                uploadingDocType = nil
+            }
             let canonicalType = DocumentRepository.normalizedDocumentType(docType)
             // Replace never removes the current copy up front: it is retired only after the
             // new file and its row are both saved.
@@ -773,7 +800,12 @@ struct PropertyVaultView: View {
                 return
             }
 
-            let fileName = url.lastPathComponent
+            // The upload's content type comes from the extension (PDF, JPEG or PNG); add one if the file has none.
+            var fileName = url.lastPathComponent
+            if url.pathExtension.isEmpty,
+               let ext = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType?.preferredFilenameExtension {
+                fileName += ".\(ext)"
+            }
 
             let upload: MoveMarkUpload
             do {

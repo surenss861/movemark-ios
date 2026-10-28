@@ -12,6 +12,8 @@ struct FirstRunMomentPickerView: View {
     /// who already has one.
     let isPreparing: Bool
     let onSelect: (RentalMoment) -> Void
+    /// The way out of first run for someone who signed in to the wrong account.
+    var onSignOut: (() -> Void)? = nil
 
     var body: some View {
         MMScreen(
@@ -43,6 +45,12 @@ struct FirstRunMomentPickerView: View {
                 .padding(.horizontal, 4)
                 .padding(.top, 14)
                 .accessibilityElement(children: .combine)
+            }
+
+            if let onSignOut {
+                MMSecondaryButton(title: "Sign out", tint: MMInk.secondary, action: onSignOut)
+                    .accessibilityIdentifier("firstRun.signOut")
+                    .padding(.top, 18)
             }
         }
     }

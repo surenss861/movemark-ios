@@ -51,7 +51,7 @@ struct MaintenanceLogView: View {
             isPushed: true,
             trailing: { headerBar }
         ) {
-            if let errorMessage {
+            if let errorMessage, !log.isEmpty {
                 // A refresh failure is calm: the recorded cases are still here.
                 MMNotice(
                     message: errorMessage,
@@ -60,7 +60,7 @@ struct MaintenanceLogView: View {
                     action: errorRetryAction
                 )
                 .padding(.bottom, 18)
-            } else if let softNotice {
+            } else if errorMessage == nil, let softNotice {
                 MMNotice(message: softNotice, tone: .info).padding(.bottom, 18)
             }
 
@@ -121,6 +121,15 @@ struct MaintenanceLogView: View {
             }
             .frame(maxWidth: .infinity, minHeight: 80)
             .accessibilityElement(children: .combine)
+        } else if log.isEmpty, errorMessage != nil {
+            // Nothing loaded to fall back on: say so rather than claim the log is empty.
+            MMEmptyBlock(
+                icon: "doc.text.magnifyingglass",
+                title: "Cases didn't load",
+                message: "Couldn't load the maintenance log just now. Check your connection and try again.",
+                actionTitle: MMCopy.tryAgain,
+                action: { Task { await syncMaintenanceLogFromServer() } }
+            )
         } else if log.isEmpty {
             MMEmptyBlock(
                 icon: "doc.text.magnifyingglass",

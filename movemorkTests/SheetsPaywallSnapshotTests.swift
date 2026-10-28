@@ -113,7 +113,7 @@ final class SheetsPaywallSnapshotTests: XCTestCase {
     private func paywall(_ reason: PaywallReason = .moveOutExport, plans: Bool = true, reportPack: Bool = false,
                          fetched: Bool = true, success: Bool = false, successReportPack: Bool = false,
                          restore: String? = nil, error: String? = nil, toast: MMProofToastMessage? = nil) -> some View {
-        ProPaywallView(reason: reason, onClose: {}, initialOfferingsFetchCompleted: fetched, showPurchaseSuccess: success,
+        ProPaywallView(reason: reason, onClose: {}, moveInRecorded: true, initialOfferingsFetchCompleted: fetched, showPurchaseSuccess: success,
                        purchaseSuccessWasReportPack: successReportPack, restoreOutcomeMessage: restore,
                        localErrorMessage: error, toast: toast)
             .environment(subscriptions(plans: plans, reportPack: reportPack))

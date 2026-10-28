@@ -20,6 +20,11 @@ private let maintenancePhotoPipelineLog = Logger(
     category: "MaintenancePhotoPipeline"
 )
 
+private let propertyCreateLog = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "movemork",
+    category: "PropertyCreate"
+)
+
 extension PropertyStore {
     private enum MutationError: LocalizedError {
         case invalidRoomName
@@ -164,8 +169,8 @@ extension PropertyStore {
 
     private func buildPropertyRow(id: UUID, input: CreatePropertyInput, userId: UUID, createdAt: String?) -> PropertyRow {
         let dbDate = Self.dbDateFormatter
-        let deposit = Double(input.depositAmount.trimmingCharacters(in: .whitespacesAndNewlines)).map { $0 >= 0 ? $0 : nil } ?? nil
-        let rent = Double(input.rentAmount.trimmingCharacters(in: .whitespacesAndNewlines)).map { $0 >= 0 ? $0 : nil } ?? nil
+        let deposit = Self.parseAmount(input.depositAmount).map { $0 >= 0 ? $0 : nil } ?? nil
+        let rent = Self.parseAmount(input.rentAmount).map { $0 >= 0 ? $0 : nil } ?? nil
         let countryVal = input.country.trimmingCharacters(in: .whitespacesAndNewlines)
         return PropertyRow(
             id: id,
@@ -184,10 +189,28 @@ extension PropertyStore {
             depositAmount: deposit,
             rentAmount: rent,
             moveInDate: dbDate.string(from: input.moveInDate),
-            leaseStart: dbDate.string(from: input.leaseStartDate),
-            leaseEnd: dbDate.string(from: input.leaseEndDate),
+            leaseStart: input.leaseStartDate.map { dbDate.string(from: $0) },
+            leaseEnd: input.leaseEndDate.map { dbDate.string(from: $0) },
             createdAt: createdAt
         )
+    }
+
+    /// Deposit / rent as typed: "1500.50", "1,500.50" or "1500,50" (comma-decimal locales). Nil when it isn't a number.
+    static func parseAmount(_ raw: String) -> Double? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "$", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let plain = Double(trimmed) { return plain }
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.locale = .current
+        if let localized = formatter.number(from: trimmed) { return localized.doubleValue }
+        // A comma decimal typed under a dot-decimal locale (or vice versa): one separator, read as the decimal.
+        if trimmed.filter({ $0 == "," }).count == 1, !trimmed.contains(".") {
+            return Double(trimmed.replacingOccurrences(of: ",", with: "."))
+        }
+        return nil
     }
 
     /// Creates a property from the locked input contract, inserts default rooms, then refreshes store.
@@ -201,7 +224,19 @@ extension PropertyStore {
         let row = buildPropertyRow(id: UUID(), input: input, userId: userId, createdAt: nil)
 
         let created = try await propertyRepo.createProperty(row)
-        try await propertyRepo.insertDefaultRooms(propertyId: created.id, userId: userId)
+        // The rental exists from here on: failing now would invite a second (duplicate) create. Default rooms
+        // are best-effort — retry once, then carry on; rooms can be added from the rental.
+        do {
+            try await propertyRepo.insertDefaultRooms(propertyId: created.id, userId: userId)
+        } catch {
+            do {
+                try await propertyRepo.insertDefaultRooms(propertyId: created.id, userId: userId)
+            } catch {
+                propertyCreateLog.error(
+                    "Default rooms not inserted for property=\(created.id.uuidString, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                )
+            }
+        }
         activePropertyId = created.id
         UserDefaults.standard.set(created.id.uuidString, forKey: Self.persistedActivePropertyIdKey(userId: userId))
         await fetchAll(userId: userId)
@@ -457,7 +492,7 @@ extension PropertyStore {
 
     @discardableResult
     func addMaintenance(_ record: MaintenanceRecord, photos: [MMEvidenceSource], propertyId: UUID, userId: UUID) async throws -> MaintenanceSubmitOutcome {
-        let now = ISO8601DateFormatter().string(from: record.createdAt)
+        let now = MMCaseDate.dayString(record.createdAt)  // `date` columns: the renter's local calendar day
         let row = MaintenanceIssueRow(
             id: record.id,
             propertyId: propertyId,
@@ -497,7 +532,7 @@ extension PropertyStore {
         let hadPartialPhotoLoss = !photos.isEmpty && pipeline.hadAnyFailure && pipeline.hasAnySuccess
 
         if activePropertyId == propertyId {
-            let created = ISO8601DateFormatter().date(from: inserted.dateReported ?? inserted.dateDiscovered ?? "") ?? Date()
+            let created = MMCaseDate.parse(inserted.dateReported ?? inserted.dateDiscovered)?.date ?? record.createdAt
             let newEntry = MaintenanceRecord(
                 id: inserted.id,
                 title: inserted.title,
@@ -533,7 +568,7 @@ extension PropertyStore {
                     category: row.category ?? "General",
                     details: row.description ?? "",
                     status: row.status == "resolved" ? .resolved : (row.status == "follow_up" ? .followUp : .open),
-                    createdAt: ISO8601DateFormatter().date(from: row.dateReported ?? row.dateDiscovered ?? "") ?? Date(),
+                    createdAt: MMCaseDate.parse(row.dateReported ?? row.dateDiscovered)?.date ?? Date(),
                     landlordResponse: row.landlordResponse ?? "",
                     photoCount: photoCountByIssue[row.id] ?? 0
                 )

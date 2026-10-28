@@ -73,6 +73,7 @@ struct MMRecordScreen<HeaderExtra: View, Content: View>: View {
             }
         }
         .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
         .safeAreaInset(edge: .top, spacing: 0) {
             Color.clear.frame(height: 0).background(MMInk.hero.ignoresSafeArea(edges: .top))
         }

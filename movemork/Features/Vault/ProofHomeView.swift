@@ -475,7 +475,11 @@ struct ProofHomeView: View {
                     }
                     .mmFont(13)
                     .foregroundStyle(Ink.secondary)
+                    // 44pt tap target; the negative padding keeps the header's height as it was.
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
+                .padding(.vertical, -14)
             }
         }
     }
@@ -485,7 +489,12 @@ struct ProofHomeView: View {
             Image(systemName: "exclamationmark.circle.fill").foregroundStyle(MoveMarkTheme.Colors.semanticDanger)
             Text(message).mmFont(14).foregroundStyle(Ink.text)
             Spacer(minLength: 8)
-            Button(MMCopy.tryAgain, action: onRetry).mmFont(14, .semibold).foregroundStyle(Ink.text)
+            Button(action: onRetry) {
+                Text(MMCopy.tryAgain).mmFont(14, .semibold).foregroundStyle(Ink.text)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .padding(.vertical, -12)   // 44pt target inside the row's padding; the row keeps its height
         }
         .padding(12)
         .background(Ink.card, in: RoundedRectangle(cornerRadius: 12 * k, style: .continuous))

@@ -242,7 +242,7 @@ extension PropertyStore {
             landlordPhone: row.landlordPhone ?? "",
             moveInDate: moveInParsed ?? Date(),
             leaseStartDate: leaseStartParsed,
-            leaseEndDate: leaseEndParsed ?? Calendar.current.date(byAdding: .year, value: 1, to: moveInParsed ?? Date()) ?? Date(),
+            leaseEndDate: leaseEndParsed ?? Date(timeIntervalSince1970: 0),  // no lease recorded; never invent one
             depositAmount: row.depositAmount.map { String(format: "$%.2f", $0) } ?? "",
             rentAmount: row.rentAmount.map { String(format: "$%.2f", $0) } ?? "",
             country: row.country,

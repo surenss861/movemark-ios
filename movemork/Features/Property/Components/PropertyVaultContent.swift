@@ -64,6 +64,8 @@ struct PropertyVaultModel {
     var softNotice: String?
     var previewError: String?
     var isUploading = false
+    /// Which record is uploading; nil reads as the listing photo (older callers).
+    var uploadingType: VaultDocumentType? = nil
     var maintenance = Maintenance()
     var moveOut: MoveOut? = nil
     /// Address and dates, always shown in Rental details.
@@ -212,7 +214,7 @@ struct PropertyVaultContent: View {
     }
 
     private func recordRow(_ record: PropertyVaultModel.Record) -> some View {
-        let busy = record.type.acceptsImage && model.isUploading
+        let busy = model.isUploading && (model.uploadingType.map { $0 == record.type } ?? record.type.acceptsImage)
         return MMRecordRow(
             title: Self.recordTitle(record.type),
             icon: Self.recordIcon(record.type),
@@ -326,7 +328,7 @@ struct PropertyVaultContent: View {
                 Spacer()
                 Button(action: onEdit) {
                     Text("Edit").mmFont(14, .semibold).foregroundStyle(MMInk.text)
-                        .frame(minWidth: 44, minHeight: 32, alignment: .trailing)
+                        .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(MMLightPressStyle())
@@ -414,11 +416,13 @@ extension PropertyVaultModel.Detail {
                       RentalAddress.unitLabel(property.addressLine2)]
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
         let place = [RentalLocation.line(city: property.city, province: property.provinceState),
-                     property.postalCode.trimmingCharacters(in: .whitespacesAndNewlines)]
+                     RentalLocation.meaningful(property.postalCode) ?? ""]
             .filter { !$0.isEmpty }.joined(separator: " ")
         let address = [street, place].filter { !$0.isEmpty }.joined(separator: "\n")
         if !address.isEmpty { rows.append(.init(label: "Address", value: address)) }
         rows.append(.init(label: "Move-in", value: MMRecordDate.display(property.moveInDate)))
+        // An epoch lease end means no lease was entered (as the rental record treats it): no Lease row.
+        guard property.leaseEndDate.timeIntervalSince1970 > 0 else { return rows }
         let end = MMRecordDate.display(property.leaseEndDate)
         if let start = property.leaseStartDate {
             rows.append(.init(label: "Lease", value: "\(MMRecordDate.display(start)) – \(end)"))

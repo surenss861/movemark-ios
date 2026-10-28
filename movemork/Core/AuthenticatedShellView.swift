@@ -31,7 +31,12 @@ struct AuthenticatedShellView: View {
                     case .moveOutRoomDetail(let roomID):
                         MoveOutRoomDetailDestinationView(roomID: roomID, path: $path)
                     case .exports:
-                        ExportHistoryView()
+                        ExportHistoryView(
+                            onOpenVaults: { path.removeAll() },
+                            onContinueRoomProof: { path.append(.walkthrough) },
+                            onOpenMoveOutProof: { path.append(.moveOut) },
+                            onOpenDisputePacket: { path.append(.disputePacket) }
+                        )
                     case .disputePacket:
                         DisputePacketView(path: $path)
                     }
@@ -49,11 +54,17 @@ struct VaultDetailDestinationView: View {
     @Environment(SessionManager.self) private var sessionManager
 
     @Environment(\.vaultTransitionNamespace) private var vaultNamespace
+    @State private var loadFailed = false
 
     var body: some View {
         Group {
             if let property = propertyStore.currentProperty, property.id == propertyId {
                 PropertyVaultView(property: property, path: $path, namespace: vaultNamespace)
+            } else if loadFailed {
+                MMScreen(title: "Rental record", isPushed: true) {
+                    MMNotice(message: propertyStore.errorMessage ?? "Couldn't load this rental. Try again.",
+                             actionTitle: MMCopy.tryAgain, action: { Task { await select() } })
+                }
             } else {
                 // The rental record's own shape while it loads, so the push lands on the screen it becomes.
                 MMRentalRecordSkeleton()
@@ -61,13 +72,14 @@ struct VaultDetailDestinationView: View {
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            if propertyStore.currentProperty?.id != propertyId, let userId = sessionManager.userId {
-                Task {
-                    await propertyStore.selectProperty(id: propertyId, userId: userId)
-                }
-            }
-        }
+        .task(id: propertyId) { await select() }
+    }
+
+    private func select() async {
+        guard propertyStore.currentProperty?.id != propertyId, let userId = sessionManager.userId else { return }
+        loadFailed = false
+        await propertyStore.selectProperty(id: propertyId, userId: userId)
+        loadFailed = propertyStore.currentProperty?.id != propertyId
     }
 }
 

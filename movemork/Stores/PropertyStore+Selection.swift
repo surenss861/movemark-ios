@@ -49,6 +49,12 @@ extension PropertyStore {
         return (thumbPath, url)
     }
 
+    /// Drops the cached vault summaries so the next read refetches. Call after an evidence mutation
+    /// (save / append / edit / delete): the cached `latestEvidence` and room counts are stale from then on.
+    func invalidateVaultSummaries() {
+        vaultSummaries = nil
+    }
+
     /// One summary per rental, refreshed at most every 30 s (vault rows call this once per card).
     private func vaultSummary(for propertyId: UUID) async -> VaultSummary? {
         if let cached = vaultSummaries, Date().timeIntervalSince(cached.fetchedAt) < 30 {

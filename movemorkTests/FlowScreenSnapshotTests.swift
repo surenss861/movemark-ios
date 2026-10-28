@@ -32,7 +32,9 @@ final class FlowScreenSnapshotTests: XCTestCase {
                 title: .constant("North wall paint wear"), notes: .constant(""), selectedTags: .constant(["Scratch"]),
                 selectedCondition: .constant(.fair), selectedItems: .constant([]), loadedImages: [], isUploading: false,
                 errorMessage: error, successMessage: success, moveOutMode: false,
-                fixedIssueTags: ["Scratch", "Stain", "Water damage", "Chipped paint", "Cracked tile", "Appliance damage"]
+                fixedIssueTags: ["Scratch", "Stain", "Water damage", "Chipped paint", "Cracked tile", "Appliance damage"],
+                // A save error offers "Try again" (the button only shows when there is a retry).
+                onRetry: error == nil ? nil : {}
             )
             .padding(.horizontal, 20)
             .padding(.vertical, 24)

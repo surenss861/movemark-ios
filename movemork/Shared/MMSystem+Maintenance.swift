@@ -32,6 +32,15 @@ enum MMCaseDate {
         return nil
     }
 
+    /// A local calendar day ("2026-10-27") for the case's `date` columns, so an evening entry isn't stored as tomorrow (UTC).
+    static func dayString(_ date: Date) -> String {
+        let day = DateFormatter()
+        day.locale = Locale(identifier: "en_US_POSIX")
+        day.calendar = Calendar(identifier: .gregorian)
+        day.dateFormat = "yyyy-MM-dd"
+        return day.string(from: date)
+    }
+
     static func text(_ date: Date, time: Bool = true) -> String {
         let day = date.formatted(.dateTime.month(.abbreviated).day())
         guard time else { return day }

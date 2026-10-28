@@ -9,13 +9,16 @@ import SwiftUI
 
 extension EvidenceCaptureView {
     func saveEvidence() {
+        // Notices raised here are save errors (`errorSource = .save`): their "Try again" runs this again.
         guard let property = propertyStore.currentProperty else {
             errorMessage = MoveMarkFlowMessage.noActiveProperty
+            errorSource = .save
             return
         }
 
         guard let userId = sessionManager.userId else {
             errorMessage = MoveMarkFlowMessage.signInRequired
+            errorSource = .save
             return
         }
 
@@ -27,6 +30,7 @@ extension EvidenceCaptureView {
                 return
             }
             errorMessage = "Add at least one photo before saving."
+            errorSource = .none
             MMHaptics.warning()
             return
         }
@@ -84,6 +88,7 @@ extension EvidenceCaptureView {
 
                 let result = outcome.photoResult ?? MMEvidenceSaveResult()
                 errorMessage = nil
+                propertyStore.invalidateVaultSummaries()
 
                 MoveMarkAnalytics.track(
                     .photoAdded,
@@ -125,10 +130,11 @@ extension EvidenceCaptureView {
                         )
                         if !result.saved.isEmpty {
                             presentReceipt(photoCount: result.saved.count, pendingCount: result.pending.count,
-                                           issueCount: evidence.issueTags.count)
+                                           issueCount: evidence.issueTags.count, photo: result.saved.first)
                         }
                     } else {
                         errorMessage = MMEvidenceSaveStatus.partial(saved: result.saved.count, requested: result.requestedCount)
+                        errorSource = .none   // no entry to append to: nothing a retry could resend
                     }
                     MMHaptics.warning()
                     return
@@ -140,6 +146,7 @@ extension EvidenceCaptureView {
                 #endif
                 // Nothing was saved and the entry was removed: the photos stay pending as they were.
                 errorMessage = MoveMarkFlowMessage.proofSaveFailed(error)
+                errorSource = .save
                 MMHaptics.error()
             }
         }
@@ -162,13 +169,15 @@ extension EvidenceCaptureView {
                 isMoveOut: moveOutMode
             )
             let result = outcome.photoResult ?? MMEvidenceSaveResult()
+            if !result.saved.isEmpty { propertyStore.invalidateVaultSummaries() }
             retry.savedCount += result.saved.count
             retry.pending = result.pending
             guard retry.pending.isEmpty else {
                 pendingRetry = retry
                 MMHaptics.warning()
                 if !result.saved.isEmpty {
-                    presentReceipt(photoCount: retry.savedCount, pendingCount: retry.pending.count, issueCount: retry.issueCount)
+                    presentReceipt(photoCount: retry.savedCount, pendingCount: retry.pending.count, issueCount: retry.issueCount,
+                                   photo: result.saved.first)
                 }
                 return
             }
@@ -199,14 +208,17 @@ extension EvidenceCaptureView {
         if outcome.hydrationRefreshFailed { hints += MoveMarkFlowMessage.proofHydrationHint }
         if outcome.tagInsertFailed { hints += MoveMarkFlowMessage.tagInsertFailedHint }
         if !hints.isEmpty { successMessage = hints.trimmingCharacters(in: .whitespaces) }
-        presentReceipt(photoCount: photoCount, pendingCount: 0, issueCount: issueCount)
+        presentReceipt(photoCount: photoCount, pendingCount: 0, issueCount: issueCount,
+                       photo: outcome.photoResult?.saved.first)
     }
 
     /// The receipt after a save: what the backend confirmed, and the one next step.
-    private func presentReceipt(photoCount: Int, pendingCount: Int, issueCount: Int) {
+    /// `photo` is one the save just confirmed (the receipt's image); nil shows no image, never another room's.
+    private func presentReceipt(photoCount: Int, pendingCount: Int, issueCount: Int, photo: EvidencePhoto?) {
         let property = propertyStore.currentProperty
+        // Photo totals, as on the comparison screen: a room with only empty entries still needs proof.
         let nextRoom = property?.rooms.first { room in
-            room.id != roomID && (moveOutMode ? room.moveOutEntryTotal : room.moveInEntryTotal) == 0
+            room.id != roomID && (moveOutMode ? room.moveOutPhotoTotal : room.moveInPhotoTotal) == 0
         }
         let next: SavedRoomReceipt.Next
         if pendingCount > 0 {
@@ -219,6 +231,7 @@ extension EvidenceCaptureView {
             next = .done
         }
         MMHaptics.success()
+        if let photo { MoveMarkStoredFileURLs.remember([photo]) }   // so the room's resolver can sign it
         savedReceipt = SavedRoomReceipt(
             propertyId: property?.id,
             roomName: roomName,
@@ -227,7 +240,8 @@ extension EvidenceCaptureView {
             pendingCount: pendingCount,
             issueCount: issueCount,
             savedAt: Date(),
-            next: next
+            next: next,
+            photoPath: photo.map { $0.thumbnailPath ?? $0.filePath }
         )
     }
 
@@ -247,35 +261,40 @@ extension EvidenceCaptureView {
         }
     }
 
+    /// The result shows as the proof toast at the top (the row may be anywhere on the page). A failure also
+    /// leaves a notice whose "Try again" retries this delete.
     func deleteEntry(_ entryId: UUID) async {
+        guard !isDeleting else { return }
         guard let property = propertyStore.currentProperty else {
-            errorMessage = MoveMarkFlowMessage.noActiveProperty
+            showError(MoveMarkFlowMessage.noActiveProperty, source: .delete(entryId))
             return
         }
 
         guard let userId = sessionManager.userId else {
-            errorMessage = MoveMarkFlowMessage.signInRequired
+            showError(MoveMarkFlowMessage.signInRequired, source: .delete(entryId))
             return
         }
 
+        isDeleting = true
+        defer { isDeleting = false }
         do {
             let outcome = try await propertyStore.deleteEvidence(
                 entryId: entryId,
                 propertyId: property.id,
                 userId: userId
             )
-            errorMessage = nil
-            var msg = "Entry removed."
-            if outcome.hydrationRefreshFailed { msg += MoveMarkFlowMessage.proofHydrationHint }
-            successMessage = msg
-            MMHaptics.success()
+            propertyStore.invalidateVaultSummaries()
+            if case .delete = errorSource { errorMessage = nil; errorSource = .none }
+            showToast(.success, "Entry removed", hint: outcome.hydrationRefreshFailed)
         } catch {
-            errorMessage = MoveMarkFlowMessage.proofDeleteFailed(error)
-            MMHaptics.error()
+            let msg = MoveMarkFlowMessage.proofDeleteFailed(error)
+            errorMessage = msg
+            errorSource = .delete(entryId)
+            showToast(.danger, msg)
         }
     }
 
-    /// - Returns: `nil` on success, user-facing message on failure (also sets `errorMessage`).
+    /// - Returns: `nil` on success, user-facing message on failure (shown in the edit sheet, next to Save).
     @discardableResult
     func saveEditedEvidence(
         entryId: UUID,
@@ -285,17 +304,13 @@ extension EvidenceCaptureView {
         condition: RoomRecord.ConditionRating
     ) async -> String? {
         guard let property = propertyStore.currentProperty else {
-            let msg = MoveMarkFlowMessage.noActiveProperty
-            errorMessage = msg
             MMHaptics.error()
-            return msg
+            return MoveMarkFlowMessage.noActiveProperty
         }
 
         guard let userId = sessionManager.userId else {
-            let msg = MoveMarkFlowMessage.signInRequired
-            errorMessage = msg
             MMHaptics.error()
-            return msg
+            return MoveMarkFlowMessage.signInRequired
         }
 
         do {
@@ -308,42 +323,31 @@ extension EvidenceCaptureView {
                 propertyId: property.id,
                 userId: userId
             )
-            errorMessage = nil
-            var msg = "Entry updated."
-            if outcome.hydrationRefreshFailed { msg += MoveMarkFlowMessage.proofHydrationHint }
-            successMessage = msg
-            MMHaptics.success()
+            propertyStore.invalidateVaultSummaries()
+            showToast(.success, "Entry updated", hint: outcome.hydrationRefreshFailed)
             return nil
         } catch {
-            let msg = MoveMarkFlowMessage.proofUpdateFailed(error)
-            errorMessage = msg
             MMHaptics.error()
-            return msg
+            return MoveMarkFlowMessage.proofUpdateFailed(error)
         }
     }
 
     /// Appends to an existing entry. Returns the photos that still need a retry (empty when all were
-    /// saved) and a message for the sheet; the saved ones are never sent again.
+    /// saved) and a message for the sheet; the saved ones are never sent again. Success shows the proof toast.
     func appendPhotos(to entryId: UUID, photos: [MMPendingEvidence]) async -> (pending: [MMPendingEvidence], message: String?) {
         guard !photos.isEmpty else {
-            let msg = "Choose at least one photo to add."
-            errorMessage = msg
             MMHaptics.warning()
-            return (photos, msg)
+            return (photos, "Choose at least one photo to add.")
         }
 
         guard let property = propertyStore.currentProperty else {
-            let msg = MoveMarkFlowMessage.noActiveProperty
-            errorMessage = msg
             MMHaptics.error()
-            return (photos, msg)
+            return (photos, MoveMarkFlowMessage.noActiveProperty)
         }
 
         guard let userId = sessionManager.userId else {
-            let msg = MoveMarkFlowMessage.signInRequired
-            errorMessage = msg
             MMHaptics.error()
-            return (photos, msg)
+            return (photos, MoveMarkFlowMessage.signInRequired)
         }
 
         let outcome = await propertyStore.appendPhotosToEvidence(
@@ -355,17 +359,40 @@ extension EvidenceCaptureView {
             isMoveOut: moveOutMode
         )
         let result = outcome.photoResult ?? MMEvidenceSaveResult(pending: photos)
+        if !result.saved.isEmpty { propertyStore.invalidateVaultSummaries() }
         guard result.isComplete else {
             MMHaptics.warning()
             return (result.pending, MMEvidenceSaveStatus.partial(saved: result.saved.count, requested: result.requestedCount))
         }
-        errorMessage = nil
-        var msg = "Photos added to entry."
-        if outcome.hydrationRefreshFailed { msg += MoveMarkFlowMessage.proofHydrationHint }
-        successMessage = msg
-        MMHaptics.success()
+        showToast(.success, result.saved.count == 1 ? "1 photo added" : "\(result.saved.count) photos added",
+                  hint: outcome.hydrationRefreshFailed)
         return ([], nil)
     }
+
+    /// A notice in the room body; `source` decides what its "Try again" does.
+    func showError(_ message: String, source: EvidenceErrorSource) {
+        errorMessage = message
+        errorSource = source
+        MMHaptics.error()
+    }
+
+    /// Delete / edit / append feedback: the room's proof toast (it plays the haptic).
+    private func showToast(_ kind: MMProofToastMessage.Kind, _ title: String, hint: Bool = false) {
+        let detail = hint ? MoveMarkFlowMessage.proofHydrationHint.trimmingCharacters(in: .whitespaces) : nil
+        MMProofToastPresenter.show(
+            MMProofToastMessage(kind: kind, title: title, message: detail),
+            message: $proofToast,
+            isVisible: $proofToastVisible
+        )
+    }
+}
+
+/// Where the room's current notice came from, so "Try again" repeats the right thing.
+enum EvidenceErrorSource {
+    case none
+    case save
+    case delete(UUID)
+    case history(() async throws -> Void)
 }
 
 /// Photos of a just-saved entry that didn't make it. Retried on their own — never together with the

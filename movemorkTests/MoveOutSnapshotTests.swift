@@ -105,9 +105,9 @@ final class MoveOutSnapshotTests: XCTestCase {
     }
 
     private func screen(_ rooms: [RoomRecord], checklist: MoveOutChecklistRow? = nil, exporting: Bool = false,
-                        error: String? = nil, queued: String? = nil) -> some View {
+                        error: String? = nil, errorFromExport: Bool = false, queued: String? = nil) -> some View {
         MoveOutFoundationView(path: .constant([]), initialChecklist: checklist, initiallyExporting: exporting,
-                              initialError: error, initialQueuedNotice: queued)
+                              initialError: error, initialErrorFromExport: errorFromExport, initialQueuedNotice: queued)
             .environment(store(rooms))
             .environment(\.mmEvidenceImageOverride, { path in
                 Self.photo((path as NSString).deletingPathExtension.components(separatedBy: "/").last ?? path)
@@ -187,8 +187,17 @@ final class MoveOutSnapshotTests: XCTestCase {
                        as: ScreenSnapshot.strategy(reportPage), named: "tall")
     }
 
+    /// An export failure shows beside the report action, where the renter tapped.
     func testMoveOutError() {
-        assertScreen(screen(Self.completeRooms, checklist: checklist, error: "Couldn't queue move-out report. Try again."),
+        assertSnapshot(of: ScreenSnapshot.host(screen(Self.completeRooms, checklist: checklist,
+                                                      error: "Couldn't queue move-out report. Try again.",
+                                                      errorFromExport: true)),
+                       as: ScreenSnapshot.strategy(reportPage), named: "tall")
+    }
+
+    /// A checklist failure stays at the top of the page.
+    func testMoveOutChecklistError() {
+        assertScreen(screen(Self.completeRooms, checklist: checklist, error: "Couldn't save your checklist. Try again."),
                      devices: [("pro", ScreenSnapshot.pro), ("small", ScreenSnapshot.small)])
     }
 

@@ -24,6 +24,8 @@ struct ReportsHomeModel {
         case ready(generatedAt: Date?)
         /// The newest attempt failed; `lastReadyAt` is set when an earlier report can still be opened.
         case failed(lastReadyAt: Date?)
+        /// The report list couldn't be loaded and never has been: nothing is known about the report yet.
+        case unavailable
     }
 
     enum Need: Equatable { case rooms, record }
@@ -58,6 +60,8 @@ struct ReportsHomeModel {
     var history: [HistoryItem] = []
     var others: [OtherReport] = []
     var errorMessage: String?
+    /// The error row's action label; `nil` reads "Try again".
+    var errorActionTitle: String? = nil
 }
 
 /// The Reports tab: a document control centre for one rental. The move-in report is the artifact at the
@@ -70,6 +74,8 @@ struct ReportsHomeView: View {
     var onPrimary: () -> Void = {}
     var onShare: () -> Void = {}
     var onViewLastReport: () -> Void = {}
+    /// Ready state: make a fresh report from today's proof (quota and paywall are the caller's job).
+    var onGenerateNew: () -> Void = {}
     var onHistory: (ReportsHomeModel.HistoryItem, HistoryAction) -> Void = { _, _ in }
     var onOther: (ReportsHomeModel.OtherReport) -> Void = { _ in }
     var onRetry: () -> Void = {}
@@ -301,7 +307,7 @@ struct ReportsHomeView: View {
             ProgressView().controlSize(.small).tint(Ink.secondary)
         case .ready:
             Circle().fill(Ink.limeMark).frame(width: 9 * k, height: 9 * k)
-        case .failed:
+        case .failed, .unavailable:
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: 14 * k, weight: .semibold))
                 .foregroundStyle(Ink.danger)
@@ -320,6 +326,7 @@ struct ReportsHomeView: View {
         case .generating: "Generating report…"
         case .ready: "Ready"
         case .failed: "Couldn't generate report"
+        case .unavailable: "Couldn't load reports"
         }
     }
 
@@ -342,13 +349,16 @@ struct ReportsHomeView: View {
                 return "Your evidence is safe. Your last report, from \(lastReady.formatted(.dateTime.month(.abbreviated).day()).replacingOccurrences(of: " ", with: "\u{00A0}")), is still available."
             }
             return "Your evidence is safe. Try again in a moment."
+        case .unavailable:
+            return "Your evidence is safe. Try again in a moment."
         }
     }
 
     @ViewBuilder
     private var artifactActions: some View {
         switch model.primary {
-        case .loading, .generating, .noRental:
+        case .loading, .generating, .noRental, .unavailable:
+            // Unavailable: the error row above carries Try again.
             EmptyView()
         case .needsProof, .canGenerate:
             limeButton(model.primaryTitle, icon: primaryIcon, action: onPrimary)
@@ -357,6 +367,7 @@ struct ReportsHomeView: View {
             VStack(spacing: 4 * k) {
                 limeButton("View report", icon: "doc.text.magnifyingglass", action: onPrimary)
                 quietButton("Share", icon: "square.and.arrow.up", action: onShare)
+                quietButton("Generate new report", icon: nil, action: onGenerateNew)
             }
             .padding(.top, 18 * k)
         case .failed(let lastReady):
@@ -574,7 +585,10 @@ struct ReportsHomeView: View {
             Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Ink.danger)
             Text(message).mmFont(14).foregroundStyle(Ink.text).fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
-            Button(MMCopy.tryAgain, action: onRetry).mmFont(14, .semibold).foregroundStyle(Ink.text)
+            Button(model.errorActionTitle ?? MMCopy.tryAgain, action: onRetry)
+                .mmFont(14, .semibold)
+                .foregroundStyle(Ink.text)
+                .frame(minHeight: 44)
         }
         .padding(12)
         .background(Ink.card, in: RoundedRectangle(cornerRadius: 12 * k, style: .continuous))

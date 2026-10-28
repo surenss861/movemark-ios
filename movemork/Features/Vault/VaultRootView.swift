@@ -53,7 +53,8 @@ struct VaultRootView: View {
         .sheet(isPresented: $showPaywall) {
             ProPaywallView(
                 reason: activePaywallReason,
-                onClose: { showPaywall = false }
+                onClose: { showPaywall = false },
+                moveInRecorded: propertyStore.currentProperty.map { propertyStore.totalPhotoCount(for: $0) > 0 } ?? false
             )
         }
         .navigationTitle("")
@@ -252,12 +253,8 @@ struct VaultRootView: View {
         case .makeMoveInReport:
             path.append(.exports)
         case .moveOutProofReminder:
-            if subscriptionManager.hasPro {
-                path.append(.moveOut)
-            } else {
-                activePaywallReason = .moveOutExport
-                showPaywall = true
-            }
+            // Recording move-out proof is free; only the move-out report is Pro (gated where it's made).
+            path.append(.moveOut)
         }
     }
 

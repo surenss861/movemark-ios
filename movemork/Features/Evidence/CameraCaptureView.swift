@@ -110,7 +110,8 @@ final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptur
 
     private func configureSession(position: AVCaptureDevice.Position) {
         guard let camera = applyConfiguration(position: position) else {
-            DispatchQueue.main.async { self.showUnavailable() }
+            // A failed flip restores the previous input and keeps it running; only no input at all is unavailable.
+            if session.inputs.isEmpty { DispatchQueue.main.async { self.showUnavailable() } }
             return
         }
         device = camera
@@ -124,10 +125,15 @@ final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptur
         session.beginConfiguration()
         defer { session.commitConfiguration() }
         session.sessionPreset = .photo
-        session.inputs.forEach { session.removeInput($0) }
+        let previousInputs = session.inputs
+        previousInputs.forEach { session.removeInput($0) }
         guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position),
               let input = try? AVCaptureDeviceInput(device: camera), session.canAddInput(input)
-        else { return nil }
+        else {
+            // Never leave the session without a camera: put the previous input back.
+            for previous in previousInputs where session.canAddInput(previous) { session.addInput(previous) }
+            return nil
+        }
         session.addInput(input)
         if !session.outputs.contains(output), session.canAddOutput(output) {
             session.addOutput(output)
@@ -340,10 +346,15 @@ final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptur
         NSLayoutConstraint.activate([
             header.topAnchor.constraint(equalTo: guide.topAnchor, constant: 8),
             header.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 20),
-            header.trailingAnchor.constraint(lessThanOrEqualTo: flashButton.leadingAnchor, constant: -12),
-            flipButton.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -20),
-            flipButton.topAnchor.constraint(equalTo: guide.topAnchor, constant: 10),
-            flashButton.trailingAnchor.constraint(equalTo: flipButton.leadingAnchor, constant: -20),
+            header.trailingAnchor.constraint(lessThanOrEqualTo: flashButton.leadingAnchor, constant: -2),
+            // 44pt tap targets; the constants absorb the larger frames so the icons stay where they were.
+            flipButton.widthAnchor.constraint(equalToConstant: 44),
+            flipButton.heightAnchor.constraint(equalToConstant: 44),
+            flashButton.widthAnchor.constraint(equalToConstant: 44),
+            flashButton.heightAnchor.constraint(equalToConstant: 44),
+            flipButton.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -10),
+            flipButton.topAnchor.constraint(equalTo: guide.topAnchor, constant: -1),
+            flashButton.trailingAnchor.constraint(equalTo: flipButton.leadingAnchor),
             flashButton.centerYAnchor.constraint(equalTo: flipButton.centerYAnchor),
             suggestionLabel.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 10),
             suggestionLabel.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 20),
