@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 extension EvidenceCaptureView {
     func saveEvidence() {
@@ -22,7 +23,7 @@ extension EvidenceCaptureView {
             return
         }
 
-        guard !isUploading else { return }
+        guard !isUploading, !isCheckingSaved else { return }
 
         if loadedImages.isEmpty {
             if pendingRetry != nil {
@@ -38,6 +39,7 @@ extension EvidenceCaptureView {
         errorMessage = nil
         successMessage = nil
         isUploading = true
+        uploadingCount = loadedSources.count
 
         let evidence = EvidenceRecord(
             title: title.isEmpty ? roomName : title,
@@ -49,12 +51,33 @@ extension EvidenceCaptureView {
             stage: moveOutMode ? .moveOut : .moveIn
         )
 
-        // One row id per photo for every attempt; previews follow the photos into a retry.
-        let photos = loadedSources.map { MMPendingEvidence(source: $0) }
+        // One row id per photo for every attempt (the id it got at capture, also its file on this iPhone);
+        // previews follow the photos into a retry.
+        let photos = loadedSources
         let previews = Dictionary(uniqueKeysWithValues: zip(photos.map(\.id), loadedImages))
+        let key = pendingKey
+        let ids = photos.map(\.id)
+        let draft = currentDraft
+        let center = pendingCenter
+        // Lets a short save finish if the renter leaves the app; if iOS stops it anyway, the photos are
+        // still on this iPhone (marked uploading → failed at the next launch) and retryable.
+        let background = EvidenceBackgroundTask(name: "Save room evidence")
 
         Task { @MainActor in
-            defer { isUploading = false }
+            defer {
+                isUploading = false
+                background.end()
+            }
+            if let key {
+                await center.perform(key.userId) { await $0.markUploading(ids, in: key, draft: draft) }.value
+            }
+            // Recorded the moment the entry exists, so a save cut off mid-way still knows where its photos went.
+            let onEntryCreated: (UUID) async -> Void = { entryId in
+                guard let key else { return }
+                await center.perform(key.userId) {
+                    await $0.setEntry(entryId, savedCount: 0, requestedCount: ids.count, in: key)
+                }.value
+            }
 
             do {
                 let outcome: PropertyMutationOutcome
@@ -65,7 +88,8 @@ extension EvidenceCaptureView {
                         evidence: evidence,
                         photos: photos,
                         propertyId: property.id,
-                        userId: userId
+                        userId: userId,
+                        onEntryCreated: onEntryCreated
                     )
                     if hadZeroMoveOutEvidenceBefore, outcome.photoResult?.saved.isEmpty == false {
                         propertyStore.pendingVaultFeedback = .moveOutRoomCompleted(roomName: roomName)
@@ -76,7 +100,8 @@ extension EvidenceCaptureView {
                         evidence: evidence,
                         photos: photos,
                         propertyId: property.id,
-                        userId: userId
+                        userId: userId,
+                        onEntryCreated: onEntryCreated
                     )
 
                     let isNowDocumented = isRoomCurrentlyDocumented
@@ -89,6 +114,11 @@ extension EvidenceCaptureView {
                 let result = outcome.photoResult ?? MMEvidenceSaveResult()
                 errorMessage = nil
                 propertyStore.invalidateVaultSummaries()
+                // Confirmed rows leave this iPhone; the rest stay, failed, tied to the entry for their retry.
+                if let key {
+                    recordSaveResult(result, entryId: outcome.entryId, savedSoFar: result.saved.count,
+                                     requested: result.requestedCount, key: key)
+                }
 
                 MoveMarkAnalytics.track(
                     .photoAdded,
@@ -114,8 +144,10 @@ extension EvidenceCaptureView {
                 selectedTags = []
                 selectedCondition = .good
                 selectedItems = []
+                pickerItemIDs = []
                 loadedImages = []
                 loadedSources = []
+                uploadFailed = false
 
                 guard result.isComplete else {
                     if let entryId = outcome.entryId {
@@ -144,7 +176,15 @@ extension EvidenceCaptureView {
                 #if DEBUG
                 print("ROOM SAVE FAILED:", error.localizedDescription)
                 #endif
-                // Nothing was saved and the entry was removed: the photos stay pending as they were.
+                // Nothing was saved and the entry was removed: the photos stay pending as they were (on this
+                // iPhone too, marked failed and no longer tied to an entry).
+                uploadFailed = true
+                if let key {
+                    center.perform(key.userId) { store in
+                        await store.setEntry(nil, savedCount: 0, requestedCount: 0, in: key)
+                        await store.markFailed(ids, in: key)
+                    }
+                }
                 errorMessage = MoveMarkFlowMessage.proofSaveFailed(error)
                 errorSource = .save
                 MMHaptics.error()
@@ -154,12 +194,29 @@ extension EvidenceCaptureView {
 
     /// Retries only the photos of `pendingRetry`, appending them to the entry that already holds the rest.
     private func retryPendingPhotos(propertyId: UUID, userId: UUID) {
-        guard var retry = pendingRetry, !isUploading else { return }
+        guard pendingRetry != nil, !isUploading, !isCheckingSaved else { return }
         errorMessage = nil
         successMessage = nil
-        isUploading = true
+        let key = pendingKey
+        let center = pendingCenter
         Task { @MainActor in
-            defer { isUploading = false }
+            // Restored after a relaunch: first ask which photos already made it.
+            guard await reconcileRestoredRetry() else {
+                saveEvidence()   // the entry is gone: the photos were returned to the form as a new entry
+                return
+            }
+            guard var retry = pendingRetry, !isUploading else { return }
+            isUploading = true
+            uploadingCount = retry.pending.count
+            let background = EvidenceBackgroundTask(name: "Retry room evidence")
+            defer {
+                isUploading = false
+                background.end()
+            }
+            if let key {
+                let ids = retry.pending.map(\.id)
+                await center.perform(key.userId) { await $0.markUploading(ids, in: key) }.value
+            }
             let outcome = await propertyStore.appendPhotosToEvidence(
                 entryId: retry.entryId,
                 roomId: roomID,
@@ -172,6 +229,10 @@ extension EvidenceCaptureView {
             if !result.saved.isEmpty { propertyStore.invalidateVaultSummaries() }
             retry.savedCount += result.saved.count
             retry.pending = result.pending
+            if let key {
+                recordSaveResult(result, entryId: retry.entryId, savedSoFar: retry.savedCount,
+                                 requested: retry.requestedCount, key: key)
+            }
             guard retry.pending.isEmpty else {
                 pendingRetry = retry
                 MMHaptics.warning()
@@ -186,6 +247,28 @@ extension EvidenceCaptureView {
             merged.tagInsertFailed = retry.outcomeHints.tagInsertFailed
             presentSaveSuccess(photoCount: retry.savedCount, issueCount: retry.issueCount, outcome: merged)
         }
+    }
+
+    /// Mirrors a save's result on this iPhone: confirmed photos are removed (the server has their rows);
+    /// the rest are marked failed, keep any unresolved upload, and stay tied to the entry for their retry.
+    private func recordSaveResult(_ result: MMEvidenceSaveResult, entryId: UUID?, savedSoFar: Int, requested: Int,
+                                  key: PendingEvidenceKey) {
+        let saved = result.saved.map(\.id)
+        let failed = result.pending.map(\.id)
+        let unresolved = Dictionary(uniqueKeysWithValues: result.pending.compactMap { item in
+            item.unresolved.map { (item.id, PendingEvidenceUpload($0)) }
+        })
+        pendingCenter.perform(key.userId) { store in
+            await store.remove(saved, from: key)
+            guard !failed.isEmpty else { return }
+            await store.markFailed(failed, unresolved: unresolved, in: key)
+            await store.setEntry(entryId, savedCount: savedSoFar, requestedCount: requested, in: key)
+        }
+    }
+
+    /// A restored partial save turned out to be complete on the server.
+    func showSyncToast(savedCount: Int) {
+        showToast(.success, savedCount == 1 ? "1 photo saved" : "\(savedCount) photos saved")
     }
 
     /// Full success: only reached when every photo the user asked to save is confirmed saved.
@@ -407,7 +490,27 @@ struct EvidenceRetryState {
     let issueCount: Int
     /// The first attempt's outcome (tag insert result) for the eventual success message.
     let outcomeHints: PropertyMutationOutcome
+    /// Restored from this iPhone after a relaunch: which photos already have rows isn't known yet.
+    var needsServerCheck: Bool = false
 
     var statusLine: String { MMEvidenceSaveStatus.partial(saved: savedCount, requested: requestedCount) }
     var pendingPreviews: [UIImage] { pending.compactMap { previews[$0.id] } }
+}
+
+/// A background-task assertion around a save: lets a short upload finish when the renter leaves the app.
+/// On expiry it just ends; the photos stay on this iPhone and the interrupted save is retryable.
+final class EvidenceBackgroundTask {
+    private var identifier: UIBackgroundTaskIdentifier = .invalid
+
+    init(name: String) {
+        identifier = UIApplication.shared.beginBackgroundTask(withName: name) { [weak self] in
+            self?.end()
+        }
+    }
+
+    func end() {
+        guard identifier != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(identifier)
+        identifier = .invalid
+    }
 }

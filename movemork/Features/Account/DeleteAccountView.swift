@@ -60,9 +60,12 @@ struct DeleteAccountView: View {
                 throw APIClientError.invalidBaseURL
             }
             let client = try ExportAPIClient(baseURLString: apiBaseURL)
+            let userId = sessionManager.userId
             try await client.deleteAccount()
             // The account (and its Neon Auth identity) is gone; drop the session without a server round trip.
             await NeonAuthClient.shared.endSessionLocally(notify: false)
+            // Nothing of the account stays on this iPhone: photos not uploaded yet go too.
+            if let userId { await PendingEvidenceCenter.shared.clearUser(userId) }
 
             propertyStore.clear()
             await sessionManager.signOut()

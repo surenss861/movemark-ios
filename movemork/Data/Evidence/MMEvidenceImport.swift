@@ -26,12 +26,12 @@ import UniformTypeIdentifiers
 
 /// Evidence source formats the server accepts as immutable sources. Anything else (e.g. DNG/ProRAW,
 /// GIF, WebP, TIFF) is refused with a clear error rather than silently transcoded.
-enum MMEvidenceCaptureSource: String, Sendable {
+nonisolated enum MMEvidenceCaptureSource: String, Sendable, Codable {
     case camera
     case library
 }
 
-struct MMEvidenceSource: Sendable, Equatable {
+nonisolated struct MMEvidenceSource: Sendable, Equatable {
     /// The file's bytes, exactly as received from the platform.
     let data: Data
     let mimeType: String
@@ -46,7 +46,7 @@ struct MMEvidenceSource: Sendable, Equatable {
     let captureSource: MMEvidenceCaptureSource
 }
 
-enum MMEvidenceImportError: LocalizedError, Equatable {
+nonisolated enum MMEvidenceImportError: LocalizedError, Equatable {
     case unreadable
     case unsupportedFormat(String)
     case tooLarge(bytes: Int)
@@ -63,7 +63,7 @@ enum MMEvidenceImportError: LocalizedError, Equatable {
     }
 }
 
-enum MMEvidenceImport {
+nonisolated enum MMEvidenceImport {
     /// Server limit for immutable sources (`SOURCE` in the API). Sources are never shrunk to fit.
     static let maxSourceBytes = 25 * 1024 * 1024
     /// Server limit for the working derivative (`PHOTO` in the API).
@@ -198,7 +198,7 @@ enum MMEvidenceImport {
 /// DEBUG builds only: an append-only record of the SHA-256 of bytes exactly as the platform handed them
 /// over (camera `fileDataRepresentation()`, picker file data), so a device test can prove the hash chain
 /// platform bytes → uploaded source → stored object. Written to Documents/evidence-audit.log.
-enum MMEvidenceAuditLog {
+nonisolated enum MMEvidenceAuditLog {
     static func record(_ origin: String, _ data: Data) {
         let hex = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         let type = CGImageSourceCreateWithData(data as CFData, nil).flatMap { CGImageSourceGetType($0) as String? } ?? "?"
