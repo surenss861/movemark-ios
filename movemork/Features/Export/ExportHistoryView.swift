@@ -15,6 +15,8 @@ struct ExportHistoryView: View {
     @Environment(\.mmRootTabBarVisible) private var rootTabBarVisible
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    /// Reports is kept alive behind the other tabs; this says whether it is the visible one.
+    @Environment(\.mmRootTabIsActive) private var rootTabIsActive
 
     private struct ReportPreviewItem: Identifiable {
         let id = UUID()
@@ -61,6 +63,8 @@ struct ExportHistoryView: View {
     @State private var pollTimedOut = false
     /// Tags this view's refresh notifications so it doesn't reload twice for its own request.
     @State private var instanceID = UUID()
+    /// On screen in its navigation stack (a pushed screen over it, or a closed stack, reads false).
+    @State private var isOnScreen = false
 
     // MARK: - Export status (polled while a report is queued or processing)
 
@@ -136,6 +140,7 @@ struct ExportHistoryView: View {
             handleReportReadinessChange()
         }
         .onAppear {
+            isOnScreen = true
             lastReportReadiness = currentReportReadiness
         }
         .confirmationDialog(
@@ -204,17 +209,19 @@ struct ExportHistoryView: View {
             await refreshAndPoll()
         }
         .onDisappear {
+            isOnScreen = false
             pollTask?.cancel()
             pollTask = nil
         }
         .onChange(of: scenePhase) { _, phase in
             // Back from the background: a job may have finished (or the poll was suspended mid-wait).
-            if phase == .active { Task { await refreshAndPoll() } }
+            if phase == .active { Task { await refreshAndPoll(quietly: true) } }
         }
         .onReceive(NotificationCenter.default.publisher(for: .moveMarkExportsShouldRefresh)) { note in
             // This view's own requests already reload and poll inline.
             if (note.userInfo?[Self.refreshSourceKey] as? UUID) == instanceID { return }
-            Task { await refreshAndPoll() }
+            // Returning to the tab: refresh behind what is already shown, never back through "Checking…".
+            Task { await refreshAndPoll(quietly: true) }
         }
     }
 
@@ -417,9 +424,14 @@ struct ExportHistoryView: View {
         if cta.enabled { cta.action() }
     }
 
-    /// Reloads the list, then (re)starts the one status poll.
-    private func refreshAndPoll() async {
-        await loadExports()
+    /// Reloads the list, then (re)starts the one status poll. `quietly` keeps what is on screen while the
+    /// fetch runs (no loading state, no cleared error row) once this rental's list has loaded.
+    private func refreshAndPoll(quietly: Bool = false) async {
+        if quietly, let loadedPropertyId, loadedPropertyId == resolvedExportPropertyId {
+            await loadExportsQuietly()
+        } else {
+            await loadExports()
+        }
         startPolling()
     }
 
@@ -480,6 +492,14 @@ struct ExportHistoryView: View {
                 let fp = (item.filePath ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                 nextVerification[item.id] = fp.isEmpty ? .missingPath : .ready
             }
+        }
+        // A report the renter is waiting on just finished while they're looking at Reports.
+        let finishedWhileWatching = nextVerification.contains { id, status in
+            guard status == .ready, let previous = verificationStatus[id] else { return false }
+            return isActiveExportJob(previous)
+        }
+        if finishedWhileWatching, isOnScreen, rootTabIsActive, scenePhase == .active {
+            MMHaptics.success()
         }
         exports = items.map { item in
             ExportRow(
@@ -800,41 +820,41 @@ struct ExportHistoryView: View {
         }
     }
 
+    /// The report as a local PDF named for people; reopening it uses the copy already on this iPhone.
     private func prepareLocalReportFile(for row: ExportRow) async throws -> URL {
         let client = try makeAPIClient()
-        let response = try await client.fetchDownloadURL(exportId: row.id.uuidString)
-        guard let signedURL = URL(string: response.downloadUrl) else {
-            throw APIClientError.invalidResponse
-        }
-        return try await ReportFileDownloader.downloadPDF(
-            from: signedURL,
-            exportType: row.exportType
+        let fileName = ReportFileDownloader.reportFileName(
+            exportType: row.exportType,
+            rentalName: activeVaultDisplayTitle,
+            date: parsedDate(row.createdAt) ?? Date()
         )
+        return try await ReportFileDownloader.localReport(exportId: row.id, fileName: fileName) {
+            let response = try await client.fetchDownloadURL(exportId: row.id.uuidString)
+            guard let signedURL = URL(string: response.downloadUrl) else {
+                throw APIClientError.invalidResponse
+            }
+            return signedURL
+        }
     }
 
     private func viewReport(_ row: ExportRow) {
+        // A second tap while the first is opening (or once the preview is up) never starts more work.
+        guard !isDownloadingReport, reportPreviewItem == nil else { return }
+        MMHaptics.soft()
+        errorMessage = nil
+        // Already on this iPhone: open it at once, with no download and no "Opening report…" flash.
+        if let cached = ReportFileDownloader.cachedReport(exportId: row.id) {
+            presentPreview(of: cached, for: row)
+            return
+        }
+        isDownloadingReport = true
         Task { @MainActor in
-            MMHaptics.soft()
-            errorMessage = nil
-            isDownloadingReport = true
             defer { isDownloadingReport = false }
 
             do {
                 let localURL = try await prepareLocalReportFile(for: row)
                 try ReportFileDownloader.validateReportFile(at: localURL)
-                reportPreviewItem = ReportPreviewItem(
-                    fileURL: localURL,
-                    title: ReportFileDownloader.displayTitle(for: row.exportType),
-                    exportType: row.exportType
-                )
-                verificationStatus[row.id] = .ready
-                presentProofToast(
-                    MMProofToastMessage(
-                        kind: .success,
-                        title: "Report ready",
-                        message: "Preview or share your PDF."
-                    )
-                )
+                presentPreview(of: localURL, for: row)
             } catch let reportError as ReportFileError {
                 errorMessage = reportError.localizedDescription
                 MMHaptics.error()
@@ -845,6 +865,22 @@ struct ExportHistoryView: View {
                 MMHaptics.error()
             }
         }
+    }
+
+    private func presentPreview(of localURL: URL, for row: ExportRow) {
+        reportPreviewItem = ReportPreviewItem(
+            fileURL: localURL,
+            title: ReportFileDownloader.displayTitle(for: row.exportType),
+            exportType: row.exportType
+        )
+        verificationStatus[row.id] = .ready
+        presentProofToast(
+            MMProofToastMessage(
+                kind: .success,
+                title: "Report ready",
+                message: "Preview or share your PDF."
+            )
+        )
     }
 
     private func shareCachedReport(at fileURL: URL, exportType: String) {
@@ -861,26 +897,22 @@ struct ExportHistoryView: View {
     }
 
     private func share(_ row: ExportRow) {
+        guard !isDownloadingReport, !showShareSheet else { return }
+        MMHaptics.soft()
+        errorMessage = nil
+        if let cached = ReportFileDownloader.cachedReport(exportId: row.id),
+           let item = try? ReportFileDownloader.makeShareItem(for: cached, exportType: row.exportType) {
+            presentShareSheet(item, for: row)
+            return
+        }
+        isDownloadingReport = true
         Task { @MainActor in
-            MMHaptics.soft()
-            errorMessage = nil
-            isDownloadingReport = true
             defer { isDownloadingReport = false }
 
             do {
                 let localURL = try await prepareLocalReportFile(for: row)
                 let item = try ReportFileDownloader.makeShareItem(for: localURL, exportType: row.exportType)
-                shareItems = [item]
-                showShareSheet = true
-                MoveMarkAnalytics.track(.reportShared, properties: ["type": row.exportType])
-                verificationStatus[row.id] = .ready
-                presentProofToast(
-                    MMProofToastMessage(
-                        kind: .success,
-                        title: "Ready to share",
-                        message: "Send your PDF report."
-                    )
-                )
+                presentShareSheet(item, for: row)
             } catch let reportError as ReportFileError {
                 errorMessage = reportError.localizedDescription
                 MMHaptics.error()
@@ -893,6 +925,20 @@ struct ExportHistoryView: View {
                 MMHaptics.error()
             }
         }
+    }
+
+    private func presentShareSheet(_ item: ReportPDFActivityItem, for row: ExportRow) {
+        shareItems = [item]
+        showShareSheet = true
+        MoveMarkAnalytics.track(.reportShared, properties: ["type": row.exportType])
+        verificationStatus[row.id] = .ready
+        presentProofToast(
+            MMProofToastMessage(
+                kind: .success,
+                title: "Ready to share",
+                message: "Send your PDF report."
+            )
+        )
     }
 
     private func handleReportDownloadAPIError(_ api: APIClientError, row: ExportRow) {

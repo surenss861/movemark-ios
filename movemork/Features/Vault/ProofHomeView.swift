@@ -113,11 +113,14 @@ struct ProofHomeView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
+                MMScrollTopAnchor()
                 hero
                 sheet.padding(.top, -spec.sheetRadius)
             }
         }
         .scrollIndicators(.hidden)
+        // Tapping the active dock item again brings the page back to its top.
+        .mmScrollsToTopOnRequest()
         // The status bar keeps a solid band of the header colour, so scrolled content never runs under
         // the clock (the white status bar text stays legible over it).
         .safeAreaInset(edge: .top, spacing: 0) {

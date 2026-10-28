@@ -15,6 +15,7 @@ struct DisputePacketView: View {
     @Environment(SubscriptionManager.self) private var subscriptionManager
     @Environment(SessionManager.self) private var sessionManager
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.mmRootTabIsActive) private var rootTabIsActive
 
     private struct PreviewItem: Identifiable {
         let id = UUID()
@@ -50,6 +51,8 @@ struct DisputePacketView: View {
     @State private var pollTask: Task<Void, Never>?
     /// The poll budget ran out with the packet still queued or processing.
     @State private var pollTimedOut = false
+    /// The builder is the visible screen of its stack (for the quiet "packet ready" haptic).
+    @State private var isOnScreen = false
 
     private let inspectionRepo = InspectionRepository()
 
@@ -64,6 +67,7 @@ struct DisputePacketView: View {
                     errorMessage: errorMessage ?? (pollTimedOut && isGenerating ? "Taking longer than usual." : nil),
                     isDownloading: isDownloading,
                     onToggleRoom: { id in
+                        MMHaptics.selection()
                         if selectedRoomIDs.contains(id) { selectedRoomIDs.remove(id) } else { selectedRoomIDs.insert(id) }
                     },
                     onOpenPhoto: { item, side in openViewer(item, side, rooms: property.rooms) },
@@ -86,7 +90,9 @@ struct DisputePacketView: View {
                     restoreDraft(propertyID: property.id)
                     await refreshAndPoll()
                 }
+                .onAppear { isOnScreen = true }
                 .onDisappear {
+                    isOnScreen = false
                     pollTask?.cancel()
                     pollTask = nil
                 }
@@ -215,6 +221,9 @@ struct DisputePacketView: View {
                 ExportRow(id: $0.id, disputeId: nil, propertyId: $0.propertyId, userId: $0.userId,
                           exportType: $0.type, filePath: $0.filePath, createdAt: $0.requestedAt ?? $0.createdAt)
             }
+            // A packet the renter is waiting on just finished while the builder is on screen.
+            let finished = next.contains { id, status in status == .ready && statuses[id] == .active }
+            if finished, isOnScreen, rootTabIsActive, scenePhase == .active { MMHaptics.success() }
             statuses = next
             errorMessage = nil
         } catch {
@@ -302,29 +311,61 @@ struct DisputePacketView: View {
     }
 
     private func open(share: Bool) {
-        guard let row = latestPacket() else { return }
-        isDownloading = true
+        // A second tap while the packet is opening (or already showing) never starts another download.
+        guard let row = latestPacket(), !isDownloading, preview == nil, !showShareSheet else { return }
         errorMessage = nil
+        if let cached = ReportFileDownloader.cachedReport(exportId: row.id) {
+            present(cached, row: row, share: share)
+            return
+        }
+        isDownloading = true
+        let fileName = ReportFileDownloader.reportFileName(
+            exportType: row.exportType,
+            rentalName: propertyStore.currentProperty?.title,
+            date: Self.parsedDate(row.createdAt) ?? Date()
+        )
         Task { @MainActor in
             defer { isDownloading = false }
             do {
-                let response = try await client().fetchDownloadURL(exportId: row.id.uuidString)
-                guard let signed = URL(string: response.downloadUrl) else { throw APIClientError.invalidResponse }
-                let local = try await ReportFileDownloader.downloadPDF(from: signed, exportType: row.exportType)
-                try ReportFileDownloader.validateReportFile(at: local)
-                if share {
-                    shareItems = [try ReportFileDownloader.makeShareItem(for: local, exportType: row.exportType)]
-                    showShareSheet = true
-                    MoveMarkAnalytics.track(.reportShared, properties: ["type": row.exportType])
-                } else {
-                    preview = PreviewItem(fileURL: local)
+                let api = try client()
+                let local = try await ReportFileDownloader.localReport(exportId: row.id, fileName: fileName) {
+                    let response = try await api.fetchDownloadURL(exportId: row.id.uuidString)
+                    guard let signed = URL(string: response.downloadUrl) else { throw APIClientError.invalidResponse }
+                    return signed
                 }
+                present(local, row: row, share: share)
             } catch {
                 errorMessage = (error as? ReportFileError)?.localizedDescription
                     ?? MoveMarkFlowMessage.documentPreviewFailed(error)
                 MMHaptics.error()
             }
         }
+    }
+
+    private func present(_ local: URL, row: ExportRow, share: Bool) {
+        do {
+            try ReportFileDownloader.validateReportFile(at: local)
+            if share {
+                shareItems = [try ReportFileDownloader.makeShareItem(for: local, exportType: row.exportType)]
+                showShareSheet = true
+                MoveMarkAnalytics.track(.reportShared, properties: ["type": row.exportType])
+            } else {
+                preview = PreviewItem(fileURL: local)
+            }
+        } catch {
+            errorMessage = (error as? ReportFileError)?.localizedDescription
+                ?? MoveMarkFlowMessage.documentPreviewFailed(error)
+            MMHaptics.error()
+        }
+    }
+
+    private static func parsedDate(_ value: String?) -> Date? {
+        guard let value else { return nil }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = iso.date(from: value) { return date }
+        iso.formatOptions = [.withInternetDateTime]
+        return iso.date(from: value)
     }
 
     private func sharePreview(_ item: PreviewItem) {

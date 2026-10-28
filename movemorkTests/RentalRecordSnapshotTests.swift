@@ -231,13 +231,12 @@ final class RentalRecordSnapshotTests: XCTestCase {
     }
 
     func testEditRental() {
-        assertScreen(EditPropertyView(property: Self.day3)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") {} } },
+        assertScreen(EditPropertyView(property: Self.day3, onClose: {}),
                      devices: ScreenSnapshot.allDevices + Self.tall)
     }
 
     func testAddRental() {
-        assertScreen(NewPropertyView(today: Self.day).toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") {} } },
+        assertScreen(NewPropertyView(today: Self.day, onCancel: {}),
                      devices: ScreenSnapshot.allDevices + Self.tall)
     }
 

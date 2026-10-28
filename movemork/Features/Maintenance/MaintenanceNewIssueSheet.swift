@@ -13,6 +13,7 @@ import PhotosUI
 struct MaintenanceNewIssueSheet: View {
     @Environment(PropertyStore.self) private var propertyStore
     @Environment(SessionManager.self) private var sessionManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Called after a successful save with an optional calm notice for the log (partial photos, stale list).
     let onSaved: (String?) -> Void
@@ -33,6 +34,19 @@ struct MaintenanceNewIssueSheet: View {
     @State private var isSubmitting = false
     @State private var errorMessage: String? = nil
     @State private var errorRetryAction: (() -> Void)? = nil
+    @State private var confirmDiscard = false
+    @FocusState private var focusedField: Field?
+
+    private enum Field { case title, details }
+
+    /// Anything entered that closing the sheet would lose.
+    private var hasChanges: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || selectedCategory != .other
+            || !selectedPhotos.isEmpty
+            || !loadedImages.isEmpty
+    }
 
     init(initialError: String? = nil, onSaved: @escaping (String?) -> Void, onCancel: @escaping () -> Void) {
         self.onSaved = onSaved
@@ -52,9 +66,12 @@ struct MaintenanceNewIssueSheet: View {
             }
 
             VStack(alignment: .leading, spacing: 16) {
-                MMField(title: "Issue title", placeholder: "Water leak under sink", text: $title)
+                MMField(title: "Issue title", placeholder: "Water leak under sink", text: $title,
+                        submitLabel: .next, onSubmit: { focusedField = .details })
+                    .focused($focusedField, equals: .title)
                 categoryPicker
                 MMField(title: "Details", placeholder: "What happened, where, and what was reported", text: $details, axis: .vertical)
+                    .focused($focusedField, equals: .details)
             }
 
             MMGroup {
@@ -106,10 +123,14 @@ struct MaintenanceNewIssueSheet: View {
         }
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel", action: onCancel).disabled(isSubmitting)
+                Button("Cancel") {
+                    MMDiscardChanges.cancel(hasChanges: hasChanges, isConfirming: $confirmDiscard, dismiss: onCancel)
+                }
+                .disabled(isSubmitting)
             }
         }
-        .interactiveDismissDisabled(isSubmitting)
+        .mmDiscardChangesGuard(hasChanges: hasChanges, isBusy: isSubmitting, isConfirming: $confirmDiscard,
+                               onDiscard: onCancel)
     }
 
     private var categoryPicker: some View {
@@ -119,8 +140,12 @@ struct MaintenanceNewIssueSheet: View {
             FlowLayout(spacing: 8) {
                 ForEach(MaintenanceCategory.allCases, id: \.self) { cat in
                     MMChip(title: cat.rawValue, isSelected: selectedCategory == cat) {
+                        guard selectedCategory != cat else { return }
+                        MMHaptics.selection()
                         selectedCategory = cat
                     }
+                    // The selected fill morphs across rather than snapping (scoped to the chip).
+                    .animation(reduceMotion ? nil : MMMotion.fastFade, value: selectedCategory == cat)
                     .clipShape(Capsule())
                 }
             }

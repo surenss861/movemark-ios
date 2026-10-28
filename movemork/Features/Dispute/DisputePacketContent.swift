@@ -196,6 +196,10 @@ struct DisputePacketContent: View {
     /// The notice's action label ("Check again" when a packet is taking longer than usual).
     var errorActionTitle: String = MMCopy.tryAgain
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @FocusState private var focusedField: Field?
+    private enum Field { case question, amount }
+
     var body: some View {
         MMRecordScreen(
             eyebrow: "Dispute packet",
@@ -243,9 +247,13 @@ struct DisputePacketContent: View {
         VStack(alignment: .leading, spacing: 12) {
             MMRecordSectionHeader(title: "What is being questioned")
             MMField(title: "Issue", placeholder: "e.g. Deduction for the kitchen counter", text: $question,
-                    autocapitalization: .sentences)
+                    autocapitalization: .sentences, submitLabel: .next, onSubmit: { focusedField = .amount })
+                .focused($focusedField, equals: .question)
             MMField(title: "Amount questioned (optional)", placeholder: "e.g. $350", text: $amount,
-                    keyboard: .numbersAndPunctuation, autocapitalization: .never)
+                    keyboard: .numbersAndPunctuation, autocapitalization: .never,
+                    submitLabel: .done, onSubmit: { focusedField = nil })
+                .autocorrectionDisabled()
+                .focused($focusedField, equals: .amount)
             Text("Kept on this iPhone for your reference. It is not added to the generated packet.")
                 .mmFont(13)
                 .foregroundStyle(MMInk.secondary)
@@ -271,6 +279,8 @@ struct DisputePacketContent: View {
                 FlowLayout(spacing: 8) {
                     ForEach(model.selectableRooms) { room in
                         MMChip(title: room.name, isSelected: model.selectedRoomIDs.contains(room.id)) { onToggleRoom(room.id) }
+                            // Only the chip's fill and outline morph; the rows it adds below don't animate.
+                            .animation(reduceMotion ? nil : MMMotion.fastFade, value: model.selectedRoomIDs.contains(room.id))
                             .clipShape(Capsule())
                             .fixedSize()
                     }

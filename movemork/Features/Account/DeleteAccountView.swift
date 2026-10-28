@@ -40,6 +40,7 @@ struct DeleteAccountView: View {
             titleVisibility: .visible
         ) {
             Button("Delete Permanently", role: .destructive) {
+                MMHaptics.warning()
                 Task { await performDeletion() }
             }
             Button("Cancel", role: .cancel) {}
@@ -65,6 +66,7 @@ struct DeleteAccountView: View {
             await NeonAuthClient.shared.endSessionLocally(notify: false)
 
             propertyStore.clear()
+            ReportFileDownloader.clearCache()
             await sessionManager.signOut()
             dismiss()
         } catch {

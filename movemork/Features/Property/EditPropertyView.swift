@@ -32,6 +32,9 @@ struct EditPropertyView: View {
 
     @State private var errorMessage = ""
     @State private var isLoading = false
+    @State private var confirmDiscard = false
+    /// Closes the sheet (the presenter's binding); `nil` uses the environment's dismiss.
+    private let onClose: (() -> Void)?
 
     /// The rental had lease dates when the sheet opened (an epoch end means none was entered).
     private let hadLease: Bool
@@ -39,8 +42,9 @@ struct EditPropertyView: View {
     private let initialFieldValues: [String]
     private let initialDateValues: [Date]
 
-    init(property: PropertyRecord) {
+    init(property: PropertyRecord, onClose: (() -> Void)? = nil) {
         self.property = property
+        self.onClose = onClose
         // A title that is just the street address stays blank here, so it keeps following the address if the
         // street is edited (blank saves as the address).
         let title = property.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -92,6 +96,23 @@ struct EditPropertyView: View {
     }
 
     private var dateValues: [Date] { [moveInDate, leaseStartDate, leaseEndDate] }
+
+    /// Optional details that can't be saved as typed. A value left as it was isn't held against the save.
+    private var detailsIssue: String? {
+        RentalFormFields.detailsIssue(
+            email: landlordEmail == initialFieldValues[9] ? "" : landlordEmail,
+            deposit: depositAmount == initialFieldValues[11] ? "" : depositAmount,
+            rent: rentAmount == initialFieldValues[12] ? "" : rentAmount
+        )
+    }
+
+    private var isSaveDisabled: Bool {
+        input.validationError != nil || detailsIssue != nil || isLoading
+    }
+
+    private func close() {
+        if let onClose { onClose() } else { dismiss() }
+    }
 
     /// Unsaved edits: the sheet can't be swiped away while there are any.
     private var hasChanges: Bool {
@@ -147,22 +168,28 @@ struct EditPropertyView: View {
             } else if let leaseError = input.leaseDatesError {
                 MMNotice(message: leaseError).padding(.top, 22)
             }
-            MMPrimaryButton(title: "Save changes", isLoading: isLoading,
-                            isDisabled: input.validationError != nil || isLoading) { submit() }
+            MMPrimaryButton(title: "Save changes", isLoading: isLoading, isDisabled: isSaveDisabled) { submit() }
                 .padding(.top, 26)
         }
         .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Close") {
+                    MMDiscardChanges.cancel(hasChanges: hasChanges, isConfirming: $confirmDiscard, dismiss: close)
+                }
+                .disabled(isLoading)
+            }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") { submit() }
                     .fontWeight(.semibold)
-                    .disabled(input.validationError != nil || isLoading)
+                    .disabled(isSaveDisabled)
             }
         }
-        .interactiveDismissDisabled(hasChanges)
+        // Unsaved edits: no swipe-away, and Close or a swipe asks before dropping them.
+        .mmDiscardChangesGuard(hasChanges: hasChanges, isBusy: isLoading, isConfirming: $confirmDiscard, onDiscard: close)
     }
 
     private func submit() {
-        if let msg = input.validationError {
+        if let msg = input.validationError ?? detailsIssue {
             errorMessage = msg
             return
         }
@@ -179,7 +206,7 @@ struct EditPropertyView: View {
             defer { isLoading = false }
             do {
                 try await propertyStore.updateProperty(propertyId: property.id, input: input, userId: userId)
-                dismiss()
+                close()
             } catch {
                 errorMessage = MoveMarkFlowMessage.propertyUpdateFailed(error)
             }

@@ -11,6 +11,8 @@ import SwiftUI
 
 struct MMProofTabBarV4: View {
     @Binding var selectedTab: RootTab
+    /// The already-selected item tapped again: the shell pops that tab to its root or scrolls it to the top.
+    var onReselect: (RootTab) -> Void = { _ in }
 
     @Namespace private var tabNamespace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -55,7 +57,10 @@ struct MMProofTabBarV4: View {
     private func item(_ tab: RootTab, title: String, outline: String, filled: String) -> some View {
         let isSelected = selectedTab == tab
         return Button {
-            guard selectedTab != tab else { return }
+            guard selectedTab != tab else {
+                onReselect(tab)
+                return
+            }
             MMHaptics.selection()
             withAnimation(reduceMotion ? nil : MMMotion.tabIndicator) { selectedTab = tab }
         } label: {

@@ -92,6 +92,8 @@ struct AccountView: View {
             if let termsURL { openURL(termsURL) }
         case .signOut:
             propertyStore.clear()
+            // Downloaded reports are personal records: they don't outlive the session on a shared iPhone.
+            ReportFileDownloader.clearCache()
             Task { await sessionManager.signOut() }
         case .deleteAccount:
             showDeleteAccount = true
@@ -158,9 +160,15 @@ struct EditNameSheet: View {
     @State private var isSaving = false
     @State private var errorMessage: String? = nil
     @FocusState private var fieldFocused: Bool
+    @State private var confirmDiscard = false
 
     private var trimmedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// An edited name that closing the sheet would lose.
+    private var hasChanges: Bool {
+        trimmedName != currentName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var canSave: Bool {
@@ -220,10 +228,15 @@ struct EditNameSheet: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        MMDiscardChanges.cancel(hasChanges: hasChanges, isConfirming: $confirmDiscard, dismiss: { dismiss() })
+                    }
+                    .disabled(isSaving)
                 }
             }
             .onAppear { fieldFocused = true }
+            .mmDiscardChangesGuard(hasChanges: hasChanges, isBusy: isSaving, isConfirming: $confirmDiscard,
+                                   onDiscard: { dismiss() })
         }
     }
 
