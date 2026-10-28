@@ -42,12 +42,8 @@ struct VaultRootView: View {
         }
         .sheet(isPresented: $showAddProperty) {
             NavigationStack {
-                NewPropertyView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Cancel") { showAddProperty = false }
-                        }
-                    }
+                // Owns its Cancel, which asks before discarding what was typed.
+                NewPropertyView(onCancel: { showAddProperty = false })
             }
         }
         .sheet(isPresented: $showPaywall) {
