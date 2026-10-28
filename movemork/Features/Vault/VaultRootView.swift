@@ -119,7 +119,8 @@ struct VaultRootView: View {
             failed: pendingRooms.contains { $0.failedCount > 0 },
             onOpen: { if let first = pendingRooms.first { openPendingRoom(first) } }
         )
-        .task(id: sessionManager.userId) { await PendingEvidenceCenter.shared.refresh(userId: sessionManager.userId) }
+        // Settles what an interrupted save left (photos already saved, an empty entry, uploads to release).
+        .task(id: sessionManager.userId) { await PendingEvidenceCenter.shared.reconcileAll(userId: sessionManager.userId) }
         .task { await loadPreviewURLs() }
         .task(id: featuredPropertyId) { await ensureFeaturedPropertyLoaded() }
         .task(id: otherProperties.map(\.id)) { await loadOtherRentalSummaries() }

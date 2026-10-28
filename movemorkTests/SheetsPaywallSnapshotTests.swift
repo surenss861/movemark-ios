@@ -72,7 +72,7 @@ final class SheetsPaywallSnapshotTests: XCTestCase {
     // MARK: Add photos
 
     private func appendPhotos(_ images: [UIImage] = []) -> some View {
-        AppendPhotosSheet(entry: entry(photoCount: 4, loaded: 4), onAdd: { _ in ([], nil) }, onDismiss: {}, previewImages: images)
+        AppendPhotosSheet(entry: entry(photoCount: 4, loaded: 4), onAdd: { ([], nil) }, onDismiss: {}, previewImages: images)
     }
 
     func testAddPhotosEmpty() {

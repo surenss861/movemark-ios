@@ -38,44 +38,60 @@ extension EvidenceCaptureView {
             let picked = selection.sources.map { source in
                 reusable.removeValue(forKey: source.sha256Hex) ?? MMPendingEvidence(source: source)
             }
-            let fixed = zip(loadedSources, loadedImages).filter { !pickerItemIDs.contains($0.0.id) }
             let pickedIDs = Set(picked.map(\.id))
             let previousIDs = Set(previousPicker.map(\.id))
 
-            loadedSources = fixed.map(\.0) + picked
-            loadedImages = fixed.map(\.1) + selection.previews
-            pickerItemIDs = picked.map(\.id)
+            // Durable first: new picks are on this iPhone before they appear in the form.
+            var rejection = selection.rejectionMessage
+            var keep = Array(zip(picked, selection.previews))
+            do {
+                try await admit(picked.filter { !previousIDs.contains($0.id) })
+            } catch {
+                keep.removeAll { !previousIDs.contains($0.0.id) }
+                rejection = Self.keepFailedMessage
+            }
+            let fixed = zip(loadedSources, loadedImages).filter { !pickerItemIDs.contains($0.0.id) }
+            loadedSources = fixed.map(\.0) + keep.map(\.0)
+            loadedImages = fixed.map(\.1) + keep.map(\.1)
+            pickerItemIDs = keep.map(\.0.id)
+            if keep.count != picked.count { selectedItems = [] }   // the picker can't show what wasn't kept
 
-            persistPending(picked.filter { !previousIDs.contains($0.id) })
             forgetPending(previousPicker.map(\.id).filter { !pickedIDs.contains($0) })
             if loadedSources.isEmpty { uploadFailed = false }
-            if let message = selection.rejectionMessage {
-                errorMessage = message
+            if let rejection {
+                errorMessage = rejection
                 errorSource = .none   // nothing to retry: the user picks again
             }
         }
     }
 
-    // MARK: Durable pending set
+    static let keepFailedMessage = "Couldn’t keep that photo on this iPhone. Free up some space and try again."
 
-    /// Writes new pending photos (original bytes) and the current draft to this iPhone.
-    func persistPending(_ items: [MMPendingEvidence]) {
-        guard let key = pendingKey, !items.isEmpty else { return }
-        let inputs = items.map { PendingEvidenceInput(id: $0.id, source: $0.source) }
-        let roomName = roomName
-        let draft = currentDraft
-        pendingCenter.perform(key.userId) { store in
-            do {
-                try await store.add(inputs, to: key, roomName: roomName, draft: draft)
-            } catch {
-                #if DEBUG
-                print("MoveMark: pending evidence write failed:", error.localizedDescription)
-                #endif
-            }
+    /// A camera shot: kept only once it is written to this iPhone.
+    func admitCapture(_ capture: MMCameraCapture) async -> Bool {
+        let item = MMPendingEvidence(source: capture.source)
+        do {
+            try await admit([item])
+        } catch {
+            return false
         }
+        loadedSources.append(item)
+        loadedImages.append(capture.preview)
+        return true
     }
 
-    /// Drops photos from this iPhone's pending set (removed by the renter, or confirmed saved).
+    // MARK: Durable pending set
+
+    /// Writes new pending photos (original bytes) and the current draft to this iPhone; returns once they
+    /// are on disk.
+    func admit(_ items: [MMPendingEvidence]) async throws {
+        guard !items.isEmpty else { return }
+        guard let key = pendingKey else { throw CocoaError(.fileWriteUnknown) }
+        let inputs = items.map { PendingEvidenceInput(id: $0.id, source: $0.source) }
+        try await pendingCenter.admit(inputs, to: key, roomName: roomName, draft: currentDraft)
+    }
+
+    /// Drops photos the renter removed from this iPhone's pending set.
     func forgetPending(_ ids: [UUID]) {
         guard let key = pendingKey, !ids.isEmpty else { return }
         pendingCenter.perform(key.userId) { await $0.remove(ids, from: key) }
@@ -86,47 +102,73 @@ extension EvidenceCaptureView {
         pendingCenter.perform(key.userId) { await $0.updateDraft(draft, for: key) }
     }
 
-    /// The renter chose Discard: nothing of this room's unsaved photos stays on the phone.
+    /// The renter chose Discard: nothing of this room's unsaved photos stays on the phone (what an earlier
+    /// attempt may have left on the server is settled by the next reconcile).
     func discardPendingCaptures() {
         guard let key = pendingKey else { return }
         pendingCenter.perform(key.userId) { await $0.clearRoom(key) }
+        Task { _ = await pendingCenter.reconcile(key) }
     }
 
-    /// Brings back what an earlier visit left on this iPhone. A plain pending set returns to the form; a
-    /// partial save returns as its retry, checked against the server first so a photo whose row already
-    /// exists is never sent again.
+    /// Brings back what an earlier visit left on this iPhone, then checks it against the server: photos an
+    /// interrupted save had in fact saved leave the phone, an Add photos set reopens its sheet.
     func restorePendingCaptures() async {
         guard let key = pendingKey, restoredKey != key else { return }
         restoredKey = key
         guard loadedSources.isEmpty, pendingRetry == nil, !isUploading else { return }
         await pendingCenter.flush()
-        guard let restored = await pendingCenter.store.restore(key), !restored.items.isEmpty else {
-            await pendingCenter.refresh(userId: key.userId)
+        await showStored(key)
+        await pendingCenter.refresh(userId: key.userId)
+        reopenPendingAppend(key)
+
+        guard !loadedSources.isEmpty || pendingRetry != nil else {
+            _ = await pendingCenter.reconcile(key)   // leftovers only (an empty entry, uploads to release)
             return
         }
-        // Anything still marked uploading was cut off by the app stopping: it is failed now.
-        let interrupted = restored.manifest.items.contains { $0.status != .pending }
-        await pendingCenter.perform(key.userId) { await $0.settleInterrupted(key) }.value
+        isCheckingSaved = true
+        let before = pendingRetry?.savedCount ?? 0
+        let outcome = await pendingCenter.reconcile(key)
+        isCheckingSaved = false
+        guard case .checked(let alreadySaved, _) = outcome, alreadySaved > 0, !isUploading else { return }
+        propertyStore.invalidateVaultSummaries()
+        await showStored(key)
+        if loadedSources.isEmpty, pendingRetry == nil {
+            showSyncToast(savedCount: before + alreadySaved)
+        }
+    }
 
+    /// Rebuilds the form or the retry from what is on this iPhone for `key`. Photos that some attempt
+    /// already linked to an entry (some saved, or an upload still to settle) return as that entry's retry;
+    /// otherwise they return to the form with their draft.
+    func showStored(_ key: PendingEvidenceKey) async {
+        guard let restored = await pendingCenter.store.restore(key), !restored.items.isEmpty else {
+            loadedSources = []
+            loadedImages = []
+            pendingRetry = nil
+            return
+        }
+        let manifest = restored.manifest
         let photos = restored.items.map {
             MMPendingEvidence(source: $0.source, id: $0.item.id, unresolved: $0.item.unresolved?.moveMarkUpload)
         }
         let previews = restored.items.map(\.preview)
-        let draft = restored.manifest.draft
+        let draft = manifest.draft
+        let interrupted = manifest.items.contains { $0.status != .pending }
 
-        if let entryId = restored.manifest.entryId {
+        if let entryId = manifest.entryId, manifest.savedCount > 0 || photos.contains(where: { $0.unresolved != nil }) {
+            loadedSources = []
+            loadedImages = []
             pendingRetry = EvidenceRetryState(
                 entryId: entryId,
                 pending: photos,
                 previews: Dictionary(uniqueKeysWithValues: zip(photos.map(\.id), previews)),
-                savedCount: restored.manifest.savedCount,
-                requestedCount: max(restored.manifest.requestedCount, restored.manifest.savedCount + photos.count),
+                savedCount: manifest.savedCount,
+                requestedCount: max(manifest.requestedCount, manifest.savedCount + photos.count),
                 issueCount: draft.tags.count,
-                outcomeHints: PropertyMutationOutcome(hydrationRefreshFailed: false),
-                needsServerCheck: true
+                outcomeHints: PropertyMutationOutcome(hydrationRefreshFailed: false)
             )
-            _ = await reconcileRestoredRetry()
         } else {
+            pendingRetry = nil
             loadedSources = photos
             loadedImages = previews
             pickerItemIDs = []
@@ -138,50 +180,21 @@ extension EvidenceCaptureView {
         }
     }
 
-    /// For a restored partial save: asks the server which photos already have rows under its entry.
-    /// Confirmed photos leave the store; if the entry is gone, the photos return to the form as a new entry.
-    /// - Returns: false when the retry state was replaced by the form (the caller saves instead).
-    @discardableResult
-    func reconcileRestoredRetry() async -> Bool {
-        guard var retry = pendingRetry, retry.needsServerCheck, let key = pendingKey, !isCheckingSaved else { return true }
-        isCheckingSaved = true
-        defer { isCheckingSaved = false }
-        let check = await propertyStore.checkEntryPhotos(
-            entryId: retry.entryId, roomId: roomID, isMoveOut: moveOutMode,
-            photoIds: Set(retry.pending.map(\.id)), userId: key.userId
-        )
-        switch check {
-        case .unknown:
-            return true   // offline: the retry goes ahead; stable row ids rule out duplicates
-        case .present(let saved):
-            retry.needsServerCheck = false
-            if !saved.isEmpty {
-                retry.pending.removeAll { saved.contains($0.id) }
-                retry.savedCount += saved.count
-                forgetPending(Array(saved))
-                propertyStore.invalidateVaultSummaries()
-            }
-            if retry.pending.isEmpty {
-                pendingRetry = nil
-                showSyncToast(savedCount: retry.savedCount)
-            } else {
-                pendingRetry = retry
-                let (savedCount, requested) = (retry.savedCount, retry.requestedCount)
-                pendingCenter.perform(key.userId) {
-                    await $0.setEntry(retry.entryId, savedCount: savedCount, requestedCount: requested, in: key)
-                }
-            }
-            return true
-        case .entryMissing:
-            // Nothing of that save survives on the server: the photos are a new entry again.
-            let previews = retry.pendingPreviews
-            pendingRetry = nil
-            loadedSources = retry.pending.map { MMPendingEvidence(source: $0.source, id: $0.id) }
-            loadedImages = previews
-            pickerItemIDs = []
-            uploadFailed = true
-            pendingCenter.perform(key.userId) { await $0.setEntry(nil, savedCount: 0, requestedCount: 0, in: key) }
-            return false
+    /// The app stopped with the Add photos sheet open: reopen it for its entry (it restores its photos).
+    private func reopenPendingAppend(_ key: PendingEvidenceKey) {
+        let appendSet = pendingCenter.summaries(userId: key.userId, propertyId: key.propertyId).first {
+            $0.key.base == key && $0.key.appendTo != nil
         }
+        guard appendPhotosEntry == nil, let entryId = appendSet?.key.appendTo,
+              let entry = existingEntries.first(where: { $0.id == entryId })
+        else { return }
+        appendPhotosEntry = entry
+    }
+
+    /// This room's Add photos set for `entryId`.
+    func appendKey(_ entryId: UUID) -> PendingEvidenceKey? {
+        guard var key = pendingKey else { return nil }
+        key.appendTo = entryId
+        return key
     }
 }

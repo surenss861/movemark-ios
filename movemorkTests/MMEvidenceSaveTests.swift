@@ -318,6 +318,26 @@ final class FakeEvidenceURLProtocol: URLProtocol, @unchecked Sendable {
         expectCleanAndComplete(photos)
     }
 
+    /// The ticket reaches the caller (to be written to disk) before any byte is sent, so an upload cut off
+    /// later — even by a kill — can be released.
+    @MainActor @Test func ticketIsReportedBeforeAnyByteIsSent() async throws {
+        backend.reset()
+        let session = FakeEvidenceURLProtocol.makeSession()
+        let storage = MoveMarkStorageService(
+            apiTransport: { try await session.data(for: $0) },
+            objectSession: session,
+            apiBaseURL: { URL(string: "https://api.fake") }
+        )
+        var atTicket: (ticketId: String, tickets: Int, objects: Int)?
+        let backend = backend
+        let upload = try await storage.uploadEvidence(photos[0], propertyId: UUID(), roomId: UUID(), isMoveOut: false) { ticket in
+            atTicket = (ticket.ticketId, backend.tickets.count, backend.objects.count)
+        }
+        #expect(atTicket?.ticketId == upload.ticketId)
+        #expect(atTicket?.tickets == 1 && atTicket?.objects == 0)
+        await storage.abandon(upload)
+    }
+
     @Test func statusLineWording() {
         #expect(MMEvidenceSaveStatus.partial(saved: 1, requested: 2) == "1 of 2 photos saved. 1 photo needs retry.")
         #expect(MMEvidenceSaveStatus.partial(saved: 1, requested: 4) == "1 of 4 photos saved. 3 photos need retry.")

@@ -104,9 +104,9 @@ struct PendingEvidenceStoreTests {
         await store.markUploading(photos.map(\.id), in: key(userA))
 
         // The server confirmed rows for the first two only.
-        await store.remove([photos[0].id, photos[1].id], from: key(userA))
+        await store.setEntry(UUID(), in: key(userA))
+        await store.confirm([photos[0].id, photos[1].id], in: key(userA))
         await store.markFailed([photos[2].id], in: key(userA))
-        await store.setEntry(UUID(), savedCount: 2, requestedCount: 3, in: key(userA))
 
         let manifest = try #require(await store.manifest(for: key(userA)))
         #expect(manifest.items.map(\.id) == [photos[2].id])
@@ -116,7 +116,7 @@ struct PendingEvidenceStoreTests {
         #expect(Set(remaining) == ["manifest.json", manifest.items[0].fileName])
 
         // The last one confirmed: nothing of the room is left on the phone.
-        await store.remove([photos[2].id], from: key(userA))
+        await store.confirm([photos[2].id], in: key(userA))
         #expect(await store.manifest(for: key(userA)) == nil)
         #expect(!FileManager.default.fileExists(atPath: store.roomFolder(key(userA)).path))
         #expect(await store.summaries(userId: userA).isEmpty)

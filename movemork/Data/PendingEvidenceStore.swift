@@ -17,6 +17,16 @@
 //  A photo file is written before the manifest names it, and the manifest drops an item before its
 //  file is deleted, so the manifest never points at a missing file (orphans are swept on restore).
 //
+//  Photos added to an existing entry (the Add photos sheet) have their own folder,
+//  `<roomId>-<phase>-add-<entryId>`, keyed to that entry.
+//
+//  What reaches the server is recorded before it is sent, so a kill at any point leaves something the
+//  next launch can settle (see ``PendingEvidenceSync``): the entry id is chosen here and written before
+//  the entry is created, and each upload's ticket is written before its bytes are sent. A room whose
+//  photos are all gone but that may still have server-side leftovers (an entry that might be empty,
+//  uploads to release) keeps its manifest, with no items, until ``PendingEvidenceSync/reconcile(_:)``
+//  has settled them.
+//
 
 import Foundation
 import UIKit
@@ -32,6 +42,11 @@ nonisolated struct PendingEvidenceKey: Hashable, Sendable, Codable {
     let propertyId: UUID
     let roomId: UUID
     let stage: Stage
+    /// Photos for an entry that already exists (the Add photos sheet); nil for the room's new entry.
+    var appendTo: UUID? = nil
+
+    /// The room's new-entry set this key belongs to.
+    var base: PendingEvidenceKey { PendingEvidenceKey(userId: userId, propertyId: propertyId, roomId: roomId, stage: stage) }
 }
 
 /// The new-entry fields typed before saving; restored with the photos.
@@ -95,8 +110,40 @@ nonisolated struct PendingEvidenceManifest: Codable, Sendable, Equatable {
     var requestedCount: Int = 0
     var items: [PendingEvidenceItem] = []
     var updatedAt: Date = Date()
+    /// Uploads of photos the renter dropped while their outcome was unknown: released (abandoned) by the
+    /// next reconcile so no object stays behind unreferenced.
+    var cleanup: [PendingEvidenceUpload] = []
 
     var failedCount: Int { items.filter { $0.status != .pending }.count }
+
+    /// No photos left, but the server may still hold something of this room to settle: queued uploads,
+    /// or an entry created (or about to be) with no photo confirmed on it.
+    var needsServerCleanup: Bool {
+        items.isEmpty && (!cleanup.isEmpty || (key.appendTo == nil && entryId != nil && savedCount == 0))
+    }
+
+    init(key: PendingEvidenceKey, roomName: String) {
+        self.key = key
+        self.roomName = roomName
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case version, key, roomName, draft, entryId, savedCount, requestedCount, items, updatedAt, cleanup
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        version = try c.decode(Int.self, forKey: .version)
+        key = try c.decode(PendingEvidenceKey.self, forKey: .key)
+        roomName = try c.decode(String.self, forKey: .roomName)
+        draft = try c.decodeIfPresent(PendingEvidenceDraft.self, forKey: .draft) ?? PendingEvidenceDraft()
+        entryId = try c.decodeIfPresent(UUID.self, forKey: .entryId)
+        savedCount = try c.decodeIfPresent(Int.self, forKey: .savedCount) ?? 0
+        requestedCount = try c.decodeIfPresent(Int.self, forKey: .requestedCount) ?? 0
+        items = try c.decodeIfPresent([PendingEvidenceItem].self, forKey: .items) ?? []
+        updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+        cleanup = try c.decodeIfPresent([PendingEvidenceUpload].self, forKey: .cleanup) ?? []
+    }
 }
 
 /// What the Proof root needs to point at a room with photos still on the phone.
@@ -152,9 +199,11 @@ actor PendingEvidenceStore {
     }
 
     nonisolated func roomFolder(_ key: PendingEvidenceKey) -> URL {
-        userFolder(key.userId)
+        var name = "\(key.roomId.uuidString.lowercased())-\(key.stage.rawValue)"
+        if let entry = key.appendTo { name += "-add-\(entry.uuidString.lowercased())" }
+        return userFolder(key.userId)
             .appendingPathComponent(key.propertyId.uuidString.lowercased(), isDirectory: true)
-            .appendingPathComponent("\(key.roomId.uuidString.lowercased())-\(key.stage.rawValue)", isDirectory: true)
+            .appendingPathComponent(name, isDirectory: true)
     }
 
     nonisolated func fileURL(_ key: PendingEvidenceKey, _ item: PendingEvidenceItem) -> URL {
@@ -183,9 +232,7 @@ actor PendingEvidenceStore {
         var restored: [PendingEvidenceRestoredItem] = []
         var kept: [PendingEvidenceItem] = []
         for item in manifest.items {
-            guard let data = try? Data(contentsOf: fileURL(key, item)),
-                  let source = try? MMEvidenceImport.source(from: data, captureSource: item.captureSource),
-                  source.sha256Hex == item.sha256Hex,
+            guard let source = source(for: item, in: key),
                   let preview = MMEvidenceImport.preview(from: source)
             else { continue }
             kept.append(item)
@@ -197,31 +244,47 @@ actor PendingEvidenceStore {
         }
         sweepOrphans(key, manifest: manifest)
         guard !manifest.items.isEmpty else {
-            removeFolder(key)
+            if !manifest.needsServerCleanup { removeFolder(key) }
             return nil
         }
         return PendingEvidenceRestore(manifest: manifest, items: restored)
     }
 
-    /// Every room of `userId` with photos still on this iPhone, newest first.
-    func summaries(userId: UUID) -> [PendingEvidenceRoomSummary] {
+    /// The item's source evidence from its file, or nil when the file is missing or no longer matches its hash.
+    func source(for item: PendingEvidenceItem, in key: PendingEvidenceKey) -> MMEvidenceSource? {
+        guard let data = try? Data(contentsOf: fileURL(key, item)),
+              let source = try? MMEvidenceImport.source(from: data, captureSource: item.captureSource),
+              source.sha256Hex == item.sha256Hex
+        else { return nil }
+        return source
+    }
+
+    /// Every manifest of `userId` on this iPhone, including rooms waiting only for server cleanup.
+    func manifests(userId: UUID) -> [PendingEvidenceManifest] {
         let userDir = userFolder(userId)
         guard let properties = try? fileManager.contentsOfDirectory(at: userDir, includingPropertiesForKeys: nil) else { return [] }
-        var out: [PendingEvidenceRoomSummary] = []
+        var out: [PendingEvidenceManifest] = []
         for property in properties {
             guard let rooms = try? fileManager.contentsOfDirectory(at: property, includingPropertiesForKeys: nil) else { continue }
             for room in rooms {
                 let url = room.appendingPathComponent(Self.manifestName)
                 guard let data = try? Data(contentsOf: url),
                       let manifest = try? Self.decoder.decode(PendingEvidenceManifest.self, from: data),
-                      manifest.key.userId == userId, !manifest.items.isEmpty
+                      manifest.key.userId == userId
                 else { continue }
-                out.append(PendingEvidenceRoomSummary(key: manifest.key, roomName: manifest.roomName,
-                                                      count: manifest.items.count, failedCount: manifest.failedCount,
-                                                      updatedAt: manifest.updatedAt))
+                out.append(manifest)
             }
         }
-        return out.sorted { $0.updatedAt > $1.updatedAt }
+        return out
+    }
+
+    /// Every room of `userId` with photos still on this iPhone, newest first.
+    func summaries(userId: UUID) -> [PendingEvidenceRoomSummary] {
+        manifests(userId: userId)
+            .filter { !$0.items.isEmpty }
+            .map { PendingEvidenceRoomSummary(key: $0.key, roomName: $0.roomName, count: $0.items.count,
+                                              failedCount: $0.failedCount, updatedAt: $0.updatedAt) }
+            .sorted { $0.updatedAt > $1.updatedAt }
     }
 
     func pendingCount(userId: UUID) -> Int {
@@ -259,19 +322,92 @@ actor PendingEvidenceStore {
         try write(manifest)
     }
 
-    /// Drops photos from the room: the server confirmed their rows, or the renter removed them.
+    /// The renter removed these photos before they were saved. An upload of theirs whose outcome is
+    /// unknown is queued for release (it may hold objects, or even a row, on the server).
     func remove(_ ids: some Sequence<UUID>, from key: PendingEvidenceKey) {
+        drop(Set(ids), from: key, confirmed: false)
+    }
+
+    /// The server confirmed these photos' rows: they leave this iPhone and count as saved.
+    func confirm(_ ids: some Sequence<UUID>, in key: PendingEvidenceKey) {
+        drop(Set(ids), from: key, confirmed: true)
+    }
+
+    private func drop(_ ids: Set<UUID>, from key: PendingEvidenceKey, confirmed: Bool) {
         guard var manifest = manifest(for: key) else { return }
-        let drop = Set(ids)
-        let removed = manifest.items.filter { drop.contains($0.id) }
+        let removed = manifest.items.filter { ids.contains($0.id) }
         guard !removed.isEmpty else { return }
-        manifest.items.removeAll { drop.contains($0.id) }
-        if manifest.items.isEmpty {
+        manifest.items.removeAll { ids.contains($0.id) }
+        if confirmed {
+            manifest.savedCount += removed.count
+        } else {
+            manifest.cleanup += removed.compactMap(\.unresolved)
+        }
+        if manifest.items.isEmpty, !manifest.needsServerCleanup {
             removeFolder(key)
             return
         }
         try? write(manifest)
         for item in removed { try? fileManager.removeItem(at: fileURL(key, item)) }
+    }
+
+    /// Records the upload a photo is in the middle of (written before its bytes are sent, and again with
+    /// the finalized paths), or clears it once settled.
+    func setUnresolved(_ upload: PendingEvidenceUpload?, for id: UUID, in key: PendingEvidenceKey) {
+        guard var manifest = manifest(for: key),
+              let index = manifest.items.firstIndex(where: { $0.id == id }),
+              manifest.items[index].unresolved != upload
+        else { return }
+        manifest.items[index].unresolved = upload
+        try? write(manifest)
+    }
+
+    /// The entry this room's photos go to: the Add photos target, the one an earlier attempt chose, or a
+    /// new id — written to disk here, before the entry is created, so a kill right after the create
+    /// still leaves its id behind.
+    func beginEntry(_ key: PendingEvidenceKey) throws -> UUID? {
+        guard var manifest = manifest(for: key) else { return nil }
+        if let id = manifest.entryId { return id }
+        let id = key.appendTo ?? UUID()
+        manifest.entryId = id
+        try write(manifest)
+        return id
+    }
+
+    /// A queued upload was released (or turned out to be referenced by a row).
+    func dropCleanup(_ upload: PendingEvidenceUpload, in key: PendingEvidenceKey) {
+        guard var manifest = manifest(for: key), manifest.cleanup.contains(upload) else { return }
+        manifest.cleanup.removeAll { $0 == upload }
+        finishOrWrite(manifest)
+    }
+
+    /// The room's entry was checked (deleted when it was empty, or found to hold photos): nothing about it
+    /// is left to settle.
+    func entrySettled(_ key: PendingEvidenceKey, savedOnServer: Int) {
+        guard var manifest = manifest(for: key) else { return }
+        manifest.savedCount = max(manifest.savedCount, savedOnServer)
+        if manifest.items.isEmpty, manifest.savedCount == 0 { manifest.entryId = nil }
+        finishOrWrite(manifest)
+    }
+
+    /// The entry an Add photos set was meant for is gone: its photos become the room's new-entry set, so
+    /// nothing is lost. Files are moved, never re-encoded.
+    func rehomeToNewEntry(_ key: PendingEvidenceKey) throws {
+        guard key.appendTo != nil, let manifest = manifest(for: key) else { return }
+        let target = key.base
+        var destination = self.manifest(for: target) ?? PendingEvidenceManifest(key: target, roomName: manifest.roomName)
+        try ensureFolder(target)
+        let known = Set(destination.items.map(\.id))
+        for var item in manifest.items where !known.contains(item.id) {
+            let from = fileURL(key, item), to = fileURL(target, item)
+            if !fileManager.fileExists(atPath: to.path) { try fileManager.moveItem(at: from, to: to) }
+            item.status = .failed
+            item.unresolved = nil   // released below, with the rest of this set's uploads
+            destination.items.append(item)
+        }
+        destination.cleanup += manifest.cleanup + manifest.items.compactMap(\.unresolved)
+        try write(destination)
+        removeFolder(key)
     }
 
     func updateDraft(_ draft: PendingEvidenceDraft, for key: PendingEvidenceKey) {
@@ -287,6 +423,7 @@ actor PendingEvidenceStore {
         for index in manifest.items.indices where set.contains(manifest.items[index].id) {
             manifest.items[index].status = .uploading
         }
+        manifest.requestedCount = max(manifest.requestedCount, manifest.savedCount + manifest.items.count)
         if let draft { manifest.draft = draft }
         try? write(manifest)
     }
@@ -300,14 +437,15 @@ actor PendingEvidenceStore {
         try? write(manifest)
     }
 
-    /// These photos weren't confirmed. `unresolved` keeps uploads whose fate is unknown so they are
-    /// settled before a re-upload.
+    /// These photos weren't confirmed. `unresolved` records uploads whose fate is unknown so they are
+    /// settled before a re-upload; an upload already recorded for a photo is kept (cleared only by
+    /// ``setUnresolved(_:for:in:)`` once settled).
     func markFailed(_ ids: some Sequence<UUID>, unresolved: [UUID: PendingEvidenceUpload] = [:], in key: PendingEvidenceKey) {
         guard var manifest = manifest(for: key) else { return }
         let set = Set(ids)
         for index in manifest.items.indices where set.contains(manifest.items[index].id) {
             manifest.items[index].status = .failed
-            manifest.items[index].unresolved = unresolved[manifest.items[index].id]
+            if let upload = unresolved[manifest.items[index].id] { manifest.items[index].unresolved = upload }
         }
         try? write(manifest)
     }
@@ -321,9 +459,11 @@ actor PendingEvidenceStore {
         try? write(manifest)
     }
 
-    /// The renter discarded the room's unsaved photos.
+    /// The renter discarded the room's unsaved photos. What may remain on the server (an empty entry,
+    /// unknown uploads) stays recorded until reconciled.
     func clearRoom(_ key: PendingEvidenceKey) {
-        removeFolder(key)
+        guard let manifest = manifest(for: key) else { return removeFolder(key) }
+        drop(Set(manifest.items.map(\.id)), from: key, confirmed: false)
     }
 
     /// Sign-out (after its warning) and account deletion: everything this user had pending on this iPhone.
@@ -345,6 +485,14 @@ actor PendingEvidenceStore {
         d.dateDecodingStrategy = .iso8601
         return d
     }()
+
+    private func finishOrWrite(_ manifest: PendingEvidenceManifest) {
+        if manifest.items.isEmpty, !manifest.needsServerCleanup {
+            removeFolder(manifest.key)
+        } else {
+            try? write(manifest)
+        }
+    }
 
     private func write(_ manifest: PendingEvidenceManifest) throws {
         var manifest = manifest

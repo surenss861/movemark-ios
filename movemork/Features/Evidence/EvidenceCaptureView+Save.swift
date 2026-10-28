@@ -9,27 +9,24 @@ import SwiftUI
 import UIKit
 
 extension EvidenceCaptureView {
+    /// Saves the room's pending photos (the form's, or a partial save's retry) through
+    /// ``PendingEvidenceSync``: the photos are already on this iPhone; they leave it only once confirmed.
     func saveEvidence() {
         // Notices raised here are save errors (`errorSource = .save`): their "Try again" runs this again.
-        guard let property = propertyStore.currentProperty else {
+        guard propertyStore.currentProperty != nil else {
             errorMessage = MoveMarkFlowMessage.noActiveProperty
             errorSource = .save
             return
         }
 
-        guard let userId = sessionManager.userId else {
+        guard let userId = sessionManager.userId, let key = pendingKey else {
             errorMessage = MoveMarkFlowMessage.signInRequired
             errorSource = .save
             return
         }
-
         guard !isUploading, !isCheckingSaved else { return }
 
-        if loadedImages.isEmpty {
-            if pendingRetry != nil {
-                retryPendingPhotos(propertyId: property.id, userId: userId)
-                return
-            }
+        if loadedImages.isEmpty, pendingRetry == nil {
             errorMessage = "Add at least one photo before saving."
             errorSource = .none
             MMHaptics.warning()
@@ -39,25 +36,24 @@ extension EvidenceCaptureView {
         errorMessage = nil
         successMessage = nil
         isUploading = true
-        uploadingCount = loadedSources.count
+        let retry = pendingRetry
+        uploadingCount = loadedSources.count + (retry?.pending.count ?? 0)
 
+        // Previews follow the photos into a retry.
+        var previews = retry?.previews ?? [:]
+        for (item, image) in zip(loadedSources, loadedImages) { previews[item.id] = image }
+        let draft = currentDraft
+        let isFormSave = retry == nil
+        let issueCount = isFormSave ? selectedTags.count : (retry?.issueCount ?? 0)
         let evidence = EvidenceRecord(
-            title: title.isEmpty ? roomName : title,
-            notes: notes,
-            issueTags: Array(selectedTags),
-            condition: selectedCondition,
+            title: draft.title.isEmpty ? roomName : draft.title,
+            notes: draft.notes,
+            issueTags: draft.tags,
+            condition: draft.conditionRating,
             photoCount: loadedImages.count,
             photos: [],
             stage: moveOutMode ? .moveOut : .moveIn
         )
-
-        // One row id per photo for every attempt (the id it got at capture, also its file on this iPhone);
-        // previews follow the photos into a retry.
-        let photos = loadedSources
-        let previews = Dictionary(uniqueKeysWithValues: zip(photos.map(\.id), loadedImages))
-        let key = pendingKey
-        let ids = photos.map(\.id)
-        let draft = currentDraft
         let center = pendingCenter
         // Lets a short save finish if the renter leaves the app; if iOS stops it anyway, the photos are
         // still on this iPhone (marked uploading → failed at the next launch) and retryable.
@@ -68,201 +64,86 @@ extension EvidenceCaptureView {
                 isUploading = false
                 background.end()
             }
-            if let key {
-                await center.perform(key.userId) { await $0.markUploading(ids, in: key, draft: draft) }.value
+            if isFormSave {
+                await center.perform(key.userId) { await $0.updateDraft(draft, for: key) }.value
             }
-            // Recorded the moment the entry exists, so a save cut off mid-way still knows where its photos went.
-            let onEntryCreated: (UUID) async -> Void = { entryId in
-                guard let key else { return }
-                await center.perform(key.userId) {
-                    await $0.setEntry(entryId, savedCount: 0, requestedCount: ids.count, in: key)
-                }.value
-            }
+            let hadZeroMoveOutEvidenceBefore = moveOutMode && room?.moveOutEvidence.isEmpty == true
+            let result = await center.send(key)
+            let outcome = await propertyStore.applyEvidenceSync(result, key: key, evidence: evidence, userId: userId)
+            let confirmed = result.saved.count + result.alreadySaved
+            if confirmed > 0 { propertyStore.invalidateVaultSummaries() }
 
-            do {
-                let outcome: PropertyMutationOutcome
+            if confirmed > 0 {
                 if moveOutMode {
-                    let hadZeroMoveOutEvidenceBefore = (room?.moveOutEvidence.isEmpty == true)
-                    outcome = try await propertyStore.addMoveOutEvidence(
-                        to: roomID,
-                        evidence: evidence,
-                        photos: photos,
-                        propertyId: property.id,
-                        userId: userId,
-                        onEntryCreated: onEntryCreated
-                    )
-                    if hadZeroMoveOutEvidenceBefore, outcome.photoResult?.saved.isEmpty == false {
+                    if hadZeroMoveOutEvidenceBefore {
                         propertyStore.pendingVaultFeedback = .moveOutRoomCompleted(roomName: roomName)
                     }
-                } else {
-                    outcome = try await propertyStore.addEvidence(
-                        to: roomID,
-                        evidence: evidence,
-                        photos: photos,
-                        propertyId: property.id,
-                        userId: userId,
-                        onEntryCreated: onEntryCreated
-                    )
-
-                    let isNowDocumented = isRoomCurrentlyDocumented
-                    if wasDocumentedOnLoad == false && isNowDocumented == true {
-                        propertyStore.pendingVaultFeedback = .roomCompleted(roomName: roomName)
-                        wasDocumentedOnLoad = true
-                    }
+                } else if wasDocumentedOnLoad == false, isRoomCurrentlyDocumented {
+                    propertyStore.pendingVaultFeedback = .roomCompleted(roomName: roomName)
+                    wasDocumentedOnLoad = true
                 }
-
-                let result = outcome.photoResult ?? MMEvidenceSaveResult()
-                errorMessage = nil
-                propertyStore.invalidateVaultSummaries()
-                // Confirmed rows leave this iPhone; the rest stay, failed, tied to the entry for their retry.
-                if let key {
-                    recordSaveResult(result, entryId: outcome.entryId, savedSoFar: result.saved.count,
-                                     requested: result.requestedCount, key: key)
+                MoveMarkAnalytics.track(.photoAdded, properties: ["count": "\(confirmed)", "move_out": moveOutMode ? "1" : "0"])
+                if isFormSave, !draft.tags.isEmpty {
+                    MoveMarkAnalytics.track(.issueTagged, properties: ["count": "\(draft.tags.count)"])
                 }
-
-                MoveMarkAnalytics.track(
-                    .photoAdded,
-                    properties: [
-                        "count": "\(result.saved.count)",
-                        "move_out": moveOutMode ? "1" : "0",
-                    ]
-                )
-                if !evidence.issueTags.isEmpty {
-                    MoveMarkAnalytics.track(
-                        .issueTagged,
-                        properties: ["count": "\(evidence.issueTags.count)"]
-                    )
-                }
-                if !evidence.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if isFormSave, !draft.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     MoveMarkAnalytics.track(.noteAdded)
                 }
+            }
 
-                // The entry exists now: the form is done with either way. Photos that didn't make it move
-                // into the retry state (and out of the picker selection, so they can't be re-added twice).
-                title = ""
-                notes = ""
-                selectedTags = []
-                selectedCondition = .good
-                selectedItems = []
-                pickerItemIDs = []
-                loadedImages = []
-                loadedSources = []
-                uploadFailed = false
-
-                guard result.isComplete else {
-                    if let entryId = outcome.entryId {
-                        pendingRetry = EvidenceRetryState(
-                            entryId: entryId,
-                            pending: result.pending,
-                            previews: previews,
-                            savedCount: result.saved.count,
-                            requestedCount: result.requestedCount,
-                            issueCount: evidence.issueTags.count,
-                            outcomeHints: outcome
-                        )
-                        if !result.saved.isEmpty {
-                            presentReceipt(photoCount: result.saved.count, pendingCount: result.pending.count,
-                                           issueCount: evidence.issueTags.count, photo: result.saved.first)
-                        }
-                    } else {
-                        errorMessage = MMEvidenceSaveStatus.partial(saved: result.saved.count, requested: result.requestedCount)
-                        errorSource = .none   // no entry to append to: nothing a retry could resend
-                    }
-                    MMHaptics.warning()
-                    return
-                }
-                presentSaveSuccess(photoCount: result.saved.count, issueCount: evidence.issueTags.count, outcome: outcome)
-            } catch {
-                #if DEBUG
-                print("ROOM SAVE FAILED:", error.localizedDescription)
-                #endif
-                // Nothing was saved and the entry was removed: the photos stay pending as they were (on this
-                // iPhone too, marked failed and no longer tied to an entry).
+            // Nothing was saved and no entry holds anything of it: the photos stay in the form as they were.
+            let nothingLinked = result.savedTotal == 0 && result.pending.allSatisfy { $0.unresolved == nil }
+            if nothingLinked, !result.pending.isEmpty {
+                pendingRetry = nil
+                loadedSources = result.pending.map { MMPendingEvidence(source: $0.source, id: $0.id) }
+                loadedImages = result.pending.compactMap { previews[$0.id] }
+                pickerItemIDs = pickerItemIDs.filter { id in loadedSources.contains { $0.id == id } }
                 uploadFailed = true
-                if let key {
-                    center.perform(key.userId) { store in
-                        await store.setEntry(nil, savedCount: 0, requestedCount: 0, in: key)
-                        await store.markFailed(ids, in: key)
-                    }
-                }
+                let error: Error = {
+                    if case .unreachable(let underlying) = result.failure { return underlying }
+                    if result.insertFailures > 0 { return moveOutMode ? ProofSaveZeroLinksError.moveOutDatabase : .moveInDatabase }
+                    return moveOutMode ? ProofSaveZeroLinksError.moveOutStorage : .moveInStorage
+                }()
                 errorMessage = MoveMarkFlowMessage.proofSaveFailed(error)
                 errorSource = .save
                 MMHaptics.error()
-            }
-        }
-    }
-
-    /// Retries only the photos of `pendingRetry`, appending them to the entry that already holds the rest.
-    private func retryPendingPhotos(propertyId: UUID, userId: UUID) {
-        guard pendingRetry != nil, !isUploading, !isCheckingSaved else { return }
-        errorMessage = nil
-        successMessage = nil
-        let key = pendingKey
-        let center = pendingCenter
-        Task { @MainActor in
-            // Restored after a relaunch: first ask which photos already made it.
-            guard await reconcileRestoredRetry() else {
-                saveEvidence()   // the entry is gone: the photos were returned to the form as a new entry
                 return
             }
-            guard var retry = pendingRetry, !isUploading else { return }
-            isUploading = true
-            uploadingCount = retry.pending.count
-            let background = EvidenceBackgroundTask(name: "Retry room evidence")
-            defer {
-                isUploading = false
-                background.end()
-            }
-            if let key {
-                let ids = retry.pending.map(\.id)
-                await center.perform(key.userId) { await $0.markUploading(ids, in: key) }.value
-            }
-            let outcome = await propertyStore.appendPhotosToEvidence(
-                entryId: retry.entryId,
-                roomId: roomID,
-                photos: retry.pending,
-                propertyId: propertyId,
-                userId: userId,
-                isMoveOut: moveOutMode
-            )
-            let result = outcome.photoResult ?? MMEvidenceSaveResult()
-            if !result.saved.isEmpty { propertyStore.invalidateVaultSummaries() }
-            retry.savedCount += result.saved.count
-            retry.pending = result.pending
-            if let key {
-                recordSaveResult(result, entryId: retry.entryId, savedSoFar: retry.savedCount,
-                                 requested: retry.requestedCount, key: key)
-            }
-            guard retry.pending.isEmpty else {
-                pendingRetry = retry
-                MMHaptics.warning()
+
+            // The entry exists now: the form is done with either way. Photos that didn't make it move into
+            // the retry state (and out of the picker selection, so they can't be re-added twice).
+            title = ""
+            notes = ""
+            selectedTags = []
+            selectedCondition = .good
+            selectedItems = []
+            pickerItemIDs = []
+            loadedImages = []
+            loadedSources = []
+            uploadFailed = false
+            errorMessage = nil
+
+            guard result.isComplete else {
+                pendingRetry = EvidenceRetryState(
+                    entryId: result.entryId ?? retry?.entryId ?? UUID(),
+                    pending: result.pending,
+                    previews: previews,
+                    savedCount: result.savedTotal,
+                    requestedCount: result.requestedTotal,
+                    issueCount: issueCount,
+                    outcomeHints: retry?.outcomeHints ?? outcome
+                )
                 if !result.saved.isEmpty {
-                    presentReceipt(photoCount: retry.savedCount, pendingCount: retry.pending.count, issueCount: retry.issueCount,
-                                   photo: result.saved.first)
+                    presentReceipt(photoCount: result.savedTotal, pendingCount: result.pending.count,
+                                   issueCount: issueCount, photo: result.saved.first)
                 }
+                MMHaptics.warning()
                 return
             }
             pendingRetry = nil
             var merged = outcome
-            merged.tagInsertFailed = retry.outcomeHints.tagInsertFailed
-            presentSaveSuccess(photoCount: retry.savedCount, issueCount: retry.issueCount, outcome: merged)
-        }
-    }
-
-    /// Mirrors a save's result on this iPhone: confirmed photos are removed (the server has their rows);
-    /// the rest are marked failed, keep any unresolved upload, and stay tied to the entry for their retry.
-    private func recordSaveResult(_ result: MMEvidenceSaveResult, entryId: UUID?, savedSoFar: Int, requested: Int,
-                                  key: PendingEvidenceKey) {
-        let saved = result.saved.map(\.id)
-        let failed = result.pending.map(\.id)
-        let unresolved = Dictionary(uniqueKeysWithValues: result.pending.compactMap { item in
-            item.unresolved.map { (item.id, PendingEvidenceUpload($0)) }
-        })
-        pendingCenter.perform(key.userId) { store in
-            await store.remove(saved, from: key)
-            guard !failed.isEmpty else { return }
-            await store.markFailed(failed, unresolved: unresolved, in: key)
-            await store.setEntry(entryId, savedCount: savedSoFar, requestedCount: requested, in: key)
+            if let retry { merged.tagInsertFailed = retry.outcomeHints.tagInsertFailed || outcome.tagInsertFailed }
+            presentSaveSuccess(photoCount: result.savedTotal, issueCount: issueCount, outcome: merged)
         }
     }
 
@@ -415,40 +296,32 @@ extension EvidenceCaptureView {
         }
     }
 
-    /// Appends to an existing entry. Returns the photos that still need a retry (empty when all were
-    /// saved) and a message for the sheet; the saved ones are never sent again. Success shows the proof toast.
-    func appendPhotos(to entryId: UUID, photos: [MMPendingEvidence]) async -> (pending: [MMPendingEvidence], message: String?) {
-        guard !photos.isEmpty else {
+    /// Sends an entry's Add photos set (already on this iPhone). Returns the photos that still need a
+    /// retry (empty when all were saved) and a message for the sheet; saved ones are never sent again.
+    func appendPhotos(to entryId: UUID) async -> (pending: [MMPendingEvidence], message: String?) {
+        guard let userId = sessionManager.userId, let key = appendKey(entryId) else {
+            MMHaptics.error()
+            return ([], MoveMarkFlowMessage.signInRequired)
+        }
+        let result = await pendingCenter.send(key)
+        let outcome = await propertyStore.applyEvidenceSync(result, key: key, evidence: nil, userId: userId)
+        if result.saved.count + result.alreadySaved > 0 { propertyStore.invalidateVaultSummaries() }
+        if case .entryMissing = result.failure {
+            // The entry was deleted meanwhile: the photos are now this room's new entry, nothing is lost.
             MMHaptics.warning()
-            return (photos, "Choose at least one photo to add.")
+            restoredKey = nil
+            await restorePendingCaptures()
+            return ([], nil)
         }
-
-        guard let property = propertyStore.currentProperty else {
-            MMHaptics.error()
-            return (photos, MoveMarkFlowMessage.noActiveProperty)
-        }
-
-        guard let userId = sessionManager.userId else {
-            MMHaptics.error()
-            return (photos, MoveMarkFlowMessage.signInRequired)
-        }
-
-        let outcome = await propertyStore.appendPhotosToEvidence(
-            entryId: entryId,
-            roomId: roomID,
-            photos: photos,
-            propertyId: property.id,
-            userId: userId,
-            isMoveOut: moveOutMode
-        )
-        let result = outcome.photoResult ?? MMEvidenceSaveResult(pending: photos)
-        if !result.saved.isEmpty { propertyStore.invalidateVaultSummaries() }
         guard result.isComplete else {
             MMHaptics.warning()
-            return (result.pending, MMEvidenceSaveStatus.partial(saved: result.saved.count, requested: result.requestedCount))
+            if case .unreachable(let error) = result.failure {
+                return (result.pending, MoveMarkFlowMessage.proofSaveFailed(error))
+            }
+            return (result.pending, MMEvidenceSaveStatus.partial(saved: result.savedTotal, requested: result.requestedTotal))
         }
-        showToast(.success, result.saved.count == 1 ? "1 photo added" : "\(result.saved.count) photos added",
-                  hint: outcome.hydrationRefreshFailed)
+        let added = result.saved.count + result.alreadySaved
+        showToast(.success, added == 1 ? "1 photo added" : "\(added) photos added", hint: outcome.hydrationRefreshFailed)
         return ([], nil)
     }
 
@@ -490,8 +363,6 @@ struct EvidenceRetryState {
     let issueCount: Int
     /// The first attempt's outcome (tag insert result) for the eventual success message.
     let outcomeHints: PropertyMutationOutcome
-    /// Restored from this iPhone after a relaunch: which photos already have rows isn't known yet.
-    var needsServerCheck: Bool = false
 
     var statusLine: String { MMEvidenceSaveStatus.partial(saved: savedCount, requested: requestedCount) }
     var pendingPreviews: [UIImage] { pending.compactMap { previews[$0.id] } }

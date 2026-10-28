@@ -13,10 +13,6 @@ import os
 import PostgREST
 import UIKit
 
-private let inspectionRepoPhotoLog = Logger(
-    subsystem: Bundle.main.bundleIdentifier ?? "movemork",
-    category: "InspectionRepositoryPhotos"
-)
 
 /// Full row for reads (`select`). Do not use for `upsert` — only send columns that exist on `public.inspections`.
 struct InspectionRow: Codable, Identifiable {
@@ -202,9 +198,44 @@ struct InspectionRepository {
         }
     }
 
-    func insertInspectionItem(inspectionId: UUID, roomId: UUID, notes: String, conditionRating: Int) async throws -> UUID {
+    /// Creates the entry with the client-chosen `id`. Idempotent: when a row with that id already exists
+    /// (an earlier attempt committed but its response, or the app, was lost) that row is reused.
+    func ensureInspectionItem(id: UUID, inspectionId: UUID, roomId: UUID, notes: String, conditionRating: Int) async throws {
+        do {
+            _ = try await insertInspectionItem(id: id, inspectionId: inspectionId, roomId: roomId, notes: notes,
+                                               conditionRating: conditionRating)
+        } catch {
+            guard try await inspectionItemExists(id: id) else { throw error }
+        }
+    }
+
+    func inspectionItemExists(id: UUID) async throws -> Bool {
+        struct IdRow: Decodable { let id: UUID }
+        let rows: [IdRow] = try await dataAPI
+            .from("inspection_items")
+            .select("id")
+            .eq("id", value: id)
+            .execute()
+            .value
+        return !rows.isEmpty
+    }
+
+    /// The `evidence_files` row ids of an entry, or nil when the entry doesn't exist.
+    func evidenceFileIds(inspectionItemId: UUID) async throws -> Set<UUID>? {
+        guard try await inspectionItemExists(id: inspectionItemId) else { return nil }
+        struct IdRow: Decodable { let id: UUID }
+        let rows: [IdRow] = try await dataAPI
+            .from("evidence_files")
+            .select("id")
+            .eq("inspection_item_id", value: inspectionItemId)
+            .execute()
+            .value
+        return Set(rows.map(\.id))
+    }
+
+    func insertInspectionItem(id: UUID = UUID(), inspectionId: UUID, roomId: UUID, notes: String, conditionRating: Int) async throws -> UUID {
         let row = InspectionItemRow(
-            id: UUID(),
+            id: id,
             inspectionId: inspectionId,
             roomId: roomId,
             notes: notes,
@@ -449,45 +480,5 @@ struct InspectionRepository {
     /// Temporary download URL for a stored evidence path (original or thumbnail).
     func signedURL(bucket: String, path: String) async throws -> URL {
         try await MoveMarkStoredFileURLs.evidenceURL(bucket: bucket, path: path)
-    }
-
-    /// Upload → row pipeline for photos of one inspection item (new entry or append). See ``MMEvidenceSaver``.
-    func evidenceSaver(inspectionItemId: UUID, roomId: UUID, propertyId: UUID, isMoveOut: Bool) -> MMEvidenceSaver {
-        MMEvidenceSaver(
-            upload: { source in
-                try await MoveMarkStorageService.shared.uploadEvidence(source, propertyId: propertyId, roomId: roomId, isMoveOut: isMoveOut)
-            },
-            insert: { rowId, upload in
-                try await InspectionRepository().insertEvidenceFile(
-                    id: rowId,
-                    propertyId: propertyId,
-                    inspectionItemId: inspectionItemId,
-                    maintenanceIssueId: nil,
-                    filePath: upload.path,
-                    thumbnailPath: upload.thumbnailPath,
-                    sourcePath: upload.sourcePath,
-                    fileType: "image",
-                    capturedAt: upload.capturedAt ?? Date()
-                )
-            },
-            abandon: { await MoveMarkStorageService.shared.abandon($0) }
-        )
-    }
-
-    /// Adds photos to an existing inspection item (move-in or move-out), photo by photo. Photos that
-    /// didn't make it come back as `pending`; the ones that did are never re-sent.
-    func appendPhotosToInspectionItem(inspectionItemId: UUID, roomId: UUID, propertyId: UUID, isMoveOut: Bool, photos: [MMPendingEvidence]) async -> MMEvidenceSaveResult {
-        inspectionRepoPhotoLog.info(
-            "appendPhotos start item=\(inspectionItemId.uuidString, privacy: .public) room=\(roomId.uuidString, privacy: .public) count=\(photos.count)"
-        )
-        let result = await evidenceSaver(inspectionItemId: inspectionItemId, roomId: roomId, propertyId: propertyId, isMoveOut: isMoveOut)
-            .save(photos)
-        inspectionRepoPhotoLog.info(
-            "appendPhotos done item=\(inspectionItemId.uuidString, privacy: .public) saved=\(result.saved.count) pending=\(result.pending.count) unresolved=\(result.pending.filter { $0.unresolved != nil }.count)"
-        )
-        if !result.saved.isEmpty {
-            await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
-        }
-        return result
     }
 }
