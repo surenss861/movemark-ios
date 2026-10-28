@@ -85,9 +85,7 @@ struct MMRecordScreen<HeaderExtra: View, Content: View>: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("MoveMark")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.85))
+            MMWordmark(size: 15)
                 .padding(.top, 4)
                 .accessibilityHidden(true)
             if !dynamicTypeSize.isAccessibilitySize {

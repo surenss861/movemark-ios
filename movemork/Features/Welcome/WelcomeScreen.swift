@@ -245,13 +245,10 @@ struct WelcomeScreen: View {
 
     // MARK: - Brand
 
-    /// Text-only wordmark, as on every dark header in the app. The app icon carries the mark on the
-    /// Home Screen; a badge here would read as a logo lockup rather than the quiet anchor this needs.
+    /// The compact wordmark lockup (small mark + "MoveMark"), as on every dark header in the app.
     private var brandIdentityRow: some View {
         HStack(alignment: .center, spacing: 10) {
-            Text("MoveMark")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.85))
+            MMWordmark()
                 .frame(minHeight: 44)
 
             Spacer(minLength: 0)

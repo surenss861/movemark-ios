@@ -91,9 +91,7 @@ struct MaintenanceLogView: View {
     /// The pushed header's top row: MoveMark wordmark on the left, the "+" (Proof header language) on the right.
     private var headerBar: some View {
         HStack {
-            Text("MoveMark")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.85))
+            MMWordmark()
             Spacer()
             Button { isRecording = true } label: {
                 Image(systemName: "plus")
