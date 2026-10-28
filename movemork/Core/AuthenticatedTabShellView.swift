@@ -32,6 +32,11 @@ struct AuthenticatedTabShellView: View {
     @State private var incomingRise: CGFloat = 0
     @State private var incomingOpacity: Double = 1
     @State private var transitionToken = 0
+    /// Reports and Account navigation, so tapping their active dock item can return them to the root.
+    @State private var reportsPath = NavigationPath()
+    @State private var accountPath = NavigationPath()
+    /// Bumped when the already-selected dock item is tapped at a tab's root: that page scrolls to its top.
+    @State private var scrollToTopTokens: [RootTab: Int] = [:]
 
     private var showsRootTabBar: Bool {
         switch selectedTab {
@@ -58,7 +63,7 @@ struct AuthenticatedTabShellView: View {
         .environment(\.mmRootTabBarVisible, showsRootTabBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if showsRootTabBar {
-                MMProofTabBarV4(selectedTab: selectedTabBinding)
+                MMProofTabBarV4(selectedTab: selectedTabBinding, onReselect: reselect)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
@@ -75,6 +80,8 @@ struct AuthenticatedTabShellView: View {
         let isSelected = tab == selectedTab
         let isOutgoing = tab == outgoingTab
         return tabContent(tab)
+            .environment(\.mmScrollToTopToken, scrollToTopTokens[tab, default: 0])
+            .environment(\.mmRootTabIsActive, isSelected)
             .opacity(isSelected ? incomingOpacity : (isOutgoing ? 1 : 0))
             .offset(y: isSelected ? incomingRise : 0)
             .zIndex(isSelected ? 2 : (isOutgoing ? 1 : 0))
@@ -113,13 +120,30 @@ struct AuthenticatedTabShellView: View {
         }
     }
 
+    /// The active dock item tapped again (native tab behaviour): a pushed tab returns to its root; a tab
+    /// already at its root scrolls to the top.
+    private func reselect(_ tab: RootTab) {
+        guard tab == selectedTab else { return }
+        MMHaptics.light()
+        switch tab {
+        case .vaults where !vaultPath.isEmpty:
+            vaultPath = []
+        case .exports where !reportsPath.isEmpty:
+            reportsPath = NavigationPath()
+        case .account where !accountPath.isEmpty:
+            accountPath = NavigationPath()
+        default:
+            scrollToTopTokens[tab, default: 0] += 1
+        }
+    }
+
     @ViewBuilder
     private func tabContent(_ tab: RootTab) -> some View {
         switch tab {
         case .vaults:
             AuthenticatedShellView(path: $vaultPath)
         case .exports:
-            NavigationStack {
+            NavigationStack(path: $reportsPath) {
                 ExportHistoryView(
                     showOpenVaultsCTA: true,
                     onOpenVaults: { switchTo(.vaults) },
@@ -140,7 +164,7 @@ struct AuthenticatedTabShellView: View {
                 .navigationBarTitleDisplayMode(.inline)
             }
         case .account:
-            NavigationStack {
+            NavigationStack(path: $accountPath) {
                 AccountView()
             }
         }
@@ -160,6 +184,53 @@ struct AuthenticatedTabShellView: View {
         guard let userId = sessionManager.userId else { return }
         Task {
             _ = await propertyStore.refreshActivePropertyHydration(userId: userId)
+        }
+    }
+}
+
+// MARK: - Scroll to top (active dock item tapped again)
+
+extension EnvironmentValues {
+    /// Changes each time the shell asks the current root page to scroll to its top.
+    @Entry var mmScrollToTopToken: Int = 0
+    /// False while this root page is kept alive behind another tab (it stays mounted, so onAppear/onDisappear
+    /// don't say whether the renter can see it).
+    @Entry var mmRootTabIsActive: Bool = true
+}
+
+enum MMScrollToTop {
+    static let anchorID = "mm.scrollToTop.anchor"
+}
+
+/// A zero-height marker at the very top of a root page's scroll content; the scroll-to-top target.
+struct MMScrollTopAnchor: View {
+    var body: some View {
+        Color.clear
+            .frame(height: 0)
+            .id(MMScrollToTop.anchorID)
+            .accessibilityHidden(true)
+    }
+}
+
+extension View {
+    /// Apply to a root page's `ScrollView` whose content starts with ``MMScrollTopAnchor``: when the shell
+    /// bumps ``EnvironmentValues/mmScrollToTopToken`` the page glides back to its top (a jump under Reduce Motion).
+    func mmScrollsToTopOnRequest() -> some View {
+        modifier(MMScrollToTopModifier())
+    }
+}
+
+private struct MMScrollToTopModifier: ViewModifier {
+    @Environment(\.mmScrollToTopToken) private var token
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        ScrollViewReader { proxy in
+            content.onChange(of: token) { _, _ in
+                withAnimation(reduceMotion ? nil : MMMotion.screenTransition) {
+                    proxy.scrollTo(MMScrollToTop.anchorID, anchor: .top)
+                }
+            }
         }
     }
 }

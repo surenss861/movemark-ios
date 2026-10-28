@@ -119,11 +119,14 @@ struct ReportsHomeView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
+                MMScrollTopAnchor()
                 hero
                 sheet.padding(.top, -sheetRadius)
             }
         }
         .scrollIndicators(.hidden)
+        // Tapping the active dock item again brings the page back to its top.
+        .mmScrollsToTopOnRequest()
         .defaultScrollAnchor(initialScrollAnchor)
         // A solid band of the header colour under the status bar: scrolled content never runs under the clock.
         .safeAreaInset(edge: .top, spacing: 0) {

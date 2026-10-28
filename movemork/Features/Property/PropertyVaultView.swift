@@ -158,14 +158,8 @@ struct PropertyVaultView: View {
         .mmProofToast(message: proofToast, isVisible: proofToastVisible)
         .sheet(isPresented: $showEditProperty) {
             NavigationStack {
-                EditPropertyView(property: property)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Close") {
-                                showEditProperty = false
-                            }
-                        }
-                    }
+                // The sheet owns its Close: unsaved edits ask before they're dropped.
+                EditPropertyView(property: property, onClose: { showEditProperty = false })
             }
         }
         .sheet(isPresented: $showPaywall) {
@@ -195,6 +189,7 @@ struct PropertyVaultView: View {
                 deleteConfirmType = nil
             }
             Button("Delete", role: .destructive) {
+                MMHaptics.warning()
                 if let type = deleteConfirmType {
                     Task { await confirmDeleteDocument(type: type) }
                 }

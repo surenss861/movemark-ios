@@ -194,6 +194,8 @@ struct AuthContainerView: View {
                 placeholder: "you@example.com",
                 text: $email,
                 keyboard: .emailAddress,
+                // The account's username for Passwords / iCloud Keychain AutoFill.
+                contentType: .username,
                 autocapitalization: .never,
                 accessibilityID: "auth.email",
                 submitLabel: .next,
@@ -208,6 +210,7 @@ struct AuthContainerView: View {
                 placeholder: mode == .signIn ? "Your password" : "At least 8 characters",
                 text: $password,
                 isSecure: true,
+                contentType: mode == .signIn ? .password : .newPassword,
                 accessibilityID: "auth.password",
                 submitLabel: mode == .signIn ? .go : .next,
                 onSubmit: { if mode == .signIn { submit() } else { focusedField = .confirm } }
@@ -220,6 +223,7 @@ struct AuthContainerView: View {
                     placeholder: "Same as above",
                     text: $confirmPassword,
                     isSecure: true,
+                    contentType: .newPassword,
                     accessibilityID: "auth.confirmPassword",
                     submitLabel: .go,
                     onSubmit: { submit() }

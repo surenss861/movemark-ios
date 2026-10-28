@@ -210,6 +210,7 @@ extension FirstRunRoomPickerView {
 struct FirstRunOtherRoomSheet: View {
     @Binding var otherRoomName: String
     let onUse: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let examples = ["Office", "Balcony", "Laundry", "Storage"]
 
@@ -234,10 +235,15 @@ struct FirstRunOtherRoomSheet: View {
 
             FlowLayout(spacing: 8) {
                 ForEach(Self.examples, id: \.self) { name in
-                    MMChip(title: name, isSelected: otherRoomName.trimmingCharacters(in: .whitespaces)
-                        .caseInsensitiveCompare(name) == .orderedSame) {
+                    let isSelected = otherRoomName.trimmingCharacters(in: .whitespaces)
+                        .caseInsensitiveCompare(name) == .orderedSame
+                    MMChip(title: name, isSelected: isSelected) {
+                        guard !isSelected else { return }
+                        MMHaptics.selection()
                         otherRoomName = name
                     }
+                    // The selected fill morphs across rather than snapping (scoped to the chip).
+                    .animation(reduceMotion ? nil : MMMotion.fastFade, value: isSelected)
                     .fixedSize()
                 }
             }

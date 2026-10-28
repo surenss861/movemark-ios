@@ -105,8 +105,10 @@ struct AddRoomSheetView: View {
     let onDismiss: () -> Void
     @Environment(PropertyStore.self) private var propertyStore
     @Environment(SessionManager.self) private var sessionManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var roomName = ""
+    @State private var confirmDiscard = false
     @State private var isAdding = false
     @State private var errorMessage: String? = nil
     /// False for a validation error (a duplicate name): retrying the same name fails the same way.
@@ -132,6 +134,9 @@ struct AddRoomSheetView: View {
         roomName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// A typed (or picked) name that closing the sheet would lose.
+    private var hasChanges: Bool { !trimmedName.isEmpty }
+
     private var canSubmit: Bool {
         !trimmedName.isEmpty && !isAdding
     }
@@ -146,14 +151,20 @@ struct AddRoomSheetView: View {
 
                 MMField(title: "Room name", placeholder: "e.g. Primary Bedroom", text: $roomName,
                         autocapitalization: .words, submitLabel: .done, onSubmit: { if canSubmit { submit() } })
+                    .autocorrectionDisabled()
                     .padding(.top, 18)
 
                 if !suggestions.isEmpty {
                     FlowLayout(spacing: 8) {
                         ForEach(suggestions, id: \.self) { name in
                             MMChip(title: name, isSelected: trimmedName.caseInsensitiveCompare(name) == .orderedSame) {
+                                guard trimmedName.caseInsensitiveCompare(name) != .orderedSame else { return }
+                                MMHaptics.selection()
                                 roomName = name
                             }
+                            // The selected fill morphs across rather than snapping (scoped to the chip).
+                            .animation(reduceMotion ? nil : MMMotion.fastFade,
+                                       value: trimmedName.caseInsensitiveCompare(name) == .orderedSame)
                             .fixedSize()
                         }
                     }
@@ -180,10 +191,15 @@ struct AddRoomSheetView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onDismiss)
+                    Button("Cancel") {
+                        MMDiscardChanges.cancel(hasChanges: hasChanges, isConfirming: $confirmDiscard, dismiss: onDismiss)
+                    }
+                    .disabled(isAdding)
                 }
             }
         }
+        .mmDiscardChangesGuard(hasChanges: hasChanges, isBusy: isAdding, isConfirming: $confirmDiscard,
+                               onDiscard: onDismiss)
     }
 
     private func submit() {

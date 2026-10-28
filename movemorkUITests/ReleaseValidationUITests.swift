@@ -61,6 +61,9 @@ final class ReleaseValidationUITests: XCTestCase {
         attach(app, "kb-3-issue-after-scroll")
         XCTAssertTrue(save.isHittable, "Save reachable with the keyboard up")
         app.buttons["Cancel"].firstMatch.tap()
+        // A typed title: Cancel asks before dropping it.
+        let discard = app.buttons["Discard"].firstMatch
+        if discard.waitForExistence(timeout: 4) { discard.tap() }
         backToRoot(app)
     }
 
