@@ -43,6 +43,17 @@ android {
         buildConfigField("String", "BILLING_MODE", "\"$billingModeProp\"")
     }
 
+    // Play upload key, read from local.properties (gitignored). Without it, release builds are left unsigned.
+    val uploadStoreFile = localProp("MOVEMARK_UPLOAD_STORE_FILE")
+    val uploadSigning = if (uploadStoreFile.isNotBlank() && file(uploadStoreFile).exists()) {
+        signingConfigs.create("upload") {
+            storeFile = file(uploadStoreFile)
+            storePassword = localProp("MOVEMARK_UPLOAD_STORE_PASSWORD")
+            keyAlias = localProp("MOVEMARK_UPLOAD_KEY_ALIAS")
+            keyPassword = localProp("MOVEMARK_UPLOAD_KEY_PASSWORD")
+        }
+    } else null
+
     buildTypes {
         debug {
             // Debug talks to whatever local.properties names (the Neon dev branch and a dev API), unless the build
@@ -69,6 +80,7 @@ android {
                 "proguard-rules.pro",
             )
             buildConfigField("String", "BILLING_MODE", "\"revenuecat\"")
+            signingConfig = uploadSigning
         }
     }
 
