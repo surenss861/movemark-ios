@@ -2,9 +2,9 @@
 //  DisputePacketContent.swift
 //  movemork
 //
-//  @file The evidence packet builder, presentational: DISPUTE PACKET header → what is being questioned → evidence
-//        included (rooms involved as the locked Move-out spreads, then records MoveMark already holds) → missing
-//        proof → packet contents → one action. Assembled from the rental's recorded evidence; nothing re-entered.
+//  @file The evidence packet builder, presentational: DISPUTE PACKET header → what is being questioned (a note on
+//        this iPhone) → evidence to review (rooms, in the locked Move-out grammar — a review tool, not a packet
+//        filter) → missing proof → what the generated packet includes (the full rental record) → one action.
 //
 
 import SwiftUI
@@ -69,13 +69,14 @@ struct DisputePacketModel {
     var contentLines: [String] {
         func n(_ count: Int, _ one: String, _ many: String) -> String { "\(count) \(count == 1 ? one : many)" }
         var lines = [
+            "Full rental evidence",
             n(moveInPhotos, "move-in photo", "move-in photos"),
             n(moveOutPhotos, "move-out photo", "move-out photos"),
             n(documents, "document", "documents"),
             n(issues, "recorded issue", "recorded issues"),
         ]
         lines.append(moveInReportIncluded ? "Move-in report included" : "Move-in report not attached")
-        lines.append("Dated timeline of the rental")
+        lines.append("Dated rental timeline")
         return lines
     }
 
@@ -233,7 +234,7 @@ struct DisputePacketContent: View {
                     autocapitalization: .sentences, submitLabel: .next)
             MMField(title: "Amount questioned (optional)", placeholder: "e.g. $350", text: $amount,
                     keyboard: .numbersAndPunctuation, autocapitalization: .never)
-            Text("Kept with this packet on this iPhone, to keep the evidence focused.")
+            Text("Kept on this iPhone for your reference. It is not added to the generated packet.")
                 .mmFont(13)
                 .foregroundStyle(MMInk.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -241,13 +242,20 @@ struct DisputePacketContent: View {
         }
     }
 
-    // MARK: Evidence included
+    // MARK: Evidence to review
 
     private var evidenceSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            MMRecordSectionHeader(title: "Evidence included")
-            if !model.selectableRooms.isEmpty {
-                Text("Rooms involved").mmFont(13, .medium).foregroundStyle(MMInk.secondary).padding(.leading, 2)
+            MMRecordSectionHeader(title: "Evidence to review")
+            if model.selectableRooms.isEmpty {
+                Text("Rooms appear here once they have proof.")
+                    .mmFont(13).foregroundStyle(MMInk.secondary).padding(.leading, 2)
+            } else {
+                // Truth first: choosing rooms focuses this screen; the PDF always covers the whole rental.
+                Text("Select the rooms you want to review while building this packet. The generated packet includes the full rental record.")
+                    .mmFont(13).foregroundStyle(MMInk.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 2)
                 FlowLayout(spacing: 8) {
                     ForEach(model.selectableRooms) { room in
                         MMChip(title: room.name, isSelected: model.selectedRoomIDs.contains(room.id)) { onToggleRoom(room.id) }
@@ -256,7 +264,7 @@ struct DisputePacketContent: View {
                     }
                 }
                 .accessibilityElement(children: .contain)
-                .accessibilityLabel("Rooms involved")
+                .accessibilityLabel("Rooms to review")
 
                 // The locked Move-out grammar, unchanged: spreads for differences, the missing side as a card,
                 // unchanged rooms compact.
@@ -274,16 +282,6 @@ struct DisputePacketContent: View {
                                 .strokeBorder(MMInk.cardStroke, lineWidth: 1))
                     }
                 }
-            }
-
-            if !model.records.isEmpty {
-                MMGroup {
-                    ForEach(Array(model.records.enumerated()), id: \.element.id) { index, record in
-                        if index > 0 { MMRowDivider(leading: 52) }
-                        includedRow(record)
-                    }
-                }
-                .padding(.top, model.involved.isEmpty ? 0 : 4)
             }
         }
     }
@@ -348,18 +346,22 @@ struct DisputePacketContent: View {
 
     private var contentsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            MMRecordSectionHeader(title: "Packet contents")
+            MMRecordSectionHeader(title: "Generated packet includes")
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(model.contentLines, id: \.self) { line in
                     Text(line).mmFont(15).monospacedDigit().foregroundStyle(MMInk.text)
                 }
             }
             .padding(.leading, 2)
-            Text("The packet covers the whole rental record, with dates.")
-                .mmFont(13)
-                .foregroundStyle(MMInk.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.leading, 2)
+            if !model.records.isEmpty {
+                MMGroup {
+                    ForEach(Array(model.records.enumerated()), id: \.element.id) { index, record in
+                        if index > 0 { MMRowDivider(leading: 52) }
+                        includedRow(record)
+                    }
+                }
+                .padding(.top, 6)
+            }
         }
     }
 
