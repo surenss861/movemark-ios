@@ -28,14 +28,27 @@ struct RoomListView: View {
         rooms.first(where: { !MMRoomProofMetrics.isDocumented($0) })
     }
 
-    private var headerSubtitle: String? {
-        guard let property = propertyStore.currentProperty else { return nil }
-        let title = PropertyVaultModel.displayTitle(for: property)
-        return [title, PropertyVaultModel.addressLine(for: property)].compactMap { $0 }.joined(separator: " · ")
+    private var headerTitle: String {
+        propertyStore.currentProperty.map { PropertyVaultModel.displayTitle(for: $0) } ?? "Rooms"
+    }
+
+    private var headerLines: [String] {
+        guard let property = propertyStore.currentProperty else { return [] }
+        return [PropertyVaultModel.addressLine(for: property)].compactMap { $0 }
     }
 
     var body: some View {
-        MMScreen(eyebrow: "Move-in proof", title: "Rooms", subtitle: headerSubtitle, isPushed: true) {
+        // Same record header as the rental: ROOMS · the rental · its address, move-in proof on the dark header.
+        MMRecordScreen(
+            eyebrow: "Rooms",
+            title: headerTitle,
+            lines: headerLines,
+            headerExtra: {
+                if !rooms.isEmpty {
+                    MMHeaderProofProgress(done: completedCount, total: rooms.count).padding(.top, 22)
+                }
+            }
+        ) {
             if rooms.isEmpty {
                 MMEmptyBlock(
                     icon: "door.left.hand.open",
@@ -45,8 +58,6 @@ struct RoomListView: View {
                     action: { showAddRoom = true }
                 )
             } else {
-                MMProgressStrip(label: "Rooms documented", done: completedCount, total: rooms.count, unit: "rooms")
-                    .padding(.horizontal, 4)
                 MMRentalRoomsBlock(
                     rooms: rooms.map { MMRentalRoom($0) },
                     nextID: nextRoom?.id,
@@ -57,9 +68,7 @@ struct RoomListView: View {
                     onOpenRoom: { path.append(.roomDetail(roomID: $0)) },
                     onAddRoom: { showAddRoom = true }
                 )
-                .padding(.top, 18)
             }
-            supportingProofSection
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
@@ -90,66 +99,6 @@ struct RoomListView: View {
         }
     }
 
-    /// Lease, deposit, maintenance, move-out and the report — after rooms, outside the room count.
-    @ViewBuilder
-    private var supportingProofSection: some View {
-        if let property = propertyStore.currentProperty {
-            let issues = propertyStore.openIssueCount(for: property)
-            VStack(alignment: .leading, spacing: 10) {
-                MMRecordSectionHeader(title: "Supporting proof")
-                MMGroup(footer: "Supporting proof backs up your rooms; it doesn't count toward rooms documented.") {
-                    ForEach(ProofSprint.documentTargets) { target in
-                        let added = ProofSprint.isDocumentUploaded(target.documentType, in: property)
-                        Button { path.append(.vaultDetail(propertyId: property.id)) } label: {
-                            MMRecordRow(title: target.title, icon: PropertyVaultContent.recordIcon(target.documentType),
-                                        isPresent: added, detail: added ? "to your rental record" : target.reason) {
-                                MMRowChevron()
-                            }
-                        }
-                        .buttonStyle(MMLightPressStyle())
-                        .accessibilityElement(children: .combine)
-                        MMRowDivider(leading: 52)
-                    }
-                    supportingRow(
-                        title: "Maintenance log",
-                        subtitle: issues == 0
-                            ? "Record repairs and problems with photos and a date."
-                            : (issues == 1 ? "1 open case" : "\(issues) open cases"),
-                        icon: "wrench.and.screwdriver"
-                    ) { path.append(.maintenance) }
-                    MMRowDivider(leading: 52)
-                    supportingRow(
-                        title: "Move-out",
-                        subtitle: "Compare move-in to move-out when you leave.",
-                        icon: "arrow.2.circlepath"
-                    ) { path.append(.moveOut) }
-                    if !rooms.isEmpty && completedCount < rooms.count {
-                        MMRowDivider(leading: 52)
-                        supportingRow(
-                            title: "Move-in report",
-                            subtitle: reportGuidance(remaining: rooms.count - completedCount),
-                            icon: "doc.richtext"
-                        ) { path.append(.exports) }
-                    }
-                }
-            }
-            .padding(.top, 32)
-        }
-    }
-
-    private func supportingRow(title: String, subtitle: String, icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            MMStatusRow(title: title, subtitle: subtitle, icon: icon)
-        }
-        .buttonStyle(MMLightPressStyle())
-        .accessibilityElement(children: .combine)
-    }
-
-    private func reportGuidance(remaining: Int) -> String {
-        if completedCount == 0 { return "Document a room to make your first report." }
-        let rooms = remaining == 1 ? "1 room still needs proof" : "\(remaining) rooms still need proof"
-        return "Ready to make now — \(rooms)."
-    }
 }
 
 struct AddRoomSheetView: View {

@@ -43,15 +43,19 @@ struct MaintenanceLogView: View {
     }
 
     var body: some View {
+        // Record header grammar: MAINTENANCE · the rental · what this log holds.
         MMScreen(
-            title: "Maintenance",
+            eyebrow: "Maintenance",
+            title: propertyStore.currentProperty.map { PropertyVaultModel.displayTitle(for: $0) } ?? "Maintenance",
             subtitle: "Issues recorded for this rental.",
             isPushed: true,
             trailing: { headerBar }
         ) {
             if let errorMessage {
+                // A refresh failure is calm: the recorded cases are still here.
                 MMNotice(
                     message: errorMessage,
+                    tone: .info,
                     actionTitle: errorRetryAction != nil ? MMCopy.tryAgain : nil,
                     action: errorRetryAction
                 )

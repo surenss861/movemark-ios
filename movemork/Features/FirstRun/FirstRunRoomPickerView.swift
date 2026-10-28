@@ -208,19 +208,31 @@ struct FirstRunOtherRoomSheet: View {
     }
 
     var body: some View {
+        // Same grammar as the rental's Add a room: one line, the field, suggestions as wrapping chips.
         MMSheetScaffold(title: "Add another room") {
-            MMField(title: "Room name", placeholder: "Office", text: $otherRoomName,
+            Text("Name the space. You'll photograph it next.")
+                .mmFont(15)
+                .foregroundStyle(MMInk.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 8)
+
+            MMField(title: "Room name", placeholder: "e.g. Office", text: $otherRoomName,
                     autocapitalization: .words, accessibilityID: "firstRun.otherRoomName",
                     submitLabel: .done, onSubmit: { if !isNameEmpty { onUse() } })
                 .autocorrectionDisabled()
-                .padding(.top, 8)
+                .padding(.top, 18)
 
-            Text(Self.examples.joined(separator: " · "))
-                .mmFont(13)
-                .foregroundStyle(MMInk.secondary)
-                .padding(.top, 8)
-                .padding(.leading, 2)
-                .accessibilityLabel("For example: \(Self.examples.joined(separator: ", "))")
+            FlowLayout(spacing: 8) {
+                ForEach(Self.examples, id: \.self) { name in
+                    MMChip(title: name, isSelected: otherRoomName.trimmingCharacters(in: .whitespaces)
+                        .caseInsensitiveCompare(name) == .orderedSame) {
+                        otherRoomName = name
+                    }
+                    .fixedSize()
+                }
+            }
+            .padding(.top, 14)
+            .accessibilityLabel("Suggestions")
 
             MMPrimaryButton(title: "Add room", isDisabled: isNameEmpty, action: onUse)
                 .accessibilityIdentifier("firstRun.addOtherRoom")

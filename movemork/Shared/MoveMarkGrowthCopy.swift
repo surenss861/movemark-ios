@@ -51,7 +51,6 @@ enum MoveMarkGrowthCopy {
     static let firstRunMomentTitle = "What are you documenting?"
     static let firstRunMomentSubtitle = "We’ll start you in the right proof flow."
 
-    static let firstRunSetupEyebrow = "Your rental"
     static let firstRunSetupTitle = "Where are you documenting?"
     static let firstRunSetupSubtitle = "This address appears on your proof record and reports."
     static let firstRunSetupCTA = "Create rental record"

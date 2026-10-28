@@ -86,7 +86,7 @@ struct RoomEvidenceBody: View {
 
     private var damageSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionLabel(damage.isEmpty ? "Notes" : "Damage noted")
+            sectionLabel(damage.isEmpty ? "Notes" : "What was observed")
             if !damage.isEmpty {
                 FlowLayout(spacing: 8) {
                     ForEach(damage, id: \.self) { tag in

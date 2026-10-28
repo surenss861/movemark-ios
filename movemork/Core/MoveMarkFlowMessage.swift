@@ -151,7 +151,7 @@ enum MoveMarkFlowMessage {
     }
 
     /// `PropertyStore.refreshMaintenance` failed without a surfaced `Error` (e.g. network).
-    static let maintenanceListSyncFailed = "Couldn’t refresh maintenance list. Try again."
+    static let maintenanceListSyncFailed = "Couldn’t refresh the maintenance log just now. Your recorded cases are still here."
 
     static func maintenancePhotoUploadFailed(_ error: Error) -> String {
         if isLikelyStorageFailure(error) {

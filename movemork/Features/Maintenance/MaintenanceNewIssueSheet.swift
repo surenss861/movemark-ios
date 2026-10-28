@@ -108,17 +108,16 @@ struct MaintenanceNewIssueSheet: View {
     private var categoryPicker: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Category").mmFont(13, .medium).foregroundStyle(MMInk.secondary)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(MaintenanceCategory.allCases, id: \.self) { cat in
-                        MMChip(title: cat.rawValue, isSelected: selectedCategory == cat) {
-                            selectedCategory = cat
-                        }
-                        .clipShape(Capsule())
+            // Chips wrap like every other choice group: no option hides off the edge.
+            FlowLayout(spacing: 8) {
+                ForEach(MaintenanceCategory.allCases, id: \.self) { cat in
+                    MMChip(title: cat.rawValue, isSelected: selectedCategory == cat) {
+                        selectedCategory = cat
                     }
+                    .clipShape(Capsule())
                 }
-                .padding(.vertical, 1)
             }
+            .padding(.top, 2)
         }
     }
 

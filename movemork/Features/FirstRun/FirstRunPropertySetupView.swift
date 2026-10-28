@@ -31,8 +31,8 @@ struct FirstRunPropertySetupView: View {
     private var trimmedStreet: String { street.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
+        // Focused-flow header (like sign in and the other first-run steps): wordmark, title, one line — no eyebrow.
         MMScreen(
-            eyebrow: MoveMarkGrowthCopy.firstRunSetupEyebrow,
             title: MoveMarkGrowthCopy.firstRunSetupTitle,
             subtitle: MoveMarkGrowthCopy.firstRunSetupSubtitle
         ) {

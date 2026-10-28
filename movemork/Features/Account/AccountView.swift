@@ -172,9 +172,9 @@ struct EditNameSheet: View {
         NavigationStack {
             MMSheetScaffold(title: "") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("YOUR NAME")
-                        .mmFont(11, .semibold)
-                        .tracking(0.8)
+                    // Field label in the light-sheet style ("Room name", "Issue title").
+                    Text("Your name")
+                        .mmFont(13, .medium)
                         .foregroundStyle(MMInk.secondary)
                         .accessibilityHidden(true)
                     TextField("Full name", text: $name)

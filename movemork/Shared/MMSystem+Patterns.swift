@@ -286,7 +286,7 @@ struct MMComparisonPair<Before: View, After: View>: View {
         case .unchanged: ("Unchanged", MMInk.secondary)
         case .changed: ("Changed", MMInk.warning)
         case .newIssue: ("New issue", MMInk.warning)
-        case .missingAfter: ("Move-out proof missing", MMInk.secondary)
+        case .missingAfter: ("Move-out proof needed", MMInk.secondary)
         }
     }
 

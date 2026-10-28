@@ -27,33 +27,37 @@ struct EvidenceCaptureForm: View {
         // No card: the form sits in the Room body under a NEW ENTRY label (ROOM_EVIDENCE_RECORD §4). Dark evidence
         // surface: white text, white/12% strokes, never green.
         VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Details")
-                    .mmFont(17, .semibold)
-                    .foregroundStyle(.white)
-                    .accessibilityAddTraits(.isHeader)
-
-                Text("Title, notes, condition, and optional issue markers.")
-                    .mmFont(13.5)
-                    .foregroundStyle(MMInk.heroSecondary)
+            // Same order and words as Edit evidence: condition, what was observed, then the label and notes.
+            VStack(alignment: .leading, spacing: 12) {
+                MMEvidenceSectionLabel(title: "Condition")
+                FlowLayout(spacing: 8) {
+                    ForEach(RoomRecord.ConditionRating.allCases.reversed(), id: \.self) { rating in
+                        MMEvidenceChip(title: rating.rawValue, isSelected: selectedCondition == rating) {
+                            MMHaptics.selection()
+                            selectedCondition = rating
+                        }
+                    }
+                }
             }
 
-            MMEvidenceField(
-                title: "Entry title",
-                placeholder: "North wall paint wear",
-                text: $title
-            )
+            VStack(alignment: .leading, spacing: 12) {
+                MMEvidenceSectionLabel(title: "What was observed",
+                                       detail: selectedTags.isEmpty ? "Only if relevant" : "\(selectedTags.count) noted")
+                FlowLayout(spacing: 8) {
+                    ForEach(fixedIssueTags, id: \.self) { tag in
+                        MMEvidenceChip(title: tag, isSelected: selectedTags.contains(tag)) {
+                            MMHaptics.selection()
+                            if selectedTags.contains(tag) { selectedTags.remove(tag) } else { selectedTags.insert(tag) }
+                        }
+                    }
+                }
+            }
 
-            MMEvidenceTagPicker(tags: fixedIssueTags, selected: $selectedTags)
-
-            MMEvidenceField(
-                title: "Notes",
-                placeholder: "What matters, where it is, what it looked like",
-                text: $notes,
-                axis: .vertical
-            )
-
-            MMEvidenceConditionPicker(condition: $selectedCondition)
+            VStack(alignment: .leading, spacing: 14) {
+                MMEvidenceSectionLabel(title: "Notes")
+                MMEvidenceField(title: "Label", placeholder: "e.g. North wall", text: $title)
+                MMEvidenceField(title: "Notes", placeholder: "What you saw, and where", text: $notes, axis: .vertical)
+            }
 
             if let errorMessage {
                 MMEvidenceNotice(

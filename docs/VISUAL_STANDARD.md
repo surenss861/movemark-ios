@@ -92,6 +92,19 @@ Evidence photography may dominate the UI, but **MoveMark never beautifies, enhan
 - Placeholders for missing evidence must never resemble evidence, and never appear in an evidence section ("Recent evidence" shows only saved photos; rooms without proof are listed separately).
 - Generated or stock imagery is allowed only in debug and test fixtures, never in a user's record.
 
+
+## Consistency rules (pass of 2026-10-27)
+
+- **Record headers** (overview screens): MoveMark wordmark, then EYEBROW = what the screen is, then the title = its subject (usually the rental), then one or two quiet lines. YOUR PROOF / RENTAL RECORD / ROOMS / MAINTENANCE / MOVE-OUT · 88 Harbour St. Detail screens drop the wordmark (MAINTENANCE CASE · Water leak under sink).
+- **Focused-flow headers** (sign in, first run, load failure): wordmark, title, one line. No eyebrow.
+- **Progress** lives in the dark header as the lime line: label and %, the line, then the count. It never appears as a second bar on the light sheet.
+- **Overview screens summarise; they don't repeat other screens.** No feature-directory rows, and no "supporting proof" lists on Rooms.
+- **Choice chips wrap** (FlowLayout). They never scroll sideways off the edge.
+- **Light-sheet field labels** are sentence case ("Room name", "Your name"). Uppercase is only for section labels on dark evidence surfaces (CONDITION, WHAT WAS OBSERVED).
+- **One evidence vocabulary everywhere.** Condition chips run best → worst; "What was observed" (never "Issue tags" or "Damage noted"); Label and Notes. "Move-out proof needed" (never "missing"). Recorded is the time MoveMark received a photo; Captured is only a source's own declared time.
+- **Refresh failures are calm.** Use the info notice, say what failed and that the saved record is still here, and offer Try again. No red alarm for a refresh.
+- **The same task gets the same sheet.** Both add-room sheets use one line, the field and wrapping suggestion chips.
+
 ## Material and color
 
 | Role | Value |
