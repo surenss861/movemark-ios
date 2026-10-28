@@ -15,13 +15,17 @@ final class PendingEvidenceCenter {
     static let shared = PendingEvidenceCenter(store: .shared)
 
     @ObservationIgnored let store: PendingEvidenceStore
+    @ObservationIgnored let backend: PendingEvidenceBackend
+
+    var sync: PendingEvidenceSync { PendingEvidenceSync(store: store, backend: backend) }
 
     /// Rooms of `summaryUserId` with photos still only on this iPhone, newest first.
     private(set) var summaries: [PendingEvidenceRoomSummary] = []
     private(set) var summaryUserId: UUID?
 
-    init(store: PendingEvidenceStore) {
+    init(store: PendingEvidenceStore, backend: PendingEvidenceBackend = LivePendingEvidenceBackend()) {
         self.store = store
+        self.backend = backend
     }
 
     func summaries(userId: UUID?, propertyId: UUID?) -> [PendingEvidenceRoomSummary] {
@@ -63,6 +67,53 @@ final class PendingEvidenceCenter {
     /// Waits for every queued write.
     func flush() async {
         await tail?.value
+    }
+
+    /// Writes new photos to this iPhone (in order with every other write) and returns only once they are
+    /// on disk. A photo is shown as taken only after this returns; if it throws, nothing was kept and
+    /// the caller shows an error instead of a thumbnail.
+    func admit(_ inputs: [PendingEvidenceInput], to key: PendingEvidenceKey, roomName: String,
+               draft: PendingEvidenceDraft? = nil) async throws {
+        guard !inputs.isEmpty else { return }
+        let previous = tail
+        let store = store
+        let task = Task { @MainActor () -> Result<Void, Error> in
+            await previous?.value
+            let outcome: Result<Void, Error>
+            do {
+                try await store.add(inputs, to: key, roomName: roomName, draft: draft)
+                outcome = .success(())
+            } catch {
+                outcome = .failure(error)
+            }
+            await self.refresh(userId: key.userId)
+            return outcome
+        }
+        tail = Task { _ = await task.value }
+        try await task.value.get()
+    }
+
+    /// Sends `key`'s photos (after every queued write), then refreshes the summary.
+    func send(_ key: PendingEvidenceKey) async -> PendingEvidenceSyncResult {
+        await flush()
+        let result = await sync.sync(key)
+        await refresh(userId: key.userId)
+        return result
+    }
+
+    func reconcile(_ key: PendingEvidenceKey) async -> PendingEvidenceSync.ReconcileOutcome {
+        await flush()
+        let outcome = await sync.reconcile(key)
+        await refresh(userId: key.userId)
+        return outcome
+    }
+
+    /// At launch / sign-in: settles leftovers of every room (interrupted saves, empty entries, uploads to release).
+    func reconcileAll(userId: UUID?) async {
+        guard let userId else { return await refresh(userId: nil) }
+        await flush()
+        await sync.reconcileAll(userId: userId)
+        await refresh(userId: userId)
     }
 
     func pendingCount(userId: UUID) async -> Int {

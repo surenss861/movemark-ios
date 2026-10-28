@@ -118,8 +118,11 @@ struct MoveMarkStorageService: Sendable {
     // MARK: Upload
 
     /// Room evidence: immutable source + working derivative + thumbnail, verified and finalized.
-    func uploadEvidence(_ source: MMEvidenceSource, propertyId: UUID, roomId: UUID, isMoveOut: Bool) async throws -> MoveMarkUpload {
-        try await uploadSourced(source, fields: [
+    /// `onTicket` runs once the API has issued the ticket and before any byte is sent, so the caller can
+    /// record it durably: an upload cut off later (even by the app being killed) can then be released.
+    func uploadEvidence(_ source: MMEvidenceSource, propertyId: UUID, roomId: UUID, isMoveOut: Bool,
+                        onTicket: (MoveMarkUpload) async -> Void = { _ in }) async throws -> MoveMarkUpload {
+        try await uploadSourced(source, onTicket: onTicket, fields: [
             "kind": "evidence",
             "propertyId": propertyId.uuidString.lowercased(),
             "roomId": roomId.uuidString.lowercased(),
@@ -159,7 +162,8 @@ struct MoveMarkStorageService: Sendable {
         let source: Part?
     }
 
-    private func uploadSourced(_ source: MMEvidenceSource, fields: [String: String]) async throws -> MoveMarkUpload {
+    private func uploadSourced(_ source: MMEvidenceSource, onTicket: (MoveMarkUpload) async -> Void = { _ in },
+                               fields: [String: String]) async throws -> MoveMarkUpload {
         guard let derivative = MMEvidenceImport.derivative(from: source) else { throw MMEvidenceImportError.unreadable }
         let thumbnail = MMEvidenceImport.thumbnail(from: source)
         var body: [String: Any] = fields
@@ -173,6 +177,7 @@ struct MoveMarkStorageService: Sendable {
         let ticket: Ticket = try await api("POST", "api/storage/uploads", json: body)
         guard let sourcePart = ticket.source else { throw MoveMarkStorageError.invalidResponse }
         let released = MoveMarkUpload(ticketId: ticket.uploadTicketId, bucket: ticket.bucket, path: ticket.path, thumbnailPath: nil)
+        await onTicket(released)
 
         do {
             try await put(source.data, to: sourcePart.url, headers: sourcePart.headers)
@@ -251,6 +256,12 @@ struct MoveMarkStorageService: Sendable {
             let result: Result = try await api("POST", "api/storage/uploads/\(upload.ticketId)/abandon", json: nil)
             storageLog.info("abandoned upload ticket status=\(result.status, privacy: .public)")
             return result.status == "kept" ? .kept : .deleted
+        } catch MoveMarkStorageError.rejected(status: 410, _, _) {
+            // Expired and referenced by no row (the API checks references first), and an expired ticket can
+            // no longer be consumed: safe to upload again. Its objects are left for server-side cleanup
+            // (there is no sweeper for expired tickets yet).
+            storageLog.notice("abandon: ticket expired unreferenced; objects left for server cleanup")
+            return .deleted
         } catch {
             storageLog.error("abandon failed: \(error.localizedDescription, privacy: .public)")
             return .failed

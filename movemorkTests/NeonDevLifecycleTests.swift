@@ -24,6 +24,19 @@ import UIKit
 
 private let env = ProcessInfo.processInfo.environment
 
+/// The app's durable path for adding a photo to an entry: written to a pending store first, then sent by
+/// ``PendingEvidenceSync`` with the live backend (ticket recorded before the PUTs, row id fixed up front).
+@MainActor
+private func appendThroughPendingStore(_ source: MMEvidenceSource, userId: UUID, propertyId: UUID, roomId: UUID,
+                                       entryId: UUID) async throws -> PendingEvidenceSyncResult {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("S7-pending-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = PendingEvidenceStore(root: root)
+    let key = PendingEvidenceKey(userId: userId, propertyId: propertyId, roomId: roomId, stage: .moveIn, appendTo: entryId)
+    try await store.add([PendingEvidenceInput(id: UUID(), source: source)], to: key, roomName: "Kitchen")
+    return await PendingEvidenceSync(store: store, backend: LivePendingEvidenceBackend()).sync(key)
+}
+
 @MainActor
 @Suite(.serialized, .enabled(if: env["MM_E2E_DIR"] != nil, "set TEST_RUNNER_MM_E2E_DIR to run against Neon dev"))
 struct NeonDevLifecycleTests {
@@ -160,9 +173,7 @@ struct NeonDevLifecycleTests {
         //    finalize → row; provenance is filled in by the database from the verified ticket.
         let inspection = try await inspections.upsertInspection(propertyId: property.id, userId: userA, type: "move_in")
         let item = try await inspections.insertInspectionItem(inspectionId: inspection, roomId: room.id, notes: "Kitchen\nCounters clean", conditionRating: 4)
-        let saved = await inspections.appendPhotosToInspectionItem(
-            inspectionItemId: item, roomId: room.id, propertyId: property.id, isMoveOut: false, photos: [MMPendingEvidence(source: source)]
-        )
+        let saved = try await appendThroughPendingStore(source, userId: userA, propertyId: property.id, roomId: room.id, entryId: item)
         #expect(saved.isComplete)
         let kept = try #require(saved.saved.first)
         let expectedPrefix = "\(userA.uuidString.lowercased())/\(property.id.uuidString.lowercased())/move-in/\(room.id.uuidString.lowercased())/"
@@ -234,8 +245,8 @@ struct NeonDevLifecycleTests {
 
         // 9. Delete evidence (the app deletes an evidence entry by inspection item; files go server-side).
         let item2 = try await inspections.insertInspectionItem(inspectionId: inspection, roomId: room.id, notes: "Kitchen\nScuff by door", conditionRating: 3)
-        let doomed = try #require(await inspections.appendPhotosToInspectionItem(
-            inspectionItemId: item2, roomId: room.id, propertyId: property.id, isMoveOut: false, photos: [MMPendingEvidence(source: source2)]
+        let doomed = try #require(try await appendThroughPendingStore(
+            source2, userId: userA, propertyId: property.id, roomId: room.id, entryId: item2
         ).saved.first)
         let doomedURL = try await inspections.signedURL(bucket: "inspection-media", path: doomed.filePath)
         #expect(try await download(doomedURL).0 == 200)

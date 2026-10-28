@@ -287,13 +287,9 @@ struct EvidenceCaptureView: View {
                 pendingCount: loadedImages.count,
                 prompts: RoomCapturePrompts.items,
                 onCapture: { capture in
-                    // The camera's encoded capture file is the source evidence, untouched; it is written to this
-                    // iPhone at once, and the camera stays open for the next shot.
-                    let item = MMPendingEvidence(source: capture.source)
-                    loadedSources.append(item)
-                    loadedImages.append(capture.preview)
-                    persistPending([item])
-                    return true
+                    // The camera's encoded capture file is the source evidence, untouched. It is written to this
+                    // iPhone first and only then shown as taken; the camera stays open for the next shot.
+                    await admitCapture(capture)
                 },
                 onDone: { showCamera = false },
                 onCancel: { showCamera = false }
@@ -316,9 +312,9 @@ struct EvidenceCaptureView: View {
         .sheet(item: $appendPhotosEntry) { entry in
             AppendPhotosSheet(
                 entry: entry,
-                onAdd: { photos in
-                    await appendPhotos(to: entry.id, photos: photos)
-                },
+                pendingKey: appendKey(entry.id),
+                roomName: roomName,
+                onAdd: { await appendPhotos(to: entry.id) },
                 onDismiss: { appendPhotosEntry = nil }
             )
         }
@@ -659,32 +655,45 @@ struct EditEvidenceSheet: View {
 }
 
 // MARK: - Append photos sheet
+/// Photos for an existing entry. Every photo chosen here is written to this iPhone (keyed to the entry)
+/// before it appears, restored if the app stops with the sheet open, and leaves the phone only once the
+/// server confirms its row; a retry reuses the same row ids.
 struct AppendPhotosSheet: View {
     let entry: EvidenceRecord
-    /// Returns the photos still needing a retry and a message; empty when everything was added.
-    let onAdd: ([MMPendingEvidence]) async -> (pending: [MMPendingEvidence], message: String?)
+    /// The entry's Add photos set on this iPhone (nil only in snapshots).
+    let pendingKey: PendingEvidenceKey?
+    let roomName: String
+    /// Sends the set; returns the photos still needing a retry and a message (empty when all were added).
+    let onAdd: () async -> (pending: [MMPendingEvidence], message: String?)
     let onDismiss: () -> Void
 
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var loadedImages: [UIImage] = []
-    @State private var loadedSources: [MMEvidenceSource] = []
+    @State private var loadedIds: [UUID] = []
     @State private var isUploading = false
     @State private var localError: String?
-    /// After a partial append: exactly the photos that didn't make it. Picker changes are ignored until
-    /// they're saved, so photos already added can't be picked up and sent again.
-    @State private var retryPending: [MMPendingEvidence]? = nil
+    /// After a partial append (or a restore of one): exactly the photos that didn't make it. Picker
+    /// changes are ignored until they're saved, so photos already added can't be picked up and sent again.
+    @State private var retryPending = false
     @State private var confirmDiscard = false
+    @State private var restored = false
+
+    private var center: PendingEvidenceCenter { PendingEvidenceCenter.shared }
 
     init(
         entry: EvidenceRecord,
-        onAdd: @escaping ([MMPendingEvidence]) async -> (pending: [MMPendingEvidence], message: String?),
+        pendingKey: PendingEvidenceKey? = nil,
+        roomName: String = "",
+        onAdd: @escaping () async -> (pending: [MMPendingEvidence], message: String?),
         onDismiss: @escaping () -> Void,
         previewImages: [UIImage] = []
     ) {
         self.entry = entry
+        self.pendingKey = pendingKey
+        self.roomName = roomName
         self.onAdd = onAdd
         self.onDismiss = onDismiss
-        // Snapshot seam only: pending previews without sources (the app always loads both from the picker).
+        // Snapshot seam only: pending previews without a store (the app always loads them through the store).
         _loadedImages = State(initialValue: previewImages)
     }
 
@@ -699,7 +708,7 @@ struct AppendPhotosSheet: View {
     private var hasPending: Bool { !loadedImages.isEmpty }
 
     /// Photos chosen (or left over from a partial add) that aren't on the record yet.
-    private var hasChanges: Bool { hasPending || retryPending != nil }
+    private var hasChanges: Bool { hasPending || retryPending }
 
     var body: some View {
         NavigationStack {
@@ -715,7 +724,7 @@ struct AppendPhotosSheet: View {
                     )
                 }
                 .buttonStyle(MMLightPressStyle())
-                .disabled(isUploading || retryPending != nil)
+                .disabled(isUploading || retryPending)
                 .onChange(of: selectedItems) { _, new in
                     loadItems(new)
                 }
@@ -752,24 +761,35 @@ struct AppendPhotosSheet: View {
                         .disabled(isUploading)
                 }
             }
-            .mmDiscardChangesConfirmation(isPresented: $confirmDiscard, onDiscard: onDismiss)
+            .mmDiscardChangesConfirmation(isPresented: $confirmDiscard, onDiscard: discard)
             .interactiveDismissDisabled(isUploading || hasChanges)
+            .task { await restore() }
         }
+    }
+
+    /// Photos this set left on the iPhone (the app stopped with the sheet open, or a partial add).
+    private func restore() async {
+        guard !restored, let pendingKey else { return }
+        restored = true
+        await center.flush()
+        guard let set = await center.store.restore(pendingKey), !set.items.isEmpty else { return }
+        loadedIds = set.items.map(\.item.id)
+        loadedImages = set.items.map(\.preview)
+        retryPending = set.manifest.savedCount > 0 || set.items.contains { $0.item.status != .pending }
     }
 
     private func commitAppend() async {
         guard !isUploading else { return }
         localError = nil
-        let photos = retryPending ?? loadedSources.map { MMPendingEvidence(source: $0) }
-        guard !photos.isEmpty else {
+        guard !loadedImages.isEmpty else {
             MMHaptics.warning()
             localError = "Choose at least one photo to add."
             return
         }
-        let previews = Dictionary(uniqueKeysWithValues: zip(photos.map(\.id), loadedImages))
+        let previews = Dictionary(uniqueKeysWithValues: zip(loadedIds, loadedImages))
 
         isUploading = true
-        let (pending, message) = await onAdd(photos)
+        let (pending, message) = await onAdd()
         isUploading = false
 
         if pending.isEmpty, message == nil {
@@ -777,21 +797,40 @@ struct AppendPhotosSheet: View {
             return
         }
         localError = message
-        if !pending.isEmpty {
-            retryPending = pending
-            loadedImages = pending.compactMap { previews[$0.id] }
-            loadedSources = pending.map(\.source)
-        }
+        retryPending = true
+        loadedIds = pending.map(\.id)
+        loadedImages = pending.compactMap { previews[$0.id] }
     }
 
     private func loadItems(_ items: [PhotosPickerItem]) {
-        guard retryPending == nil else { return }
+        guard !retryPending, let pendingKey else { return }
         Task { @MainActor in
             let selection = await MMEvidencePicker.load(items)
-            loadedSources = selection.sources
-            loadedImages = selection.previews
-            localError = selection.rejectionMessage
+            let picked = selection.sources.map { MMPendingEvidence(source: $0) }
+            let replaced = loadedIds
+            // The new choice replaces the old one, on this iPhone first; shown only once it is on disk.
+            await center.perform(pendingKey.userId) { await $0.remove(replaced, from: pendingKey) }.value
+            do {
+                try await center.admit(picked.map { PendingEvidenceInput(id: $0.id, source: $0.source) },
+                                       to: pendingKey, roomName: roomName)
+                loadedIds = picked.map(\.id)
+                loadedImages = selection.previews
+                localError = selection.rejectionMessage
+            } catch {
+                loadedIds = []
+                loadedImages = []
+                selectedItems = []
+                localError = EvidenceCaptureView.keepFailedMessage
+            }
         }
+    }
+
+    private func discard() {
+        if let pendingKey {
+            center.perform(pendingKey.userId) { await $0.clearRoom(pendingKey) }
+            Task { _ = await center.reconcile(pendingKey) }
+        }
+        onDismiss()
     }
 }
 

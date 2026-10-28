@@ -46,7 +46,9 @@ struct CameraCaptureView: UIViewControllerRepresentable {
     var prompts: [String] = []
     /// The prepared shot (its source is the encoded capture file's bytes); returns whether it joined the
     /// pending photos. Called on the main actor, in shutter order.
-    var onCapture: (MMCameraCapture) -> Bool
+    /// Keeps the shot (written to this iPhone before it returns true). The camera shows the shot as taken
+    /// only once this says it is durable; false shows an error instead of a thumbnail.
+    var onCapture: (MMCameraCapture) async -> Bool
     /// Back to the room with the photos taken (Done, or the thumbnail to review them).
     var onDone: () -> Void = {}
     var onCancel: () -> Void
@@ -62,7 +64,7 @@ struct CameraCaptureView: UIViewControllerRepresentable {
 final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
     private let roomName: String
     private let prompts: [String]
-    private let onCapture: (MMCameraCapture) -> Bool
+    private let onCapture: (MMCameraCapture) async -> Bool
     private let onDone: () -> Void
     private let onCancel: () -> Void
     private var total: Int
@@ -94,7 +96,7 @@ final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptur
     private static let onLime = UIColor(red: 0.067, green: 0.086, blue: 0.035, alpha: 1)
 
     init(roomName: String, pendingCount: Int, prompts: [String],
-         onCapture: @escaping (MMCameraCapture) -> Bool, onDone: @escaping () -> Void, onCancel: @escaping () -> Void) {
+         onCapture: @escaping (MMCameraCapture) async -> Bool, onDone: @escaping () -> Void, onCancel: @escaping () -> Void) {
         self.roomName = roomName
         self.total = pendingCount
         self.prompts = prompts
@@ -215,9 +217,10 @@ final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptur
         // disabled from tap until this callback, so a double tap can't capture twice.
         DispatchQueue.main.async { self.shutterButton.isEnabled = true }
         let capture = data.flatMap(MMCameraCapture.prepare)
-        DispatchQueue.main.async {
-            guard let capture, self.onCapture(capture) else {
-                self.flash(message: "Couldn’t add that photo. Try again.")
+        Task { @MainActor in
+            // Durable first: the shot is on disk before it is counted or shown as taken.
+            guard let capture, await self.onCapture(capture) else {
+                self.flash(message: "Couldn’t keep that photo. Try again.")
                 return
             }
             self.total += 1
