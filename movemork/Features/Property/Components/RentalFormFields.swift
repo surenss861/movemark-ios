@@ -35,8 +35,15 @@ struct RentalFormFields: View {
     static let supportedCountries = ["CA", "US", "GB", "AU", "NZ"]
 
     @State private var showOptional: Bool? = nil
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var optionalVisible: Bool { showOptional ?? optionalStartsExpanded }
+
+    private var regionPostalLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 10))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -47,19 +54,13 @@ struct RentalFormFields: View {
                         autocapitalization: .words)
                 MMField(title: "City", placeholder: "Toronto", text: $city, contentType: .addressCity,
                         autocapitalization: .words)
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 10) {
-                        MMField(title: "Province / state", placeholder: "ON", text: $region, contentType: .addressState,
-                                autocapitalization: .characters)
-                        MMField(title: "Postal / ZIP code", placeholder: "M5J 2N8", text: $postalCode,
-                                contentType: .postalCode, autocapitalization: .characters)
-                    }
-                    VStack(alignment: .leading, spacing: 12) {
-                        MMField(title: "Province / state", placeholder: "ON", text: $region, contentType: .addressState,
-                                autocapitalization: .characters)
-                        MMField(title: "Postal / ZIP code", placeholder: "M5J 2N8", text: $postalCode,
-                                contentType: .postalCode, autocapitalization: .characters)
-                    }
+                // Side by side, except at accessibility sizes: there "Postal / ZIP code" wraps to two lines and
+                // drops its field below the province field. (Text fields compress, so ViewThatFits never stacked.)
+                regionPostalLayout {
+                    MMField(title: "Province / state", placeholder: "ON", text: $region, contentType: .addressState,
+                            autocapitalization: .characters)
+                    MMField(title: "Postal / ZIP code", placeholder: "M5J 2N8", text: $postalCode,
+                            contentType: .postalCode, autocapitalization: .characters)
                 }
                 MMGroup {
                     HStack {

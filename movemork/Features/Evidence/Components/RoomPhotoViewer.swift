@@ -222,7 +222,7 @@ struct RoomPhotoViewer: View {
     private var filmstrip: some View {
         ScrollViewReader { reader in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                LazyHStack(spacing: 8) {
                     ForEach(Array(photos.enumerated()), id: \.element.id) { offset, photo in
                         ViewerThumb(photo: photo, isSelected: photo.id == selection, resolvePhotoURL: resolvePhotoURL)
                             .id(photo.id)
@@ -234,6 +234,9 @@ struct RoomPhotoViewer: View {
                 }
                 .padding(.horizontal, 20)
             }
+            // A LazyHStack, unlike an HStack, takes all the height offered; held to the thumbnails' height so the
+            // filmstrip doesn't squeeze the photo.
+            .fixedSize(horizontal: false, vertical: true)
             .onChange(of: selection) { _, id in
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { reader.scrollTo(id, anchor: .center) }
             }
@@ -336,7 +339,7 @@ private struct TagFlow: Layout {
         let width = proposal.width ?? .infinity
         var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, maxX: CGFloat = 0
         for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
+            let size = measure(view, within: width)
             if x > 0, x + size.width > width { x = 0; y += rowHeight + spacing; rowHeight = 0 }
             x += size.width + spacing
             maxX = max(maxX, x - spacing)
@@ -348,12 +351,20 @@ private struct TagFlow: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
         for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
+            let size = measure(view, within: bounds.width)
             if x > bounds.minX, x + size.width > bounds.maxX { x = bounds.minX; y += rowHeight + spacing; rowHeight = 0 }
             view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
             x += size.width + spacing
             rowHeight = max(rowHeight, size.height)
         }
+    }
+
+    /// A tag wider than the whole row (long or translated text at large sizes) is offered the row's width, so
+    /// its one line truncates instead of running off the screen.
+    private func measure(_ view: LayoutSubview, within width: CGFloat) -> CGSize {
+        let natural = view.sizeThatFits(.unspecified)
+        guard width.isFinite, natural.width > width else { return natural }
+        return view.sizeThatFits(ProposedViewSize(width: width, height: nil))
     }
 }
 

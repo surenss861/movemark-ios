@@ -59,13 +59,12 @@ struct RoomEvidenceBody: View {
 
     // MARK: - Condition
 
-    private func conditionRow(_ condition: RoomRecord.ConditionRating) -> some View {
+    private func conditionRating(_ condition: RoomRecord.ConditionRating) -> some View {
         HStack(alignment: .center, spacing: 12) {
-            sectionLabel("Condition")
-            Spacer(minLength: 8)
             Text(condition.rawValue)
                 .font(MoveMarkTheme.Typography.subheadlineMedium)
                 .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                .fixedSize()
             HStack(spacing: 3) {
                 ForEach(1...5, id: \.self) { step in
                     Capsule()
@@ -76,6 +75,22 @@ struct RoomEvidenceBody: View {
                 }
             }
             .accessibilityHidden(true)
+        }
+    }
+
+    private func conditionRow(_ condition: RoomRecord.ConditionRating) -> some View {
+        // One row; at the largest text sizes the label goes above the rating instead of breaking mid-word
+        // ("CONDITIO / N") and pushing the meter off the edge.
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: 12) {
+                sectionLabel("Condition").fixedSize()
+                Spacer(minLength: 8)
+                conditionRating(condition)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                sectionLabel("Condition")
+                conditionRating(condition)
+            }
         }
         .padding(.vertical, 16)
         .accessibilityElement(children: .combine)
