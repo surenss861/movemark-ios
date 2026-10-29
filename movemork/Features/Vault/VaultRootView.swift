@@ -11,13 +11,11 @@ struct VaultRootView: View {
     @Binding var path: [AppRoute]
     @Environment(SessionManager.self) private var sessionManager
     @Environment(PropertyStore.self) private var propertyStore
-    @Environment(\.scenePhase) private var scenePhase
     @Environment(SubscriptionManager.self) private var subscriptionManager
 
     @State private var showAddProperty = false
     @State private var showPaywall = false
     @State private var activePaywallReason: PaywallReason = .extraProperty
-    @State private var previewByPropertyId: [UUID: (path: String, url: URL)] = [:]
     @State private var otherRentalSummaries: [UUID: (documented: Int, total: Int)] = [:]
 
     /// Only the featured (recent/first) card is expandable; others are static. Ensures chevron is always on the same card.
@@ -58,16 +56,6 @@ struct VaultRootView: View {
         .task(id: sessionManager.userId) {
             await reload()
         }
-    }
-
-    private func loadPreviewURLs() async {
-        var previews: [UUID: (path: String, url: URL)] = [:]
-        for row in propertyStore.properties {
-            if let preview = await propertyStore.previewImage(for: row.id) {
-                previews[row.id] = preview
-            }
-        }
-        previewByPropertyId = previews
     }
 
     /// Preload the featured property so its expansion tray has data; keeps chevron + expand behavior consistent.
@@ -117,7 +105,6 @@ struct VaultRootView: View {
         )
         // Settles what an interrupted save left (photos already saved, an empty entry, uploads to release).
         .task(id: sessionManager.userId) { await PendingEvidenceCenter.shared.reconcileAll(userId: sessionManager.userId) }
-        .task { await loadPreviewURLs() }
         .task(id: featuredPropertyId) { await ensureFeaturedPropertyLoaded() }
         .task(id: otherProperties.map(\.id)) { await loadOtherRentalSummaries() }
         .onChange(of: propertyStore.currentProperty?.id) { _, _ in
@@ -125,9 +112,6 @@ struct VaultRootView: View {
         }
         .onAppear {
             trackFeaturedProofScoreIfNeeded()
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await loadPreviewURLs() } }
         }
     }
 

@@ -78,13 +78,15 @@ extension RoomRecord {
     var moveInTotals: StageTotals { Self.sum(evidence, moveInUnloaded) }
     var moveOutTotals: StageTotals { Self.sum(moveOutEvidence, moveOutUnloaded) }
 
-    var moveInEntryTotal: Int { moveInTotals.entries }
-    var moveInPhotoTotal: Int { moveInTotals.photos }
-    var moveInIssueTagTotal: Int { moveInTotals.issueTags }
-    var moveInLatestAt: Date? { moveInTotals.latestAt }
-    var moveOutEntryTotal: Int { moveOutTotals.entries }
-    var moveOutPhotoTotal: Int { moveOutTotals.photos }
-    var moveOutIssueTagTotal: Int { moveOutTotals.issueTags }
+    // Single totals compute only their own field: these run per room, several times per Proof / room-list
+    // render, and the full StageTotals also trims every entry's notes (1,500-character notes add up).
+    var moveInEntryTotal: Int { evidence.count + (moveInUnloaded?.entries ?? 0) }
+    var moveInPhotoTotal: Int { evidence.reduce(0) { $0 + $1.photoCount } + (moveInUnloaded?.photos ?? 0) }
+    var moveInIssueTagTotal: Int { evidence.reduce(0) { $0 + $1.issueTags.count } + (moveInUnloaded?.issueTags ?? 0) }
+    var moveInLatestAt: Date? { [evidence.map(\.createdAt).max(), moveInUnloaded?.latestAt].compactMap { $0 }.max() }
+    var moveOutEntryTotal: Int { moveOutEvidence.count + (moveOutUnloaded?.entries ?? 0) }
+    var moveOutPhotoTotal: Int { moveOutEvidence.reduce(0) { $0 + $1.photoCount } + (moveOutUnloaded?.photos ?? 0) }
+    var moveOutIssueTagTotal: Int { moveOutEvidence.reduce(0) { $0 + $1.issueTags.count } + (moveOutUnloaded?.issueTags ?? 0) }
 
     /// Older entries exist that are not loaded yet (load with `PropertyStore.loadOlderEntries`).
     func hasOlderEntries(moveOut: Bool) -> Bool { ((moveOut ? moveOutUnloaded : moveInUnloaded)?.entries ?? 0) > 0 }

@@ -85,11 +85,13 @@ struct MMEvidenceRecordPhotos: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private static let thumb: CGFloat = 56
+    /// Widest phone × the lead's height: decodes a 4096 px original at screen size, not full size.
+    private static let leadDecodeSize = CGSize(width: 440, height: 240)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let lead = photos.first {
-                MMEvidenceImage(path: lead.filePath, resolve: resolve, placeholder: Color.white.opacity(0.06))
+                MMEvidenceImage(path: lead.filePath, resolve: resolve, size: Self.leadDecodeSize, placeholder: Color.white.opacity(0.06))
                     .frame(maxWidth: .infinity)
                     .frame(height: dynamicTypeSize.isAccessibilitySize ? 190 : 240)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -122,6 +124,9 @@ struct MMEvidenceRecordPhotos: View {
                 Text("+\(unseen)")
                     .mmFont(14, .medium)
                     .foregroundStyle(MMInk.heroSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5) // "+296" at the largest text sizes shrinks instead of reading "+2…"
+                    .padding(.horizontal, 4)
                     .frame(width: Self.thumb, height: Self.thumb)
                     .background(MMInk.evidenceRaised, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }

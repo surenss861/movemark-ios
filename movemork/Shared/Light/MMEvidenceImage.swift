@@ -32,8 +32,9 @@ enum MMEvidenceImages {
     static func request(path: String, url: URL, size: CGSize?) -> ImageRequest {
         var processors: [any ImageProcessing] = []
         if let size, size.width > 0, size.height > 0 {
-            // Decode at display size (points × screen scale), filled and cropped to the frame.
-            processors.append(ImageProcessors.Resize(size: size, unit: .points, contentMode: .aspectFill, crop: true))
+            // Decode at display size (points × screen scale): scaled to cover `size`, never cropped here, so
+            // an approximate size can't change the framing — the view's own fill does the crop.
+            processors.append(ImageProcessors.Resize(size: size, unit: .points, contentMode: .aspectFill, crop: false))
         }
         return ImageRequest(url: url, processors: processors, userInfo: [.imageIdKey: path])
     }
@@ -76,7 +77,7 @@ struct MMEvidenceImage: View {
     let path: String
     /// Mints a signed URL for `path` (only called on a cache miss).
     let resolve: (String) async -> URL?
-    /// Display size in points, for decoding. Nil decodes at full size (heroes, viewer).
+    /// Display size in points, for decoding. Nil decodes at full size (the zoomable viewer only).
     var size: CGSize? = nil
     var placeholder: Color = MoveMarkTheme.Light.fill
     /// Whole photo visible (viewer). Default fills and crops (cards, heroes).

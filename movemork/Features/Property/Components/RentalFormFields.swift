@@ -43,7 +43,15 @@ struct RentalFormFields: View {
         var usesPad: Bool { self == .phone || self == .deposit || self == .rent }
     }
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     private var optionalVisible: Bool { showOptional ?? optionalStartsExpanded }
+
+    private var regionPostalLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 10))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -58,15 +66,11 @@ struct RentalFormFields: View {
                 MMField(title: "City", placeholder: "Toronto", text: $city, contentType: .addressCity,
                         autocapitalization: .words, submitLabel: .next, onSubmit: { focus = .region })
                     .focused($focus, equals: .city)
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 10) {
-                        regionField
-                        postalField
-                    }
-                    VStack(alignment: .leading, spacing: 12) {
-                        regionField
-                        postalField
-                    }
+                // Side by side, except at accessibility sizes: there "Postal / ZIP code" wraps to two lines and
+                // drops its field below the province field. (Text fields compress, so ViewThatFits never stacked.)
+                regionPostalLayout {
+                    regionField
+                    postalField
                 }
                 MMGroup {
                     HStack {

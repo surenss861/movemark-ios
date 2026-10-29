@@ -143,6 +143,9 @@ struct RoomEvidenceHero: View {
                 }
                 .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
                 .padding(.bottom, 18)
+                // Free while the text fits on the poster (it is bottom-aligned). At the largest text sizes a long
+                // room name makes it taller than the poster; this keeps it below the status bar instead of under it.
+                .padding(.top, topInset + 12)
             }
 
             VStack(alignment: .leading, spacing: 14) {
@@ -191,7 +194,8 @@ struct RoomEvidenceHero: View {
     }
 
     private func photoLayer(_ photo: EvidencePhoto) -> some View {
-        MMEvidenceImage(path: photo.filePath, resolve: resolvePhotoURL, placeholder: MoveMarkTheme.Colors.card)
+        MMEvidenceImage(path: photo.filePath, resolve: resolvePhotoURL, size: CGSize(width: containerSize.width, height: heroHeight),
+                        placeholder: MoveMarkTheme.Colors.card)
             .id(photo.id)
             .transition(.opacity)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: photo.id)
@@ -244,7 +248,7 @@ struct RoomEvidenceHero: View {
 
     private func filmstrip(selectedID: UUID) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            LazyHStack(spacing: 8) {
                 ForEach(allPhotos, id: \.photo.id) { item in
                     RoomEvidenceThumb(
                         photo: item.photo,
