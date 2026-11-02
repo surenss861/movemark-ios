@@ -55,6 +55,12 @@ sealed class ExportApiException(message: String) : Exception(message) {
     class Network(message: String = "Report couldn't load. Try again.") : ExportApiException(message)
     class QueueFailed(message: String = "Report couldn't be started. Try again.") : ExportApiException(message)
     class DownloadFailed(message: String = "Report couldn't be opened. Try again.") : ExportApiException(message)
+
+    /** 402 `pro_required` / `quota_exhausted`: the server says this report needs Pro (the free one is used). Opens the paywall. */
+    class PaymentRequired(val code: String?) : ExportApiException("This report needs MoveMark Pro.")
+
+    /** 409 `export_already_active`: a job for this report is already queued or building. Shows it building. */
+    class AlreadyActive : ExportApiException("This report is already building. Check status below.")
 }
 
 @Serializable
@@ -160,8 +166,10 @@ class ExportApiClient(
         val err = runCatching { json.decodeFromString<ApiErrorBody>(body) }.getOrNull()
         when {
             allow409 && resp.code == 409 -> throw ExportApiException.NotReady()
-            resp.code == 409 && err?.code == "export_already_processing" ->
-                throw ExportApiException.QueueFailed("A move-out report is already building. Check back shortly.")
+            // Same reading as iOS `ExportRequestRefusal`.
+            resp.code == 402 || err?.code == "pro_required" || err?.code == "quota_exhausted" ->
+                throw ExportApiException.PaymentRequired(err?.code)
+            resp.code == 409 -> throw ExportApiException.AlreadyActive()
             resp.code == 400 -> {
                 when (err?.code) {
                     "export_failed" -> throw ExportApiException.ServerFailed()

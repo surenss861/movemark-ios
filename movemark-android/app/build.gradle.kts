@@ -105,6 +105,29 @@ android {
     }
 }
 
+// Play release guard: a bundle without the upload key can't be uploaded, and one without a Google Play
+// RevenueCat key ships a paywall that can't sell or restore. -PmovemarkAllowNoBilling=true lets an internal
+// QA build through without the key (purchases then report "plans unavailable").
+gradle.taskGraph.whenReady {
+    val releasePackaging = allTasks.any { it.project == project && it.name in setOf("bundleRelease", "assembleRelease", "packageReleaseBundle") }
+    if (!releasePackaging) return@whenReady
+    val storeFile = localProp("MOVEMARK_UPLOAD_STORE_FILE")
+    if (storeFile.isBlank() || !file(storeFile).exists()) {
+        throw GradleException("Release builds need the Play upload key: set MOVEMARK_UPLOAD_STORE_FILE (and its passwords) in local.properties.")
+    }
+    val allowNoBilling = (findProperty("movemarkAllowNoBilling") as String?)?.trim() == "true"
+    val keyProblem = when {
+        revenueCatKey.isBlank() -> "REVENUECAT_PUBLIC_KEY is empty"
+        revenueCatKey.startsWith("sk_") -> "REVENUECAT_PUBLIC_KEY is a secret key"
+        !revenueCatKey.startsWith("goog_") -> "REVENUECAT_PUBLIC_KEY isn't a Google Play (goog_) key"
+        else -> null
+    }
+    if (keyProblem != null) {
+        if (allowNoBilling) logger.warn("WARNING: $keyProblem; building without working purchases (-PmovemarkAllowNoBilling).")
+        else throw GradleException("$keyProblem. Add the RevenueCat Google Play public SDK key to local.properties, or pass -PmovemarkAllowNoBilling=true for a QA-only build.")
+    }
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

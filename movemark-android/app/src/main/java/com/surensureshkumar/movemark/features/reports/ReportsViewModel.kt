@@ -22,6 +22,7 @@ import com.surensureshkumar.movemark.domain.ProofPhase
 import com.surensureshkumar.movemark.domain.RoomProofMetrics
 import com.surensureshkumar.movemark.features.reports.components.ChecklistItemState
 import com.surensureshkumar.movemark.features.reports.components.ReportChecklistItem
+import com.surensureshkumar.movemark.data.remote.ExportApiException
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -82,7 +83,7 @@ class ReportsViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val propertyStore: PropertyStore,
     private val exportRepository: ExportRepository,
-    subscriptionRepository: SubscriptionRepository,
+    private val subscriptionRepository: SubscriptionRepository,
 ) : ViewModel() {
 
     val hasPro: StateFlow<Boolean> = subscriptionRepository.hasPro
@@ -225,6 +226,26 @@ class ReportsViewModel @Inject constructor(
         }
     }
 
+    private val _paywallRequests = MutableSharedFlow<PaywallReason>(extraBufferCapacity = 1)
+
+    /** The server refused a report with 402: open the paywall for it (iOS `handleExportRequestError`). */
+    val paywallRequests: SharedFlow<PaywallReason> = _paywallRequests.asSharedFlow()
+
+    /** Shared handling of a refused export POST. Returns true when it was handled (paywall or already building). */
+    private suspend fun handleRefusal(error: Exception, reason: PaywallReason): Boolean = when (error) {
+        is ExportApiException.PaymentRequired -> {
+            subscriptionRepository.refreshCustomerInfo()
+            _paywallRequests.tryEmit(reason)
+            true
+        }
+        is ExportApiException.AlreadyActive -> {
+            _banner.value = (error.message ?: "") to false
+            refreshExports()
+            true
+        }
+        else -> false
+    }
+
     private fun queueMoveInReport() {
         val property = propertyStore.currentProperty.value ?: return
         if (_actionInProgress.value) return
@@ -242,7 +263,7 @@ class ReportsViewModel @Inject constructor(
                 _banner.value = "Report queued. Building your PDF…" to false
                 refreshExports()
             } catch (e: Exception) {
-                _banner.value = exportRepository.userMessage(e) to true
+                if (!handleRefusal(e, PaywallReason.UnlimitedExports)) _banner.value = exportRepository.userMessage(e) to true
             } finally {
                 _actionInProgress.value = false
             }
@@ -266,7 +287,7 @@ class ReportsViewModel @Inject constructor(
                 _banner.value = "Move-out report queued. Building your PDF…" to false
                 refreshExports()
             } catch (e: Exception) {
-                _banner.value = exportRepository.userMessage(e) to true
+                if (!handleRefusal(e, PaywallReason.MoveOutReport)) _banner.value = exportRepository.userMessage(e) to true
             } finally {
                 _moveOutActionInProgress.value = false
             }
@@ -305,7 +326,7 @@ class ReportsViewModel @Inject constructor(
                 _banner.value = "Dispute packet queued. Building your PDF…" to false
                 refreshExports()
             } catch (e: Exception) {
-                _banner.value = exportRepository.userMessage(e) to true
+                if (!handleRefusal(e, PaywallReason.DisputePacket)) _banner.value = exportRepository.userMessage(e) to true
             } finally {
                 _disputeActionInProgress.value = false
             }

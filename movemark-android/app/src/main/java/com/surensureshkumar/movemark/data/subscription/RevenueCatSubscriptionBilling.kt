@@ -61,7 +61,7 @@ class RevenueCatSubscriptionBilling @Inject constructor() : SubscriptionBilling,
     }
 
     val isConfigured: Boolean
-        get() = BuildConfig.REVENUECAT_PUBLIC_KEY.isNotBlank() &&
+        get() = BillingConfig.keyProblem(BuildConfig.REVENUECAT_PUBLIC_KEY) == null &&
             runCatching { Purchases.isConfigured }.getOrDefault(false)
 
     override fun onReceived(customerInfo: CustomerInfo) {
