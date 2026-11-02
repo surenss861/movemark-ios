@@ -183,6 +183,14 @@ fun MoveMarkNavHost() {
                 onOpenRoom = { roomId ->
                     navController.navigate(Routes.roomProof(roomId.toString(), ProofPhase.MoveOut))
                 },
+                onCaptureMoveIn = {
+                    mainTabRequest.request(MainTab.Rooms)
+                    navController.popBackStack()
+                },
+                onOpenReports = {
+                    mainTabRequest.request(MainTab.Reports)
+                    navController.popBackStack()
+                },
             )
         }
         composable(

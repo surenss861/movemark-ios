@@ -97,6 +97,13 @@ android {
     testOptions {
         // Repository/store code logs through android.util.Log; plain JVM tests get no-op stubs.
         unitTests.isReturnDefaultValues = true
+        // Robolectric + Compose UI tests run on the JVM (no device). Robolectric's SDK jars are fetched once
+        // into the Gradle home on the data volume, not ~/.m2 on the startup disk.
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all {
+            it.systemProperty("maven.repo.local", "${gradle.gradleUserHomeDir}/robolectric-m2")
+            it.maxHeapSize = "2g"
+        }
     }
 
     buildFeatures {
@@ -161,6 +168,12 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.robolectric)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.test.ext.junit)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.kotlinx.coroutines.test)

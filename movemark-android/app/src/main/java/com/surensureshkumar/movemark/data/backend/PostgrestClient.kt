@@ -115,6 +115,19 @@ class PostgrestClient(
     suspend inline fun <reified B> insertIgnoringDuplicates(table: String, body: B, onConflict: String) =
         insertIgnoringDuplicates(table, json.encodeToJsonElement(serializer<B>(), body), onConflict)
 
+    /** Inserts, or updates the existing row with the same [onConflict] key (`resolution=merge-duplicates`). */
+    suspend fun upsert(table: String, body: JsonElement, onConflict: String) {
+        send(
+            Request.Builder()
+                .url(url(table, PostgrestQuery().apply { params += "on_conflict" to onConflict }))
+                .header("Prefer", "resolution=merge-duplicates,return=minimal")
+                .post(body.toString().toRequestBody(JSON_MEDIA)),
+        )
+    }
+
+    suspend inline fun <reified B> upsert(table: String, body: B, onConflict: String) =
+        upsert(table, json.encodeToJsonElement(serializer<B>(), body), onConflict)
+
     suspend fun update(table: String, patch: JsonElement, filter: PostgrestQuery.() -> Unit) {
         val query = PostgrestQuery().apply(filter)
         require(query.params.isNotEmpty()) { "Refusing an unfiltered update of $table" }
