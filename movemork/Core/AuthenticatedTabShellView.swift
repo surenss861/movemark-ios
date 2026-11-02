@@ -109,10 +109,12 @@ struct AuthenticatedTabShellView: View {
                 )
                 .navigationTitle("")
                 .navigationBarTitleDisplayMode(.inline)
+                .mmRootTabAccessibilityGate()
             }
         case .account:
             NavigationStack(path: $accountPath) {
                 AccountView()
+                    .mmRootTabAccessibilityGate()
             }
         }
     }

@@ -85,11 +85,13 @@ struct MMRootTabQAShell: View {
             NavigationStack {
                 ProofHomeView(model: Self.proof, resolvePhotoURL: { _ in nil })
                     .toolbar(.hidden, for: .navigationBar)
+                    .mmRootTabAccessibilityGate()
             }
         case .exports:
             NavigationStack(path: $reportsPath) {
                 ReportsHomeView(model: Self.reports)
                     .toolbar(.hidden, for: .navigationBar)
+                    .mmRootTabAccessibilityGate()
             }
         case .account:
             NavigationStack(path: $accountPath) {
@@ -97,6 +99,7 @@ struct MMRootTabQAShell: View {
                     if action == .support { accountPath.append("support") }
                 })
                 .toolbar(.hidden, for: .navigationBar)
+                .mmRootTabAccessibilityGate()
                 .navigationDestination(for: String.self) { _ in
                     Text("Support fixture")
                         .font(.title2.weight(.semibold))
@@ -104,6 +107,7 @@ struct MMRootTabQAShell: View {
                         .background(Color(white: 0.97))
                         .navigationTitle("Support")
                         .accessibilityIdentifier("qa.supportFixture")
+                        .mmRootTabAccessibilityGate()
                 }
             }
         }

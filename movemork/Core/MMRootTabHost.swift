@@ -98,6 +98,8 @@ struct MMRootTabHost<Page: View, Dock: View>: View {
             .opacity(isSelected ? 1 : 0)
             .zIndex(isSelected ? 1 : 0)
             .allowsHitTesting(isSelected)
+            // Does not reach inside a NavigationStack on its own: each stack root also carries
+            // .mmRootTabAccessibilityGate().
             .accessibilityHidden(!isSelected)
             .transition(.identity)
             // Visibility never animates, even if a surrounding transaction does (e.g. the dock appearing as
@@ -106,5 +108,28 @@ struct MMRootTabHost<Page: View, Dock: View>: View {
                 transaction.animation = nil
                 transaction.disablesAnimations = true
             }
+    }
+}
+
+// MARK: - Accessibility gate (kept-alive pages)
+
+extension View {
+    /// Put on a root tab's NavigationStack root content (and on pushed screens that should follow it). While the
+    /// tab is kept alive behind another one, this content leaves the accessibility tree.
+    ///
+    /// Needed because `.accessibilityHidden` on the page in MMRootTabHost does not reach into a NavigationStack's
+    /// hosted content: UI tests (and so VoiceOver) still found a hidden page's title. Applied inside the stack it
+    /// works for the root. Known gap: a screen pushed inside a kept-alive stack (and its navigation bar) can stay
+    /// in the tree; see RootTabNavigationUITests.test04.
+    func mmRootTabAccessibilityGate() -> some View {
+        modifier(MMRootTabAccessibilityGateModifier())
+    }
+}
+
+private struct MMRootTabAccessibilityGateModifier: ViewModifier {
+    @Environment(\.mmRootTabIsActive) private var isActive
+
+    func body(content: Content) -> some View {
+        content.accessibilityHidden(!isActive)
     }
 }
