@@ -54,7 +54,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -237,7 +236,7 @@ fun RoomEvidenceHero(
 
 @Composable
 private fun HeroImage(photo: EvidencePhoto, signPhotoUrl: suspend (String) -> String?) {
-    val url by produceState<String?>(initialValue = null, photo.filePath) { value = signPhotoUrl(photo.filePath) }
+    val url by rememberSignedUrl(photo.filePath) { signPhotoUrl(photo.filePath) }
     Box(Modifier.fillMaxSize().background(MMColors.Card)) {
         if (url != null) {
             SubcomposeAsyncImage(
@@ -419,9 +418,7 @@ private fun FilmstripThumb(
     onClick: () -> Unit,
 ) {
     val path = photo.thumbnailPath ?: photo.filePath
-    val url by produceState<String?>(initialValue = null, path) {
-        value = signPhotoUrl(path) ?: signPhotoUrl(photo.filePath)
-    }
+    val url by rememberSignedUrl(path) { signPhotoUrl(path) ?: signPhotoUrl(photo.filePath) }
     val shape = RoundedCornerShape(12.dp)
     Box(
         Modifier
@@ -529,4 +526,15 @@ private fun EmptyField(
 @Composable
 fun Kicker(text: String, color: Color) {
     Text(text, color = color, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+}
+
+/**
+ * A signed URL for [key], fetched once per key. (Replaces `produceState`, whose lint check misfires on a
+ * suspend-lambda producer.)
+ */
+@Composable
+internal fun rememberSignedUrl(key: Any?, sign: suspend () -> String?): androidx.compose.runtime.State<String?> {
+    val state = androidx.compose.runtime.remember(key) { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    androidx.compose.runtime.LaunchedEffect(key) { state.value = sign() }
+    return state
 }

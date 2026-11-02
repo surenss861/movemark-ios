@@ -61,7 +61,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -451,7 +450,7 @@ fun RoomPhotoViewer(
         Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
             HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
                 val photo = photos[page]
-                val url by produceState<String?>(initialValue = null, photo.filePath) { value = signPhotoUrl(photo.filePath) }
+                val url by rememberSignedUrl(photo.filePath) { signPhotoUrl(photo.filePath) }
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     if (url == null) {
                         CircularProgressIndicator(color = androidx.compose.ui.graphics.Color.White)
@@ -492,7 +491,7 @@ fun RoomPhotoViewer(
                 ) {
                     itemsIndexed(photos, key = { _, p -> p.id }) { index, p ->
                         val path = p.thumbnailPath ?: p.filePath
-                        val thumb by produceState<String?>(initialValue = null, path) { value = signPhotoUrl(path) ?: signPhotoUrl(p.filePath) }
+                        val thumb by rememberSignedUrl(path) { signPhotoUrl(path) ?: signPhotoUrl(p.filePath) }
                         val selected = index == pager.currentPage
                         Box(
                             Modifier
