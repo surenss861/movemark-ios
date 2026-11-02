@@ -8,5 +8,5 @@
 NEON_AUTH_URL[config=Release] = https:/$()/$(/)ep-steep-wind-b56266ss.neonauth.c-7.us-east-2.aws.neon.tech/neondb/auth
 NEON_DATA_API_URL[config=Release] = https:/$()/$(/)ep-steep-wind-b56266ss.apirest.c-7.us-east-2.aws.neon.tech/neondb/rest/v1
 MOVEMARK_API_BASE_URL_OVERRIDE[config=Release] =
-MOVEMARK_PASSWORD_RESET_URL[config=Release] =
+MOVEMARK_PASSWORD_RESET_URL[config=Release] = https:/$()/$(/)account.movemark.ca/reset
 REVENUECAT_TEST_STORE_PUBLIC_KEY[config=Release] =
