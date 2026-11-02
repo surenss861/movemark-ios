@@ -63,6 +63,10 @@ sealed class ExportApiException(message: String) : Exception(message) {
     class AlreadyActive : ExportApiException("This report is already building. Check status below.")
 }
 
+/** `GET /api/account/report-credits`: the Report Pack balance the server holds for this account. */
+@Serializable
+data class ReportCreditsResponse(val balance: Int = 0)
+
 @Serializable
 private data class ApiErrorBody(val error: String? = null, val code: String? = null)
 
@@ -105,6 +109,9 @@ class ExportApiClient(
         } catch (_: Exception) {
             throw ExportApiException.QueueFailed()
         }
+
+    suspend fun fetchReportCredits(): ReportCreditsResponse =
+        json.decodeFromString(executeGet(url("api/account/report-credits")))
 
     suspend fun fetchDownloadUrl(exportId: String): ExportDownloadResponse = try {
         val body = executeGet(url("api/exports/$exportId/download"), allow409 = true)

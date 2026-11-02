@@ -9,6 +9,7 @@ import com.surensureshkumar.movemark.data.backend.StoredFileUrls
 import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceCenter
 import com.surensureshkumar.movemark.data.property.PropertyStore
 import com.surensureshkumar.movemark.data.remote.ExportApiClient
+import com.surensureshkumar.movemark.data.subscription.ReportCreditsManager
 import com.surensureshkumar.movemark.data.subscription.SubscriptionRepository
 import dagger.Lazy
 import kotlinx.coroutines.CoroutineScope
@@ -43,6 +44,7 @@ class SessionManager @Inject constructor(
     private val propertyStore: Lazy<PropertyStore>,
     private val pendingEvidence: Lazy<PendingEvidenceCenter>,
     private val localFiles: LocalUserFiles,
+    private val reportCredits: Lazy<ReportCreditsManager>,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -195,12 +197,15 @@ class SessionManager @Inject constructor(
                 // RevenueCat's app user id is the Neon Auth user id (lowercase uuid), as on iOS.
                 subscriptionRepository.logIn(id.toString().lowercase())
                 subscriptionRepository.refreshCustomerInfo()
+                runCatching { reportCredits.get().refresh(id) }
                 refreshProfile()
             }
         }
     }
 
     private fun clearUser() {
+        // Nothing cached about one account's report credits may leak into the next.
+        scope.launch { reportCredits.get().refresh(null) }
         _userId.value = null
         _userEmail.value = null
         _userFullName.value = null

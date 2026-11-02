@@ -23,6 +23,9 @@ import com.surensureshkumar.movemark.domain.RoomProofMetrics
 import com.surensureshkumar.movemark.features.reports.components.ChecklistItemState
 import com.surensureshkumar.movemark.features.reports.components.ReportChecklistItem
 import com.surensureshkumar.movemark.data.remote.ExportApiException
+import com.surensureshkumar.movemark.data.auth.SessionManager
+import com.surensureshkumar.movemark.data.subscription.ReportCreditPolicy
+import com.surensureshkumar.movemark.data.subscription.ReportCreditsManager
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -84,6 +87,8 @@ class ReportsViewModel @Inject constructor(
     private val propertyStore: PropertyStore,
     private val exportRepository: ExportRepository,
     private val subscriptionRepository: SubscriptionRepository,
+    private val credits: ReportCreditsManager,
+    private val sessionManager: SessionManager,
 ) : ViewModel() {
 
     val hasPro: StateFlow<Boolean> = subscriptionRepository.hasPro
@@ -235,7 +240,10 @@ class ReportsViewModel @Inject constructor(
     private suspend fun handleRefusal(error: Exception, reason: PaywallReason): Boolean = when (error) {
         is ExportApiException.PaymentRequired -> {
             subscriptionRepository.refreshCustomerInfo()
-            _paywallRequests.tryEmit(reason)
+            credits.refresh(sessionManager.userId.value)
+            // The server is the source of truth; a purchase may still be syncing to it.
+            if (credits.isPurchaseLikelySyncing) _banner.value = ReportCreditPolicy.PURCHASE_STILL_SYNCING to true
+            else _paywallRequests.tryEmit(reason)
             true
         }
         is ExportApiException.AlreadyActive -> {
@@ -254,12 +262,19 @@ class ReportsViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
+            // Free accounts: one move-in report, plus one per Report Pack (server balance wins once known).
+            val userId = sessionManager.userId.value
+            if (!subscriptionRepository.hasPro.value && !credits.canExportMoveIn(userId, hasPro = false)) {
+                _paywallRequests.tryEmit(PaywallReason.UnlimitedExports)
+                return@launch
+            }
             _actionInProgress.value = true
             _banner.value = null
             try {
                 withContext(Dispatchers.IO) {
                     exportRepository.queueMoveInReport(property.id)
                 }
+                if (!subscriptionRepository.hasPro.value) userId?.let { credits.recordMoveInExport(it) }
                 _banner.value = "Report queued. Building your PDF…" to false
                 refreshExports()
             } catch (e: Exception) {

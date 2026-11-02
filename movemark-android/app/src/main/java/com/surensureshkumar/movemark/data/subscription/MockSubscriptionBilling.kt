@@ -77,13 +77,21 @@ class MockSubscriptionBilling @Inject constructor(
         _loading.value = false
     }
 
+    private val _reportPackPurchases = MutableStateFlow(0)
+    override val reportPackPurchases: StateFlow<Int> = _reportPackPurchases.asStateFlow()
+
     override suspend fun purchase(activity: Activity, plan: PlanPackageUi): PurchaseOutcome {
         _purchasing.value = true
         _errorMessage.value = null
         return try {
             delay(700)
-            setMockPro(true)
-            _restoreMessage.value = "Pro unlocked for testing."
+            if (plan.isReportPack) {
+                _reportPackPurchases.value += 1
+                _restoreMessage.value = "Report Pack unlocked for testing."
+            } else {
+                setMockPro(true)
+                _restoreMessage.value = "Pro unlocked for testing."
+            }
             PurchaseOutcome.Success
         } finally {
             _purchasing.value = false
@@ -145,6 +153,14 @@ class MockSubscriptionBilling @Inject constructor(
             periodLabel = "Billed yearly",
             price = "$79.99 / year",
             isYearly = true,
+        ),
+        PlanPackageUi(
+            id = "mock_report_pack",
+            title = "Report Pack",
+            periodLabel = "One move-in report · no subscription",
+            price = "$4.99",
+            isYearly = false,
+            isReportPack = true,
         ),
     )
 }
