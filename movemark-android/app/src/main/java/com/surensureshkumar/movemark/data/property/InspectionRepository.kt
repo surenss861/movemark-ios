@@ -96,9 +96,10 @@ class InspectionRepository(
         roomId: UUID,
         notes: String,
         conditionRating: Int,
+        id: UUID = UUID.randomUUID(),
     ): UUID {
         val row = InspectionItemRow(
-            id = UUID.randomUUID().toString(),
+            id = id.toString(),
             inspectionId = inspectionId.toString(),
             roomId = roomId.toString(),
             notes = notes,
@@ -106,6 +107,32 @@ class InspectionRepository(
         )
         val inserted = postgrest.insertReturning<InspectionItemRow, InspectionItemRow>("inspection_items", row).single()
         return UUID.fromString(inserted.id)
+    }
+
+    /**
+     * Creates the entry under a client-chosen id, or reuses it when a row with that id already exists (a retry
+     * after a lost response or a kill). Never creates a second entry for one save. (iOS `ensureInspectionItem`.)
+     */
+    suspend fun ensureInspectionItem(id: UUID, inspectionId: UUID, roomId: UUID, notes: String, conditionRating: Int) {
+        try {
+            insertInspectionItem(inspectionId, roomId, notes, conditionRating, id)
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException || !inspectionItemExists(id)) throw e
+        }
+    }
+
+    suspend fun inspectionItemExists(id: UUID): Boolean =
+        postgrest.select<IdRow>("inspection_items") {
+            select("id")
+            eq("id", id.toString())
+            order("id")
+            limit(1)
+        }.isNotEmpty()
+
+    /** The entry's `evidence_files` row ids, or null when the entry doesn't exist. */
+    suspend fun evidenceFileIds(inspectionItemId: UUID): Set<UUID>? {
+        if (!inspectionItemExists(inspectionItemId)) return null
+        return evidenceIdsForItem(inspectionItemId).mapTo(mutableSetOf()) { UUID.fromString(it) }
     }
 
     /** Inserts the `evidence_files` row for a finalized upload, under the photo's stable row id. */
