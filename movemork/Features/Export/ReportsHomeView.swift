@@ -193,6 +193,8 @@ struct ReportsHomeView: View {
         .padding(.top, 20 * k)
         .frame(maxWidth: .infinity, alignment: .leading)
         .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        // Root-tab switch: only this content region may move / resolve (MMTabContentTransition); no-op at rest.
+        .mmTabContentRegion(cover: Ink.sheet)
         .background(
             UnevenRoundedRectangle(topLeadingRadius: sheetRadius, topTrailingRadius: sheetRadius, style: .continuous)
                 .fill(Ink.sheet)

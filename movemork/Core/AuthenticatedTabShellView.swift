@@ -4,7 +4,7 @@
 //
 //  Root tabs (Proof / Reports / Account) with tab bar only when appropriate:
 //  bar visible for vault stack root and for Exports & Account tabs; hidden for any vault push
-//  (property detail, walkthrough, capture, move-out, dispute, etc.).
+//  (property detail, walkthrough, capture, move-out, dispute, etc.). Switching rules live in MMRootTabHost.
 //
 
 import SwiftUI
@@ -20,23 +20,17 @@ struct AuthenticatedTabShellView: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var selectedTab: RootTab = .vaults
+    /// Selection, mounted pages and the new page's content entrance (MMRootTabHost / MMTabContentTransition).
+    @State private var tabs = MMRootTabSwitcher()
     /// Vault-tab navigation only; non-empty means workspace/task screens — hide root tab bar.
     @State private var vaultPath: [AppRoute] = []
-    /// Tabs stay alive once opened, so switching never rebuilds a page (scroll, loaded data and navigation
-    /// survive) and the outgoing page stays solid under the incoming one instead of two half-faded screens.
-    @State private var visitedTabs: Set<RootTab> = [.vaults]
-    /// The page being left: kept visible underneath until the incoming page has resolved.
-    @State private var outgoingTab: RootTab?
-    /// The incoming page's settle (0 = in place).
-    @State private var incomingRise: CGFloat = 0
-    @State private var incomingOpacity: Double = 1
-    @State private var transitionToken = 0
     /// Reports and Account navigation, so tapping their active dock item can return them to the root.
     @State private var reportsPath = NavigationPath()
     @State private var accountPath = NavigationPath()
     /// Bumped when the already-selected dock item is tapped at a tab's root: that page scrolls to its top.
     @State private var scrollToTopTokens: [RootTab: Int] = [:]
+
+    private var selectedTab: RootTab { tabs.selected }
 
     private var showsRootTabBar: Bool {
         switch selectedTab {
@@ -48,75 +42,28 @@ struct AuthenticatedTabShellView: View {
     }
 
     private var selectedTabBinding: Binding<RootTab> {
-        Binding(get: { selectedTab }, set: { switchTo($0) })
+        Binding(get: { tabs.selected }, set: { switchTo($0) })
     }
 
     var body: some View {
-        ZStack {
-            ForEach([RootTab.vaults, .exports, .account], id: \.self) { tab in
-                if visitedTabs.contains(tab) {
-                    page(for: tab)
-                }
-            }
+        MMRootTabHost(switcher: tabs, scrollToTopTokens: scrollToTopTokens, showsDock: showsRootTabBar) { tab in
+            tabContent(tab)
+        } dock: {
+            MMRootDock(selectedTab: selectedTabBinding, onReselect: reselect)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .environment(\.mmRootTabBarVisible, showsRootTabBar)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if showsRootTabBar {
-                MMProofTabBarV4(selectedTab: selectedTabBinding, onReselect: reselect)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
-        }
-        .animation(.easeOut(duration: 0.2), value: showsRootTabBar)
         .onAppear { consumePendingFirstRunExit() }
         .onChange(of: propertyStore.pendingFirstRunExit != nil) { _, hasPending in
             if hasPending { consumePendingFirstRunExit() }
         }
     }
 
-    /// One root page. Only the selected page (and, mid-switch, the one being left) is visible, hit-testable
-    /// and in the accessibility tree; the incoming page sits on top while it resolves.
-    private func page(for tab: RootTab) -> some View {
-        let isSelected = tab == selectedTab
-        let isOutgoing = tab == outgoingTab
-        return tabContent(tab)
-            .environment(\.mmScrollToTopToken, scrollToTopTokens[tab, default: 0])
-            .environment(\.mmRootTabIsActive, isSelected)
-            .opacity(isSelected ? incomingOpacity : (isOutgoing ? 1 : 0))
-            .offset(y: isSelected ? incomingRise : 0)
-            .zIndex(isSelected ? 2 : (isOutgoing ? 1 : 0))
-            .allowsHitTesting(isSelected)
-            .accessibilityHidden(!isSelected)
-    }
-
-    /// Old tab stays put → the new page fades in over it with a small settle → the old page is hidden.
-    /// The dock and the screen frame never move.
+    /// The selected page changes in this frame (the old one is hidden in the same frame); only the dock and,
+    /// per variant, the new page's content region animate.
     private func switchTo(_ new: RootTab) {
-        guard new != selectedTab else { return }
-        let previous = selectedTab
-        transitionToken += 1
-        let token = transitionToken
-        visitedTabs.insert(new)
+        guard tabs.select(new, reduceMotion: reduceMotion) else { return }
         if new == .exports {
             // Reports was kept alive: refresh it quietly instead of rebuilding it.
             NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
-        }
-        var setup = Transaction()
-        setup.disablesAnimations = true
-        withTransaction(setup) {
-            outgoingTab = previous
-            selectedTab = new
-            incomingOpacity = 0
-            incomingRise = reduceMotion ? 0 : MMMotion.tabContentRise
-        }
-        withAnimation(reduceMotion ? MMMotion.tabContentFadeReduced : MMMotion.tabContentFade) {
-            incomingOpacity = 1
-            incomingRise = 0
-        }
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 220_000_000)
-            guard token == transitionToken else { return }
-            outgoingTab = nil
         }
     }
 

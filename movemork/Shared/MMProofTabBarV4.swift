@@ -34,6 +34,7 @@ struct MMProofTabBarV4: View {
                     item(.exports, title: "Reports", outline: "doc.text", filled: "doc.text.fill")
                     item(.account, title: "Account", outline: "person", filled: "person.fill")
                 }
+                .animation(reduceMotion ? nil : MMMotion.tabIndicator, value: selectedTab)
                 .padding(.horizontal, 8)
                 .frame(maxWidth: .infinity, minHeight: MoveMarkTheme.Spacing.floatingDockHeight)
                 .background(Ink.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -62,7 +63,9 @@ struct MMProofTabBarV4: View {
                 return
             }
             MMHaptics.selection()
-            withAnimation(reduceMotion ? nil : MMMotion.tabIndicator) { selectedTab = tab }
+            // The selection itself is never animated (the shell swaps pages in one frame); the dock animates
+            // its own signal through the scoped `.animation` below.
+            selectedTab = tab
         } label: {
             VStack(spacing: 4) {
                 // The active icon morphs in (outline → filled, a hair larger); idle icons sit back slightly.
@@ -91,6 +94,7 @@ struct MMProofTabBarV4: View {
         }
         .buttonStyle(MMFloatingDockPressStyle())
         .accessibilityLabel(title)
+        .accessibilityIdentifier("tab.\(tab.dockIdentifier)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

@@ -273,6 +273,8 @@ struct ProofHomeView: View {
         .padding(.top, 20 * k)
         .frame(maxWidth: .infinity, alignment: .leading)
         .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        // Root-tab switch: only this content region may move / resolve (MMTabContentTransition); no-op at rest.
+        .mmTabContentRegion(cover: Ink.sheet)
         .background(
             UnevenRoundedRectangle(topLeadingRadius: spec.sheetRadius, topTrailingRadius: spec.sheetRadius, style: .continuous)
                 .fill(Ink.sheet)
@@ -568,6 +570,7 @@ struct ProofHomeEmptyView: View {
                 }
                 .padding(20)
                 .padding(.top, 8)
+                .mmTabContentRegion(cover: Ink.sheet)
                 .background(
                     UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22, style: .continuous)
                         .fill(Ink.sheet)
