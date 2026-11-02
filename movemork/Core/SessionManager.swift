@@ -105,6 +105,8 @@ final class SessionManager {
 
         do {
             _ = try await NeonAuthClient.shared.validAccessToken()
+            // A post-reset revocation that couldn't reach Neon Auth at sign-in gets another try.
+            await PendingSessionRevocation().performIfPending { try await NeonAuthClient.shared.revokeOtherSessions() }
         } catch NeonAuthError.sessionExpired {
             // The server no longer accepts the stored session (revoked, expired, password reset elsewhere).
             clearAuthenticatedFields()
@@ -277,6 +279,8 @@ final class SessionManager {
         defer { interactiveAuthInFlight = false }
 
         let user = try await NeonAuthClient.shared.signIn(email: trimmedEmail, password: password)
+        // First session after a password reset: sign every other device out (see PendingSessionRevocation).
+        await PendingSessionRevocation().performIfPending { try await NeonAuthClient.shared.revokeOtherSessions() }
         await applyAuthenticatedSession(user)
         hasResolvedInitialAuthState = true
     }
@@ -379,8 +383,9 @@ final class SessionManager {
         try await NeonAuthClient.shared.requestPasswordReset(email: trimmed)
     }
 
-    /// Sets a new password from a reset link's token. Neon Auth revokes the account's sessions, so a
-    /// signed-in device is signed out and the user signs in with the new password.
+    /// Sets a new password from a reset link's token. Neon Auth leaves the account's sessions alive, so this
+    /// device signs out, and the sign-in with the new password ends every other session
+    /// (PendingSessionRevocation).
     func completePasswordReset(token: String, newPassword: String, confirmPassword: String) async throws {
         guard MoveMarkBackendConfig.isConfigured else {
             throw AuthError.validation("This build is not configured to reach MoveMark’s servers.")
@@ -392,6 +397,7 @@ final class SessionManager {
             throw AuthError.validation("Passwords do not match.")
         }
         try await NeonAuthClient.shared.resetPassword(token: token, newPassword: newPassword)
+        PendingSessionRevocation().markPasswordReset()
         if authPhase != .signedOut {
             await signOut()
         }

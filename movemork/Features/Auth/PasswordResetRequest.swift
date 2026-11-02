@@ -91,6 +91,60 @@ enum PasswordResetRequest {
     static let genericFailure = "Couldn’t send the reset link. Try again."
 }
 
+/// Neon Auth's managed config leaves the account's other sessions alive after a password reset (Better
+/// Auth's `revokeSessionsOnPasswordReset` is off and not exposed). So a completed reset is remembered here,
+/// and the first session after it — the sign-in with the new password — ends all the others.
+///
+/// The reset token doesn't say which account it belongs to, so the mark is not tied to an account: it
+/// expires after `window`, and only the next sign-in (or a launch with that session, if the first try was
+/// offline) acts on it. Revoking another account's *other* sessions by mistake would only sign that
+/// account's other devices out.
+struct PendingSessionRevocation {
+    static let window: TimeInterval = 60 * 60
+    private static let key = "movemark.pendingSessionRevocationUntil"
+
+    var defaults: UserDefaults = .standard
+
+    func markPasswordReset(now: Date = Date()) {
+        defaults.set(now.addingTimeInterval(Self.window).timeIntervalSince1970, forKey: Self.key)
+    }
+
+    func isPending(now: Date = Date()) -> Bool {
+        let until = defaults.double(forKey: Self.key)
+        guard until > 0 else { return false }
+        if now.timeIntervalSince1970 < until { return true }
+        clear()
+        return false
+    }
+
+    func clear() { defaults.removeObject(forKey: Self.key) }
+
+    enum Outcome: Equatable {
+        case nothingPending
+        case revoked
+        /// The session was already gone (revoked or expired): nothing left to protect from here.
+        case sessionGone
+        /// Offline or a server error: kept for the next launch with this session.
+        case willRetry
+    }
+
+    /// Runs `revoke` when a reset is pending and clears the mark unless it should be retried.
+    @discardableResult
+    func performIfPending(now: Date = Date(), _ revoke: () async throws -> Void) async -> Outcome {
+        guard isPending(now: now) else { return .nothingPending }
+        do {
+            try await revoke()
+            clear()
+            return .revoked
+        } catch NeonAuthError.sessionExpired {
+            clear()
+            return .sessionGone
+        } catch {
+            return .willRetry
+        }
+    }
+}
+
 #if DEBUG
 /// UI tests only (`-MMPasswordResetFixture` launch argument): a reset page is configured so "Forgot
 /// password?" shows, and the two reset calls answer locally — no request leaves the device, no email is

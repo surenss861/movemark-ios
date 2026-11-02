@@ -260,6 +260,38 @@ actor NeonAuthClient {
         _ = try await post("reset-password", ["token": token, "newPassword": newPassword], storeSession: false)
     }
 
+    /// Ends every other session of the signed-in account (Better Auth `POST /revoke-other-sessions`), keeping
+    /// this one. Neon Auth's managed config can't revoke sessions on reset, so the app does it with the first
+    /// session after a reset. Already-issued access tokens elsewhere still live until they expire (15 min).
+    func revokeOtherSessions() async throws {
+        #if DEBUG
+        if PasswordResetFixture.isActive { return }
+        #endif
+        loadIfNeeded()
+        guard let base = MoveMarkBackendConfig.neonAuthURL else { throw NeonAuthError.notConfigured }
+        try await revokeOtherSessions(base: base)
+    }
+
+    /// `base` is injectable for tests only.
+    func revokeOtherSessions(base: URL) async throws {
+        loadIfNeeded()
+        guard let stored else { throw NeonAuthError.sessionExpired }
+        var request = URLRequest(url: base.appendingPathComponent("revoke-other-sessions"))
+        request.httpMethod = "POST"
+        request.setValue(stored.cookieHeader, forHTTPHeaderField: "Cookie")
+        request.setValue(Self.origin(of: base), forHTTPHeaderField: "Origin")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Data("{}".utf8)
+        let (data, response) = try await http.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if status == 401 || status == 403 { throw NeonAuthError.sessionExpired }
+        guard (200..<300).contains(status) else {
+            let err = try? JSONDecoder().decode(ErrorBody.self, from: data)
+            neonAuthLog.notice("revoke-other-sessions failed HTTP \(status) code=\(err?.code ?? "-", privacy: .public)")
+            throw NeonAuthError.rejected(code: status == 429 ? "RATE_LIMITED" : err?.code, message: "")
+        }
+    }
+
     // MARK: - HTTP
 
     private func post(_ path: String, _ fields: [String: String], storeSession: Bool) async throws -> Data {
