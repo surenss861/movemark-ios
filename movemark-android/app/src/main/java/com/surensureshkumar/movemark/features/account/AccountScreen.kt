@@ -18,6 +18,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -60,6 +62,8 @@ fun AccountScreen(
     val reduceMotion = MMMotion.rememberReduceMotion()
     var appeared by remember { mutableStateOf(reduceMotion) }
     var showEditName by remember { mutableStateOf(false) }
+    var unsavedOnSignOut by remember { mutableStateOf(0) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(reduceMotion) {
         if (!reduceMotion) appeared = true
@@ -253,7 +257,12 @@ fun AccountScreen(
             MMSettingsRow(
                 title = "Sign out",
                 subtitle = "Clear this device and return to Welcome",
-                onClick = { viewModel.signOut(onSignOut) },
+                onClick = {
+                    scope.launch {
+                        val unsaved = viewModel.unsavedPhotoCount()
+                        if (unsaved > 0) unsavedOnSignOut = unsaved else viewModel.signOut(onSignOut)
+                    }
+                },
             )
             MMSettingsDivider()
             MMSettingsRow(
@@ -263,6 +272,28 @@ fun AccountScreen(
                 onClick = { confirmDelete = true },
             )
         }
+    }
+
+    if (unsavedOnSignOut > 0) {
+        val count = unsavedOnSignOut
+        AlertDialog(
+            onDismissRequest = { unsavedOnSignOut = 0 },
+            title = {
+                Text(
+                    if (count == 1) "1 photo hasn’t been saved yet. Signing out removes it from this phone."
+                    else "$count photos haven’t been saved yet. Signing out removes them from this phone.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    unsavedOnSignOut = 0
+                    viewModel.signOut(onSignOut)
+                }) { Text("Sign out", color = MMColors.SemanticDanger) }
+            },
+            dismissButton = {
+                TextButton(onClick = { unsavedOnSignOut = 0 }) { Text("Cancel", color = MMColors.TextSecondary) }
+            },
+        )
     }
 
     if (confirmDelete) {

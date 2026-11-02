@@ -123,6 +123,9 @@ fun MoveMarkNavHost() {
                 onOpenRoom = { roomId ->
                     navController.navigate(Routes.roomProof(roomId.toString(), ProofPhase.MoveIn))
                 },
+                onOpenRoomPhase = { roomId, phase ->
+                    navController.navigate(Routes.roomProof(roomId.toString(), phase))
+                },
                 onOpenMoveOutProof = {
                     navController.navigate(Routes.MoveOutRooms)
                 },

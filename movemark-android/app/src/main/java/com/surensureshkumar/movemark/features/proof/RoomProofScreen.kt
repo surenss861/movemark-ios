@@ -337,7 +337,11 @@ fun RoomProofScreen(
                                     color = MMColors.TextMuted,
                                 )
                             }
-                            RoomProofPhotoGrid(photos = photos, reduceMotion = reduceMotion)
+                            RoomProofPhotoGrid(
+                                photos = photos,
+                                reduceMotion = reduceMotion,
+                                onRemove = if (isBusy) null else viewModel::removePhoto,
+                            )
                             EntryDetailsForm(
                                 draft = draft,
                                 onChange = { next -> viewModel.updateDraft { next } },

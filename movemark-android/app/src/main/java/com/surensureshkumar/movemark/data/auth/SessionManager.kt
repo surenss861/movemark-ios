@@ -6,6 +6,7 @@ import com.surensureshkumar.movemark.data.backend.NeonAuthClient
 import com.surensureshkumar.movemark.data.backend.NeonAuthException
 import com.surensureshkumar.movemark.data.backend.NeonAuthUser
 import com.surensureshkumar.movemark.data.backend.StoredFileUrls
+import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceCenter
 import com.surensureshkumar.movemark.data.property.PropertyStore
 import com.surensureshkumar.movemark.data.remote.ExportApiClient
 import com.surensureshkumar.movemark.data.subscription.SubscriptionRepository
@@ -40,6 +41,8 @@ class SessionManager @Inject constructor(
     private val exportApi: ExportApiClient,
     private val fileUrls: StoredFileUrls,
     private val propertyStore: Lazy<PropertyStore>,
+    private val pendingEvidence: Lazy<PendingEvidenceCenter>,
+    private val localFiles: LocalUserFiles,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -112,8 +115,14 @@ class SessionManager @Inject constructor(
         _userFullName.value = fullName.trim()
     }
 
-    /** Hard reset: always clears local state, even if the server-side sign-out fails (e.g. offline). */
+    /**
+     * Hard reset: always clears local state, even if the server-side sign-out fails (e.g. offline). Signing out on
+     * purpose (after the unsaved-photos warning) also removes this user's pending photos and downloaded reports
+     * from the device (iOS `AccountView.signOut`).
+     */
     suspend fun signOut(onCleared: suspend () -> Unit) {
+        _userId.value?.let { pendingEvidence.get().clearUser(it.toString()) }
+        localFiles.clear()
         subscriptionRepository.logOut()
         auth.signOut()
         fileUrls.clear()
@@ -121,12 +130,19 @@ class SessionManager @Inject constructor(
         onCleared()
     }
 
+    /** Photos of the signed-in user still only on this device (the sign-out warning). */
+    suspend fun unsavedPhotoCount(): Int =
+        _userId.value?.let { pendingEvidence.get().pendingCount(it.toString()) } ?: 0
+
     /**
      * Permanently deletes the account and its cloud data (`DELETE /api/account`), then signs out on this device.
      * The session is already gone server-side, so only local state is cleared.
      */
     suspend fun deleteAccount(onCleared: suspend () -> Unit) {
         exportApi.deleteAccount()
+        // The account is gone: nothing of it stays on this device (pending photos, downloaded reports, captures).
+        _userId.value?.let { pendingEvidence.get().clearUser(it.toString()) }
+        localFiles.clear()
         subscriptionRepository.logOut()
         auth.endSessionLocally(notify = false)
         fileUrls.clear()
@@ -158,6 +174,8 @@ class SessionManager @Inject constructor(
         _userEmail.value = user.email
         _authState.value = if (id != null) AuthState.SignedIn else AuthState.SignedOut
         if (id != null) {
+            // Settle what an interrupted save left (empty entries, uploads to release, photos already saved).
+            pendingEvidence.get().reconcileAll(id.toString())
             scope.launch {
                 // RevenueCat's app user id is the Neon Auth user id (lowercase uuid), as on iOS.
                 subscriptionRepository.logIn(id.toString().lowercase())

@@ -80,9 +80,12 @@ class PendingEvidenceCenter(
     }
 
     /** Sends [key]'s photos in the app scope (survives the screen), then refreshes the summary. */
-    suspend fun send(key: PendingEvidenceKey): PendingEvidenceSyncResult {
+    suspend fun send(
+        key: PendingEvidenceKey,
+        onProgress: suspend (index: Int, total: Int) -> Unit = { _, _ -> },
+    ): PendingEvidenceSyncResult {
         return appScope.async {
-            syncLock.withLock { withContext(io) { sync.sync(key) } }.also { refresh(key.userId) }
+            syncLock.withLock { withContext(io) { sync.sync(key, onProgress) } }.also { refresh(key.userId) }
         }.await()
     }
 

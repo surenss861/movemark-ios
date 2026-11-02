@@ -88,7 +88,10 @@ class PendingEvidenceSync(
      * Sends everything pending for [key]. Safe to call again at any point (after a failure, a relaunch, a kill
      * mid-way): it settles what an earlier attempt left before sending anything new.
      */
-    suspend fun sync(key: PendingEvidenceKey): PendingEvidenceSyncResult {
+    suspend fun sync(
+        key: PendingEvidenceKey,
+        onProgress: suspend (index: Int, total: Int) -> Unit = { _, _ -> },
+    ): PendingEvidenceSyncResult {
         var result = PendingEvidenceSyncResult()
         store.settleInterrupted(key)
         releaseQueued(key)
@@ -137,7 +140,8 @@ class PendingEvidenceSync(
         }
 
         store.markUploading(current.items.map { it.id }, key)
-        for (item in current.items) {
+        for ((index, item) in current.items.withIndex()) {
+            onProgress(index + 1, current.items.size)
             val (photo, outcome) = send(item, entryId, key)
             result = result.copy(
                 saved = if (photo != null) result.saved + photo else result.saved,
