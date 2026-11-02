@@ -70,12 +70,24 @@ class MaintenanceRepository @Inject constructor(
         return postgrest.insertReturning<MaintenanceInsertRow, MaintenanceIssueRow>("maintenance_issues", row).single()
     }
 
-    suspend fun updateFollowUp(issueId: UUID, note: String) {
-        val now = java.time.Instant.now().toString()
+    /**
+     * Appends a dated follow-up to `landlord_response` (one text column), read fresh so an earlier entry is never
+     * overwritten (iOS `updateFollowUp`). Returns the stored response.
+     */
+    suspend fun updateFollowUp(issueId: UUID, note: String, fallbackExisting: String? = null): String {
+        val now = java.time.Instant.now()
+        val current = postgrest.select<MaintenanceIssueRow>("maintenance_issues") {
+            eq("id", issueId.toString())
+            order("id")
+            limit(1)
+        }.firstOrNull()
+        val existing = if (current != null) current.landlordResponse else fallbackExisting
+        val response = MaintenanceFollowUpLog.appending(note, now, existing)
         postgrest.update(
             "maintenance_issues",
-            MaintenanceFollowUpWithTimestamp(landlordResponse = note.trim(), followUpDate = now, updatedAt = now),
+            MaintenanceFollowUpWithTimestamp(landlordResponse = response, followUpDate = now.toString(), updatedAt = now.toString()),
         ) { eq("id", issueId.toString()) }
+        return response
     }
 
     suspend fun markResolved(issueId: UUID) {
@@ -83,5 +95,24 @@ class MaintenanceRepository @Inject constructor(
         postgrest.update("maintenance_issues", MaintenanceStatusWithTimestamp(status = "resolved", updatedAt = now)) {
             eq("id", issueId.toString())
         }
+    }
+}
+
+/**
+ * `landlord_response` as a log (iOS `MaintenanceFollowUpLog`): entries separated by a blank line, each new one
+ * prefixed "Oct 27: ". Older free text reads as one undated entry.
+ */
+object MaintenanceFollowUpLog {
+    private val dayFormatter = java.time.format.DateTimeFormatter.ofPattern("MMM d", java.util.Locale.US)
+
+    fun appending(
+        note: String,
+        at: java.time.Instant,
+        existing: String?,
+        zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
+    ): String {
+        val entry = "${dayFormatter.format(at.atZone(zone))}: ${note.trim()}"
+        val previous = existing?.trim().orEmpty()
+        return if (previous.isEmpty()) entry else "$previous\n\n$entry"
     }
 }
