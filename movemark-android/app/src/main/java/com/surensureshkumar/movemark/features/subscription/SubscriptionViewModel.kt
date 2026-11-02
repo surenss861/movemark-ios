@@ -71,7 +71,7 @@ class SubscriptionViewModel @Inject constructor(
             when (repository.purchase(activity, plan)) {
                 PurchaseOutcome.Success -> {
                     repository.refreshCustomerInfo()
-                    credits.purchaseCompleted(sessionManager.userId.value, repository.reportPackPurchases.value)
+                    credits.purchaseCompleted(sessionManager.userId.value)
                     _purchaseWasReportPack.value = plan.isReportPack
                     _purchaseSuccess.value = true
                     onSuccess()
@@ -93,7 +93,7 @@ class SubscriptionViewModel @Inject constructor(
                 RestoreOutcome.Restored -> {
                     repository.refreshCustomerInfo()
                     val userId = sessionManager.userId.value
-                    credits.restored(userId, repository.reportPackPurchases.value)
+                    credits.restored(userId)
                     when {
                         repository.hasPro.value -> onRestored()
                         credits.hasUsablePackCredit(userId) -> {

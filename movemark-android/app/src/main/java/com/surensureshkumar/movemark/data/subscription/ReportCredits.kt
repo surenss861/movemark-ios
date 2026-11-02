@@ -20,61 +20,76 @@ import javax.inject.Singleton
  * (`GET /api/account/report-credits`) wins once fetched; local counters are the fallback. Pro is unlimited.
  */
 
-/** The allowance rule, pure (iOS `remainingMoveInExports` / `hasUsableReportPackCredit`). */
+/** What happens when a free account asks for a move-in report. */
+enum class MoveInGate {
+    /** Send the request; the server decides (and may still answer 402). */
+    Allowed,
+
+    /** Nothing left by the server's numbers: open the paywall. */
+    Paywall,
+
+    /**
+     * Nothing left by the server's numbers, but a purchase finished in the last 10 minutes and its webhook may not
+     * have reached the server yet: say so instead of offering a second purchase. No credit is assumed.
+     */
+    StillSyncing,
+}
+
+/**
+ * The allowance rule, pure. Report Pack credits come from the server balance alone (`GET api/account/report-credits`,
+ * granted once per RevenueCat event by the webhook); nothing on the phone ever adds a credit. The free move-in report
+ * is the only local counter, and it can only hold a request back, never grant one.
+ */
 object ReportCreditPolicy {
-    /** How long after a purchase a server 402 is treated as "still syncing" rather than "buy again". */
+    /** How long after a purchase a refusal reads "still syncing" rather than "buy again". Copy only. */
     const val PURCHASE_SYNC_WINDOW_MS = 10 * 60 * 1000L
 
     const val PURCHASE_STILL_SYNCING = "Your purchase is still syncing. Try again in a minute."
 
-    /** One-time Report Pack product ids — must match Play Console / RevenueCat. */
-    private val PRODUCT_IDS = setOf("report_pack", "movemark_report_pack", "test_report_pack")
+    /**
+     * The one Report Pack product: `report_pack`, a consumable one-time product. It is the id the API's webhook
+     * falls back to and its smoke tests send, and the id iOS's paywall tests use. Matched exactly.
+     */
+    const val REPORT_PACK_PRODUCT_ID = "report_pack"
 
-    fun isReportPackProduct(productId: String): Boolean =
-        productId.substringBefore(':') in PRODUCT_IDS || productId.contains("report_pack", ignoreCase = true)
+    fun isReportPackProduct(productId: String): Boolean = productId.trim().lowercase() == REPORT_PACK_PRODUCT_ID
 
     fun isPurchaseLikelySyncing(lastPurchaseAtMs: Long?, nowMs: Long): Boolean =
-        lastPurchaseAtMs != null && nowMs - lastPurchaseAtMs < PURCHASE_SYNC_WINDOW_MS
+        lastPurchaseAtMs != null && nowMs in lastPurchaseAtMs until lastPurchaseAtMs + PURCHASE_SYNC_WINDOW_MS
 
-    /** Move-in reports still available to a free user. */
-    fun remainingMoveInExports(freeUsed: Int, localPackCredits: Int, serverBalance: Int?, syncing: Boolean): Int {
-        val localRemaining = maxOf(0, 1 + localPackCredits - freeUsed)
-        serverBalance ?: return localRemaining
-        val serverRemaining = (if (freeUsed < 1) 1 else 0) + maxOf(0, serverBalance)
-        // Right after a purchase the webhook may lag; don't bounce the renter back to the paywall to buy twice.
-        return if (syncing) maxOf(serverRemaining, localRemaining) else serverRemaining
+    /**
+     * Move-in reports a free account may request: the unused free one plus the server's balance. An unknown balance
+     * (not fetched, or the fetch failed) counts as nothing extra: the request may still go to the server, which
+     * decides. The sync window is deliberately not an input.
+     */
+    fun remainingMoveInExports(freeUsed: Int, serverBalance: Int?): Int =
+        (if (freeUsed < 1) 1 else 0) + maxOf(0, serverBalance ?: 0)
+
+    fun moveInGate(freeUsed: Int, serverBalance: Int?, syncing: Boolean): MoveInGate = when {
+        remainingMoveInExports(freeUsed, serverBalance) > 0 -> MoveInGate.Allowed
+        // Unknown balance: let the server decide rather than guess either way.
+        serverBalance == null -> MoveInGate.Allowed
+        syncing -> MoveInGate.StillSyncing
+        else -> MoveInGate.Paywall
     }
 
-    /** A Report Pack credit that can still be spent (decides whether a restore restored anything). */
-    fun hasUsablePackCredit(freeUsed: Int, localPackCredits: Int, serverBalance: Int?): Boolean =
-        if (serverBalance != null) serverBalance > 0 else localPackCredits > 0 && freeUsed < 1 + localPackCredits
+    /** A restore restored a Report Pack only when the server holds an unspent credit. */
+    fun hasUsablePackCredit(serverBalance: Int?): Boolean = (serverBalance ?: 0) > 0
 }
 
-/** Per-user counters on this device. */
+/** The free move-in report, per user, on this device (an advisory pre-check; the server enforces it too). */
 @Singleton
 class ReportCreditsStore @Inject constructor(private val dataStore: DataStore<Preferences>) {
     private fun freeKey(userId: UUID) = intPreferencesKey("free_move_in_exports_${userId.toString().lowercase()}")
-    private fun packKey(userId: UUID) = intPreferencesKey("report_pack_credits_${userId.toString().lowercase()}")
 
     suspend fun freeUsed(userId: UUID): Int = dataStore.data.first()[freeKey(userId)] ?: 0
-    suspend fun packCredits(userId: UUID): Int = maxOf(0, dataStore.data.first()[packKey(userId)] ?: 0)
 
     suspend fun incrementFreeUsed(userId: UUID) {
         dataStore.edit { it[freeKey(userId)] = (it[freeKey(userId)] ?: 0) + 1 }
     }
-
-    /** Local credits never go below what RevenueCat says was bought (restore / reinstall). */
-    suspend fun mergePackPurchases(userId: UUID, purchased: Int): Int {
-        var merged = 0
-        dataStore.edit {
-            merged = maxOf(it[packKey(userId)] ?: 0, purchased)
-            it[packKey(userId)] = merged
-        }
-        return merged
-    }
 }
 
-/** App-wide report credits: server balance, local counters, purchase sync window. */
+/** App-wide report credits: the server balance, the free-report counter, the purchase sync window (copy only). */
 @Singleton
 class ReportCreditsManager @Inject constructor(
     private val store: ReportCreditsStore,
@@ -116,32 +131,26 @@ class ReportCreditsManager @Inject constructor(
         }
     }
 
-    suspend fun canExportMoveIn(userId: UUID?, hasPro: Boolean): Boolean {
-        if (hasPro) return true
-        userId ?: return false
-        return ReportCreditPolicy.remainingMoveInExports(
-            store.freeUsed(userId), store.packCredits(userId), balanceFor(userId), isPurchaseLikelySyncing,
-        ) > 0
+    suspend fun moveInGate(userId: UUID?, hasPro: Boolean): MoveInGate {
+        if (hasPro) return MoveInGate.Allowed
+        userId ?: return MoveInGate.Paywall
+        return ReportCreditPolicy.moveInGate(store.freeUsed(userId), balanceFor(userId), isPurchaseLikelySyncing)
     }
 
-    suspend fun hasUsablePackCredit(userId: UUID?): Boolean {
-        userId ?: return false
-        return ReportCreditPolicy.hasUsablePackCredit(store.freeUsed(userId), store.packCredits(userId), balanceFor(userId))
-    }
+    fun hasUsablePackCredit(userId: UUID?): Boolean =
+        userId != null && ReportCreditPolicy.hasUsablePackCredit(balanceFor(userId))
 
     /** A free (non-Pro) move-in report was queued. */
     suspend fun recordMoveInExport(userId: UUID) = store.incrementFreeUsed(userId)
 
-    /** A purchase (Pro or Report Pack) finished on this device. */
-    suspend fun purchaseCompleted(userId: UUID?, reportPackPurchases: Int) {
+    /** A purchase (Pro or Report Pack) finished on this device: start the copy window and ask the server. */
+    suspend fun purchaseCompleted(userId: UUID?) {
         lastPurchaseAt = clock()
-        userId?.let { store.mergePackPurchases(it, reportPackPurchases) }
         refresh(userId)
     }
 
-    /** After a restore: merge the packs RevenueCat knows about, then ask the server. */
-    suspend fun restored(userId: UUID?, reportPackPurchases: Int) {
-        userId?.let { store.mergePackPurchases(it, reportPackPurchases) }
+    /** After a restore: the server's balance says whether a pack is still unspent. */
+    suspend fun restored(userId: UUID?) {
         refresh(userId)
     }
 }

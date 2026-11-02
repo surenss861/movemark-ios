@@ -24,6 +24,7 @@ import com.surensureshkumar.movemark.features.reports.components.ChecklistItemSt
 import com.surensureshkumar.movemark.features.reports.components.ReportChecklistItem
 import com.surensureshkumar.movemark.data.remote.ExportApiException
 import com.surensureshkumar.movemark.data.auth.SessionManager
+import com.surensureshkumar.movemark.data.subscription.MoveInGate
 import com.surensureshkumar.movemark.data.subscription.ReportCreditPolicy
 import com.surensureshkumar.movemark.data.subscription.ReportCreditsManager
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
@@ -264,9 +265,17 @@ class ReportsViewModel @Inject constructor(
         viewModelScope.launch {
             // Free accounts: one move-in report, plus one per Report Pack (server balance wins once known).
             val userId = sessionManager.userId.value
-            if (!subscriptionRepository.hasPro.value && !credits.canExportMoveIn(userId, hasPro = false)) {
-                _paywallRequests.tryEmit(PaywallReason.UnlimitedExports)
-                return@launch
+            when (credits.moveInGate(userId, subscriptionRepository.hasPro.value)) {
+                MoveInGate.Allowed -> Unit
+                MoveInGate.Paywall -> {
+                    _paywallRequests.tryEmit(PaywallReason.UnlimitedExports)
+                    return@launch
+                }
+                // Copy only: no credit is assumed while a purchase reaches the server.
+                MoveInGate.StillSyncing -> {
+                    _banner.value = ReportCreditPolicy.PURCHASE_STILL_SYNCING to true
+                    return@launch
+                }
             }
             _actionInProgress.value = true
             _banner.value = null
