@@ -24,6 +24,8 @@ import com.surensureshkumar.movemark.features.maintenance.MaintenanceIssueDetail
 import com.surensureshkumar.movemark.features.maintenance.MaintenanceLogScreen
 import com.surensureshkumar.movemark.features.main.MainShellScreen
 import com.surensureshkumar.movemark.features.moveout.MoveOutRoomsScreen
+import com.surensureshkumar.movemark.features.dispute.DisputePacketScreen
+import com.surensureshkumar.movemark.domain.DisputePacketModel
 import com.surensureshkumar.movemark.features.onboarding.OnboardingNameScreen
 import com.surensureshkumar.movemark.features.proof.RoomProofScreen
 import com.surensureshkumar.movemark.features.proof.SavedProofReceiptScreen
@@ -139,6 +141,7 @@ fun MoveMarkNavHost() {
                 onOpenMoveOutProof = {
                     navController.navigate(Routes.MoveOutRooms)
                 },
+                onOpenDisputePacket = { navController.navigate(Routes.DisputePacket) },
                 onSignOut = {
                     navController.navigate(Routes.Welcome) {
                         popUpTo(0) { inclusive = true }
@@ -175,6 +178,20 @@ fun MoveMarkNavHost() {
         composable(Routes.AddProperty) {
             CreatePropertyScreen(
                 onCreated = { navController.popBackStack() },
+            )
+        }
+        composable(Routes.DisputePacket) {
+            DisputePacketScreen(
+                onBack = { navController.popBackStack() },
+                onCaptureMoveOut = { roomId -> navController.navigate(Routes.roomProof(roomId.toString(), ProofPhase.MoveOut)) },
+                onMissing = { target ->
+                    when (target) {
+                        DisputePacketModel.Missing.Target.RentalRecord -> navController.navigate(Routes.Documents)
+                        DisputePacketModel.Missing.Target.MoveOut -> navController.navigate(Routes.MoveOutRooms)
+                        DisputePacketModel.Missing.Target.Rooms -> { mainTabRequest.request(MainTab.Rooms); navController.popBackStack() }
+                        DisputePacketModel.Missing.Target.Reports -> { mainTabRequest.request(MainTab.Reports); navController.popBackStack() }
+                    }
+                },
             )
         }
         composable(Routes.MoveOutRooms) {

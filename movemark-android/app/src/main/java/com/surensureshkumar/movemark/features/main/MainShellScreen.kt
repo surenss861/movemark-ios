@@ -31,6 +31,7 @@ fun MainShellScreen(
     onOpenRoom: (UUID) -> Unit,
     onOpenRoomPhase: (UUID, ProofPhase) -> Unit,
     onOpenMoveOutProof: () -> Unit,
+    onOpenDisputePacket: () -> Unit = {},
     onSignOut: () -> Unit,
     onAddProperty: () -> Unit,
     onOpenMaintenance: () -> Unit,
@@ -76,6 +77,7 @@ fun MainShellScreen(
                         onOpenMoveOutProof = onOpenMoveOutProof,
                         onOpenVault = { tab = MainTab.Vault },
                         onShowPaywall = { paywallReason = it },
+                        onOpenDisputePacket = onOpenDisputePacket,
                     )
                     MainTab.Account -> AccountScreen(
                         modifier = Modifier.padding(padding),

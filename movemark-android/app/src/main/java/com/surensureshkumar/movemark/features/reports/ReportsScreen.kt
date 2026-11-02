@@ -67,6 +67,8 @@ fun ReportsScreen(
     onOpenVault: () -> Unit,
     onShowPaywall: (PaywallReason) -> Unit,
     modifier: Modifier = Modifier,
+    /** The dispute packet opens its builder, as on iOS; null keeps the in-place action. */
+    onOpenDisputePacket: (() -> Unit)? = null,
     viewModel: ReportsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -212,7 +214,7 @@ fun ReportsScreen(
                     primaryTitle = disputeCtaTitle,
                     primaryEnabled = disputeCtaEnabled,
                     primaryLoading = disputeCtaLoading,
-                    onPrimary = {
+                    onPrimary = onOpenDisputePacket ?: {
                         viewModel.onDisputePrimaryAction(
                             hasPro = hasPro,
                             onContinueRoomProof = onContinueRoomProof,

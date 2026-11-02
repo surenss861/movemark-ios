@@ -147,3 +147,15 @@ private fun PdfPage(pages: PdfPages, index: Int, widthPx: Int) {
 
 /** US Letter, the reports' page size, until the real page is rendered. */
 private const val PAGE_ASPECT = 8.5f / 11f
+
+/** Hands a downloaded report to the system share sheet through the FileProvider (never the signed URL). */
+fun shareReportPdf(context: android.content.Context, file: File, title: String) {
+    val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "application/pdf"
+        putExtra(android.content.Intent.EXTRA_STREAM, uri)
+        putExtra(android.content.Intent.EXTRA_TITLE, title)
+        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(android.content.Intent.createChooser(send, "Share report"))
+}

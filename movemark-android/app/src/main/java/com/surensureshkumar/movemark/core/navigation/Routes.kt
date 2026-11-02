@@ -28,6 +28,7 @@ object Routes {
         "room_proof/${phase.key}/$roomId"
 
     const val MoveOutRooms = "move_out_rooms"
+    const val DisputePacket = "dispute_packet"
 
     const val SavedProofReceipt = "saved_proof_receipt/{proofPhase}/{roomId}"
     const val SavedProofReceiptArg = "roomId"
