@@ -7,6 +7,7 @@
  */
 package com.surensureshkumar.movemark.features.proof
 
+import com.surensureshkumar.movemark.core.design.mmLines
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -241,7 +242,7 @@ private fun HeroImage(photo: EvidencePhoto, signPhotoUrl: suspend (String) -> St
         if (url != null) {
             SubcomposeAsyncImage(
                 model = url,
-                contentDescription = null,
+                contentDescription = "Latest evidence photo of this room",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
                 error = {
@@ -282,7 +283,7 @@ fun RoomTopBar(roomName: String, phase: ProofPhase, onBack: () -> Unit, scrolled
             color = Color.White,
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
+            maxLines = mmLines(),
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
             modifier = Modifier
@@ -390,7 +391,7 @@ private fun GlassChip(chip: HeroChip) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Icon(chip.icon, contentDescription = null, tint = chip.tint, modifier = Modifier.size(14.dp))
-        Text(chip.text, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(chip.text, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = mmLines())
     }
 }
 

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -201,7 +202,8 @@ fun MMVaultProofHeroCard(
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clickable(onClick = onViewReport),
+                    .heightIn(min = 48.dp)
+                    .clickable(onClickLabel = "View report", role = androidx.compose.ui.semantics.Role.Button, onClick = onViewReport),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(reportReadyLine, fontSize = 14.sp, color = MMColors.TextSecondary, modifier = Modifier.weight(1f))

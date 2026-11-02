@@ -1,5 +1,6 @@
 package com.surensureshkumar.movemark.core.design.components
 
+import com.surensureshkumar.movemark.core.design.mmLines
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
@@ -152,7 +153,7 @@ private fun CompactRowContent(
             }
             meta?.takeIf { it.isNotBlank() }?.let {
                 Spacer(Modifier.height(2.dp))
-                Text(it, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MMColors.TextMuted, maxLines = 1)
+                Text(it, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MMColors.TextMuted, maxLines = mmLines())
             }
         }
         Icon(
