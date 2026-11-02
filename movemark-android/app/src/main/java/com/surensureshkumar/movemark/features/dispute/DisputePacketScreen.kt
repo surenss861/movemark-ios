@@ -30,7 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -291,7 +291,7 @@ internal fun DisputePacketContent(
                             Icon(
                                 when (record.kind) {
                                     DisputePacketModel.RecordKind.Report -> Icons.Filled.Description
-                                    DisputePacketModel.RecordKind.Document -> Icons.Filled.InsertDriveFile
+                                    DisputePacketModel.RecordKind.Document -> Icons.AutoMirrored.Filled.InsertDriveFile
                                     DisputePacketModel.RecordKind.Maintenance -> Icons.Filled.Build
                                 },
                                 contentDescription = null,

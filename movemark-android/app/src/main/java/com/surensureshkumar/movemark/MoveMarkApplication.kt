@@ -5,6 +5,7 @@ import android.util.Log
 import com.revenuecat.purchases.LogLevel
 import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.PurchasesConfiguration
+import com.surensureshkumar.movemark.core.CrashReporting
 import com.surensureshkumar.movemark.data.subscription.BillingConfig
 import com.surensureshkumar.movemark.data.subscription.RevenueCatSubscriptionBilling
 import dagger.hilt.android.HiltAndroidApp
@@ -13,6 +14,10 @@ import dagger.hilt.android.HiltAndroidApp
 class MoveMarkApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        CrashReporting.start(
+            this,
+            CrashReporting.settings(BuildConfig.SENTRY_DSN, BuildConfig.DEBUG, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
+        )
         BillingConfig.logStartup()
         val key = BuildConfig.REVENUECAT_PUBLIC_KEY
         if (BillingConfig.shouldConfigureRevenueCat(key)) {

@@ -48,3 +48,13 @@ app/src/main/java/com/surensureshkumar/movemark/
 ## Room proof rule
 
 A room is **documented** only when it has at least one photo on file (`photoCount > 0`). Rows alone do not count.
+
+## Versioning
+
+- `versionName` matches the iOS marketing version (currently **1.4.0**).
+- `versionCode` is **YYYYMMDDNN**: the build date and a two-digit sequence for that day (`2026110201` is the
+  first build of 2 Nov 2026). It sorts above every earlier code (the first uploads used 1) and stays below
+  Play's 2,100,000,000 limit through 2099.
+- Both live in `gradle.properties` (`movemarkVersionName`, `movemarkVersionCode`). Bump the code for every Play
+  upload (Play rejects a code it has already seen); for a one-off build pass `-PmovemarkVersionCode=…`.
+  The build fails on a code that isn't a real date plus 01–99, or a name that isn't `x.y.z`.

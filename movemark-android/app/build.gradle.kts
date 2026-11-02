@@ -1,3 +1,5 @@
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.Properties
 
 plugins {
@@ -26,6 +28,18 @@ val billingModeProp = localProp("BILLING_MODE", debugBillingDefault)
 val prodNeonAuthUrl = "https://ep-steep-wind-b56266ss.neonauth.c-7.us-east-2.aws.neon.tech/neondb/auth"
 val prodNeonDataApiUrl = "https://ep-steep-wind-b56266ss.apirest.c-7.us-east-2.aws.neon.tech/neondb/rest/v1"
 val prodMoveMarkApiBaseUrl = "https://movemark-api-py-production.up.railway.app"
+// versionCode scheme YYYYMMDDNN (a real date plus a 01-99 sequence): sorts above the old single-digit codes and
+// stays under Play's 2,100,000,000 ceiling through 2099.
+val movemarkVersionName = (findProperty("movemarkVersionName") as String?)?.trim().orEmpty()
+val movemarkVersionCode: Int = run {
+    val raw = (findProperty("movemarkVersionCode") as String?)?.trim().orEmpty()
+    val ok = Regex("""20\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(0[1-9]|[1-9]\d)""").matches(raw) &&
+        runCatching { LocalDate.parse(raw.take(8), DateTimeFormatter.BASIC_ISO_DATE) }.isSuccess
+    if (!ok) throw GradleException("movemarkVersionCode must be YYYYMMDDNN (a real date + 01-99), got '$raw'.")
+    if (!Regex("""\d+\.\d+\.\d+""").matches(movemarkVersionName)) throw GradleException("movemarkVersionName must be x.y.z, got '$movemarkVersionName'.")
+    raw.toInt()
+}
+
 val debugTargetsProduction = (findProperty("movemarkTarget") as String?)?.trim() == "production"
 
 android {
@@ -36,12 +50,14 @@ android {
         applicationId = "com.surensureshkumar.movemark"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = movemarkVersionCode
+        versionName = movemarkVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "REVENUECAT_PUBLIC_KEY", "\"$revenueCatKey\"")
         buildConfigField("String", "BILLING_MODE", "\"$billingModeProp\"")
+        // Crash reporting (Sentry): empty DSN = disabled. Use the Android project's DSN, not the iOS one.
+        buildConfigField("String", "SENTRY_DSN", "\"${localProp("SENTRY_DSN")}\"")
     }
 
     // Play upload key, read from local.properties (gitignored). Without it, release builds are left unsigned.
@@ -161,6 +177,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.revenuecat)
     implementation(libs.okhttp)
+    implementation(libs.sentry.android)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)

@@ -35,6 +35,9 @@
             </intent-filter>
         </activity>
 
+        <!-- Sentry starts from MoveMarkApplication (only with a DSN, personal data off), never on its own. -->
+        <meta-data android:name="io.sentry.auto-init" android:value="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

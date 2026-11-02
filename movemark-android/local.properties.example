@@ -19,3 +19,6 @@ MOVEMARK_UPLOAD_STORE_FILE=/Users/YOUR_USER/.movemark-android/movemark-upload.jk
 MOVEMARK_UPLOAD_STORE_PASSWORD=
 MOVEMARK_UPLOAD_KEY_ALIAS=movemark-upload
 MOVEMARK_UPLOAD_KEY_PASSWORD=
+
+# Crash reporting: the MoveMark Android Sentry project's DSN. Empty = Sentry disabled.
+SENTRY_DSN=
