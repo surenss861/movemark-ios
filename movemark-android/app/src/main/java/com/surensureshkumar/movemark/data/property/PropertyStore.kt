@@ -124,6 +124,12 @@ class PropertyStore @Inject constructor(
         fetchAll(userId)
     }
 
+    /** Edit rental (iOS `updateProperty`): saves, then re-reads the rentals and the active one. */
+    suspend fun updateProperty(propertyId: UUID, patch: com.surensureshkumar.movemark.domain.PropertyPatch, userId: UUID) {
+        propertyRepository.updateProperty(propertyId, patch)
+        fetchAll(userId)
+    }
+
     class DuplicateRoomNameException : Exception("A room with that name already exists.")
     class InvalidRoomNameException : Exception("Enter a room name.")
 

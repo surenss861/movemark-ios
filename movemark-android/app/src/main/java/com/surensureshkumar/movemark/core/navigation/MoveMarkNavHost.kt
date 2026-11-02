@@ -25,6 +25,7 @@ import com.surensureshkumar.movemark.features.maintenance.MaintenanceLogScreen
 import com.surensureshkumar.movemark.features.main.MainShellScreen
 import com.surensureshkumar.movemark.features.moveout.MoveOutRoomsScreen
 import com.surensureshkumar.movemark.features.dispute.DisputePacketScreen
+import com.surensureshkumar.movemark.features.property.EditRentalScreen
 import com.surensureshkumar.movemark.domain.DisputePacketModel
 import com.surensureshkumar.movemark.features.onboarding.OnboardingNameScreen
 import com.surensureshkumar.movemark.features.proof.RoomProofScreen
@@ -153,7 +154,13 @@ fun MoveMarkNavHost() {
             )
         }
         composable(Routes.Documents) {
-            DocumentsScreen(onBack = { navController.popBackStack() })
+            DocumentsScreen(
+                onBack = { navController.popBackStack() },
+                onEditRental = { navController.navigate(Routes.EditRental) },
+            )
+        }
+        composable(Routes.EditRental) {
+            EditRentalScreen(onClose = { navController.popBackStack() })
         }
         composable(Routes.MaintenanceLog) {
             MaintenanceLogScreen(

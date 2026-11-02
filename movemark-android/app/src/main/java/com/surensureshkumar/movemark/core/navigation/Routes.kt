@@ -15,6 +15,7 @@ object Routes {
 
     const val MaintenanceLog = "maintenance_log"
     const val Documents = "documents"
+    const val EditRental = "edit_rental"
     const val MaintenanceIssueArg = "issueId"
     const val MaintenanceIssueDetail = "maintenance_issue/{issueId}"
 

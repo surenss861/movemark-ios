@@ -90,6 +90,25 @@ class DocumentsViewModel @Inject constructor(
         }
     }
 
+    private val _deleting = MutableStateFlow<VaultDocumentKind?>(null)
+    val deleting: StateFlow<VaultDocumentKind?> = _deleting.asStateFlow()
+
+    /** Removes the document from the rental record (after the screen's confirmation). */
+    fun delete(kind: VaultDocumentKind) {
+        val propertyId = propertyStore.activePropertyId.value ?: return
+        val userId = sessionManager.userId.value ?: return
+        if (_deleting.value != null) return
+        viewModelScope.launch {
+            _deleting.value = kind
+            _error.value = null
+            runCatching { documentRepository.deleteDocuments(propertyId, kind) }
+                .onFailure { _error.value = "Couldn't delete that file. Try again." }
+            runCatching { documentRepository.fetchDocuments(propertyId) }.onSuccess { _documents.value = it }
+            propertyStore.refreshActive(userId)
+            _deleting.value = null
+        }
+    }
+
     fun view(kind: VaultDocumentKind) {
         val row = _documents.value.firstOrNull { kind.queryKeys().contains(it.documentType) } ?: return
         viewModelScope.launch {

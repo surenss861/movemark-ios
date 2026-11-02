@@ -19,6 +19,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.Icons
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,12 +51,15 @@ import com.surensureshkumar.movemark.domain.VaultDocumentKind
 @Composable
 fun DocumentsScreen(
     onBack: () -> Unit,
+    onEditRental: () -> Unit = {},
     viewModel: DocumentsViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
     val documents by viewModel.documents.collectAsState()
     val error by viewModel.error.collectAsState()
     val uploading by viewModel.uploading.collectAsState()
+    val deleting by viewModel.deleting.collectAsState()
+    var confirmDelete by remember { mutableStateOf<VaultDocumentKind?>(null) }
     var showAll by remember { mutableStateOf(false) }
     var pendingKind by remember { mutableStateOf<VaultDocumentKind?>(null) }
     // The system file picker delivers its result together with a back event. Without this,
@@ -105,8 +113,14 @@ fun DocumentsScreen(
                 .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
                 .padding(bottom = 32.dp),
         ) {
-            TextButton(onClick = onBack) {
-                Text("Back", color = MMColors.TextSecondary)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onBack) {
+                    Text("Back", color = MMColors.TextSecondary)
+                }
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onEditRental) {
+                    Text("Edit rental", color = MMColors.Primary, fontWeight = FontWeight.SemiBold)
+                }
             }
             Text(
                 "RECEIPTS & LEASE DOCS",
@@ -142,7 +156,7 @@ fun DocumentsScreen(
                     DocumentRow(
                         kind = kind,
                         present = present,
-                        busy = uploading == kind,
+                        busy = uploading == kind || deleting == kind,
                         expanded = showAll,
                         onUpload = {
                             pendingKind = kind
@@ -151,8 +165,26 @@ fun DocumentsScreen(
                             picker.launch(mime)
                         },
                         onView = { viewModel.view(kind) },
+                        onDelete = { confirmDelete = kind },
                     )
                 }
+            }
+
+            confirmDelete?.let { kind ->
+                AlertDialog(
+                    onDismissRequest = { confirmDelete = null },
+                    title = { Text("Delete document?") },
+                    text = { Text("This file will be removed from your vault. You can upload again later. This can't be undone.") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            confirmDelete = null
+                            viewModel.delete(kind)
+                        }) { Text("Delete", color = MMColors.SemanticDanger) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { confirmDelete = null }) { Text("Cancel", color = MMColors.TextSecondary) }
+                    },
+                )
             }
 
             TextButton(onClick = { showAll = !showAll }) {
@@ -174,6 +206,7 @@ private fun DocumentRow(
     expanded: Boolean,
     onUpload: () -> Unit,
     onView: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
@@ -191,6 +224,9 @@ private fun DocumentRow(
             }
             TextButton(onClick = onUpload, enabled = !busy) {
                 Text(if (busy) "Saving…" else "Replace", color = MMColors.TextPrimary, fontWeight = FontWeight.SemiBold)
+            }
+            IconButton(onClick = onDelete, enabled = !busy) {
+                Icon(Icons.Filled.Delete, contentDescription = "Delete ${kind.title}", tint = MMColors.TextSecondary)
             }
         } else {
             TextButton(onClick = onUpload, enabled = !busy, modifier = Modifier.clip(RoundedCornerShape(20.dp))) {

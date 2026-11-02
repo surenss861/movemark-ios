@@ -139,6 +139,11 @@ class PropertyRepository @Inject constructor(
         return postgrest.insertReturning<PropertyRow, PropertyRow>("properties", row).single()
     }
 
+    /** Edit rental: writes the edited columns of one property (RLS limits it to the owner's rows). */
+    suspend fun updateProperty(propertyId: UUID, patch: com.surensureshkumar.movemark.domain.PropertyPatch) {
+        postgrest.update("properties", patch) { eq("id", propertyId.toString()) }
+    }
+
     suspend fun insertDefaultRooms(propertyId: UUID) {
         val names = listOf(
             "Kitchen", "Living Room", "Primary Bedroom", "Bedroom 2",
