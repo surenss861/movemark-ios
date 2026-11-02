@@ -47,6 +47,20 @@ enum ScreenSnapshot {
     static let propertyStore = PropertyStore()
     static let subscriptionManager = SubscriptionManager()
 
+    /// Goldens are recorded in one locale, calendar and time zone, whatever the simulator is set to: an
+    /// en_CA region rendered the compact DatePicker as `2025-10-19` instead of `Oct 19, 2025`. SwiftUI
+    /// output (DatePicker, `Text(date, format:)`) follows this environment; strings the app formats itself
+    /// with `Locale.current` follow the test host's `-AppleLocale en_US` and `TZ` (scheme Test action),
+    /// which `SnapshotLocaleTests` checks.
+    static let locale = Locale(identifier: "en_US")
+    static let timeZone = TimeZone(identifier: "America/Toronto")!
+    static let calendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = locale
+        calendar.timeZone = timeZone
+        return calendar
+    }()
+
     /// Hosts a screen the way the app does: in a NavigationStack, stores in the environment. Note: iOS 26
     /// navigation-bar titles and items don't render reliably in these window-less snapshots; check bars live.
     static func host<V: View>(_ view: V, inNavigation: Bool = true) -> UIViewController {
@@ -54,7 +68,18 @@ enum ScreenSnapshot {
             .environment(sessionManager)
             .environment(propertyStore)
             .environment(subscriptionManager)
+            .snapshotLocale()
         return UIHostingController(rootView: content)
+    }
+}
+
+extension View {
+    /// The fixed locale, calendar and time zone every golden is recorded in (see `ScreenSnapshot.locale`).
+    @MainActor
+    func snapshotLocale() -> some View {
+        environment(\.locale, ScreenSnapshot.locale)
+            .environment(\.calendar, ScreenSnapshot.calendar)
+            .environment(\.timeZone, ScreenSnapshot.timeZone)
     }
 }
 

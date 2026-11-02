@@ -168,7 +168,7 @@ final class MoveOutSnapshotTests: XCTestCase {
                 Self.photo((path as NSString).deletingPathExtension.components(separatedBy: "/").last ?? path)
             })
         let config = ViewImageConfig(safeArea: .zero, size: CGSize(width: 402, height: 400), traits: ScreenSnapshot.pro.traits)
-        assertSnapshot(of: UIHostingController(rootView: row), as: ScreenSnapshot.strategy(config), named: "pro")
+        assertSnapshot(of: UIHostingController(rootView: row.snapshotLocale()), as: ScreenSnapshot.strategy(config), named: "pro")
     }
 
     /// The report states sit at the end of the page, so these render the full page.

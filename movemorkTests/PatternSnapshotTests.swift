@@ -70,9 +70,9 @@ final class PatternSnapshotTests: XCTestCase {
     func testPatternsGallery() {
         let tall = ViewImageConfig(safeArea: .zero, size: CGSize(width: 402, height: 1900),
                                    traits: UITraitCollection(traitsFrom: [.init(displayScale: 3), .init(userInterfaceStyle: .light)]))
-        assertSnapshot(of: UIHostingController(rootView: gallery), as: ScreenSnapshot.strategy(tall), named: "tall")
+        assertSnapshot(of: UIHostingController(rootView: gallery.snapshotLocale()), as: ScreenSnapshot.strategy(tall), named: "tall")
         let tallAX = ViewImageConfig(safeArea: .zero, size: CGSize(width: 402, height: 3000),
                                      traits: UITraitCollection(traitsFrom: [tall.traits, .init(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge)]))
-        assertSnapshot(of: UIHostingController(rootView: gallery), as: ScreenSnapshot.strategy(tallAX), named: "ax3")
+        assertSnapshot(of: UIHostingController(rootView: gallery.snapshotLocale()), as: ScreenSnapshot.strategy(tallAX), named: "ax3")
     }
 }

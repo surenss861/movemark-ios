@@ -73,7 +73,7 @@ final class VisualSnapshotTests: XCTestCase {
     }
 
     private func host<V: View>(_ view: V) -> UIViewController {
-        UIHostingController(rootView: view.environment(\.mmEvidenceImageOverride, Self.images))
+        UIHostingController(rootView: view.environment(\.mmEvidenceImageOverride, Self.images).snapshotLocale())
     }
 
     private func proofModel(_ state: String) -> ProofHomeModel {
