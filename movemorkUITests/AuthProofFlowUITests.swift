@@ -26,7 +26,7 @@ final class AuthProofFlowUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Welcome back."].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Continue"].exists)
         XCTAssertEqual(app.secureTextFields.count, 1)
-        // Email reset can't be delivered yet: no "Forgot password?" on sign in.
+        // Debug builds have no reset page configured (only Release and the reset fixture do): no "Forgot password?".
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS 'Forgot'")).firstMatch.exists)
     }
 

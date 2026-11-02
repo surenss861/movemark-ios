@@ -53,6 +53,27 @@ final class AuthScreenSnapshotTests: XCTestCase {
                      devices: all, inNavigation: false)
     }
 
+    /// "Forgot password?" absent: builds without a reset page (Debug, and Release before 1.4).
+    func testAuthSignInNoReset() {
+        assertScreen(AuthContainerView(previewMode: .signIn, passwordResetAvailable: false), inNavigation: false)
+    }
+
+    /// The request step: email only, one lime action, back to sign in below.
+    func testAuthResetRequest() {
+        assertScreen(AuthContainerView(previewMode: .resetPassword), devices: all, inNavigation: false)
+    }
+
+    func testAuthResetRequestOffline() {
+        assertScreen(AuthContainerView(previewMode: .resetPassword, error: "No connection. Check your internet and try again."),
+                     inNavigation: false)
+    }
+
+    /// Neutral confirmation (never says whether the address has an account), resend waiting out its cooldown.
+    func testAuthResetSent() {
+        assertScreen(AuthContainerView(previewMode: .resetPassword, resetSentTo: "alex@example.com", resendCooldown: 42),
+                     devices: all, inNavigation: false)
+    }
+
     /// Sign-up needs the address confirmed: the form is replaced by "Check your email", not a banner in it.
     func testAuthSignUpConfirmEmail() {
         assertScreen(AuthContainerView(previewMode: .signUp, confirmationEmail: "alex@example.com"),
@@ -62,13 +83,18 @@ final class AuthScreenSnapshotTests: XCTestCase {
     // MARK: Password reset
 
     func testPasswordReset() {
-        assertScreen(PasswordResetView(token: "t") {}, devices: all, inNavigation: false)
+        assertScreen(PasswordResetView(link: .token("t")) { _ in }, devices: all, inNavigation: false)
     }
 
     func testPasswordResetError() {
         assertScreen(PasswordResetView(token: "t", previewDidReset: false,
-                                       previewError: "This reset link has expired. Request a new one."),
+                                       previewError: "No connection. Check your internet and try again."),
                      inNavigation: false)
+    }
+
+    /// Expired, used or malformed link (from the link itself or refused on save): request a new one.
+    func testPasswordResetExpired() {
+        assertScreen(PasswordResetView(link: .invalid) { _ in }, devices: all, inNavigation: false)
     }
 
     func testPasswordResetDone() {

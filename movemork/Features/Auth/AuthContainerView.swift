@@ -4,8 +4,9 @@
 //
 //  Sign in / create account — "your evidence has a private home". Dark header (title, close) over the light
 //  working sheet: fields, one lime action, the other mode quietly below. No feature cards, no persuasion.
-//  Password reset is reachable only from its deep link (PasswordResetView): email delivery is deferred, so
-//  there is no "Forgot password?" here that would send a mail that can't arrive.
+//  "Forgot password?" shows on sign in only when the build has a reset page (MoveMarkPasswordResetURL): it
+//  asks for the email, sends the link, and answers the same whether or not the address has an account. The
+//  link itself opens PasswordResetView.
 //
 
 import SwiftUI
@@ -15,6 +16,8 @@ struct AuthContainerView: View {
     enum Mode: Equatable {
         case signIn
         case signUp
+        /// "Forgot password?": email only, sends a reset link.
+        case resetPassword
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -33,6 +36,13 @@ struct AuthContainerView: View {
     /// Set when sign-up succeeded but Neon Auth wants the address confirmed first: the form is replaced by
     /// a "Check your email" state for this address.
     @State private var confirmationEmail: String? = nil
+    /// Set once a reset link was requested: the form is replaced by the neutral "Check your email" state.
+    @State private var resetSentTo: String? = nil
+    /// Seconds until another reset link can be sent from this surface.
+    @State private var resendCooldown = 0
+    @State private var cooldownTask: Task<Void, Never>? = nil
+    @State private var isResending = false
+    private let passwordResetAvailable: Bool
     @State private var isLoading = false
     @State private var surfaceAppeared = false
     @State private var formFieldsAppeared = false
@@ -51,31 +61,45 @@ struct AuthContainerView: View {
     }
 
     private var headerTitle: String {
-        if confirmationEmail != nil { return "Check your email" }
-        return mode == .signIn ? "Welcome back." : "Create your private vault"
+        if confirmationEmail != nil || resetSentTo != nil { return "Check your email" }
+        switch mode {
+        case .signIn: return "Welcome back."
+        case .signUp: return "Create your private vault"
+        case .resetPassword: return "Reset your password"
+        }
     }
 
     private var headerSubtitle: String {
         if confirmationEmail != nil { return "One more step to finish your vault." }
-        return mode == .signIn
-            ? "Continue your proof vault."
-            : "Your rental proof stays tied to your account."
+        if resetSentTo != nil { return "Open the link on this iPhone." }
+        switch mode {
+        case .signIn: return "Continue your proof vault."
+        case .signUp: return "Your rental proof stays tied to your account."
+        case .resetPassword: return "We’ll email you a link to choose a new one."
+        }
     }
 
     init(initialMode: Mode, onDismiss: @escaping () -> Void = {}) {
-        _mode = State(initialValue: initialMode)
+        let available = PasswordResetRequest.isAvailable()
+        _mode = State(initialValue: initialMode == .resetPassword && !available ? .signIn : initialMode)
+        self.passwordResetAvailable = available
         self.onDismiss = onDismiss
     }
 
     /// Snapshot tests only: the settled surface (no entrance), optionally with a status message showing.
-    /// Production uses the init above.
-    init(previewMode: Mode, error: String = "", info: String = "", confirmationEmail: String? = nil) {
-        self.init(initialMode: previewMode)
+    /// Shows "Forgot password?" as the release build does unless told otherwise. Production uses the init above.
+    init(previewMode: Mode, error: String = "", info: String = "", confirmationEmail: String? = nil,
+         resetSentTo: String? = nil, resendCooldown: Int = 0, passwordResetAvailable: Bool = true) {
+        _mode = State(initialValue: previewMode)
+        self.passwordResetAvailable = passwordResetAvailable
+        self.onDismiss = {}
         _surfaceAppeared = State(initialValue: true)
         _formFieldsAppeared = State(initialValue: true)
         _errorMessage = State(initialValue: error)
         _infoMessage = State(initialValue: info)
         _confirmationEmail = State(initialValue: confirmationEmail)
+        _resetSentTo = State(initialValue: resetSentTo)
+        _resendCooldown = State(initialValue: resendCooldown)
     }
 
     var body: some View {
@@ -96,6 +120,9 @@ struct AuthContainerView: View {
                     )
                     .accessibilityIdentifier("auth.confirmation")
                     .padding(.top, 4)
+                } else if let resetSentTo {
+                    resetSentBlock(email: resetSentTo)
+                        .padding(.top, 4)
                 } else {
                     authForm
                         .opacity(formFieldsAppeared ? 1 : 0)
@@ -104,10 +131,12 @@ struct AuthContainerView: View {
             }
             .animation(authSpring, value: mode)
             .animation(authSpring, value: confirmationEmail)
+            .animation(authSpring, value: resetSentTo)
         }
         .offset(y: surfaceAppeared ? 0 : 28)
         .opacity(surfaceAppeared ? 1 : 0)
         .onAppear { playSurfaceEntrance() }
+        .onDisappear { cooldownTask?.cancel() }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
             applyKeyboardInset(from: note, visible: true)
         }
@@ -171,10 +200,15 @@ struct AuthContainerView: View {
         VStack(alignment: .leading, spacing: 0) {
             authInputFields
 
+            if mode == .signIn && passwordResetAvailable {
+                forgotPasswordButton
+                    .padding(.top, 2)
+            }
+
             authStatusMessages
 
             primaryActionButton
-                .padding(.top, 22)
+                .padding(.top, mode == .signIn && passwordResetAvailable ? 12 : 22)
 
             if mode == .signUp {
                 legalFinePrint
@@ -198,24 +232,27 @@ struct AuthContainerView: View {
                 contentType: .username,
                 autocapitalization: .never,
                 accessibilityID: "auth.email",
-                submitLabel: .next,
-                onSubmit: { focusedField = .password }
+                submitLabel: mode == .resetPassword ? .send : .next,
+                onSubmit: { if mode == .resetPassword { submit() } else { focusedField = .password } }
             )
             .autocorrectionDisabled()
             .focused($focusedField, equals: .email)
 
             // Return signs in (or moves on): the primary action can sit under the keyboard on smaller phones.
-            MMField(
-                title: "Password",
-                placeholder: mode == .signIn ? "Your password" : "At least 8 characters",
-                text: $password,
-                isSecure: true,
-                contentType: mode == .signIn ? .password : .newPassword,
-                accessibilityID: "auth.password",
-                submitLabel: mode == .signIn ? .go : .next,
-                onSubmit: { if mode == .signIn { submit() } else { focusedField = .confirm } }
-            )
-            .focused($focusedField, equals: .password)
+            if mode != .resetPassword {
+                MMField(
+                    title: "Password",
+                    placeholder: mode == .signIn ? "Your password" : "At least 8 characters",
+                    text: $password,
+                    isSecure: true,
+                    contentType: mode == .signIn ? .password : .newPassword,
+                    accessibilityID: "auth.password",
+                    submitLabel: mode == .signIn ? .go : .next,
+                    onSubmit: { if mode == .signIn { submit() } else { focusedField = .confirm } }
+                )
+                .focused($focusedField, equals: .password)
+                .transition(fieldTransition)
+            }
 
             if mode == .signUp {
                 MMField(
@@ -251,10 +288,75 @@ struct AuthContainerView: View {
 
     private var primaryActionButton: some View {
         MMPrimaryButton(
-            title: mode == .signIn ? "Continue" : "Create vault",
+            title: primaryActionTitle,
             isLoading: isLoading
         ) { submit() }
         .accessibilityIdentifier("auth.primaryAction")
+    }
+
+    private var primaryActionTitle: String {
+        switch mode {
+        case .signIn: return "Continue"
+        case .signUp: return "Create vault"
+        case .resetPassword: return "Send reset link"
+        }
+    }
+
+    /// Quiet, under the password it's about; only when this build can deliver a reset link.
+    private var forgotPasswordButton: some View {
+        MMTextAction(title: "Forgot password?") { openResetPassword() }
+            .accessibilityIdentifier("auth.forgotPassword")
+            .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    // MARK: - Reset link sent
+
+    /// Neutral by design: the same words whether or not the address has an account.
+    private func resetSentBlock(email: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            MMResolvedBlock(
+                icon: "envelope",
+                message: "If \(email) has a MoveMark account, a link to choose a new password is on its way. It expires soon.",
+                actionTitle: "Back to sign in",
+                action: backToSignInFromReset
+            )
+            .accessibilityIdentifier("auth.resetSent")
+
+            if !errorMessage.isEmpty {
+                MMNotice(message: errorMessage)
+                    .padding(.top, 18)
+            }
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    resendPrompt
+                    resendButton
+                }
+                VStack(spacing: 0) {
+                    resendPrompt.padding(.top, 8)
+                    resendButton
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 6)
+        }
+    }
+
+    private var resendPrompt: some View {
+        Text("Didn’t get it?")
+            .mmFont(14)
+            .foregroundStyle(MMInk.secondary)
+            .multilineTextAlignment(.center)
+    }
+
+    private var resendButton: some View {
+        let waiting = resendCooldown > 0
+        return MMTextAction(
+            title: isResending ? "Sending…" : (waiting ? "Resend in \(resendCooldown)s" : "Resend link"),
+            tint: waiting || isResending ? MMInk.secondary : MMInk.text
+        ) { resendResetLink() }
+        .disabled(waiting || isResending)
+        .accessibilityIdentifier("auth.resendReset")
     }
 
     private var fieldTransition: AnyTransition {
@@ -280,7 +382,7 @@ struct AuthContainerView: View {
     }
 
     private var modeSwitchPrompt: some View {
-        Text(mode == .signIn ? "New to MoveMark?" : "Already have a vault?")
+        Text(modeSwitchPromptText)
             .mmFont(14)
             .foregroundStyle(MMInk.secondary)
             .multilineTextAlignment(.center)
@@ -321,6 +423,14 @@ struct AuthContainerView: View {
         return line
     }
 
+    private var modeSwitchPromptText: String {
+        switch mode {
+        case .signIn: return "New to MoveMark?"
+        case .signUp: return "Already have a vault?"
+        case .resetPassword: return "Remembered it?"
+        }
+    }
+
     private func switchAuthMode() {
         let next: Mode = mode == .signIn ? .signUp : .signIn
         if reduceMotion {
@@ -356,8 +466,88 @@ struct AuthContainerView: View {
         if reduceMotion { update() } else { withAnimation(authSpring) { update() } }
     }
 
+    private func openResetPassword() {
+        let update = {
+            mode = .resetPassword
+            password = ""
+            errorMessage = ""
+            infoMessage = ""
+        }
+        if reduceMotion { update() } else { withAnimation(authSpring) { update() } }
+        focusedField = .email
+    }
+
+    /// Back to sign in with the address already filled in. A running cooldown keeps counting.
+    private func backToSignInFromReset() {
+        let update = {
+            if let resetSentTo { email = resetSentTo }
+            resetSentTo = nil
+            mode = .signIn
+            errorMessage = ""
+            infoMessage = ""
+        }
+        if reduceMotion { update() } else { withAnimation(authSpring) { update() } }
+    }
+
+    private func startResendCooldown() {
+        cooldownTask?.cancel()
+        resendCooldown = PasswordResetRequest.resendCooldown
+        cooldownTask = Task { @MainActor in
+            while resendCooldown > 0 {
+                try? await Task.sleep(for: .seconds(1))
+                if Task.isCancelled { return }
+                resendCooldown -= 1
+            }
+        }
+    }
+
+    private func sendResetLink() {
+        if let problem = PasswordResetRequest.validationMessage(forEmail: email) {
+            errorMessage = problem
+            return
+        }
+        if resendCooldown > 0 {
+            infoMessage = "You can send another link in \(resendCooldown)s."
+            return
+        }
+        let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        isLoading = true
+        errorMessage = ""
+        infoMessage = ""
+        Task { @MainActor in
+            defer { isLoading = false }
+            let failure = await PasswordResetRequest.send { try await sessionManager.sendPasswordReset(email: address) }
+            switch PasswordResetRequest.outcome(for: failure) {
+            case .sent:
+                focusedField = nil
+                startResendCooldown()
+                if reduceMotion { resetSentTo = address } else { withAnimation(authSpring) { resetSentTo = address } }
+            case .failed(let message):
+                errorMessage = message
+            }
+        }
+    }
+
+    private func resendResetLink() {
+        guard let address = resetSentTo, resendCooldown == 0, !isResending else { return }
+        isResending = true
+        errorMessage = ""
+        Task { @MainActor in
+            defer { isResending = false }
+            let failure = await PasswordResetRequest.send { try await sessionManager.sendPasswordReset(email: address) }
+            switch PasswordResetRequest.outcome(for: failure) {
+            case .sent: startResendCooldown()
+            case .failed(let message): errorMessage = message
+            }
+        }
+    }
+
     private func submit() {
         guard !isLoading else { return }
+        if mode == .resetPassword {
+            sendResetLink()
+            return
+        }
         isLoading = true
         errorMessage = ""
         infoMessage = ""
@@ -380,6 +570,8 @@ struct AuthContainerView: View {
                         focusedField = nil
                         confirmationEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
                     }
+                case .resetPassword:
+                    break
                 }
             } catch {
                 errorMessage = MoveMarkFlowMessage.authOperationFailed(error)

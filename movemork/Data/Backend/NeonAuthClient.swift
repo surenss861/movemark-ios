@@ -237,13 +237,26 @@ actor NeonAuthClient {
 
     /// Emails a reset link. Answers the same whether or not the address has an account.
     func requestPasswordReset(email: String) async throws {
+        #if DEBUG
+        if PasswordResetFixture.isActive {
+            try await Task.sleep(for: .milliseconds(400))
+            return
+        }
+        #endif
         var body = ["email": email]
         if let redirect = MoveMarkBackendConfig.passwordResetURL { body["redirectTo"] = redirect.absoluteString }
         _ = try await post("request-password-reset", body, storeSession: false)
     }
 
-    /// Sets a new password from the token in a reset link. Neon Auth revokes the account's other sessions.
+    /// Sets a new password from the token in a reset link (single use; Neon Auth expires it after 15 minutes).
     func resetPassword(token: String, newPassword: String) async throws {
+        #if DEBUG
+        if PasswordResetFixture.isActive {
+            try await Task.sleep(for: .milliseconds(400))
+            if token == PasswordResetFixture.expiredToken { throw NeonAuthError.rejected(code: "INVALID_TOKEN", message: "") }
+            return
+        }
+        #endif
         _ = try await post("reset-password", ["token": token, "newPassword": newPassword], storeSession: false)
     }
 

@@ -11,7 +11,7 @@ struct AppRouter: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(PropertyStore.self) private var propertyStore
     @Environment(SubscriptionManager.self) private var subscriptionManager
-    @State private var passwordResetToken: PasswordResetLink.Token?
+    @State private var passwordResetLink: PasswordResetLink.Payload?
 
     var body: some View {
         ZStack {
@@ -36,13 +36,20 @@ struct AppRouter: View {
         }
         /// Single place that clears property context whenever auth ends — not only manual sign-out from Account.
         .onOpenURL { url in
-            if let token = PasswordResetLink.token(from: url) {
-                passwordResetToken = PasswordResetLink.Token(value: token)
+            if let link = PasswordResetLink.payload(from: url) {
+                passwordResetLink = link
             }
         }
-        .sheet(item: $passwordResetToken) { token in
-            PasswordResetView(token: token.value) { passwordResetToken = nil }
-                .environment(sessionManager)
+        .sheet(item: $passwordResetLink) { link in
+            PasswordResetView(link: link) { nextAuthMode in
+                passwordResetLink = nil
+                guard let nextAuthMode else { return }
+                // After the sheet starts down, so sign in rises over Welcome rather than under the sheet.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    NotificationCenter.default.post(name: .moveMarkOpenAuth, object: nextAuthMode)
+                }
+            }
+            .environment(sessionManager)
         }
         .onChange(of: sessionManager.authPhase) { _, phase in
             if phase == .signedOut || phase == .misconfigured {

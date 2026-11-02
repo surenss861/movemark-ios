@@ -111,6 +111,10 @@ struct WelcomeScreen: View {
             playEntrance()
             MoveMarkAnalytics.track(.onboardingStarted)
         }
+        // A finished password reset continues to sign in; an expired reset link to asking for a new one.
+        .onReceive(NotificationCenter.default.publisher(for: .moveMarkOpenAuth)) { note in
+            if let mode = note.object as? AuthContainerView.Mode { launchAuth(mode: mode) }
+        }
     }
 
     // MARK: - Welcome content
