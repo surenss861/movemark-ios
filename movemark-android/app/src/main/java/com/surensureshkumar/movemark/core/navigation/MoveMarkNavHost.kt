@@ -27,6 +27,8 @@ import com.surensureshkumar.movemark.features.moveout.MoveOutRoomsScreen
 import com.surensureshkumar.movemark.features.onboarding.OnboardingNameScreen
 import com.surensureshkumar.movemark.features.proof.RoomProofScreen
 import com.surensureshkumar.movemark.features.proof.SavedProofReceiptScreen
+import com.surensureshkumar.movemark.features.auth.PasswordResetLink
+import com.surensureshkumar.movemark.features.auth.PasswordResetScreen
 import com.surensureshkumar.movemark.features.proof.camera.CameraCaptureScreen
 import com.surensureshkumar.movemark.features.welcome.WelcomeScreen
 import com.surensureshkumar.movemark.features.welcome.WelcomeViewModel
@@ -46,6 +48,14 @@ fun MoveMarkNavHost() {
         )
     }
     val mainTabRequest = remember(entryPoints) { entryPoints.mainTabRequest() }
+    val sessionManager = remember(entryPoints) { entryPoints.sessionManager() }
+    val resetToken by PasswordResetLink.token.collectAsState()
+    resetToken?.let { token ->
+        PasswordResetScreen(
+            onReset = { password, confirm -> sessionManager.completePasswordReset(token, password, confirm) },
+            onDone = PasswordResetLink::consume,
+        )
+    }
     val navController = rememberNavController()
     val welcomeVm: WelcomeViewModel = hiltViewModel()
     val authState by welcomeVm.authState.collectAsState()

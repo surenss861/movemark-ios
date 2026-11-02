@@ -95,7 +95,22 @@ class SessionManager @Inject constructor(
         applyUser(user)
     }
 
-    /** Asks Neon Auth to email a reset link. Handling the link itself is not part of this build. */
+    /**
+     * Sets a new password from a `movemark://reset-password` link (iOS `completePasswordReset`). Neon Auth revokes
+     * the account's sessions, so a signed-in device signs out afterwards.
+     */
+    suspend fun completePasswordReset(token: String, newPassword: String, confirmPassword: String) {
+        requireConfigured()
+        if (newPassword.length < 8) throw AuthException("Password must be at least 8 characters.")
+        if (newPassword != confirmPassword) throw AuthException("Passwords do not match.")
+        auth.resetPassword(token, newPassword)
+        if (_authState.value == AuthState.SignedIn) {
+            auth.endSessionLocally(notify = false)
+            endLocalSession()
+        }
+    }
+
+    /** Asks Neon Auth to email a reset link (the link opens [completePasswordReset] through movemark://reset-password). */
     suspend fun resetPassword(email: String) {
         requireConfigured()
         val trimmed = email.trim()
