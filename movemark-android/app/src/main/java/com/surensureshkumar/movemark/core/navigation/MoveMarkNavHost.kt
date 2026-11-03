@@ -185,6 +185,7 @@ fun MoveMarkNavHost() {
         composable(Routes.AddProperty) {
             CreatePropertyScreen(
                 onCreated = { navController.popBackStack() },
+                askLease = true,
             )
         }
         composable(Routes.DisputePacket) {

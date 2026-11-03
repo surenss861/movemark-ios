@@ -41,6 +41,7 @@ import com.surensureshkumar.movemark.core.design.MMBackground
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
+import com.surensureshkumar.movemark.core.design.components.MMDateField
 import com.surensureshkumar.movemark.domain.RentalEditForm
 
 /** Edit rental: a plain utility form (the same fields as setup), Save (iOS `EditPropertyView`). */
@@ -67,7 +68,7 @@ fun EditRentalScreen(onClose: () -> Unit, viewModel: EditRentalViewModel = hiltV
                 Icon(Icons.Filled.Close, contentDescription = "Close", tint = MMColors.TextPrimary)
             }
             EditRentalForm(form, viewModel.initial, viewModel::update)
-            (error ?: form.validationError ?: form.detailsIssue(viewModel.initial))?.let {
+            (error ?: form.validationError ?: form.leaseError(viewModel.initial) ?: form.detailsIssue(viewModel.initial))?.let {
                 Spacer(Modifier.height(16.dp))
                 Text(it, color = if (error != null) MMColors.SemanticDanger else MMColors.TextSecondary, fontSize = 14.sp)
             }
@@ -105,6 +106,17 @@ internal fun EditRentalForm(form: RentalEditForm, initial: RentalEditForm, onCha
         Field("Province or state", form.region) { v -> onChange { it.copy(region = v) } }
         Field("Postal code", form.postalCode, capitalization = KeyboardCapitalization.Characters) { v -> onChange { it.copy(postalCode = v) } }
         Field("Country", form.country, capitalization = KeyboardCapitalization.Characters) { v -> onChange { it.copy(country = v) } }
+    }
+    Section("Dates") {
+        MMDateField("Move-in date", form.moveInDate, { v -> onChange { it.copy(moveInDate = v) } })
+        MMDateField("Lease start", form.leaseStart, { v -> onChange { it.copy(leaseStart = v) } })
+        MMDateField("Lease end", form.leaseEnd, { v -> onChange { it.copy(leaseEnd = v) } })
+        Text(
+            "Your move-in date anchors the record: proof captured around it shows the condition you moved into.",
+            fontSize = 13.sp,
+            color = MMColors.TextSecondary,
+            modifier = Modifier.padding(start = 4.dp, top = 6.dp),
+        )
     }
     Section("Landlord") {
         Field("Name (optional)", form.landlordName) { v -> onChange { it.copy(landlordName = v) } }

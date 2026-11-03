@@ -3,6 +3,7 @@ package com.surensureshkumar.movemark.domain
 import com.surensureshkumar.movemark.data.models.PropertyRow
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.time.LocalDate
 
 /** The `properties` columns Edit rental writes (lease and move-in dates are left as they are). */
 @Serializable
@@ -19,6 +20,10 @@ data class PropertyPatch(
     @SerialName("landlord_phone") val landlordPhone: String?,
     @SerialName("deposit_amount") val depositAmount: Double?,
     @SerialName("rent_amount") val rentAmount: Double?,
+    @SerialName("move_in_date") val moveInDate: String? = null,
+    /** Null leaves the stored lease as it is (nulls are omitted from the request). */
+    @SerialName("lease_start") val leaseStart: String? = null,
+    @SerialName("lease_end") val leaseEnd: String? = null,
 )
 
 /**
@@ -38,10 +43,22 @@ data class RentalEditForm(
     val landlordPhone: String = "",
     val depositAmount: String = "",
     val rentAmount: String = "",
+    val moveInDate: LocalDate = LocalDate.now(),
+    /** Picker values; saved only when [hadLease] or either was changed ([RentalDates.savesLease]). */
+    val leaseStart: LocalDate = moveInDate,
+    val leaseEnd: LocalDate = RentalDates.defaultLeaseEnd(leaseStart),
+    /** The rental had lease dates when the form opened. */
+    val hadLease: Boolean = false,
 ) {
-    /** Blocks the save: the address is required. */
+    /** Blocks the save: the address is required (and a lease being saved can't end before it starts). */
     val validationError: String?
         get() = if (addressLine1.isBlank()) "Enter the property address." else null
+
+    fun savesLease(initial: RentalEditForm): Boolean =
+        RentalDates.savesLease(hadLease, leaseStart, leaseEnd, initial.leaseStart, initial.leaseEnd)
+
+    fun leaseError(initial: RentalEditForm): String? =
+        if (savesLease(initial)) RentalDates.leaseDatesError(leaseStart, leaseEnd) else null
 
     /** An optional detail that can't be saved as typed; a value left as it was isn't held against the save. */
     fun detailsIssue(initial: RentalEditForm): String? =
@@ -49,9 +66,11 @@ data class RentalEditForm(
             ?: amountIssue(depositAmount.takeIf { it != initial.depositAmount }.orEmpty())
             ?: amountIssue(rentAmount.takeIf { it != initial.rentAmount }.orEmpty())
 
-    fun canSave(initial: RentalEditForm): Boolean = validationError == null && detailsIssue(initial) == null
+    fun canSave(initial: RentalEditForm): Boolean =
+        validationError == null && leaseError(initial) == null && detailsIssue(initial) == null
 
-    fun toPatch(): PropertyPatch {
+    fun toPatch(initial: RentalEditForm = this): PropertyPatch {
+        val lease = savesLease(initial)
         val street = addressLine1.trim()
         return PropertyPatch(
             title = name.trim().ifEmpty { street },
@@ -67,13 +86,20 @@ data class RentalEditForm(
             landlordPhone = landlordPhone.trim().ifEmpty { null },
             depositAmount = parseAmount(depositAmount),
             rentAmount = parseAmount(rentAmount),
+            moveInDate = RentalDates.format(moveInDate),
+            leaseStart = if (lease) RentalDates.format(leaseStart) else null,
+            leaseEnd = if (lease) RentalDates.format(leaseEnd) else null,
         )
     }
 
     companion object {
-        fun from(row: PropertyRow): RentalEditForm {
+        fun from(row: PropertyRow, today: LocalDate = LocalDate.now()): RentalEditForm {
             val title = row.title.trim()
             val street = row.addressLine1.trim()
+            val moveIn = RentalDates.parse(row.moveInDate) ?: today
+            val storedStart = RentalDates.parse(row.leaseStart)
+            val storedEnd = RentalDates.parse(row.leaseEnd)
+            val start = storedStart ?: moveIn
             return RentalEditForm(
                 name = if (title == street) "" else row.title,
                 addressLine1 = row.addressLine1,
@@ -87,6 +113,11 @@ data class RentalEditForm(
                 landlordPhone = row.landlordPhone.orEmpty(),
                 depositAmount = row.depositAmount?.let(::amountText).orEmpty(),
                 rentAmount = row.rentAmount?.let(::amountText).orEmpty(),
+                moveInDate = moveIn,
+                leaseStart = start,
+                // No lease yet: the pickers still need a value, but it's only saved if the renter sets one.
+                leaseEnd = storedEnd ?: RentalDates.defaultLeaseEnd(start),
+                hadLease = storedStart != null || storedEnd != null,
             )
         }
 

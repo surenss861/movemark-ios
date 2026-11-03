@@ -48,7 +48,7 @@ class EditRentalViewModel @Inject constructor(
         viewModelScope.launch {
             _saving.value = true
             try {
-                propertyStore.updateProperty(id, form.toPatch(), userId)
+                propertyStore.updateProperty(id, form.toPatch(initial), userId)
                 onSaved()
             } catch (e: Exception) {
                 _error.value = "Couldn't save your changes. Try again."
