@@ -74,7 +74,7 @@ Proof on dev after applying both migrations, with the API as `movemark_api` and 
   - credit balances can't go negative;
   - ownership and key columns are NOT NULL (two nullable columns are nullable by design);
   - 0930's cross-property protections are in place and covered by the poisoning test (another account stays deletable).
-- **Intentional `ON DELETE NO ACTION` everywhere inside the domain.** Deletion runs through `delete_user_owned_data` in a fixed order. Only the billing tables cascade from `neon_auth.user`.
+- **Intentional `ON DELETE NO ACTION` everywhere inside the domain.** Deletion runs through `delete_user_owned_data` (account) and `delete_property_owned_data` (one rental, 1020) in a fixed order. Only the billing tables cascade from `neon_auth.user`.
 - **Open:**
   - `user_id` columns other than the billing tables have no FK to `neon_auth.user`;
   - account deletion goes through the API, so a user removed only in Neon Auth would leave rows behind;
@@ -86,7 +86,7 @@ Proof on dev after applying both migrations, with the API as `movemark_api` and 
 |---|---|---|---|---|
 | `anonymous` | no | none | — | none |
 | `authenticated` (Data API) | via JWT | properties SIU · rooms SI · inspections SI · inspection_items SIUD · inspection_item_tags SID · evidence_files SID · maintenance_issues SIUD · property_documents SID · profiles SIU · move_out_checklists SIU · issue_tags S · exports S · disputes S · dispute_evidence_links S | own rows (RLS); `disputes`/links SELECT only because 0930's maintenance update policy reads them | `get_property_snapshot` |
-| `movemark_api` | yes | S: properties, rooms, inspections, inspection_items, inspection_item_tags, issue_tags, maintenance_issues, disputes, user_report_credits · SD: evidence_files, property_documents, dispute_evidence_links · SI: exports · SIU: user_entitlements · SIUD: storage_upload_tickets | named policy per table for this role only, **no BYPASSRLS** | consume/grant_report_credit, delete_user_owned_data, delete_auth_user |
+| `movemark_api` | yes | S: properties, rooms, inspections, inspection_items, inspection_item_tags, issue_tags, maintenance_issues, disputes, user_report_credits · SD: evidence_files, property_documents, dispute_evidence_links · SI: exports · SIU: user_entitlements · SIUD: storage_upload_tickets | named policy per table for this role only, **no BYPASSRLS** | consume/grant_report_credit, delete_user_owned_data, delete_property_owned_data (1020), delete_auth_user |
 | `movemark_worker` | yes | S: properties, rooms, inspections, inspection_items, inspection_item_tags, issue_tags, evidence_files, property_documents, maintenance_issues · SU: exports, storage_upload_tickets | named policy per table for this role only, **no BYPASSRLS** | claim_next_export_job, reap_stuck_export_jobs |
 | `movemark_backend` | no | none (kept as an empty group) | — | none |
 | `neondb_owner` | yes | owner | — | owner; migrations only (`neon/migrate.py`), never Railway |
