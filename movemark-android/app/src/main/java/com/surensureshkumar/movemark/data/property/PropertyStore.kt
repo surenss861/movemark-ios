@@ -7,8 +7,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import android.util.Log
 import com.surensureshkumar.movemark.core.util.MMUserMessages
 import com.surensureshkumar.movemark.data.backend.StoredFileUrls
-import com.surensureshkumar.movemark.data.evidence.EvidenceSaveOutcome
-import com.surensureshkumar.movemark.data.evidence.PendingEvidence
 import com.surensureshkumar.movemark.data.models.CreatePropertyInput
 import com.surensureshkumar.movemark.data.models.EvidenceRecord
 import com.surensureshkumar.movemark.data.models.MaintenanceRecord
@@ -24,16 +22,6 @@ import kotlinx.coroutines.flow.first
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
-
-data class SaveEvidenceResult(
-    val savedCount: Int,
-    val attemptedCount: Int,
-    val hydrationRefreshed: Boolean,
-    /** Photos that aren't confirmed saved; retry exactly these (never the saved ones). */
-    val pending: List<PendingEvidence> = emptyList(),
-) {
-    val hadPartialFailure: Boolean get() = savedCount in 1 until attemptedCount
-}
 
 @Singleton
 class PropertyStore @Inject constructor(
@@ -133,6 +121,12 @@ class PropertyStore @Inject constructor(
         propertyRepository.insertDefaultRooms(UUID.fromString(created.id))
         // Persist selection before fetchAll so it resolves the new property as active.
         dataStore.edit { it[activeKey(userId)] = created.id }
+        fetchAll(userId)
+    }
+
+    /** Edit rental (iOS `updateProperty`): saves, then re-reads the rentals and the active one. */
+    suspend fun updateProperty(propertyId: UUID, patch: com.surensureshkumar.movemark.domain.PropertyPatch, userId: UUID) {
+        propertyRepository.updateProperty(propertyId, patch)
         fetchAll(userId)
     }
 
@@ -274,86 +268,7 @@ class PropertyStore @Inject constructor(
     }
 
     private companion object {
-        /** "Good" — iOS `RoomRecord.ConditionRating.good`, the capture form's default. */
-        const val DEFAULT_CONDITION_RATING = 4
-        const val UPLOAD_TAG = "MoveMarkUpload"
         const val VAULT_SUMMARY_TTL_MS = 30_000L
-        const val UPLOAD_FAILURE_MESSAGE =
-            "Photos couldn't upload. Check your connection and try again."
-    }
-
-    suspend fun createEvidenceUploadContext(
-        roomId: UUID,
-        title: String,
-        notes: String,
-        propertyId: UUID,
-        userId: UUID,
-        proofPhase: ProofPhase = ProofPhase.MoveIn,
-        conditionRating: Int = DEFAULT_CONDITION_RATING,
-        issueTags: List<String> = emptyList(),
-    ): EvidenceUploadContext {
-        val inspectionId = inspectionRepository.upsertInspection(propertyId, userId, proofPhase.key)
-        val itemId = inspectionRepository.insertInspectionItem(
-            inspectionId = inspectionId,
-            roomId = roomId,
-            notes = "$title\n$notes",
-            conditionRating = conditionRating,
-        )
-        return EvidenceUploadContext(
-            inspectionItemId = itemId,
-            roomId = roomId,
-            title = title,
-            propertyId = propertyId,
-            userId = userId,
-            proofPhase = proofPhase,
-            issueTags = issueTags,
-        )
-    }
-
-    /**
-     * Saves one photo of a new entry: upload (source, derivative, thumbnail, finalize) then its row, under the
-     * photo's stable row id. A pending outcome carries what the retry needs; a saved photo is never re-sent.
-     */
-    suspend fun saveEvidencePhoto(context: EvidenceUploadContext, item: PendingEvidence): EvidenceSaveOutcome {
-        val outcome = inspectionRepository.evidenceSaver(
-            inspectionItemId = context.inspectionItemId,
-            roomId = context.roomId,
-            propertyId = context.propertyId,
-            isMoveOut = context.proofPhase == ProofPhase.MoveOut,
-        ).saveOne(item)
-        if (outcome is EvidenceSaveOutcome.Pending) {
-            Log.e(UPLOAD_TAG, "Photo not saved room=${context.roomId} row=${item.rowId}", outcome.error)
-        }
-        return outcome
-    }
-
-    suspend fun commitEvidenceUpload(
-        context: EvidenceUploadContext,
-        uploadedCount: Int,
-        attemptedCount: Int,
-    ): SaveEvidenceResult {
-        if (uploadedCount <= 0) {
-            runCatching {
-                inspectionRepository.deleteInspectionItem(context.inspectionItemId)
-            }.onFailure {
-                Log.e(UPLOAD_TAG, "Failed to roll back empty evidence item", it)
-            }
-            throw IllegalStateException(UPLOAD_FAILURE_MESSAGE)
-        }
-        // Tags are optional metadata: a failure here must not turn a saved entry into "save failed".
-        if (context.issueTags.isNotEmpty()) {
-            runCatching { inspectionRepository.insertItemTags(context.inspectionItemId, context.issueTags) }
-                .onFailure { Log.e(UPLOAD_TAG, "insertItemTags failed after save (evidence stored)", it) }
-        }
-        applyOptimisticEvidence(
-            context.roomId,
-            context.inspectionItemId,
-            context.title,
-            uploadedCount,
-            context.proofPhase,
-        )
-        val refreshed = refreshActive(context.userId)
-        return SaveEvidenceResult(uploadedCount, attemptedCount, refreshed)
     }
 
     /** Edit a saved entry. Mirrors iOS `updateEvidence`: item first, then replace its tag links. */
@@ -378,34 +293,20 @@ class PropertyStore @Inject constructor(
     }
 
     /**
-     * Add photos to an existing entry. Unlike a new save, a failed batch never deletes the
-     * entry — it already holds the user's earlier photos.
+     * After a pending-evidence sync confirmed [confirmed] photos of [entryId]: show them at once, then refresh
+     * from the server. Returns whether the refresh succeeded.
      */
-    suspend fun appendPhotosToEvidence(
-        entryId: UUID,
+    suspend fun applyEvidenceSync(
         roomId: UUID,
-        proofPhase: ProofPhase,
-        photos: List<PendingEvidence>,
-        propertyId: UUID,
+        entryId: UUID?,
+        title: String,
+        confirmed: Int,
+        phase: ProofPhase,
         userId: UUID,
-    ): SaveEvidenceResult {
-        val result = inspectionRepository.evidenceSaver(
-            inspectionItemId = entryId,
-            roomId = roomId,
-            propertyId = propertyId,
-            isMoveOut = proofPhase == ProofPhase.MoveOut,
-        ).save(photos)
-        if (result.saved.isEmpty()) throw IllegalStateException(UPLOAD_FAILURE_MESSAGE)
-        val refreshed = refreshActive(userId)
-        return SaveEvidenceResult(result.saved.size, photos.size, refreshed, result.pending)
-    }
-
-    suspend fun abandonEvidenceUpload(context: EvidenceUploadContext) {
-        runCatching {
-            inspectionRepository.deleteInspectionItem(context.inspectionItemId)
-        }.onFailure {
-            Log.e(UPLOAD_TAG, "Failed to abandon evidence upload", it)
-        }
+    ): Boolean {
+        if (entryId != null && confirmed > 0) applyOptimisticEvidence(roomId, entryId, title, confirmed, phase)
+        vaultSummaries = null
+        return refreshActive(userId)
     }
 
     private fun applyOptimisticEvidence(
@@ -422,9 +323,8 @@ class PropertyStore @Inject constructor(
                 ProofPhase.MoveIn -> room.moveInEvidence
                 ProofPhase.MoveOut -> room.moveOutEvidence
             }
-            // Each save creates a brand-new inspection_item row (see createEvidenceUploadContext),
-            // so itemId is never an existing record's id except on a retry of the same context.
-            // Append a new entry rather than merging counts into an unrelated pre-existing one.
+            // Each new-entry save has its own client-chosen inspection_item id (PendingEvidenceSync), so
+            // itemId matches an existing record only when a retry completes the same entry.
             val updatedEvidence = if (existingList.any { it.id == itemId }) {
                 existingList.map { e ->
                     if (e.id == itemId) e.copy(photoCount = e.photoCount + photoCount) else e

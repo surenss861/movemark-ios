@@ -27,10 +27,13 @@ import com.surensureshkumar.movemark.core.design.mmAppearRise
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMProofSectionHeader
 import com.surensureshkumar.movemark.core.design.components.MMTextField
+import com.surensureshkumar.movemark.core.design.components.MMDateField
 
 @Composable
 fun CreatePropertyScreen(
     onCreated: () -> Unit,
+    /** Adding a rental asks for the lease too; first-run setup asks only for the move-in date (as on iOS). */
+    askLease: Boolean = false,
     viewModel: CreatePropertyViewModel = hiltViewModel(),
 ) {
     val title by viewModel.title.collectAsState()
@@ -39,6 +42,9 @@ fun CreatePropertyScreen(
     val region by viewModel.region.collectAsState()
     val loading by viewModel.loading.collectAsState()
     val error by viewModel.error.collectAsState()
+    val moveIn by viewModel.moveIn.collectAsState()
+    val leaseStart by viewModel.leaseStart.collectAsState()
+    val leaseEnd by viewModel.leaseEnd.collectAsState()
     val reduceMotion = MMMotion.rememberReduceMotion()
     var appeared by remember { mutableStateOf(reduceMotion) }
 
@@ -68,6 +74,18 @@ fun CreatePropertyScreen(
                 MMTextField(city, viewModel::setCity, "City")
                 Spacer(Modifier.height(12.dp))
                 MMTextField(region, viewModel::setRegion, "Province / State")
+                Spacer(Modifier.height(20.dp))
+                MMDateField("Move-in date", moveIn, viewModel::setMoveIn)
+                if (askLease) {
+                    MMDateField("Lease start", leaseStart, viewModel::setLeaseStart)
+                    MMDateField("Lease end", leaseEnd, viewModel::setLeaseEnd)
+                }
+                Text(
+                    "Your move-in date anchors the record: proof captured around it shows the condition you moved into.",
+                    fontSize = 13.sp,
+                    color = MMColors.TextSecondary,
+                    modifier = Modifier.padding(start = 4.dp, top = 6.dp),
+                )
                 error?.let {
                     Spacer(Modifier.height(12.dp))
                     Text(it, color = MMColors.SemanticDanger, fontSize = 14.sp)
@@ -75,7 +93,7 @@ fun CreatePropertyScreen(
                 Spacer(Modifier.height(24.dp))
                 MMButton(
                     text = if (loading) "Creating rental…" else "Create rental",
-                    onClick = { viewModel.create(onCreated) },
+                    onClick = { viewModel.create(askLease, onCreated) },
                     loading = loading,
                     enabled = !loading,
                 )

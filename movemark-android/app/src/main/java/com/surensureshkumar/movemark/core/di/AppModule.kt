@@ -8,6 +8,9 @@ import androidx.room.Room
 import com.surensureshkumar.movemark.BuildConfig
 import com.surensureshkumar.movemark.data.cache.MoveMarkDatabase
 import com.surensureshkumar.movemark.data.cache.PropertySnapshotDao
+import com.surensureshkumar.movemark.data.evidence.pending.LivePendingEvidenceBackend
+import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceCenter
+import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceStore
 import com.surensureshkumar.movemark.data.property.DocumentRepository
 import com.surensureshkumar.movemark.data.property.DocumentSaveFaults
 import com.surensureshkumar.movemark.data.property.InspectionRepository
@@ -124,6 +127,18 @@ object AppModule {
         storage: MoveMarkStorageService,
         fileUrls: StoredFileUrls,
     ): InspectionRepository = InspectionRepository(context, postgrest, storage, fileUrls)
+
+    /** Evidence photos kept on this device until the server confirms them (see PendingEvidenceStore). */
+    @Provides
+    @Singleton
+    fun providePendingEvidenceCenter(
+        @ApplicationContext context: Context,
+        inspectionRepository: InspectionRepository,
+        storage: MoveMarkStorageService,
+    ): PendingEvidenceCenter = PendingEvidenceCenter(
+        store = PendingEvidenceStore(PendingEvidenceStore.defaultRoot(context.filesDir)),
+        backend = LivePendingEvidenceBackend(inspectionRepository, storage),
+    )
 
     @Provides
     @Singleton

@@ -122,6 +122,9 @@ class AccountViewModel @Inject constructor(
         }
     }
 
+    /** Photos not uploaded yet; non-zero means sign-out must warn first. */
+    suspend fun unsavedPhotoCount(): Int = runCatching { sessionManager.unsavedPhotoCount() }.getOrDefault(0)
+
     fun signOut(onDone: () -> Unit) {
         viewModelScope.launch {
             sessionManager.signOut { propertyStore.clear() }

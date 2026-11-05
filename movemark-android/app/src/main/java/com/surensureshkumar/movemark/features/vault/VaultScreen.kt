@@ -4,6 +4,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -37,6 +45,7 @@ import com.surensureshkumar.movemark.core.design.components.MMVaultProofHeroCard
 import com.surensureshkumar.movemark.data.models.PropertyRow
 import com.surensureshkumar.movemark.data.models.VaultSummary
 import com.surensureshkumar.movemark.domain.LifecycleNudge
+import com.surensureshkumar.movemark.domain.ProofPhase
 import com.surensureshkumar.movemark.domain.RoomProofMetrics
 import com.surensureshkumar.movemark.domain.VaultDocumentKind
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
@@ -50,6 +59,7 @@ import java.util.UUID
 fun VaultScreen(
     onOpenRoom: (UUID) -> Unit,
     onOpenMoveOutProof: () -> Unit,
+    onOpenRoomPhase: (UUID, ProofPhase) -> Unit = { id, _ -> onOpenRoom(id) },
     onAddProperty: () -> Unit,
     onShowPaywall: (PaywallReason) -> Unit,
     onOpenReports: () -> Unit = {},
@@ -68,6 +78,7 @@ fun VaultScreen(
     val previewImageUrl by viewModel.previewImageUrl.collectAsState()
     val previewImagePath by viewModel.previewImagePath.collectAsState()
     val maintenanceLog by viewModel.maintenanceLog.collectAsState()
+    val pendingRooms by viewModel.pendingRooms.collectAsState()
     val reduceMotion = MMMotion.rememberReduceMotion()
     var hasAnimatedIn by remember { mutableStateOf(reduceMotion) }
 
@@ -100,6 +111,15 @@ fun VaultScreen(
                 }
             },
         )
+        // Photos still only on this phone (not uploaded yet): one quiet row that opens their room.
+        if (pendingRooms.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            MMPendingUploadsRow(
+                count = pendingRooms.sumOf { it.count },
+                failed = pendingRooms.any { it.failedCount > 0 },
+                onOpen = { viewModel.openPendingRoom(pendingRooms.first(), onOpenRoomPhase) },
+            )
+        }
         Spacer(Modifier.height(16.dp))
 
         when {
@@ -284,4 +304,34 @@ private fun OtherRentalRow(
         meta = rooms ?: "Tap to switch vault".takeIf { location.isNotBlank() },
         onClick = onClick,
     )
+}
+
+/** The Proof home's quiet row while any room still has photos only on this phone (iOS `MMPendingUploadsRow`). */
+@Composable
+internal fun MMPendingUploadsRow(count: Int, failed: Boolean, onOpen: () -> Unit) {
+    val title = if (count == 1) "1 photo not uploaded yet" else "$count photos not uploaded yet"
+    androidx.compose.foundation.layout.Row(
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(onClickLabel = "Open the room", role = androidx.compose.ui.semantics.Role.Button, onClick = onOpen)
+            .padding(vertical = 10.dp),
+    ) {
+        androidx.compose.material3.Icon(
+            imageVector = if (failed) Icons.Filled.Error
+            else Icons.Filled.PhoneAndroid,
+            contentDescription = null,
+            tint = if (failed) MMColors.SemanticDanger else MMColors.TextSecondary,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(title, color = MMColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+        androidx.compose.material3.Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MMColors.TextSecondary,
+            modifier = Modifier.size(18.dp),
+        )
+    }
 }

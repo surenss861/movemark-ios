@@ -1,5 +1,6 @@
 package com.surensureshkumar.movemark.core.design.components
 
+import com.surensureshkumar.movemark.core.design.mmLines
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -274,7 +275,7 @@ private fun MMProofArtifactHeader(model: MMProofArtifactModel) {
             fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
             color = MMColors.TextPrimary,
-            maxLines = 1,
+            maxLines = mmLines(),
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 6.dp),
         )
