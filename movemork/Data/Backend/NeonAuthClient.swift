@@ -10,7 +10,8 @@
 //    MoveMark API accept. It is minted from the cookie by `GET /token` and refreshed here, once,
 //    for every caller — repositories never see expiry or refresh.
 //
-//  Email/password only in the recovery build; no OAuth.
+//  Email/password for the app session. `signInSocial` (an OIDC ID token from Apple/Google) exists for the
+//  isolated social-sign-in probe only; see SocialSignIn.swift for the gate.
 //
 
 import Foundation
@@ -71,8 +72,14 @@ actor NeonAuthClient {
     /// into unrelated requests.
     private let http: URLSession
 
-    /// `http` and `keychainService` are injectable for tests only; the app uses `shared`.
-    init(http: URLSession? = nil, keychainService: String? = nil) {
+    /// Neon Auth base for this client. `nil` means the app's configured auth URL.
+    private let baseURLOverride: URL?
+    private var baseURL: URL? { baseURLOverride ?? MoveMarkBackendConfig.neonAuthURL }
+
+    /// `http` and `keychainService` are injectable for tests; `baseURL` only for the social probe (its own
+    /// project and Keychain item). The app uses `shared`.
+    init(baseURL: URL? = nil, http: URLSession? = nil, keychainService: String? = nil) {
+        self.baseURLOverride = baseURL
         self.keychain = NeonAuthKeychain(service: keychainService ?? "\(Bundle.main.bundleIdentifier ?? "movemork").neon-auth")
         self.http = http ?? {
             let config = URLSessionConfiguration.ephemeral
@@ -136,7 +143,7 @@ actor NeonAuthClient {
     }
 
     private func mintAccessToken() async throws -> String {
-        guard let base = MoveMarkBackendConfig.neonAuthURL else { throw NeonAuthError.notConfigured }
+        guard let base = baseURL else { throw NeonAuthError.notConfigured }
         guard let stored else { throw NeonAuthError.sessionExpired }
         var request = URLRequest(url: base.appendingPathComponent("token"))
         request.setValue(stored.cookieHeader, forHTTPHeaderField: "Cookie")
@@ -189,6 +196,17 @@ actor NeonAuthClient {
         return try await finishSignIn(body)
     }
 
+    /// Exchanges a provider's ID token for a Neon Auth session (`POST /sign-in/social` with `idToken`).
+    /// Probe only until account-linking behaviour is proven; the app session never calls this.
+    func signInSocial(_ token: SocialIdentityToken) async throws -> NeonAuthUser {
+        let body = try JSONEncoder().encode(SocialSignInRequest(
+            provider: token.provider.rawValue,
+            idToken: .init(token: token.idToken, nonce: token.nonce)
+        ))
+        let data = try await post("sign-in/social", body: body, storeSession: true)
+        return try await finishSignIn(data)
+    }
+
     private func finishSignIn(_ data: Data) async throws -> NeonAuthUser {
         guard stored != nil else { throw NeonAuthError.invalidResponse }
         guard let body = try? JSONDecoder().decode(SignInBody.self, from: data),
@@ -208,7 +226,7 @@ actor NeonAuthClient {
     /// Revokes the session server-side when possible; always clears it locally (offline sign-out works).
     func signOut() async {
         loadIfNeeded()
-        if let stored, let base = MoveMarkBackendConfig.neonAuthURL {
+        if let stored, let base = baseURL {
             var request = URLRequest(url: base.appendingPathComponent("sign-out"))
             request.httpMethod = "POST"
             request.setValue(stored.cookieHeader, forHTTPHeaderField: "Cookie")
@@ -250,13 +268,17 @@ actor NeonAuthClient {
     // MARK: - HTTP
 
     private func post(_ path: String, _ fields: [String: String], storeSession: Bool) async throws -> Data {
-        guard let base = MoveMarkBackendConfig.neonAuthURL else { throw NeonAuthError.notConfigured }
+        try await post(path, body: try JSONEncoder().encode(fields), storeSession: storeSession)
+    }
+
+    private func post(_ path: String, body: Data, storeSession: Bool) async throws -> Data {
+        guard let base = baseURL else { throw NeonAuthError.notConfigured }
         let url = base.appendingPathComponent(path)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(Self.origin(of: base), forHTTPHeaderField: "Origin")
-        request.httpBody = try JSONEncoder().encode(fields)
+        request.httpBody = body
         let (data, response) = try await http.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw NeonAuthError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
@@ -314,6 +336,11 @@ actor NeonAuthClient {
     }
 
     private struct TokenBody: Decodable { let token: String }
+    private struct SocialSignInRequest: Encodable {
+        struct IDToken: Encodable { let token: String; let nonce: String? }
+        let provider: String
+        let idToken: IDToken
+    }
     private struct SignInBody: Decodable {
         struct User: Decodable { let id: String; let email: String }
         let user: User

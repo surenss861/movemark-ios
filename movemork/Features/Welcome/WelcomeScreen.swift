@@ -21,6 +21,13 @@ struct WelcomeScreen: View {
     /// False only in snapshot tests (see `init(previewSettled:)`); production always layers the video.
     private var showsVideo = true
 
+    // Social sign-in (Debug + probe only; see SocialSignIn.swift). `socialOverride` is for snapshot tests.
+    private var socialOverride: Bool? = nil
+    @State private var socialBusy: SocialProvider?
+    @State private var socialError: String?
+    @State private var probeResult: SocialProbeResult?
+    private var showsSocial: Bool { socialOverride ?? SocialSignInConfig.isEnabled }
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.scenePhase) private var scenePhase
@@ -111,6 +118,13 @@ struct WelcomeScreen: View {
             }
             // Nothing is ever pushed here; an empty bar only took height from the poster composition.
             .toolbar(.hidden, for: .navigationBar)
+            .alert("Probe sign-in", isPresented: Binding(get: { probeResult != nil }, set: { if !$0 { probeResult = nil } })) {
+                Button("OK", role: .cancel) { probeResult = nil }
+            } message: {
+                if let probeResult {
+                    Text("\(probeResult.provider.buttonTitle)\nNeon user: \(probeResult.userId.uuidString.lowercased())\nEmail: \(probeResult.email)\nSigned out of the probe.")
+                }
+            }
             .onAppear { playEntrance() }
             .onAppear {
                 MoveMarkAnalytics.track(.onboardingStarted)
@@ -180,7 +194,7 @@ struct WelcomeScreen: View {
                 .offset(y: cardVisible ? 0 : 10)
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.48).delay(0.3), value: cardVisible)
 
-            bottomLaunchDock
+            bottomLaunchDock(isCompact: layout.isCompactHeight && !usesAccessibilityScrollLayout)
                 .padding(.horizontal, dockSideInset)
                 .padding(.top, layout.slipToDockGap)
         }
@@ -298,7 +312,7 @@ struct WelcomeScreen: View {
     // MARK: - Bottom launch dock
 
     /// The screen's one primary action (lime, as everywhere in the app) and a quiet way to sign in.
-    private var bottomLaunchDock: some View {
+    private func bottomLaunchDock(isCompact: Bool) -> some View {
         VStack(spacing: 0) {
             MMPrimaryButton(title: MoveMarkGrowthCopy.welcomeCTA) {
                 MMHaptics.light()
@@ -308,15 +322,27 @@ struct WelcomeScreen: View {
             .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82), value: launchCTAPressed)
             .accessibilityIdentifier("welcome.primaryCTA")
 
+            if showsSocial {
+                WelcomeSocialActions(busyProvider: socialBusy) { startSocialSignIn($0) }
+                    .padding(.top, 14)
+                if let socialError {
+                    MMNotice(message: socialError)
+                        .padding(.top, 8)
+                }
+            }
+
             signInButton
                 .padding(.top, 4)
 
-            Text(MoveMarkGrowthCopy.welcomeTrustLine)
-                .mmFont(12.5)
-                .foregroundStyle(.white.opacity(0.5))
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 2)
+            // On short screens the social block needs this line's height; the Release layout keeps it.
+            if !(showsSocial && isCompact) {
+                Text(MoveMarkGrowthCopy.welcomeTrustLine)
+                    .mmFont(12.5)
+                    .foregroundStyle(.white.opacity(0.5))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 2)
+            }
         }
         .opacity(ctaVisible ? 1 : 0)
         .offset(y: ctaVisible ? 0 : 10)
@@ -327,7 +353,7 @@ struct WelcomeScreen: View {
         Button {
             launchAuth(mode: .signIn)
         } label: {
-            Text(MoveMarkGrowthCopy.welcomeSecondaryCTA)
+            Text(showsSocial ? "Continue with email" : MoveMarkGrowthCopy.welcomeSecondaryCTA)
                 .mmFont(15.5, .semibold)
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
@@ -336,6 +362,26 @@ struct WelcomeScreen: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("welcome.signIn")
+    }
+
+    /// Probe only: signs in to the isolated probe project, shows the identity, signs out of the probe.
+    /// Never touches the app session. A cancelled sheet is silent.
+    private func startSocialSignIn(_ provider: SocialProvider) {
+        guard socialBusy == nil, let probeURL = SocialSignInConfig.probeAuthURL else { return }
+        MMHaptics.light()
+        socialError = nil
+        socialBusy = provider
+        let runner = SocialProbeRunner()
+        Task { @MainActor in
+            defer { socialBusy = nil }
+            do {
+                probeResult = try await runner.run(provider, probeURL: probeURL)
+            } catch SocialSignInError.cancelled {
+                // Closed the sheet; nothing to say.
+            } catch {
+                socialError = error.localizedDescription
+            }
+        }
     }
 
     private func playEntrance() {
@@ -363,9 +409,10 @@ struct WelcomeScreen: View {
 extension WelcomeScreen {
     /// Snapshot tests only: the settled poster composition — what Reduce Motion shows — without the video
     /// layer or the entrance. In an extension so `WelcomeScreen()` stays the production init.
-    init(previewSettled: Void) {
+    init(previewSettled: Void, showsSocial: Bool = false) {
         self.init()
         showsVideo = false
+        socialOverride = showsSocial
         _cardVisible = State(initialValue: true)
         _copyVisible = State(initialValue: true)
         _ctaVisible = State(initialValue: true)

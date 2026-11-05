@@ -30,6 +30,12 @@ final class AuthScreenSnapshotTests: XCTestCase {
         assertScreen(WelcomeScreen(previewSettled: ()), devices: all, inNavigation: false)
     }
 
+    /// Debug + probe builds only (feature/social-welcome): "or continue with", Apple, Google, then
+    /// "Continue with email". `testWelcome` above stays the Release composition, unchanged.
+    func testWelcomeWithSocial() {
+        assertScreen(WelcomeScreen(previewSettled: (), showsSocial: true), devices: all, inNavigation: false)
+    }
+
     // MARK: Auth
 
     func testAuthSignUp() {
