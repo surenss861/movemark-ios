@@ -22,6 +22,7 @@
 import AuthenticationServices
 import CryptoKit
 import Foundation
+import GoogleSignIn
 import os
 import UIKit
 
@@ -62,7 +63,7 @@ enum SocialSignInError: LocalizedError, Equatable {
         switch self {
         case .cancelled: return nil
         case .providerUnavailable(let p):
-            return p == .google ? "Google sign-in isn’t available in this build yet." : "Apple sign-in isn’t available in this build yet."
+            return p == .google ? "Google sign-in isn’t set up in this build." : "Apple sign-in isn’t available in this build yet."
         case .failed(let message): return message
         }
     }
@@ -82,6 +83,27 @@ enum SocialSignInConfig {
         #endif
     }
 
+    /// Google's iOS and web (server) client ids, only when both are set and the iOS id's reversed form is
+    /// registered as a URL scheme (Google redirects back through it). Release clears both in MoveMarkApp.xcconfig.
+    static var googleClientIDs: (ios: String, web: String)? {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let schemes = (info["CFBundleURLTypes"] as? [[String: Any]] ?? []).flatMap { $0["CFBundleURLSchemes"] as? [String] ?? [] }
+        return validatedGoogleClientIDs(ios: info["MoveMarkGoogleIOSClientID"] as? String,
+                                        web: info["MoveMarkGoogleWebClientID"] as? String,
+                                        registeredSchemes: schemes)
+    }
+
+    static func validatedGoogleClientIDs(ios: String?, web: String?, registeredSchemes: [String]) -> (ios: String, web: String)? {
+        let suffix = ".apps.googleusercontent.com"
+        guard let ios = ios?.trimmingCharacters(in: .whitespaces), ios.hasSuffix(suffix), ios.count > suffix.count,
+              let web = web?.trimmingCharacters(in: .whitespaces), web.hasSuffix(suffix), web.count > suffix.count,
+              ios != web
+        else { return nil }
+        let reversed = "com.googleusercontent.apps." + ios.dropLast(suffix.count)
+        guard registeredSchemes.contains(reversed) else { return nil }
+        return (ios, web)
+    }
+
     /// HTTPS, a Neon Auth host, and never the app's own auth (dev or production) URL.
     static func validatedProbeURL(_ raw: String?, appAuthURL: URL?) -> URL? {
         guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty,
@@ -99,7 +121,7 @@ protocol SocialCredentialProviding {
     func credential(for provider: SocialProvider) async throws -> SocialIdentityToken
 }
 
-/// Sign in with Apple (native sheet) and, once its SDK is added, Google Sign-In.
+/// Sign in with Apple (native sheet) and Google Sign-In (GoogleSignIn SDK, system browser sheet).
 @MainActor
 final class NativeSocialCredentialProvider: NSObject, SocialCredentialProviding {
     private var appleContinuation: CheckedContinuation<ASAuthorization, Error>?
@@ -108,8 +130,42 @@ final class NativeSocialCredentialProvider: NSObject, SocialCredentialProviding 
     func credential(for provider: SocialProvider) async throws -> SocialIdentityToken {
         switch provider {
         case .apple: return try await appleCredential()
-        case .google: throw SocialSignInError.providerUnavailable(.google)
+        case .google: return try await googleCredential()
         }
+    }
+
+    /// Google signs the nonce into the ID token exactly as given, so the same string goes to Neon Auth. Only the
+    /// ID token is used. Google's own session is cleared straight away, so nothing of Google's stays on the device.
+    private func googleCredential() async throws -> SocialIdentityToken {
+        guard let ids = SocialSignInConfig.googleClientIDs else { throw SocialSignInError.providerUnavailable(.google) }
+        guard let presenter = Self.topViewController() else {
+            throw SocialSignInError.failed("Google sign-in couldn’t start. Try again.")
+        }
+        let nonce = Self.randomNonce()
+        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: ids.ios, serverClientID: ids.web)
+        let result: GIDSignInResult
+        do {
+            result = try await GIDSignIn.sharedInstance.signIn(withPresenting: presenter, hint: nil, additionalScopes: nil, nonce: nonce)
+        } catch let error as GIDSignInError where error.code == .canceled {
+            throw SocialSignInError.cancelled
+        } catch {
+            socialLog.notice("google sign-in failed: \((error as NSError).code, privacy: .public)")
+            throw SocialSignInError.failed("Google sign-in didn’t finish. Try again.")
+        }
+        defer { GIDSignIn.sharedInstance.signOut() }
+        guard let token = result.user.idToken?.tokenString, !token.isEmpty else {
+            throw SocialSignInError.failed("Google didn’t return a sign-in token. Try again.")
+        }
+        return SocialIdentityToken(provider: .google, idToken: token, nonce: nonce)
+    }
+
+    private static func topViewController() -> UIViewController? {
+        var top = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow }?.rootViewController
+        while let presented = top?.presentedViewController { top = presented }
+        return top
     }
 
     private func appleCredential() async throws -> SocialIdentityToken {

@@ -1,5 +1,11 @@
 // App target base config. Backend endpoints for development builds live in Config/Secrets.xcconfig (gitignored;
 // see Secrets.xcconfig.example). xcconfig treats `//` as a comment, hence the `https:/$()/$(/)` spelling.
+// Google Sign-In (social-sign-in probe, Debug only). The defaults are inert; Config/Secrets.xcconfig may set real
+// client ids for a Debug build. The reversed client id is the URL scheme Google redirects back to.
+GOOGLE_IOS_CLIENT_ID =
+GOOGLE_WEB_CLIENT_ID =
+GOOGLE_IOS_REVERSED_CLIENT_ID = movemark-google-unset
+
 #include? "Config/Secrets.xcconfig"
 
 // Release (archives, TestFlight, App Store) always talks to production, whatever the local Secrets.xcconfig
@@ -10,3 +16,7 @@ NEON_DATA_API_URL[config=Release] = https:/$()/$(/)ep-steep-wind-b56266ss.apires
 MOVEMARK_API_BASE_URL_OVERRIDE[config=Release] =
 MOVEMARK_PASSWORD_RESET_URL[config=Release] =
 REVENUECAT_TEST_STORE_PUBLIC_KEY[config=Release] =
+// Social sign-in stays off in Release until the probe's security gates pass; Secrets.xcconfig can't turn it on.
+GOOGLE_IOS_CLIENT_ID[config=Release] =
+GOOGLE_WEB_CLIENT_ID[config=Release] =
+GOOGLE_IOS_REVERSED_CLIENT_ID[config=Release] = movemark-google-unset

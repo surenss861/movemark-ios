@@ -210,9 +210,38 @@ struct SocialSignInTests {
         #expect(await client.currentUser() == nil)
     }
 
-    @MainActor @Test func googleIsUnavailableUntilItsSDKIsAdded() async {
+    // MARK: Google configuration
+
+    private static let iosID = "81681126235-abc123def.apps.googleusercontent.com"
+    private static let webID = "81681126235-xyz789web.apps.googleusercontent.com"
+    private static let reversed = "com.googleusercontent.apps.81681126235-abc123def"
+
+    @Test func googleClientIDsNeedBothIDsAndTheRegisteredCallbackScheme() {
+        let ok = SocialSignInConfig.validatedGoogleClientIDs(ios: Self.iosID, web: Self.webID, registeredSchemes: ["movemark", Self.reversed])
+        #expect(ok?.ios == Self.iosID && ok?.web == Self.webID)
+        // Release's inert placeholder, an unregistered scheme, a missing or malformed id, or the same id twice: off.
+        #expect(SocialSignInConfig.validatedGoogleClientIDs(ios: Self.iosID, web: Self.webID, registeredSchemes: ["movemark", "movemark-google-unset"]) == nil)
+        #expect(SocialSignInConfig.validatedGoogleClientIDs(ios: "", web: Self.webID, registeredSchemes: [Self.reversed]) == nil)
+        #expect(SocialSignInConfig.validatedGoogleClientIDs(ios: Self.iosID, web: nil, registeredSchemes: [Self.reversed]) == nil)
+        #expect(SocialSignInConfig.validatedGoogleClientIDs(ios: Self.iosID, web: "not-a-client-id", registeredSchemes: [Self.reversed]) == nil)
+        #expect(SocialSignInConfig.validatedGoogleClientIDs(ios: Self.iosID, web: Self.iosID, registeredSchemes: [Self.reversed]) == nil)
+    }
+
+    @Test func thisBuildHasNoGoogleClientIDsByDefault() {
+        // CI and fresh checkouts have no Config/Secrets.xcconfig: Google must report itself unavailable, not half-work.
+        if (Bundle.main.object(forInfoDictionaryKey: "MoveMarkGoogleIOSClientID") as? String ?? "").isEmpty {
+            #expect(SocialSignInConfig.googleClientIDs == nil)
+        }
+    }
+
+    @MainActor @Test func googleIsUnavailableWithoutClientIDs() async {
+        guard SocialSignInConfig.googleClientIDs == nil else { return }
         await #expect(throws: SocialSignInError.providerUnavailable(.google)) {
             _ = try await NativeSocialCredentialProvider().credential(for: .google)
         }
+    }
+
+    @MainActor @Test func googleMarkComesFromTheSDKBundle() {
+        #expect(GoogleMark.image != nil)
     }
 }

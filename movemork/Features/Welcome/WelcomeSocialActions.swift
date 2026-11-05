@@ -6,9 +6,8 @@
 //  (Debug + probe URL), so Release builds never show a button that can't sign anyone in.
 //
 //  Apple's button is Apple's own control (`ASAuthorizationAppleIDButton`, white on the dark welcome).
-//  Google's button follows Google's light-theme spec. Its "G" mark comes with the GoogleSignIn SDK
-//  (pending), so until then it is text-only. That is acceptable only because the block is
-//  Debug-and-probe-only.
+//  Google's button follows Google's light-theme spec (white fill, #747775 outline, #1F1F1F label) with the
+//  official "G" mark loaded from the GoogleSignIn SDK's own resource bundle, never a redrawn copy.
 //
 
 import AuthenticationServices
@@ -64,7 +63,13 @@ struct WelcomeSocialActions: View {
                 .accessibilityLabel(provider.buttonTitle)
         case .google:
             Button { onSelect(.google) } label: {
-                Text(provider.buttonTitle)
+                HStack(spacing: 10) {
+                    if let mark = GoogleMark.image {
+                        Image(uiImage: mark).resizable().scaledToFit().frame(width: 20, height: 20)
+                            .accessibilityHidden(true)
+                    }
+                    Text(provider.buttonTitle)
+                }
                     // Matches the optical size Apple's control picks at this height, so the pair reads as one set.
                     .font(.system(size: 19, weight: .medium))
                     .foregroundStyle(Color(red: 0.122, green: 0.122, blue: 0.122))
@@ -81,6 +86,21 @@ struct WelcomeSocialActions: View {
             .accessibilityLabel(provider.buttonTitle)
         }
     }
+}
+
+/// Google's "G" from the GoogleSignIn package's resource bundle (`google.png`, 1x–3x). Nil only if the bundle
+/// is missing, in which case the button falls back to its label alone.
+enum GoogleMark {
+    static let image: UIImage? = {
+        let candidates = [Bundle.main.bundleURL, Bundle.main.resourceURL].compactMap { $0 } + Bundle.allBundles.map(\.bundleURL)
+        for base in candidates {
+            if let bundle = Bundle(url: base.appendingPathComponent("GoogleSignIn_GoogleSignIn.bundle")),
+               let image = UIImage(named: "google", in: bundle, compatibleWith: nil) {
+                return image
+            }
+        }
+        return nil
+    }()
 }
 
 /// Apple's own "Continue with Apple" control. The tap goes to our provider (nonce, error handling);

@@ -18,6 +18,16 @@
 				<string>movemark</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>movemark.google-signin</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(GOOGLE_IOS_REVERSED_CLIENT_ID)</string>
+			</array>
+		</dict>
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>MoveMark uses the camera to capture move-in and move-out proof photos for your rental.</string>
@@ -53,5 +63,9 @@
 	<string>$(NEON_DATA_API_URL)</string>
 	<key>MoveMarkPasswordResetURL</key>
 	<string>$(MOVEMARK_PASSWORD_RESET_URL)</string>
+	<key>MoveMarkGoogleIOSClientID</key>
+	<string>$(GOOGLE_IOS_CLIENT_ID)</string>
+	<key>MoveMarkGoogleWebClientID</key>
+	<string>$(GOOGLE_WEB_CLIENT_ID)</string>
 </dict>
 </plist>
