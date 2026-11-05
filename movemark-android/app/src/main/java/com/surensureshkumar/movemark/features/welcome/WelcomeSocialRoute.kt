@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import com.surensureshkumar.movemark.data.backend.NeonAuthException
 import com.surensureshkumar.movemark.features.auth.social.SocialProbeResult
 import com.surensureshkumar.movemark.features.auth.social.SocialProbeRunner
 import com.surensureshkumar.movemark.features.auth.social.SocialProvider
@@ -54,6 +55,9 @@ fun WelcomeRoute(onStartMoveIn: () -> Unit, onSignIn: () -> Unit) {
                     // Dismissed the sheet; nothing to say.
                 } catch (e: CancellationException) {
                     throw e
+                } catch (e: NeonAuthException.Rejected) {
+                    // Probe only: the refusal code is the evidence the security probe records (e.g. ACCOUNT_NOT_LINKED).
+                    error = "${e.message} [${e.code ?: "no code"}]"
                 } catch (e: Exception) {
                     error = e.message ?: "Sign-in didn’t finish. Try again."
                 } finally {

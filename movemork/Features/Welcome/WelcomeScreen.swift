@@ -378,6 +378,10 @@ struct WelcomeScreen: View {
                 probeResult = try await runner.run(provider, probeURL: probeURL)
             } catch SocialSignInError.cancelled {
                 // Closed the sheet; nothing to say.
+            } catch NeonAuthError.rejected(let code, let message) {
+                // Probe only: the refusal code is the evidence the security probe records (e.g. ACCOUNT_NOT_LINKED).
+                let shown = NeonAuthError.rejected(code: code, message: message).localizedDescription
+                socialError = "\(shown) [\(code ?? "no code")]"
             } catch {
                 socialError = error.localizedDescription
             }
