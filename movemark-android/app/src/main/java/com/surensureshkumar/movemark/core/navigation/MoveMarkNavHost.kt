@@ -33,7 +33,7 @@ import com.surensureshkumar.movemark.features.proof.SavedProofReceiptScreen
 import com.surensureshkumar.movemark.features.auth.PasswordResetLink
 import com.surensureshkumar.movemark.features.auth.PasswordResetScreen
 import com.surensureshkumar.movemark.features.proof.camera.CameraCaptureScreen
-import com.surensureshkumar.movemark.features.welcome.WelcomeScreen
+import com.surensureshkumar.movemark.features.welcome.WelcomeRoute
 import com.surensureshkumar.movemark.features.welcome.WelcomeViewModel
 import dagger.hilt.android.EntryPointAccessors
 import java.util.UUID
@@ -96,7 +96,7 @@ fun MoveMarkNavHost() {
 
     NavHost(navController = navController, startDestination = Routes.Welcome) {
         composable(Routes.Welcome) {
-            WelcomeScreen(
+            WelcomeRoute(
                 onStartMoveIn = {
                     navController.navigate(Routes.auth("signUp"))
                 },

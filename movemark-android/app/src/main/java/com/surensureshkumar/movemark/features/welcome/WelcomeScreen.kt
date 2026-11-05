@@ -2,6 +2,8 @@ package com.surensureshkumar.movemark.features.welcome
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -44,6 +46,9 @@ import com.surensureshkumar.movemark.core.growth.MoveMarkGrowthCopy
 fun WelcomeScreen(
     onStartMoveIn: () -> Unit,
     onSignIn: () -> Unit,
+    /** Null hides the social block (Release, or no probe configured): the original layout, unchanged. */
+    social: WelcomeSocialState? = null,
+    onSocial: (com.surensureshkumar.movemark.features.auth.social.SocialProvider) -> Unit = {},
 ) {
     val reduceMotion = MMMotion.rememberReduceMotion()
     var cardVisible by remember { mutableStateOf(reduceMotion) }
@@ -102,6 +107,9 @@ fun WelcomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    // With the social block the dock is taller than a short phone; it scrolls rather than clips.
+                    // Without it (Release), the original fixed composition is unchanged.
+                    .then(if (social != null) Modifier.verticalScroll(rememberScrollState()) else Modifier)
                     .padding(horizontal = horizontalPad)
                     .padding(top = 14.dp, bottom = 24.dp),
             ) {
@@ -139,8 +147,8 @@ fun WelcomeScreen(
                     )
                 }
 
-                Spacer(Modifier.weight(1f, fill = false))
-                Spacer(Modifier.height(8.dp))
+                if (social == null) Spacer(Modifier.weight(1f, fill = false))
+                Spacer(Modifier.height(if (social == null) 8.dp else 28.dp))
 
                 Column(
                     modifier = Modifier
@@ -150,7 +158,24 @@ fun WelcomeScreen(
                         .offset(y = ctaOffsetY.dp),
                 ) {
                     MMButton(text = MoveMarkGrowthCopy.WELCOME_CTA, onClick = onStartMoveIn)
-                    Row(
+                    if (social != null) {
+                        WelcomeSocialActions(
+                            state = social,
+                            onSelect = onSocial,
+                            modifier = Modifier.padding(top = 14.dp),
+                        )
+                        TextButton(
+                            onClick = onSignIn,
+                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                        ) {
+                            Text(
+                                "Continue with email",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MMColors.TextPrimary,
+                            )
+                        }
+                    } else Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 22.dp),
