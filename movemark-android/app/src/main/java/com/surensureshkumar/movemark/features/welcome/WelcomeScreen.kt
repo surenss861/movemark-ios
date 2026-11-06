@@ -1,7 +1,5 @@
 package com.surensureshkumar.movemark.features.welcome
 
-import android.app.Activity
-import android.content.ContextWrapper
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -25,7 +23,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,7 +39,6 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -51,7 +47,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.view.WindowCompat
 import com.surensureshkumar.movemark.R
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMMotion
@@ -72,7 +67,6 @@ fun WelcomeScreen(
     social: WelcomeSocialState? = null,
     onSocial: (SocialProvider) -> Unit = {},
 ) {
-    LightStatusBarIcons()
     val reduceMotion = MMMotion.rememberReduceMotion()
     var visible by remember { mutableStateOf(reduceMotion) }
     var revealed by remember { mutableStateOf(reduceMotion) }
@@ -187,23 +181,6 @@ fun WelcomeScreen(
                 }
             }
         }
-    }
-}
-
-/**
- * Welcome is always dark, but edge-to-edge picks status-bar icons from the system theme: on a light-mode phone they
- * would be dark on dark. Light icons while Welcome is showing; the previous appearance comes back on leaving.
- */
-@Composable
-private fun LightStatusBarIcons() {
-    val view = LocalView.current
-    DisposableEffect(view) {
-        val window = generateSequence(view.context) { (it as? ContextWrapper)?.baseContext }
-            .filterIsInstance<Activity>().firstOrNull()?.window
-        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
-        val previous = controller?.isAppearanceLightStatusBars
-        controller?.isAppearanceLightStatusBars = false
-        onDispose { if (previous != null) controller.isAppearanceLightStatusBars = previous }
     }
 }
 
