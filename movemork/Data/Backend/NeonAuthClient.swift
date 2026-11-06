@@ -10,8 +10,7 @@
 //    MoveMark API accept. It is minted from the cookie by `GET /token` and refreshed here, once,
 //    for every caller — repositories never see expiry or refresh.
 //
-//  Email/password for the app session. `signInSocial` (an OIDC ID token from Apple/Google) exists for the
-//  isolated social-sign-in probe only; see SocialSignIn.swift for the gate.
+//  Email/password, plus Neon Auth's browser flow for Apple and Google (see SocialSignIn.swift).
 //
 
 import Foundation
@@ -60,6 +59,12 @@ enum NeonAuthError: LocalizedError, Equatable {
     }
 }
 
+/// The browser URL and this attempt's challenge cookie(s). Held in memory for the one attempt.
+struct BrowserSignInStart: Sendable {
+    let url: URL
+    let challengeCookies: String
+}
+
 actor NeonAuthClient {
     static let shared = NeonAuthClient()
 
@@ -76,8 +81,7 @@ actor NeonAuthClient {
     private let baseURLOverride: URL?
     private var baseURL: URL? { baseURLOverride ?? MoveMarkBackendConfig.neonAuthURL }
 
-    /// `http` and `keychainService` are injectable for tests; `baseURL` only for the social probe (its own
-    /// project and Keychain item). The app uses `shared`.
+    /// All injectable for tests; the app uses `shared`.
     init(baseURL: URL? = nil, http: URLSession? = nil, keychainService: String? = nil) {
         self.baseURLOverride = baseURL
         self.keychain = NeonAuthKeychain(service: keychainService ?? "\(Bundle.main.bundleIdentifier ?? "movemork").neon-auth")
@@ -196,14 +200,48 @@ actor NeonAuthClient {
         return try await finishSignIn(body)
     }
 
-    /// Exchanges a provider's ID token for a Neon Auth session (`POST /sign-in/social` with `idToken`).
-    /// Reached only from the probe and from Debug live testing until account linking is proven safe.
-    func signInSocial(_ token: SocialIdentityToken) async throws -> NeonAuthUser {
-        let body = try JSONEncoder().encode(SocialSignInRequest(
-            provider: token.provider.rawValue,
-            idToken: .init(token: token.idToken, nonce: token.nonce)
-        ))
-        let data = try await post("sign-in/social", body: body, storeSession: true)
+    /// Starts Neon Auth's browser flow: the URL for the system sheet, and the challenge cookie(s) the exchange needs.
+    /// The challenge belongs to this one attempt and is never stored.
+    func beginBrowserSignIn(provider: SocialProvider, callbackURL: URL) async throws -> BrowserSignInStart {
+        guard let base = baseURL else { throw NeonAuthError.notConfigured }
+        let url = base.appendingPathComponent("sign-in/social")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(Self.origin(of: base), forHTTPHeaderField: "Origin")
+        request.httpBody = try JSONEncoder().encode(["provider": provider.rawValue, "callbackURL": callbackURL.absoluteString])
+        let (data, response) = try await http.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw NeonAuthError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else { throw Self.rejection(from: data, status: http.statusCode, path: "sign-in/social") }
+        let challenge = Self.cookies(from: http, url: url)
+            .filter { $0.name.contains("session_chal") && !$0.value.isEmpty }
+            .map { "\($0.name)=\($0.value)" }
+            .joined(separator: "; ")
+        guard !challenge.isEmpty,
+              let body = try? JSONDecoder().decode(BrowserStartBody.self, from: data),
+              let start = URL(string: body.url), start.scheme == "https"
+        else { throw NeonAuthError.invalidResponse }
+        return BrowserSignInStart(url: start, challengeCookies: challenge)
+    }
+
+    /// Exchanges the single-use verifier and this attempt's challenge for the real session (`GET /get-session`).
+    func finishBrowserSignIn(verifier: String, challengeCookies: String) async throws -> NeonAuthUser {
+        guard let base = baseURL else { throw NeonAuthError.notConfigured }
+        let endpoint = base.appendingPathComponent("get-session")
+        guard var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false) else { throw NeonAuthError.invalidResponse }
+        components.queryItems = [URLQueryItem(name: SocialBrowserReturn.verifierParameter, value: verifier)]
+        guard let url = components.url else { throw NeonAuthError.invalidResponse }
+        var request = URLRequest(url: url)
+        request.setValue(challengeCookies, forHTTPHeaderField: "Cookie")
+        request.setValue(Self.origin(of: base), forHTTPHeaderField: "Origin")
+        let (data, response) = try await http.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw NeonAuthError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else { throw Self.rejection(from: data, status: http.statusCode, path: "get-session") }
+        accessToken = nil
+        loadedFromKeychain = true
+        stored = Self.sessionCookie(from: http, url: endpoint).map {
+            NeonAuthKeychain.Stored(cookieName: $0.name, cookieValue: $0.value, user: nil)
+        }
         return try await finishSignIn(data)
     }
 
@@ -327,9 +365,7 @@ actor NeonAuthClient {
         let (data, response) = try await http.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw NeonAuthError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
-            let err = try? JSONDecoder().decode(ErrorBody.self, from: data)
-            neonAuthLog.notice("\(path, privacy: .public) failed HTTP \(http.statusCode) code=\(err?.code ?? "-", privacy: .public)")
-            throw NeonAuthError.rejected(code: http.statusCode == 429 ? "RATE_LIMITED" : err?.code, message: err?.message ?? "")
+            throw Self.rejection(from: data, status: http.statusCode, path: path)
         }
         if storeSession {
             accessToken = nil
@@ -349,12 +385,21 @@ actor NeonAuthClient {
         if stored?.user == nil { stored = nil; keychain.delete() }
     }
 
-    private static func sessionCookie(from response: HTTPURLResponse, url: URL) -> HTTPCookie? {
+    private static func rejection(from data: Data, status: Int, path: String) -> NeonAuthError {
+        let err = try? JSONDecoder().decode(ErrorBody.self, from: data)
+        neonAuthLog.notice("\(path, privacy: .public) failed HTTP \(status) code=\(err?.code ?? "-", privacy: .public)")
+        return .rejected(code: status == 429 ? "RATE_LIMITED" : err?.code, message: err?.message ?? err?.error ?? "")
+    }
+
+    private static func cookies(from response: HTTPURLResponse, url: URL) -> [HTTPCookie] {
         let headers = response.allHeaderFields.reduce(into: [String: String]()) { result, pair in
             if let key = pair.key as? String, let value = pair.value as? String { result[key] = value }
         }
         return HTTPCookie.cookies(withResponseHeaderFields: headers, for: url)
-            .first { $0.name.hasSuffix("session_token") && !$0.value.isEmpty }
+    }
+
+    private static func sessionCookie(from response: HTTPURLResponse, url: URL) -> HTTPCookie? {
+        cookies(from: response, url: url).first { $0.name.hasSuffix("session_token") && !$0.value.isEmpty }
     }
 
     private static func origin(of url: URL) -> String {
@@ -381,16 +426,12 @@ actor NeonAuthClient {
     }
 
     private struct TokenBody: Decodable { let token: String }
-    private struct SocialSignInRequest: Encodable {
-        struct IDToken: Encodable { let token: String; let nonce: String? }
-        let provider: String
-        let idToken: IDToken
-    }
+    private struct BrowserStartBody: Decodable { let url: String }
     private struct SignInBody: Decodable {
         struct User: Decodable { let id: String; let email: String }
         let user: User
     }
-    private struct ErrorBody: Decodable { let code: String?; let message: String? }
+    private struct ErrorBody: Decodable { let code: String?; let message: String?; let error: String? }
 }
 
 /// The session cookie and user, as one Keychain item available only on this device after first unlock.

@@ -27,11 +27,10 @@ struct WelcomeScreen: View {
     @State private var heroCutouts: [CGRect] = []
     private static let space = "welcome"
 
-    // Social sign-in (Debug + probe only until the security gates pass; see SocialSignIn.swift).
+    // Social sign-in (Debug live testing only until the security gates pass; see SocialSignIn.swift).
     private var socialOverride: Bool? = nil
     @State private var socialBusy: SocialProvider?
     @State private var socialError: String?
-    @State private var probeResult: SocialProbeResult?
     private var showsSocial: Bool { socialOverride ?? SocialSignInConfig.isEnabled }
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
@@ -124,13 +123,6 @@ struct WelcomeScreen: View {
             }
             .coordinateSpace(name: Self.space)
             .onPreferenceChange(WelcomeCutoutKey.self) { heroCutouts = $0 }
-        }
-        .alert("Probe sign-in", isPresented: Binding(get: { probeResult != nil }, set: { if !$0 { probeResult = nil } })) {
-            Button("OK", role: .cancel) { probeResult = nil }
-        } message: {
-            if let probeResult {
-                Text("\(probeResult.provider.buttonTitle)\nNeon user: \(probeResult.userId.uuidString.lowercased())\nEmail: \(probeResult.email)\nSigned out of the probe.")
-            }
         }
         .onAppear {
             playEntrance()
@@ -364,25 +356,16 @@ struct WelcomeScreen: View {
         }
     }
 
-    /// Live: a real session through `SessionManager`, and the root moves on by itself. Probe: signs in to the isolated
-    /// project, shows the identity, signs out; never the app session. A cancelled sheet is silent in both.
+    /// A real session through `SessionManager`; the root moves on by itself. A cancelled sheet is silent.
     private func startSocialSignIn(_ provider: SocialProvider) {
-        let mode = SocialSignInConfig.mode
-        guard socialBusy == nil, mode != .off else { return }
+        guard socialBusy == nil, SocialSignInConfig.mode == .live else { return }
         MMHaptics.light()
         socialError = nil
         socialBusy = provider
         Task { @MainActor in
             defer { socialBusy = nil }
             do {
-                switch mode {
-                case .live:
-                    try await sessionManager?.signInWithSocial(provider)
-                case .probe(let url):
-                    probeResult = try await SocialProbeRunner().run(provider, probeURL: url)
-                case .off:
-                    break
-                }
+                try await sessionManager?.signInWithSocial(provider)
             } catch SocialSignInError.cancelled {
                 // Closed the sheet; nothing to say.
             } catch NeonAuthError.rejected(let code, let message) {

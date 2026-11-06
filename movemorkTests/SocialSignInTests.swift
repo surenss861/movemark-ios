@@ -2,9 +2,8 @@
 //  SocialSignInTests.swift
 //  movemorkTests
 //
-//  The social-sign-in probe layer: the gate never accepts a non-probe URL; `signInSocial` sends exactly
-//  the Better Auth ID-token request and keeps a session only on success; the probe runner always leaves
-//  the probe signed out and never calls the network for a cancelled sheet.
+//  Neon Auth's browser sign-in: the request shape, the challenge staying with this attempt, the verifier exchange
+//  keeping a session only on success, and the return URL accepting nothing but the expected shape.
 //
 
 import Foundation
@@ -15,7 +14,7 @@ import Testing
 final class SocialStubURLProtocol: URLProtocol, @unchecked Sendable {
     struct Reply: Sendable { var status: Int; var body: String; var headers: [String: String] = [:] }
     nonisolated(unsafe) static var handler: (@Sendable (URLRequest) -> Reply) = { _ in Reply(status: 500, body: "{}") }
-    nonisolated(unsafe) static var seen: [(path: String, body: Data?, headers: [String: String])] = []
+    nonisolated(unsafe) static var seen: [(path: String, query: String?, body: Data?, headers: [String: String])] = []
     static let lock = NSLock()
 
     static func reset(_ h: @escaping @Sendable (URLRequest) -> Reply) {
@@ -25,6 +24,10 @@ final class SocialStubURLProtocol: URLProtocol, @unchecked Sendable {
     static func body(forPathSuffix suffix: String) -> Data? {
         lock.lock(); defer { lock.unlock() }
         return seen.first { $0.path.hasSuffix(suffix) }?.body
+    }
+    static func queries(forPathSuffix suffix: String) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        return seen.first { $0.path.hasSuffix(suffix) }?.query
     }
     static func headers(forPathSuffix suffix: String) -> [String: String] {
         lock.lock(); defer { lock.unlock() }
@@ -42,7 +45,7 @@ final class SocialStubURLProtocol: URLProtocol, @unchecked Sendable {
             body = data
         }
         Self.lock.lock()
-        Self.seen.append((request.url?.path ?? "", body, request.allHTTPHeaderFields ?? [:]))
+        Self.seen.append((request.url?.path ?? "", request.url?.query, body, request.allHTTPHeaderFields ?? [:]))
         let h = Self.handler
         Self.lock.unlock()
         let reply = h(request)
@@ -63,8 +66,9 @@ final class SocialStubURLProtocol: URLProtocol, @unchecked Sendable {
     }
 }
 
-private let probeURL = URL(string: "https://ep-probe-123.neonauth.c-8.us-east-2.aws.neon.tech/neondb/auth")!
+private let base = URL(string: "https://ep-test-123.neonauth.c-7.us-east-2.aws.neon.tech/neondb/auth")!
 private let userId = "22222222-2222-4222-8222-222222222222"
+private let challenge = "__Secure-neon-auth.session_challenge=chal-1; __Secure-neon-auth.session_challange=chal-1"
 
 private func jwt(lifetime: Int = 900) -> String {
     let now = Int(Date().timeIntervalSince1970)
@@ -74,31 +78,23 @@ private func jwt(lifetime: Int = 900) -> String {
     return "eyJhbGciOiJFZERTQSJ9.\(b64).sig"
 }
 
-/// Neon Auth as observed for a successful sign-in: session cookie, user, then `/token` mints a JWT.
-@Sendable private func neonAuthAccepts(_ r: URLRequest) -> SocialStubURLProtocol.Reply {
+/// Neon Auth as observed on production: a browser URL and two challenge cookies, then the verifier exchange.
+@Sendable private func neonAuth(_ r: URLRequest) -> SocialStubURLProtocol.Reply {
     let path = r.url?.path ?? ""
     if path.hasSuffix("/sign-in/social") {
-        return .init(status: 200, body: #"{"redirect":false,"token":"t","user":{"id":"\#(userId)","email":"probe@privaterelay.appleid.com"}}"#,
-                     headers: ["Set-Cookie": "__Secure-neon-auth.session_token=cookie-value; Path=/; HttpOnly; Secure; SameSite=None"])
+        return .init(status: 200, body: #"{"url":"https://ep-test-123.neonauth.c-7.us-east-2.aws.neon.tech/neondb/auth/sign-in/social/init?token=t1","redirect":true}"#,
+                     headers: ["Set-Cookie": "__Secure-neon-auth.session_challenge=chal-1; Path=/; Secure, __Secure-neon-auth.session_challange=chal-1; Path=/; Secure"])
+    }
+    if path.hasSuffix("/get-session") {
+        return .init(status: 200, body: #"{"session":{"id":"s"},"user":{"id":"\#(userId)","email":"probe@example.com"}}"#,
+                     headers: ["Set-Cookie": "__Secure-neon-auth.session_token=cookie-value; Path=/; HttpOnly; Secure"])
     }
     if path.hasSuffix("/token") { return .init(status: 200, body: #"{"token":"\#(jwt())"}"#) }
-    if path.hasSuffix("/sign-out") { return .init(status: 200, body: #"{"success":true}"#) }
     return .init(status: 404, body: "{}")
 }
 
-private func probeClient() -> NeonAuthClient {
-    NeonAuthClient(baseURL: probeURL, http: SocialStubURLProtocol.session, keychainService: "movemorkTests.social.\(UUID().uuidString)")
-}
-
-@MainActor
-private final class FakeCredentials: SocialCredentialProviding {
-    var result: Result<SocialIdentityToken, Error>
-    var calls = 0
-    init(_ result: Result<SocialIdentityToken, Error>) { self.result = result }
-    func credential(for provider: SocialProvider) async throws -> SocialIdentityToken {
-        calls += 1
-        return try result.get()
-    }
+private func client() -> NeonAuthClient {
+    NeonAuthClient(baseURL: base, http: SocialStubURLProtocol.session, keychainService: "movemorkTests.social.\(UUID().uuidString)")
 }
 
 @Suite(.serialized)
@@ -106,26 +102,9 @@ struct SocialSignInTests {
 
     // MARK: Gate
 
-    @Test(arguments: [
-        ("https://ep-probe-123.neonauth.c-8.us-east-2.aws.neon.tech/neondb/auth", true),
-        ("http://ep-probe-123.neonauth.c-8.us-east-2.aws.neon.tech/neondb/auth", false),   // not HTTPS
-        ("https://evil.example/neondb/auth", false),                                       // not Neon Auth
-        ("https://ep-x.neonauth.us-east-2.aws.neon.tech.evil.example/auth", false),        // suffix trick
-        ("https://ep-app-999.neonauth.c-8.us-east-2.aws.neon.tech/neondb/auth", false),    // the app's own auth
-        ("", false),
-        ("not a url", false),
-    ])
-    func probeURLIsOnlyAnHTTPSNeonAuthHostThatIsNotTheApps(raw: String, accepted: Bool) {
-        let app = URL(string: "https://ep-app-999.neonauth.c-8.us-east-2.aws.neon.tech/neondb/auth")
-        #expect((SocialSignInConfig.validatedProbeURL(raw, appAuthURL: app) != nil) == accepted)
-    }
-
-    @Test func modeIsOffUnlessALiveFlagOrAValidProbeIsGiven() {
-        let probe = URL(string: "https://ep-probe-123.neonauth.c-8.us-east-2.aws.neon.tech/neondb/auth")!
-        #expect(SocialSignInConfig.resolvedMode(liveFlag: false, probeURL: nil) == .off)
-        #expect(SocialSignInConfig.resolvedMode(liveFlag: false, probeURL: probe) == .probe(probe))
-        #expect(SocialSignInConfig.resolvedMode(liveFlag: true, probeURL: nil) == .live)
-        #expect(SocialSignInConfig.resolvedMode(liveFlag: true, probeURL: probe) == .live)
+    @Test func modeIsOffUnlessTheLiveFlagIsSet() {
+        #expect(SocialSignInConfig.resolvedMode(liveFlag: false) == .off)
+        #expect(SocialSignInConfig.resolvedMode(liveFlag: true) == .live)
     }
 
     @Test func thisTestBuildIsOffWithoutLaunchArguments() {
@@ -136,124 +115,89 @@ struct SocialSignInTests {
         #expect(SocialProvider.iOSOrder == [.apple, .google])
     }
 
-    @Test func nonceHashIsSHA256Hex() {
-        #expect(NativeSocialCredentialProvider.sha256Hex("abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
-        let a = NativeSocialCredentialProvider.randomNonce(), b = NativeSocialCredentialProvider.randomNonce()
-        #expect(a.count == 32 && a != b)
+    // MARK: Return URL
+
+    @Test func verifierIsReadOnlyFromTheExpectedReturnURL() throws {
+        let ok = URL(string: "movemark://auth/callback?neon_auth_session_verifier=abc-123")!
+        #expect(try SocialBrowserReturn.verifier(from: ok) == "abc-123")
     }
 
-    // MARK: signInSocial
+    @Test(arguments: [
+        "https://evil.example/auth/callback?neon_auth_session_verifier=abc",  // wrong scheme
+        "movemark://reset-password?neon_auth_session_verifier=abc",            // wrong host
+        "movemark://auth/other?neon_auth_session_verifier=abc",                // wrong path
+        "movemark://auth/callback",                                            // nothing
+        "movemark://auth/callback?neon_auth_session_verifier=",                // empty
+        "movemark://auth/callback?error=server_error",
+    ])
+    func anythingElseIsAFailedSignIn(raw: String) {
+        #expect(throws: SocialSignInError.self) { _ = try SocialBrowserReturn.verifier(from: URL(string: raw)!) }
+    }
 
-    @Test func signInSocialSendsTheIDTokenRequestAndKeepsTheSession() async throws {
-        SocialStubURLProtocol.reset(neonAuthAccepts)
-        let client = probeClient()
-        let user = try await client.signInSocial(SocialIdentityToken(provider: .apple, idToken: "id-token", nonce: "hashed-nonce"))
+    @Test func aDeclinedConsentIsTreatedAsCancelled() {
+        #expect(throws: SocialSignInError.cancelled) {
+            _ = try SocialBrowserReturn.verifier(from: URL(string: "movemark://auth/callback?error=access_denied")!)
+        }
+    }
+
+    // MARK: Start
+
+    @Test func startSendsProviderAndCallbackAndKeepsTheChallengeForThisAttempt() async throws {
+        SocialStubURLProtocol.reset(neonAuth)
+        let c = client()
+        let start = try await c.beginBrowserSignIn(provider: .google, callbackURL: SocialBrowserReturn.callbackURL)
+
+        #expect(start.url.path.hasSuffix("/sign-in/social/init"))
+        #expect(start.challengeCookies == challenge)
+        let body = try #require(SocialStubURLProtocol.body(forPathSuffix: "/sign-in/social"))
+        let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: String])
+        #expect(json == ["provider": "google", "callbackURL": "https://account.movemark.ca/auth/return"])
+        #expect(SocialStubURLProtocol.headers(forPathSuffix: "/sign-in/social")["Origin"] == "https://ep-test-123.neonauth.c-7.us-east-2.aws.neon.tech")
+        #expect(await c.currentUser() == nil)  // starting creates no session
+    }
+
+    @Test func aRefusedCallbackIsARejectionWithItsCode() async {
+        SocialStubURLProtocol.reset { _ in .init(status: 403, body: #"{"error":"Invalid callbackURL","code":"INVALID_CALLBACKURL"}"#) }
+        await #expect(throws: NeonAuthError.rejected(code: "INVALID_CALLBACKURL", message: "Invalid callbackURL")) {
+            _ = try await client().beginBrowserSignIn(provider: .apple, callbackURL: SocialBrowserReturn.callbackURL)
+        }
+    }
+
+    @Test func aStartWithoutAChallengeCookieStops() async {
+        SocialStubURLProtocol.reset { _ in .init(status: 200, body: #"{"url":"https://x.example/init","redirect":true}"#) }
+        await #expect(throws: NeonAuthError.invalidResponse) {
+            _ = try await client().beginBrowserSignIn(provider: .google, callbackURL: SocialBrowserReturn.callbackURL)
+        }
+    }
+
+    // MARK: Exchange
+
+    @Test func exchangeSendsVerifierAndChallengeAndKeepsTheSession() async throws {
+        SocialStubURLProtocol.reset(neonAuth)
+        let c = client()
+        let user = try await c.finishBrowserSignIn(verifier: "v-1", challengeCookies: challenge)
 
         #expect(user.id.uuidString.lowercased() == userId)
-        #expect(user.email == "probe@privaterelay.appleid.com")  // Hide My Email address passes through as-is
-        let body = try #require(SocialStubURLProtocol.body(forPathSuffix: "/sign-in/social"))
-        let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
-        #expect(json["provider"] as? String == "apple")
-        let idToken = try #require(json["idToken"] as? [String: Any])
-        #expect(idToken["token"] as? String == "id-token")
-        #expect(idToken["nonce"] as? String == "hashed-nonce")
-        #expect(json.keys.sorted() == ["idToken", "provider"])  // no callbackURL: never the redirect flow
-        #expect(SocialStubURLProtocol.headers(forPathSuffix: "/sign-in/social")["Origin"] == "https://ep-probe-123.neonauth.c-8.us-east-2.aws.neon.tech")
+        #expect(SocialStubURLProtocol.headers(forPathSuffix: "/get-session")["Cookie"] == challenge)
+        #expect(SocialStubURLProtocol.queries(forPathSuffix: "/get-session") == "neon_auth_session_verifier=v-1")
         #expect(SocialStubURLProtocol.paths.last?.hasSuffix("/token") == true)  // proved usable before returning
-        #expect(await client.currentUser()?.id == user.id)
-        await client.endSessionLocally(notify: false)
+        #expect(await c.currentUser()?.id == user.id)
+        await c.endSessionLocally(notify: false)
     }
 
-    @Test func googleTokenWithoutNonceOmitsIt() async throws {
-        SocialStubURLProtocol.reset(neonAuthAccepts)
-        let client = probeClient()
-        _ = try await client.signInSocial(SocialIdentityToken(provider: .google, idToken: "g-token", nonce: nil))
-        let body = try #require(SocialStubURLProtocol.body(forPathSuffix: "/sign-in/social"))
-        let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
-        #expect(json["provider"] as? String == "google")
-        #expect((json["idToken"] as? [String: Any])?["nonce"] == nil)
-        await client.endSessionLocally(notify: false)
-    }
-
-    @Test(arguments: [(401, "ACCOUNT_NOT_LINKED"), (400, "INVALID_TOKEN"), (429, "RATE_LIMITED")])
-    func rejectedTokenKeepsNoSession(status: Int, code: String) async throws {
-        SocialStubURLProtocol.reset { _ in .init(status: status, body: #"{"code":"\#(code)","message":"no"}"#) }
-        let client = probeClient()
-        await #expect(throws: NeonAuthError.self) {
-            _ = try await client.signInSocial(SocialIdentityToken(provider: .google, idToken: "x", nonce: nil))
-        }
-        #expect(await client.currentUser() == nil)
+    @Test(arguments: [(400, "VERIFICATION_NOT_FOUND"), (400, "SESSION_CHALLENGE_COOKIE_NOT_FOUND"), (429, "RATE_LIMITED")])
+    func aRefusedOrReplayedVerifierKeepsNoSession(status: Int, code: String) async {
+        SocialStubURLProtocol.reset { _ in .init(status: status, body: #"{"code":"\#(code)","error":"no"}"#) }
+        let c = client()
+        await #expect(throws: NeonAuthError.self) { _ = try await c.finishBrowserSignIn(verifier: "used", challengeCookies: challenge) }
+        #expect(await c.currentUser() == nil)
         #expect(SocialStubURLProtocol.paths.allSatisfy { !$0.hasSuffix("/token") })
     }
 
-    // MARK: Probe runner
-
-    @MainActor @Test func probeRunReportsIdentityThenSignsOutOfTheProbe() async throws {
-        SocialStubURLProtocol.reset(neonAuthAccepts)
-        let client = probeClient()
-        let runner = SocialProbeRunner(
-            credentials: FakeCredentials(.success(SocialIdentityToken(provider: .apple, idToken: "id", nonce: "n"))),
-            makeClient: { url in
-                #expect(url == probeURL)
-                return client
-            }
-        )
-        let result = try await runner.run(.apple, probeURL: probeURL)
-        #expect(result == SocialProbeResult(provider: .apple, userId: UUID(uuidString: userId)!, email: "probe@privaterelay.appleid.com"))
-        #expect(SocialStubURLProtocol.paths.last?.hasSuffix("/sign-out") == true)
-        #expect(await client.currentUser() == nil)
-    }
-
-    @MainActor @Test func cancelledSheetMakesNoNetworkCall() async throws {
-        SocialStubURLProtocol.reset(neonAuthAccepts)
-        let runner = SocialProbeRunner(credentials: FakeCredentials(.failure(SocialSignInError.cancelled)), makeClient: { _ in probeClient() })
-        await #expect(throws: SocialSignInError.cancelled) { _ = try await runner.run(.apple, probeURL: probeURL) }
-        #expect(SocialStubURLProtocol.paths.isEmpty)
-    }
-
-    @MainActor @Test func failedProbeSignInLeavesNoProbeSession() async throws {
-        SocialStubURLProtocol.reset { _ in .init(status: 401, body: #"{"code":"ACCOUNT_NOT_LINKED","message":"account not linked"}"#) }
-        let client = probeClient()
-        let runner = SocialProbeRunner(
-            credentials: FakeCredentials(.success(SocialIdentityToken(provider: .google, idToken: "id", nonce: nil))),
-            makeClient: { _ in client }
-        )
-        await #expect(throws: NeonAuthError.self) { _ = try await runner.run(.google, probeURL: probeURL) }
-        #expect(await client.currentUser() == nil)
-    }
-
-    // MARK: Google configuration
-
-    private static let iosID = "81681126235-abc123def.apps.googleusercontent.com"
-    private static let webID = "81681126235-xyz789web.apps.googleusercontent.com"
-    private static let reversed = "com.googleusercontent.apps.81681126235-abc123def"
-
-    @Test func googleClientIDsNeedBothIDsAndTheRegisteredCallbackScheme() {
-        let ok = SocialSignInConfig.validatedGoogleClientIDs(ios: Self.iosID, web: Self.webID, registeredSchemes: ["movemark", Self.reversed])
-        #expect(ok?.ios == Self.iosID && ok?.web == Self.webID)
-        // Release's inert placeholder, an unregistered scheme, a missing or malformed id, or the same id twice: off.
-        #expect(SocialSignInConfig.validatedGoogleClientIDs(ios: Self.iosID, web: Self.webID, registeredSchemes: ["movemark", "movemark-google-unset"]) == nil)
-        #expect(SocialSignInConfig.validatedGoogleClientIDs(ios: "", web: Self.webID, registeredSchemes: [Self.reversed]) == nil)
-        #expect(SocialSignInConfig.validatedGoogleClientIDs(ios: Self.iosID, web: nil, registeredSchemes: [Self.reversed]) == nil)
-        #expect(SocialSignInConfig.validatedGoogleClientIDs(ios: Self.iosID, web: "not-a-client-id", registeredSchemes: [Self.reversed]) == nil)
-        #expect(SocialSignInConfig.validatedGoogleClientIDs(ios: Self.iosID, web: Self.iosID, registeredSchemes: [Self.reversed]) == nil)
-    }
-
-    @Test func thisBuildHasNoGoogleClientIDsByDefault() {
-        // CI and fresh checkouts have no Config/Secrets.xcconfig: Google must report itself unavailable, not half-work.
-        if (Bundle.main.object(forInfoDictionaryKey: "MoveMarkGoogleIOSClientID") as? String ?? "").isEmpty {
-            #expect(SocialSignInConfig.googleClientIDs == nil)
-        }
-    }
-
-    @MainActor @Test func googleIsUnavailableWithoutClientIDs() async {
-        guard SocialSignInConfig.googleClientIDs == nil else { return }
-        await #expect(throws: SocialSignInError.providerUnavailable(.google)) {
-            _ = try await NativeSocialCredentialProvider().credential(for: .google)
-        }
-    }
-
-    @MainActor @Test func googleMarkComesFromTheSDKBundle() {
-        #expect(GoogleMark.image != nil)
+    @Test func anExchangeWithoutASessionCookieKeepsNoSession() async {
+        SocialStubURLProtocol.reset { _ in .init(status: 200, body: "null") }
+        let c = client()
+        await #expect(throws: NeonAuthError.invalidResponse) { _ = try await c.finishBrowserSignIn(verifier: "v", challengeCookies: challenge) }
+        #expect(await c.currentUser() == nil)
     }
 }

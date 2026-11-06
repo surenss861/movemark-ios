@@ -290,9 +290,9 @@ final class SessionManager {
         hasResolvedInitialAuthState = true
     }
 
-    /// Signs in with Apple or Google for real: the provider's ID token becomes a Neon Auth session, then the same
-    /// path as email sign-in decides where the user lands. Reached only in `SocialSignInMode.live` (Debug test builds).
-    func signInWithSocial(_ provider: SocialProvider, credentials: SocialCredentialProviding? = nil) async throws {
+    /// Signs in with Apple or Google through Neon Auth's browser flow (see SocialSignIn.swift), then the same path as
+    /// email sign-in decides where the user lands. Reached only in `SocialSignInMode.live` (Debug test builds).
+    func signInWithSocial(_ provider: SocialProvider, browser: SocialBrowserPresenting? = nil) async throws {
         guard MoveMarkBackendConfig.isConfigured else {
             throw AuthError.validation("This build is not configured to reach MoveMark’s servers.")
         }
@@ -300,9 +300,10 @@ final class SessionManager {
         interactiveAuthInFlight = true
         defer { interactiveAuthInFlight = false }
 
-        let source = credentials ?? NativeSocialCredentialProvider()
-        let token = try await source.credential(for: provider)
-        let user = try await NeonAuthClient.shared.signInSocial(token)
+        let start = try await NeonAuthClient.shared.beginBrowserSignIn(provider: provider, callbackURL: SocialBrowserReturn.callbackURL)
+        let returned = try await (browser ?? SystemBrowserPresenter()).open(start.url)
+        let verifier = try SocialBrowserReturn.verifier(from: returned)
+        let user = try await NeonAuthClient.shared.finishBrowserSignIn(verifier: verifier, challengeCookies: start.challengeCookies)
         await applyAuthenticatedSession(user)
         hasResolvedInitialAuthState = true
     }
