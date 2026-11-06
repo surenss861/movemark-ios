@@ -2,6 +2,7 @@ package com.surensureshkumar.movemark.features.welcome
 
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -25,7 +26,7 @@ class WelcomeSocialActionsTest {
         compose.onNodeWithText("Sign in").assertExists()
         compose.onNodeWithText("Continue with Google").assertDoesNotExist()
         compose.onNodeWithText("Continue with Apple").assertDoesNotExist()
-        compose.onNodeWithText("Continue with email").assertDoesNotExist()
+        compose.onNodeWithText("I already have a vault").assertDoesNotExist()
     }
 
     @Test
@@ -49,9 +50,18 @@ class WelcomeSocialActionsTest {
 
         compose.onNodeWithText("Continue with Google").performScrollTo().performClick()
         compose.onNodeWithText("Continue with Apple").performScrollTo().performClick()
-        compose.onNodeWithText("Continue with email").performScrollTo().performClick()
+        compose.onNodeWithText("I already have a vault").performScrollTo().performClick()
         assertEquals(listOf(SocialProvider.GOOGLE, SocialProvider.APPLE), picked)
         assertTrue(emailTapped)
+    }
+
+    @Test
+    fun exampleRecordIsAnIllustrativeCaptionNotAClaimCard() {
+        compose.setContent { WelcomeScreen(onStartMoveIn = {}, onSignIn = {}) }
+        compose.onNodeWithContentDescription("Example move-in record: Kitchen, April 14, 12 photos. Illustrative, not your evidence.")
+            .assertExists()
+        compose.onNodeWithText("DAMAGE CLAIM").assertDoesNotExist()
+        compose.onNodeWithText("Already documented").assertDoesNotExist()
     }
 
     @Test

@@ -23,6 +23,8 @@ struct WelcomeScreen: View {
 
     // Social sign-in (Debug + probe only; see SocialSignIn.swift). `socialOverride` is for snapshot tests.
     private var socialOverride: Bool? = nil
+    /// Snapshot exploration only; production always shows the archive caption.
+    private var captionStyle: WelcomeEvidenceCaption.Style = .archive
     @State private var socialBusy: SocialProvider?
     @State private var socialError: String?
     @State private var probeResult: SocialProbeResult?
@@ -185,9 +187,8 @@ struct WelcomeScreen: View {
 
             primaryCopyBlock
 
-            WelcomeProofSlip(isCompact: layout.isCompactHeight || usesAccessibilityScrollLayout)
-                // Subordinate to the headline: narrower than the copy column, never full bleed.
-                .frame(maxWidth: 300, alignment: .leading)
+            // The example record is a caption set into the footage, not a card over it (WelcomeEvidenceCaption).
+            WelcomeEvidenceCaption(style: captionStyle, isCompact: layout.isCompactHeight || usesAccessibilityScrollLayout)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, layout.heroToCopyGap)
                 .opacity(cardVisible ? 1 : 0)
@@ -353,7 +354,7 @@ struct WelcomeScreen: View {
         Button {
             launchAuth(mode: .signIn)
         } label: {
-            Text(showsSocial ? "Continue with email" : MoveMarkGrowthCopy.welcomeSecondaryCTA)
+            Text(MoveMarkGrowthCopy.welcomeSecondaryCTA)
                 .mmFont(15.5, .semibold)
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
@@ -413,10 +414,11 @@ struct WelcomeScreen: View {
 extension WelcomeScreen {
     /// Snapshot tests only: the settled poster composition — what Reduce Motion shows — without the video
     /// layer or the entrance. In an extension so `WelcomeScreen()` stays the production init.
-    init(previewSettled: Void, showsSocial: Bool = false) {
+    init(previewSettled: Void, showsSocial: Bool = false, captionStyle: WelcomeEvidenceCaption.Style = .archive) {
         self.init()
         showsVideo = false
         socialOverride = showsSocial
+        self.captionStyle = captionStyle
         _cardVisible = State(initialValue: true)
         _copyVisible = State(initialValue: true)
         _ctaVisible = State(initialValue: true)

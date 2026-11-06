@@ -9,6 +9,7 @@ object MoveMarkGrowthCopy {
     const val WELCOME_PAIN_LINE =
         "Old damage can cost you your deposit — unless you have proof."
     const val WELCOME_CTA = "Start move-in proof"
+    const val WELCOME_SECONDARY_CTA = "I already have a vault"
 
     data class OnboardingStory(val title: String, val body: String)
 

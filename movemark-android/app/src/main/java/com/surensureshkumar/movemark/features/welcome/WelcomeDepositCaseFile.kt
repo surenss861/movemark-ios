@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.dp
 import com.surensureshkumar.movemark.core.design.MMMotion
 
 /**
- * Welcome hero — premium saved proof preview (not the full in-app artifact card).
+ * Welcome hero: the kitchen photograph with its archival example caption (WelcomeEvidenceCaption).
  */
 @Composable
 fun WelcomeDepositCaseFile(
@@ -21,6 +21,8 @@ fun WelcomeDepositCaseFile(
     tagsVisible: Boolean,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
+    /** Short screens: the photo crops wider and the caption drops its separate "illustrative" line. */
+    compact: Boolean = false,
 ) {
     val cardAlpha by animateFloatAsState(
         targetValue = if (cardVisible) 1f else 0f,
@@ -40,9 +42,10 @@ fun WelcomeDepositCaseFile(
             .offset(y = cardOffsetY.dp)
             .padding(top = 8.dp),
     ) {
-        WelcomeClaimProofStack(
-            proofVisible = tagsVisible,
+        WelcomeEvidenceCaption(
+            captionVisible = tagsVisible,
             reduceMotion = reduceMotion,
+            compact = compact,
         )
     }
 }

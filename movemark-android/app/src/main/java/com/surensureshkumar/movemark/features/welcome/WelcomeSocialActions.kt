@@ -80,7 +80,8 @@ fun WelcomeSocialActions(
                 if (busy) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color(0xFF1F1F1F))
                 } else {
-                    Text(provider.buttonTitle, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    // Explicit: the app theme's text style is light-on-dark and would override the button's content colour.
+                    Text(provider.buttonTitle, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color(0xFF1F1F1F))
                 }
             }
         }

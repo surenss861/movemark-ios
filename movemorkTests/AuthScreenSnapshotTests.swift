@@ -36,6 +36,12 @@ final class AuthScreenSnapshotTests: XCTestCase {
         assertScreen(WelcomeScreen(previewSettled: (), showsSocial: true), devices: all, inNavigation: false)
     }
 
+    /// Art-direction exploration B (contact sheet), kept beside the shipped archive caption for comparison.
+    func testWelcomeCaptionExplorationContactSheet() {
+        assertScreen(WelcomeScreen(previewSettled: (), showsSocial: true, captionStyle: .contactSheet),
+                     devices: [("pro", ScreenSnapshot.pro), ("small", ScreenSnapshot.small)], inNavigation: false)
+    }
+
     // MARK: Auth
 
     func testAuthSignUp() {

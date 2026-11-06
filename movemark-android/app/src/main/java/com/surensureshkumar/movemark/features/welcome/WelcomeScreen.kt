@@ -103,6 +103,7 @@ fun WelcomeScreen(
         ) {
             val horizontalPad = 18.dp
             val cardMaxWidth = minOf(maxWidth - horizontalPad * 2, 450.dp)
+            val compactHeight = maxHeight < 700.dp
 
             Column(
                 modifier = Modifier
@@ -124,6 +125,7 @@ fun WelcomeScreen(
                     tagsVisible = tagsVisible,
                     reduceMotion = reduceMotion,
                     modifier = Modifier.widthIn(max = cardMaxWidth),
+                    compact = compactHeight,
                 )
 
                 Column(
@@ -169,7 +171,7 @@ fun WelcomeScreen(
                             modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                         ) {
                             Text(
-                                "Continue with email",
+                                MoveMarkGrowthCopy.WELCOME_SECONDARY_CTA,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = MMColors.TextPrimary,
