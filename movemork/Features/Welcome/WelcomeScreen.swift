@@ -159,9 +159,8 @@ struct WelcomeScreen: View {
             primaryCopyBlock
                 .padding(.top, layout.brandToHeadlineGap)
 
-            WelcomeProofSlip(density: slipDensity(layout))
-                // Subordinate to the headline: narrower than the copy column, never full bleed.
-                .frame(maxWidth: 264, alignment: .leading)
+            // The example record is an archival caption set into the footage, not a card over it.
+            WelcomeEvidenceCaption(isCompact: layout.isCompactHeight || usesAccessibilityScrollLayout)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, layout.copyToSlipGap)
 
@@ -178,13 +177,6 @@ struct WelcomeScreen: View {
         // The poster composition is fixed through xxxLarge (as it always was); accessibility sizes
         // get the scrolling layout and real growth, to the same ceiling as the app's sheets.
         .dynamicTypeSize(usesAccessibilityScrollLayout ? ...DynamicTypeSize.accessibility2 : ...DynamicTypeSize.large)
-    }
-
-    /// The slip compresses before any type does: short screens drop the "Original files preserved"
-    /// foot; accessibility sizes also drop the date line.
-    private func slipDensity(_ layout: WelcomeZoneLayout) -> WelcomeProofSlip.Density {
-        if usesAccessibilityScrollLayout { return .minimal }
-        return layout.isCompactHeight ? .compact : .regular
     }
 
     private var welcomeBackdropAnimation: Animation? {

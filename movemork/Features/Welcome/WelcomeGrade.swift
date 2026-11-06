@@ -14,7 +14,9 @@ import SwiftUI
 struct WelcomeNeutralGrade: View {
     var body: some View {
         Color(white: 0.5)
-            .opacity(0.85)
+            // 0.6, not 0.85: at 0.85 the footage went flat grey and read as washed out; 0.6 still tames the
+            // teal cabinetry but keeps the room's warmth and depth.
+            .opacity(0.6)
             .blendMode(.saturation)
             .ignoresSafeArea()
             .allowsHitTesting(false)
