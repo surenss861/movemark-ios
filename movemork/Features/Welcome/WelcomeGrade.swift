@@ -84,11 +84,13 @@ struct WelcomeReadabilityVeil: View {
 }
 
 /// Opaque everywhere except `cutouts`, where it keeps `1 - strength` of the layer it masks: the grade and the
-/// veil ease inside a precise frame, so the live footage there reads clearer. One mask; no second decoder.
-/// Rects are in the full-bleed (safe-area-ignoring) space.
+/// veil ease inside the frame, so the live footage there reads clearer. One mask; no second decoder.
+/// The edge is feathered: colour blooms out of the room and falls away, so it reads as light on the scene rather
+/// than an image laid over it. Rects are in the full-bleed (safe-area-ignoring) space.
 struct WelcomeCutoutMask: View {
     var cutouts: [CGRect]
     var strength: CGFloat
+    private static let feather: CGFloat = 16
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -97,6 +99,7 @@ struct WelcomeCutoutMask: View {
                 Rectangle()
                     .fill(.black.opacity(strength))
                     .frame(width: r.width, height: r.height)
+                    .blur(radius: Self.feather)
                     .offset(x: r.minX, y: r.minY)
                     .blendMode(.destinationOut)
             }

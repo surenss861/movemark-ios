@@ -21,8 +21,6 @@ struct WelcomeScreen: View {
     /// Snapshot tests only: render the Reduce Motion presentation without the system setting.
     private var forcesReduceMotion = false
 
-    /// The moment between the copy and the actions (WelcomeHero). Exploration snapshots render all three.
-    private var heroStyle: WelcomeHeroStyle = .aperture
     /// 0 → 1 once, shortly after the page fades in; 1 immediately under Reduce Motion.
     @State private var heroReveal: CGFloat = 0
     /// The hero's frames, where the grade and veil ease so the live footage reads clearer.
@@ -186,7 +184,7 @@ struct WelcomeScreen: View {
                 .padding(.top, layout.brandToHeadlineGap)
 
             // The room itself becomes the evidence: no card, no sample record (WelcomeHero).
-            WelcomeHero(style: heroStyle, isCompact: layout.isCompactHeight || usesAccessibilityScrollLayout,
+            WelcomeHero(isCompact: layout.isCompactHeight || usesAccessibilityScrollLayout,
                         reveal: heroReveal, coordinateSpace: Self.space)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, layout.copyToSlipGap)
@@ -392,12 +390,11 @@ struct WelcomeScreen: View {
 extension WelcomeScreen {
     /// Snapshot tests only: the settled poster composition — what Reduce Motion shows — without the video
     /// layer or the entrance. In an extension so `WelcomeScreen()` stays the production init.
-    init(previewSettled: Void, reduceMotion: Bool = false, showsSocial: Bool = false, heroStyle: WelcomeHeroStyle = .aperture) {
+    init(previewSettled: Void, reduceMotion: Bool = false, showsSocial: Bool = false) {
         self.init()
         showsVideo = false
         forcesReduceMotion = reduceMotion
         socialOverride = showsSocial
-        self.heroStyle = heroStyle
         _entranceVisible = State(initialValue: true)
         _heroReveal = State(initialValue: 1)
     }

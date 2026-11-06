@@ -2,25 +2,15 @@
 //  WelcomeHero.swift
 //  movemork
 //
-//  @file Welcome-only: the moment between the copy and the actions. Not a card and not a sample record: the
-//        room itself becomes the evidence. Three studies were rendered on the real footage with identical text
-//        and action positions (`Style`); see the exploration goldens. The cut-outs ease the grade and veil
-//        inside a precise frame, so the live footage there reads clearer. There is no second video and no
+//  @file Welcome-only: the Proof Aperture, the moment between the copy and the actions. Not a card and not a
+//        sample record: the room itself becomes the evidence. The cut-out eases the grade and veil inside the
+//        frame, so the live footage there shows the room in true colour. There is no second video and no
 //        continuous effect: one brief reveal, then the composition is static (and simply static under Reduce
-//        Motion).
+//        Motion). First Frame and Documentary Margin were rendered and rejected.
 //  @domain welcome
 //
 
 import SwiftUI
-
-enum WelcomeHeroStyle: CaseIterable {
-    /// One framed region of the room reads clearer, with fine registration marks and one editorial line.
-    case aperture
-    /// A short documentary sequence: one large frame and two partial frames running off the edge.
-    case firstFrame
-    /// The photograph untouched; a fine marginal rule with scale ticks and one line of copy.
-    case margin
-}
 
 /// Full-screen rects reported by the hero to the screen, which eases its grade and veil inside them.
 struct WelcomeCutoutKey: PreferenceKey {
@@ -29,7 +19,6 @@ struct WelcomeCutoutKey: PreferenceKey {
 }
 
 struct WelcomeHero: View {
-    var style: WelcomeHeroStyle
     var isCompact: Bool
     /// 0 → 1 once on appear (immediately 1 under Reduce Motion).
     var reveal: CGFloat
@@ -40,15 +29,9 @@ struct WelcomeHero: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        Group {
-            switch style {
-            case .aperture: aperture
-            case .firstFrame: firstFrame
-            case .margin: margin
-            }
-        }
+        aperture
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Move-in: a moment worth documenting.")
+        .accessibilityLabel("Move-in: before anything changes.")
     }
 
     // MARK: - Aperture
@@ -85,7 +68,7 @@ struct WelcomeHero: View {
                 .mmFont(10.5, .semibold)
                 .tracking(1.4)
                 .foregroundStyle(.white.opacity(0.82))
-            Text("A moment worth documenting.")
+            Text("Before anything changes.")
                 .font(.system(size: lineSize, weight: .regular, design: .serif).italic())
                 .foregroundStyle(.white.opacity(0.94))
                 .fixedSize(horizontal: false, vertical: true)
@@ -101,67 +84,6 @@ struct WelcomeHero: View {
                 .stroke(.white.opacity(0.85), lineWidth: 1)
                 .opacity(reveal)
         }
-    }
-
-    // MARK: - First frame
-
-    private var firstFrame: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            GeometryReader { geo in
-                let w = geo.size.width
-                let big = w * 0.6
-                let small = w * 0.3
-                HStack(spacing: 8) {
-                    frame(index: "01", width: big)
-                    frame(index: "02", width: small)
-                    frame(index: "03", width: small)  // runs off the edge: the sequence continues
-                }
-            }
-            .frame(height: isCompact ? 88 : 112)
-            Text("Before you unpack. Frame by frame.")
-                .font(.system(size: lineSize, weight: .regular, design: .serif).italic())
-                .foregroundStyle(.white.opacity(0.9))
-                .opacity(reveal)
-        }
-    }
-
-    private func frame(index: String, width: CGFloat) -> some View {
-        ZStack(alignment: .topLeading) {
-            cutout(revealFromCentre: false)
-            RegistrationMarks(length: 8)
-                .stroke(.white.opacity(0.7), lineWidth: 1)
-            Text(index)
-                .mmFont(10, .semibold)
-                .tracking(1)
-                .foregroundStyle(.white.opacity(0.85))
-                .padding(6)
-        }
-        .frame(width: width)
-        .opacity(reveal)
-    }
-
-    // MARK: - Margin
-
-    private var margin: some View {
-        HStack(alignment: .bottom, spacing: 14) {
-            ScaleRule(ticks: isCompact ? 7 : 9)
-                .stroke(.white.opacity(0.5), lineWidth: 1)
-                .frame(width: 10)
-                .opacity(reveal)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("BEFORE YOU UNPACK.")
-                    .mmFont(10.5, .semibold)
-                    .tracking(1.4)
-                    .foregroundStyle(.white.opacity(0.8))
-                Text("Every room, on the record.")
-                    .font(.system(size: lineSize, weight: .regular, design: .serif).italic())
-                    .foregroundStyle(.white.opacity(0.92))
-            }
-            .shadow(color: .black.opacity(0.45), radius: 6, y: 1)
-            .opacity(reveal)
-        }
-        .frame(height: isCompact ? 84 : 112, alignment: .bottomLeading)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Shared
@@ -189,23 +111,6 @@ private struct RegistrationMarks: Shape {
             p.move(to: CGPoint(x: corner.x + l * dx, y: corner.y))
             p.addLine(to: corner)
             p.addLine(to: CGPoint(x: corner.x, y: corner.y + l * dy))
-        }
-        return p
-    }
-}
-
-/// A vertical hairline with evenly spaced scale ticks, every fourth one longer.
-private struct ScaleRule: Shape {
-    var ticks: Int
-    func path(in r: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: r.minX, y: r.minY))
-        p.addLine(to: CGPoint(x: r.minX, y: r.maxY))
-        let n = max(ticks, 2)
-        for i in 0..<n {
-            let y = r.minY + r.height * CGFloat(i) / CGFloat(n - 1)
-            p.move(to: CGPoint(x: r.minX, y: y))
-            p.addLine(to: CGPoint(x: r.minX + (i % 4 == 0 ? r.width : r.width * 0.5), y: y))
         }
         return p
     }
