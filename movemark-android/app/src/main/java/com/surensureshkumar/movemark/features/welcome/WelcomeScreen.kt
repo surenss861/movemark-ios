@@ -1,7 +1,10 @@
 package com.surensureshkumar.movemark.features.welcome
 
+import android.app.Activity
+import android.content.ContextWrapper
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -22,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,10 +36,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -43,6 +51,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import com.surensureshkumar.movemark.R
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMMotion
 import com.surensureshkumar.movemark.core.design.components.MMButton
@@ -62,6 +72,7 @@ fun WelcomeScreen(
     social: WelcomeSocialState? = null,
     onSocial: (SocialProvider) -> Unit = {},
 ) {
+    LightStatusBarIcons()
     val reduceMotion = MMMotion.rememberReduceMotion()
     var visible by remember { mutableStateOf(reduceMotion) }
     var revealed by remember { mutableStateOf(reduceMotion) }
@@ -114,12 +125,7 @@ fun WelcomeScreen(
                 ) {
                     Column {
                         Spacer(Modifier.height(if (compact) 8.dp else minHeight * 0.1f))
-                        Text(
-                            "MoveMark",
-                            fontSize = 21.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MMColors.TextPrimary.copy(alpha = 0.88f),
-                        )
+                        Wordmark()
                         // The same deliberate two-line break as iOS, on any width; read aloud as one sentence.
                         Text(
                             text = MoveMarkGrowthCopy.WELCOME_HEADLINE_BROKEN,
@@ -181,6 +187,47 @@ fun WelcomeScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * Welcome is always dark, but edge-to-edge picks status-bar icons from the system theme: on a light-mode phone they
+ * would be dark on dark. Light icons while Welcome is showing; the previous appearance comes back on leaving.
+ */
+@Composable
+private fun LightStatusBarIcons() {
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val window = generateSequence(view.context) { (it as? ContextWrapper)?.baseContext }
+            .filterIsInstance<Activity>().firstOrNull()?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        val previous = controller?.isAppearanceLightStatusBars
+        controller?.isAppearanceLightStatusBars = false
+        onDispose { if (previous != null) controller.isAppearanceLightStatusBars = previous }
+    }
+}
+
+/** iOS MMWordmark: the same mark at 0.74x the type size, 0.38x spacing, seated on the text baseline. */
+@Composable
+private fun Wordmark() {
+    val size = 21f
+    Row(Modifier.clearAndSetSemantics { contentDescription = "MoveMark" }) {
+        Image(
+            painter = painterResource(R.drawable.movemark_mark),
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .height((size * 0.74f).dp)
+                .alignBy { it.measuredHeight },
+        )
+        Spacer(Modifier.width((size * 0.38f).dp))
+        Text(
+            "MoveMark",
+            fontSize = size.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White.copy(alpha = 0.85f),
+            modifier = Modifier.alignByBaseline(),
+        )
     }
 }
 
