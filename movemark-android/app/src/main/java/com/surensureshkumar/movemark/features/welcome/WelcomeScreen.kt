@@ -1,22 +1,24 @@
 package com.surensureshkumar.movemark.features.welcome
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,173 +30,139 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.layout.offset
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.surensureshkumar.movemark.R
-import com.surensureshkumar.movemark.core.design.MMBackground
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMMotion
-import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
+import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
 import com.surensureshkumar.movemark.core.growth.MoveMarkGrowthCopy
+import com.surensureshkumar.movemark.features.auth.social.SocialProvider
+
+/*
+ * Welcome (iOS WelcomeScreen): brand -> headline and description -> the Proof Aperture -> actions docked at the foot.
+ * Everything scrolls when it doesn't fit (short phones, large font settings), so no action is ever out of reach.
+ */
 @Composable
 fun WelcomeScreen(
     onStartMoveIn: () -> Unit,
     onSignIn: () -> Unit,
-    /** Null hides the social block (Release, or no probe configured): the original layout, unchanged. */
+    /** Null hides the social block (Release, or no probe configured). */
     social: WelcomeSocialState? = null,
-    onSocial: (com.surensureshkumar.movemark.features.auth.social.SocialProvider) -> Unit = {},
+    onSocial: (SocialProvider) -> Unit = {},
 ) {
     val reduceMotion = MMMotion.rememberReduceMotion()
-    var cardVisible by remember { mutableStateOf(reduceMotion) }
-    var tagsVisible by remember { mutableStateOf(reduceMotion) }
-    var copyVisible by remember { mutableStateOf(reduceMotion) }
-    var ctaVisible by remember { mutableStateOf(reduceMotion) }
-
+    var visible by remember { mutableStateOf(reduceMotion) }
+    var revealed by remember { mutableStateOf(reduceMotion) }
     LaunchedEffect(reduceMotion) {
-        if (reduceMotion) {
-            cardVisible = true
-            tagsVisible = true
-            copyVisible = true
-            ctaVisible = true
-            return@LaunchedEffect
-        }
-        cardVisible = true
-        kotlinx.coroutines.delay(140)
-        tagsVisible = true
-        kotlinx.coroutines.delay(80)
-        copyVisible = true
-        kotlinx.coroutines.delay(100)
-        ctaVisible = true
+        visible = true
+        if (!reduceMotion) kotlinx.coroutines.delay(450)
+        revealed = true
     }
-
-    val copyAlpha by animateFloatAsState(
-        targetValue = if (copyVisible) 1f else 0f,
-        animationSpec = MMMotion.welcomeEnterSpec(reduceMotion, durationMillis = 440),
-        label = "copyAlpha",
+    val pageAlpha by animateFloatAsState(
+        if (visible) 1f else 0f, MMMotion.welcomeEnterSpec(reduceMotion, durationMillis = 400), label = "welcomeFade",
     )
-    val copyOffsetY by animateFloatAsState(
-        targetValue = if (copyVisible) 0f else 8f,
-        animationSpec = MMMotion.welcomeEnterSpec(reduceMotion, durationMillis = 440),
-        label = "copyOffset",
-    )
-    val ctaAlpha by animateFloatAsState(
-        targetValue = if (ctaVisible) 1f else 0f,
-        animationSpec = MMMotion.welcomeEnterSpec(reduceMotion, durationMillis = 420),
-        label = "ctaAlpha",
-    )
-    val ctaOffsetY by animateFloatAsState(
-        targetValue = if (ctaVisible) 0f else 10f,
-        animationSpec = MMMotion.welcomeEnterSpec(reduceMotion, durationMillis = 420),
-        label = "ctaOffset",
+    val reveal by animateFloatAsState(
+        if (revealed) 1f else 0f, if (reduceMotion) tween(0) else tween(800), label = "apertureReveal",
     )
 
-    MMBackground {
+    var rootOrigin by remember { mutableStateOf(Offset.Zero) }
+    var aperture by remember { mutableStateOf<Rect?>(null) }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { rootOrigin = it.positionInRoot() },
+    ) {
+        WelcomeBackdrop(aperture = aperture?.translate(-rootOrigin), reveal = reveal)
+
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding(),
         ) {
-            val horizontalPad = 18.dp
-            val cardMaxWidth = minOf(maxWidth - horizontalPad * 2, 450.dp)
-            val compactHeight = maxHeight < 700.dp
+            val compact = maxHeight < 700.dp
+            // Large font settings: the caption takes the full width above the frame, as iOS does at AX sizes.
+            val stacked = LocalDensity.current.fontScale >= 1.3f
+            val minHeight = maxHeight
 
             Column(
-                modifier = Modifier
+                Modifier
                     .fillMaxSize()
-                    // With the social block the dock is taller than a short phone; it scrolls rather than clips.
-                    // Without it (Release), the original fixed composition is unchanged.
-                    .then(if (social != null) Modifier.verticalScroll(rememberScrollState()) else Modifier)
-                    .padding(horizontal = horizontalPad)
-                    .padding(top = 14.dp, bottom = 24.dp),
+                    .verticalScroll(rememberScrollState())
+                    .alpha(pageAlpha),
             ) {
-                BrandRow(
-                    visible = cardVisible,
-                    reduceMotion = reduceMotion,
-                    modifier = Modifier.padding(bottom = 14.dp),
-                )
-
-                WelcomeDepositCaseFile(
-                    cardVisible = cardVisible,
-                    tagsVisible = tagsVisible,
-                    reduceMotion = reduceMotion,
-                    modifier = Modifier.widthIn(max = cardMaxWidth),
-                    compact = compactHeight,
-                )
-
                 Column(
                     modifier = Modifier
-                        .padding(top = 22.dp)
-                        .alpha(copyAlpha)
-                        .offset(y = copyOffsetY.dp),
-                ) {
-                    Text(
-                        text = MoveMarkGrowthCopy.WELCOME_HEADLINE,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MMColors.TextPrimary,
-                        lineHeight = 36.sp,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = MoveMarkGrowthCopy.WELCOME_BODY,
-                        style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
-                        color = MMColors.TextSecondary,
-                    )
-                }
-
-                if (social == null) Spacer(Modifier.weight(1f, fill = false))
-                Spacer(Modifier.height(if (social == null) 8.dp else 28.dp))
-
-                Column(
-                    modifier = Modifier
+                        .heightIn(min = minHeight)
                         .fillMaxWidth()
-                        .padding(horizontal = 18.dp)
-                        .alpha(ctaAlpha)
-                        .offset(y = ctaOffsetY.dp),
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 16.dp),
+                    verticalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    MMButton(text = MoveMarkGrowthCopy.WELCOME_CTA, onClick = onStartMoveIn)
-                    if (social != null) {
-                        WelcomeSocialActions(
-                            state = social,
-                            onSelect = onSocial,
-                            modifier = Modifier.padding(top = 14.dp),
+                    Column {
+                        Spacer(Modifier.height(if (compact) 8.dp else minHeight * 0.1f))
+                        Text(
+                            "MoveMark",
+                            fontSize = 21.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MMColors.TextPrimary.copy(alpha = 0.88f),
                         )
-                        TextButton(
-                            onClick = onSignIn,
-                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                        ) {
-                            Text(
-                                MoveMarkGrowthCopy.WELCOME_SECONDARY_CTA,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MMColors.TextPrimary,
-                            )
-                        }
-                    } else Row(
+                        Text(
+                            text = MoveMarkGrowthCopy.WELCOME_HEADLINE,
+                            fontSize = 34.sp,
+                            lineHeight = 38.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MMColors.TextPrimary,
+                            modifier = Modifier.padding(top = 16.dp),
+                        )
+                        Text(
+                            text = MoveMarkGrowthCopy.WELCOME_BODY,
+                            fontSize = 15.5.sp,
+                            lineHeight = 21.sp,
+                            color = MMColors.TextPrimary.copy(alpha = 0.74f),
+                            modifier = Modifier.padding(top = 10.dp),
+                        )
+                        Hero(
+                            compact = compact,
+                            stacked = stacked,
+                            reveal = reveal,
+                            onAperture = { aperture = it },
+                            modifier = Modifier.padding(top = if (compact) 14.dp else 20.dp),
+                        )
+                    }
+
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 22.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+                            .padding(top = 18.dp)
+                            .padding(horizontal = 10.dp),
                     ) {
-                        Text(
-                            "Already have an account?",
-                            fontSize = 13.sp,
-                            color = MMColors.TextSecondary.copy(alpha = 0.88f),
-                        )
-                        TextButton(onClick = onSignIn) {
+                        MMButton(text = MoveMarkGrowthCopy.WELCOME_CTA, onClick = onStartMoveIn, style = MMButtonStyle.Action)
+                        if (social != null) {
+                            WelcomeSocialActions(
+                                state = social,
+                                onSelect = onSocial,
+                                modifier = Modifier.padding(top = 14.dp),
+                            )
+                        }
+                        TextButton(onClick = onSignIn, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
                             Text(
-                                "Sign in",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MMColors.Primary.copy(alpha = 0.95f),
+                                MoveMarkGrowthCopy.WELCOME_SECONDARY_CTA,
+                                fontSize = 15.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MMColors.TextPrimary,
                             )
                         }
                     }
@@ -205,28 +173,28 @@ fun WelcomeScreen(
 }
 
 @Composable
-private fun BrandRow(
-    visible: Boolean,
-    reduceMotion: Boolean,
+private fun Hero(
+    compact: Boolean,
+    stacked: Boolean,
+    reveal: Float,
+    onAperture: (Rect) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val alpha by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = MMMotion.welcomeEnterSpec(reduceMotion, durationMillis = 400),
-        label = "brandAlpha",
-    )
-    // Text-only wordmark, as on iOS's welcome: the launcher icon carries the mark; here it would read as a lockup
-    // competing with the photograph.
-    Row(
-        modifier = modifier.alpha(alpha),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            "MoveMark",
-            fontSize = 17.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = MMColors.TextPrimary.copy(alpha = 0.85f),
-            modifier = Modifier.padding(vertical = 10.dp),
-        )
+    val frameHeight = if (compact) 92.dp else 128.dp
+    val semantics = Modifier
+        .testTag("welcome.aperture")
+        .clearAndSetSemantics { contentDescription = "Move-in: before anything changes." }
+    val frame = Modifier.onGloballyPositioned { onAperture(it.boundsInRoot()) }
+    if (stacked) {
+        Column(modifier.then(semantics).fillMaxWidth()) {
+            ApertureCaption(Modifier.alpha(reveal))
+            ApertureMarks(frame.padding(top = 12.dp).fillMaxWidth().height(120.dp), alpha = reveal)
+        }
+    } else {
+        Row(modifier.then(semantics).fillMaxWidth().height(frameHeight), verticalAlignment = Alignment.Bottom) {
+            ApertureCaption(Modifier.weight(0.46f).alpha(reveal))
+            Spacer(Modifier.width(16.dp))
+            ApertureMarks(frame.weight(0.54f).fillMaxHeight(), alpha = reveal)
+        }
     }
 }

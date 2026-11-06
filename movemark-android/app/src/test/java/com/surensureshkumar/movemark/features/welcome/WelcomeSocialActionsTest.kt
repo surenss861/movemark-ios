@@ -20,13 +20,11 @@ class WelcomeSocialActionsTest {
     @get:Rule val compose = createComposeRule()
 
     @Test
-    fun withoutSocialStateWelcomeIsUnchanged() {
+    fun withoutSocialStateTheProviderButtonsAreAbsent() {
         compose.setContent { WelcomeScreen(onStartMoveIn = {}, onSignIn = {}) }
-        compose.onNodeWithText("Already have an account?").assertExists()
-        compose.onNodeWithText("Sign in").assertExists()
+        compose.onNodeWithText("I already have a vault").assertExists()
         compose.onNodeWithText("Continue with Google").assertDoesNotExist()
         compose.onNodeWithText("Continue with Apple").assertDoesNotExist()
-        compose.onNodeWithText("I already have a vault").assertDoesNotExist()
     }
 
     @Test
@@ -54,12 +52,12 @@ class WelcomeSocialActionsTest {
     }
 
     @Test
-    fun exampleRecordIsAnIllustrativeCaptionNotAClaimCard() {
+    fun heroIsTheProofApertureWithOneSpokenLine() {
         compose.setContent { WelcomeScreen(onStartMoveIn = {}, onSignIn = {}) }
-        compose.onNodeWithContentDescription("Example record: Kitchen, April 14, 12 photos. An illustration, not your evidence.")
-            .assertExists()
+        compose.onNodeWithContentDescription("Move-in: before anything changes.").assertExists()
+        compose.onNodeWithText("Prove what was already there.").assertExists()
         compose.onNodeWithText("DAMAGE CLAIM").assertDoesNotExist()
-        compose.onNodeWithText("Already documented").assertDoesNotExist()
+        compose.onNodeWithText("Kitchen").assertDoesNotExist()
     }
 
     @Test

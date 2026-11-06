@@ -5,7 +5,7 @@ object MoveMarkGrowthCopy {
 
     const val WELCOME_HEADLINE = "Prove what was already there."
     const val WELCOME_BODY =
-        "Document move-in condition before you unpack. Turn photos into a shareable record when you need proof."
+        "Photograph your rental before you unpack. Keep every photo, date and record together."
     const val WELCOME_PAIN_LINE =
         "Old damage can cost you your deposit — unless you have proof."
     const val WELCOME_CTA = "Start move-in proof"
