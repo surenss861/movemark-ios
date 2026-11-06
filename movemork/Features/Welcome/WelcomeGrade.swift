@@ -12,6 +12,10 @@ import SwiftUI
 /// takes most of the chroma out without touching luminance, so the frame stays as dark and as deep as
 /// it was — only calmer. No hue is added.
 struct WelcomeNeutralGrade: View {
+    /// Full-screen rects (see `WelcomeCutoutMask`) where the grade eases, so the footage there reads clearer.
+    var cutouts: [CGRect] = []
+    var cutoutStrength: CGFloat = 0
+
     var body: some View {
         Color(white: 0.5)
             // 0.6, not 0.85: at 0.85 the footage went flat grey and read as washed out; 0.6 still tames the
@@ -19,6 +23,7 @@ struct WelcomeNeutralGrade: View {
             .opacity(0.6)
             .blendMode(.saturation)
             .ignoresSafeArea()
+            .mask(WelcomeCutoutMask(cutouts: cutouts, strength: cutoutStrength).ignoresSafeArea())
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
@@ -33,6 +38,9 @@ struct WelcomeNeutralGrade: View {
 ///   and the type sits *in* the photograph rather than on top of it;
 /// - a leading-edge falloff so the open doorway and cabinetry on the right keep their light.
 struct WelcomeReadabilityVeil: View {
+    var cutouts: [CGRect] = []
+    var cutoutStrength: CGFloat = 0
+
     var body: some View {
         ZStack {
             LinearGradient(
@@ -69,7 +77,30 @@ struct WelcomeReadabilityVeil: View {
             )
         }
         .ignoresSafeArea()
+        .mask(WelcomeCutoutMask(cutouts: cutouts, strength: cutoutStrength).ignoresSafeArea())
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+/// Opaque everywhere except `cutouts`, where it keeps `1 - strength` of the layer it masks: the grade and the
+/// veil ease inside a precise frame, so the live footage there reads clearer. One mask; no second decoder.
+/// Rects are in the full-bleed (safe-area-ignoring) space.
+struct WelcomeCutoutMask: View {
+    var cutouts: [CGRect]
+    var strength: CGFloat
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Rectangle().fill(.white)
+            ForEach(Array(cutouts.enumerated()), id: \.offset) { _, r in
+                Rectangle()
+                    .fill(.black.opacity(strength))
+                    .frame(width: r.width, height: r.height)
+                    .offset(x: r.minX, y: r.minY)
+                    .blendMode(.destinationOut)
+            }
+        }
+        .compositingGroup()
     }
 }

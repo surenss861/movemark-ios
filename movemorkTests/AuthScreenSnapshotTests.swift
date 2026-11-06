@@ -31,6 +31,27 @@ final class AuthScreenSnapshotTests: XCTestCase {
     }
 
     /// The system Reduce Motion setting: no video, no entrance movement — the composition must not change.
+    /// With the Apple / Google block (Debug + probe builds until the sign-in security gates pass).
+    func testWelcomeWithSocial() {
+        assertScreen(WelcomeScreen(previewSettled: (), showsSocial: true), devices: all, inNavigation: false)
+    }
+
+    /// The three hero studies, rendered with identical text and action positions for comparison.
+    func testWelcomeStudyAperture() {
+        assertScreen(WelcomeScreen(previewSettled: (), showsSocial: true, heroStyle: .aperture),
+                     devices: [("pro", ScreenSnapshot.pro), ("small", ScreenSnapshot.small)], inNavigation: false)
+    }
+
+    func testWelcomeStudyFirstFrame() {
+        assertScreen(WelcomeScreen(previewSettled: (), showsSocial: true, heroStyle: .firstFrame),
+                     devices: [("pro", ScreenSnapshot.pro), ("small", ScreenSnapshot.small)], inNavigation: false)
+    }
+
+    func testWelcomeStudyMargin() {
+        assertScreen(WelcomeScreen(previewSettled: (), showsSocial: true, heroStyle: .margin),
+                     devices: [("pro", ScreenSnapshot.pro), ("small", ScreenSnapshot.small)], inNavigation: false)
+    }
+
     func testWelcomeReduceMotion() {
         assertScreen(WelcomeScreen(previewSettled: (), reduceMotion: true), devices: [("pro", ScreenSnapshot.pro)],
                      inNavigation: false)

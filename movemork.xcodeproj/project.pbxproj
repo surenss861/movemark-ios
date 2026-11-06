@@ -17,6 +17,7 @@
 		2152E0FE2F62213C00EDA905 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 2152E0FD2F62213C00EDA905 /* Supabase */; };
 		2159151B2F6DD38800B50C14 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 2152E1072F62240000EDA905 /* RevenueCat */; };
 		21ED60012FF6700000FC0D58 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 21ED60022FF6700000FC0D58 /* Sentry */; };
+		21AD50010000000000000001 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 21AD50010000000000000002 /* GoogleSignIn */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -89,6 +90,7 @@
 				2152E0F42F62213C00EDA905 /* Auth in Frameworks */,
 				2152E0FC2F62213C00EDA905 /* Storage in Frameworks */,
 				2152E0FA2F62213C00EDA905 /* Realtime in Frameworks */,
+				21AD50010000000000000001 /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -162,6 +164,7 @@
 				2152E1052F62230000EDA905 /* NukeUI */,
 				2152E1072F62240000EDA905 /* RevenueCat */,
 				21ED60022FF6700000FC0D58 /* Sentry */,
+				21AD50010000000000000002 /* GoogleSignIn */,
 			);
 			productName = movemork;
 			productReference = 2152E07D2F621A5100EDA905 /* MoveMark.app */;
@@ -250,6 +253,7 @@
 				2152E1062F62240000EDA905 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
 				21ED60002FF6700000FC0D58 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 				5A11A0010000000000000003 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */,
+				21AD50010000000000000003 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2152E07E2F621A5100EDA905 /* Products */;
@@ -715,6 +719,14 @@
 				minimumVersion = 1.17.0;
 			};
 		};
+		21AD50010000000000000003 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = exactVersion;
+				version = 10.1.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -767,6 +779,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 5A11A0010000000000000003 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */;
 			productName = SnapshotTesting;
+		};
+		21AD50010000000000000002 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 21AD50010000000000000003 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

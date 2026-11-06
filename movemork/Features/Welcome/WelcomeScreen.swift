@@ -21,6 +21,21 @@ struct WelcomeScreen: View {
     /// Snapshot tests only: render the Reduce Motion presentation without the system setting.
     private var forcesReduceMotion = false
 
+    /// The moment between the copy and the actions (WelcomeHero). Exploration snapshots render all three.
+    private var heroStyle: WelcomeHeroStyle = .aperture
+    /// 0 → 1 once, shortly after the page fades in; 1 immediately under Reduce Motion.
+    @State private var heroReveal: CGFloat = 0
+    /// The hero's frames, where the grade and veil ease so the live footage reads clearer.
+    @State private var heroCutouts: [CGRect] = []
+    private static let space = "welcome"
+
+    // Social sign-in (Debug + probe only until the security gates pass; see SocialSignIn.swift).
+    private var socialOverride: Bool? = nil
+    @State private var socialBusy: SocialProvider?
+    @State private var socialError: String?
+    @State private var probeResult: SocialProbeResult?
+    private var showsSocial: Bool { socialOverride ?? SocialSignInConfig.isEnabled }
+
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.scenePhase) private var scenePhase
@@ -81,9 +96,11 @@ struct WelcomeScreen: View {
                         .accessibilityHidden(true)
                 }
 
-                // video -> neutral grade -> readability veil -> brand / copy / proof artifact / CTA
-                WelcomeNeutralGrade()
-                WelcomeReadabilityVeil()
+                // video -> neutral grade -> readability veil -> brand / copy / hero / actions. The hero's frames are
+                // reported in this ZStack's (safe-area) space; the grade and veil are full-bleed, hence the shift.
+                let cutouts = heroCutouts.map { $0.offsetBy(dx: geo.safeAreaInsets.leading, dy: geo.safeAreaInsets.top) }
+                WelcomeNeutralGrade(cutouts: cutouts, cutoutStrength: 0.75)
+                WelcomeReadabilityVeil(cutouts: cutouts, cutoutStrength: 0.7)
 
                 welcomeContent(layout: layout, dockSideInset: dockSideInset, safeBottom: geo.safeAreaInsets.bottom)
                     .opacity(entranceVisible ? 1 : 0)
@@ -105,6 +122,15 @@ struct WelcomeScreen: View {
                     .transition(authSurfaceTransition)
                     .zIndex(10)
                 }
+            }
+            .coordinateSpace(name: Self.space)
+            .onPreferenceChange(WelcomeCutoutKey.self) { heroCutouts = $0 }
+        }
+        .alert("Probe sign-in", isPresented: Binding(get: { probeResult != nil }, set: { if !$0 { probeResult = nil } })) {
+            Button("OK", role: .cancel) { probeResult = nil }
+        } message: {
+            if let probeResult {
+                Text("\(probeResult.provider.buttonTitle)\nNeon user: \(probeResult.userId.uuidString.lowercased())\nEmail: \(probeResult.email)\nSigned out of the probe.")
             }
         }
         .onAppear {
@@ -159,8 +185,9 @@ struct WelcomeScreen: View {
             primaryCopyBlock
                 .padding(.top, layout.brandToHeadlineGap)
 
-            // The example record is an archival caption set into the footage, not a card over it.
-            WelcomeEvidenceCaption(isCompact: layout.isCompactHeight || usesAccessibilityScrollLayout)
+            // The room itself becomes the evidence: no card, no sample record (WelcomeHero).
+            WelcomeHero(style: heroStyle, isCompact: layout.isCompactHeight || usesAccessibilityScrollLayout,
+                        reveal: heroReveal, coordinateSpace: Self.space)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, layout.copyToSlipGap)
 
@@ -170,7 +197,7 @@ struct WelcomeScreen: View {
                 Color.clear.frame(height: layout.slipToDockGap)
             }
 
-            bottomLaunchDock
+            bottomLaunchDock(isCompact: layout.isCompactHeight && !usesAccessibilityScrollLayout)
                 .padding(.horizontal, dockSideInset)
         }
         .padding(.horizontal, contentPadding)
@@ -273,7 +300,7 @@ struct WelcomeScreen: View {
     // MARK: - Bottom launch dock
 
     /// The screen's one primary action (lime, as everywhere in the app) and a quiet way to sign in.
-    private var bottomLaunchDock: some View {
+    private func bottomLaunchDock(isCompact: Bool) -> some View {
         VStack(spacing: 0) {
             MMPrimaryButton(title: MoveMarkGrowthCopy.welcomeCTA) {
                 MMHaptics.light()
@@ -282,15 +309,26 @@ struct WelcomeScreen: View {
             }
             .accessibilityIdentifier("welcome.primaryCTA")
 
+            if showsSocial {
+                WelcomeSocialActions(busyProvider: socialBusy) { startSocialSignIn($0) }
+                    .padding(.top, 14)
+                if let socialError {
+                    MMNotice(message: socialError).padding(.top, 8)
+                }
+            }
+
             signInButton
                 .padding(.top, 4)
 
-            Text(MoveMarkGrowthCopy.welcomeTrustLine)
-                .mmFont(12.5)
-                .foregroundStyle(.white.opacity(0.5))
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 2)
+            // Short screens with the social block need this line's height; the default layout keeps it.
+            if !(showsSocial && isCompact) {
+                Text(MoveMarkGrowthCopy.welcomeTrustLine)
+                    .mmFont(12.5)
+                    .foregroundStyle(.white.opacity(0.5))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 2)
+            }
         }
     }
 
@@ -311,15 +349,42 @@ struct WelcomeScreen: View {
         .accessibilityIdentifier("welcome.signIn")
     }
 
-    /// One quiet fade of the whole page, once. Reduce Motion: the page is simply there.
+    /// One quiet fade of the whole page, once, then the hero's single reveal. Reduce Motion: both are simply there.
     private func playEntrance() {
         guard !entranceVisible else { return }
         if reduceMotion {
             entranceVisible = true
+            heroReveal = 1
             return
         }
         withAnimation(.easeOut(duration: 0.4)) {
             entranceVisible = true
+        }
+        withAnimation(.easeInOut(duration: 0.8).delay(0.45)) {
+            heroReveal = 1
+        }
+    }
+
+    /// Probe only: signs in to the isolated probe project, shows the identity, signs out of the probe.
+    /// Never touches the app session. A cancelled sheet is silent.
+    private func startSocialSignIn(_ provider: SocialProvider) {
+        guard socialBusy == nil, let probeURL = SocialSignInConfig.probeAuthURL else { return }
+        MMHaptics.light()
+        socialError = nil
+        socialBusy = provider
+        let runner = SocialProbeRunner()
+        Task { @MainActor in
+            defer { socialBusy = nil }
+            do {
+                probeResult = try await runner.run(provider, probeURL: probeURL)
+            } catch SocialSignInError.cancelled {
+                // Closed the sheet; nothing to say.
+            } catch NeonAuthError.rejected(let code, let message) {
+                let shown = NeonAuthError.rejected(code: code, message: message).localizedDescription
+                socialError = "\(shown) [\(code ?? "no code")]"
+            } catch {
+                socialError = error.localizedDescription
+            }
         }
     }
 }
@@ -327,11 +392,14 @@ struct WelcomeScreen: View {
 extension WelcomeScreen {
     /// Snapshot tests only: the settled poster composition — what Reduce Motion shows — without the video
     /// layer or the entrance. In an extension so `WelcomeScreen()` stays the production init.
-    init(previewSettled: Void, reduceMotion: Bool = false) {
+    init(previewSettled: Void, reduceMotion: Bool = false, showsSocial: Bool = false, heroStyle: WelcomeHeroStyle = .aperture) {
         self.init()
         showsVideo = false
         forcesReduceMotion = reduceMotion
+        socialOverride = showsSocial
+        self.heroStyle = heroStyle
         _entranceVisible = State(initialValue: true)
+        _heroReveal = State(initialValue: 1)
     }
 }
 
