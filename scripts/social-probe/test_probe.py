@@ -64,9 +64,19 @@ def test_no_evidence_is_blocked_not_passed():
 
 # ---- T5 takeover gate ----
 
-def test_takeover_fails_when_social_sign_in_reaches_the_unverified_account():
+def test_reaching_the_same_user_alone_is_not_a_verdict():
     v = probe.evaluate({"seeded": seeded(), "records": [rec("T5", user=U0)]})
-    assert status(v, "T5") == "FAIL"
+    assert status(v, "T5") == "BLOCKED"
+
+
+def test_takeover_fails_when_the_original_password_still_signs_in():
+    records = [rec("T5", user=U0), rec("T5P", outcome="password_ok", user=U0)]
+    assert status(probe.evaluate({"seeded": seeded(), "records": records}), "T5") == "FAIL"
+
+
+def test_linked_account_passes_only_if_the_original_password_stopped_working():
+    records = [rec("T5", user=U0), rec("T5P", outcome="password_rejected", user=None)]
+    assert status(probe.evaluate({"seeded": seeded(), "records": records}), "T5") == "PASS"
 
 
 def test_takeover_passes_on_a_recognised_refusal():
@@ -145,4 +155,15 @@ def test_seed_record_makes_the_takeover_gate_evaluable_without_creating_anything
     assert EMAIL not in results.read_text()
     assert probe.main(["--results", str(results), "record", "--case", "T5", "--platform", "ios", "--provider", "google",
                        "--outcome", "ok", "--user-id", U0, "--email", EMAIL]) == 0
+    assert status(probe.evaluate(probe.load_results(results)), "T5") == "BLOCKED"
+    assert probe.main(["--results", str(results), "record", "--case", "T5P", "--platform", "ios", "--provider", "google",
+                       "--outcome", "password_ok", "--user-id", U0, "--email", EMAIL]) == 0
     assert status(probe.evaluate(probe.load_results(results)), "T5") == "FAIL"
+
+
+def test_cleanup_must_cover_every_seeded_account():
+    assert status(probe.evaluate({"seeded": seeded(), "records": []}), "T9") == "BLOCKED"
+    assert status(probe.evaluate({"seeded": seeded(), "records": [rec("T9", outcome="still_exists", user=None)]}), "T9") == "FAIL"
+    assert status(probe.evaluate({"seeded": seeded(), "records": [rec("T9", outcome="deleted", user=None)]}), "T9") == "PASS"
+    other = rec("T9", outcome="deleted", user=None, email="another@example.com")
+    assert status(probe.evaluate({"seeded": seeded(), "records": [other]}), "T9") == "BLOCKED"

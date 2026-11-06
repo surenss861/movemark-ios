@@ -82,10 +82,11 @@ Run every case on both platforms where it applies. After each run, record what t
 | **T2** returning | The same identity again | `--case T2 … --user-id <id>` (must equal T1's) |
 | **T3** Hide My Email | Apple → "Hide My Email", twice | `--case T3 --provider apple … --email <relay address>` |
 | **T4** cancel | Open the sheet, then close it | `--case T4 --outcome cancelled` (no user id) |
-| **T5** takeover (unverified) | ① `seed-unverified --email E` with an address you control and do **not** verify. ② Sign in with Google/Apple whose account email is E. | `--case T5 … --outcome ok --user-id <id> --email E`, or `--outcome rejected:<CODE> --email E` |
+| **T5** takeover (unverified) | ① Create an unverified email/password account with address E (a disposable identity you control) and note its user id. ② Sign out. ③ Sign in with Google/Apple whose account email is E. ④ If that reached the same user id, sign out and **try the original password**. | ③ `--case T5 … --outcome ok --user-id <id> --email E`, or `--outcome rejected:<CODE> --email E`. ④ `--case T5P … --outcome password_ok\|password_rejected --email E` |
 | **T6** implicit link (verified) | As T5, but verify E first (probe email delivery permitting), seeded with `--kind verified` | `--case T6 …` |
 | **T7** cross-platform | The same Google identity on iOS, then on Android (Apple on Android once its browser flow exists) | `--case T7` once per platform |
-| **T8** sign-out | For each successful run, confirm the dialog said "Signed out of the probe" | `--case T8 --outcome signed_out` |
+| **T8** sign-out | For each successful run, sign out and confirm the app returns to Welcome | `--case T8 --outcome signed_out` |
+| **T9** cleanup | Delete every disposable account, then confirm: signing in with it must fail | `--case T9 --outcome deleted\|still_exists --email E` |
 
 **Seeding** (`seed-unverified`) is the only step that creates an account. The owner runs it, against the probe only.
 It asks for a password without echoing it and stores nothing but the user id and the email digest.
@@ -95,11 +96,14 @@ python3 scripts/social-probe/probe.py report   # exit 0 all pass · 1 any FAIL �
 ```
 
 **Interpretation:**
-- **T5 or T6 FAIL:** the social identity reached the seeded account's user id, or was refused with an unrecognised
-  code. Stop. Social sign-in does not ship unless Neon offers a control that turns the result into PASS on a re-run.
-- **T5 or T6 PASS:** the identity was kept as a separate user, or refused with a recognised code (ACCOUNT_NOT_LINKED,
-  LINKING_NOT_ALLOWED, …). Explicit linking, while signed in and with the user's approval, is then a separate
-  feature to design and test.
+- **T5 FAIL:** the social sign-in linked to the seeded account and the original password still signs in, so whoever
+  registered the email keeps access to the real owner's vault; or it failed with an unrecognised code. Stop. Social
+  sign-in does not ship unless Neon offers a control that turns the result into PASS on a re-run.
+- **T5 BLOCKED after a link:** the same user id alone is not a verdict. Test the original password (T5P).
+- **T5 PASS:** kept as a separate user, refused with a recognised code (ACCOUNT_NOT_LINKED, LINKING_NOT_ALLOWED, …), or
+  linked with the original password no longer working.
+- **T6 FAIL:** a verified account was linked implicitly. Not a takeover, since one person owns both identities, but it
+  breaks the rule that linking needs the user's approval, so it stays a release decision.
 - **T7 FAIL:** iOS and Android disagree on the user for the same identity. Investigate before any further work.
 
 ## 4. Native-token audience (decides iOS Apple)

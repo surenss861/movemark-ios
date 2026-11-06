@@ -100,12 +100,18 @@ CASES = {
     "T2": "Returning sign-in resolves to the same Neon user",
     "T3": "Apple Hide My Email: relay address accepted and stable on return",
     "T4": "Cancelling the provider sheet creates no session and no user",
-    "T5": "TAKEOVER: social sign-in with the email of an UNVERIFIED email/password account must not reach that account",
+    "T5": "TAKEOVER: after the real email owner signs in with Google/Apple, whoever registered that email unverified "
+          "must not keep access with the original password",
     "T6": "No implicit linking: social sign-in with the email of a VERIFIED email/password account is refused or "
           "kept separate unless the user links explicitly while signed in",
     "T7": "Cross-platform: the same provider identity on iOS and Android resolves to the same Neon user",
-    "T8": "Probe sign-out: the probe session is revoked after each run (app shows 'Signed out of the probe')",
+    "T8": "Sign-out: the session ends and the app returns to Welcome (probe: 'Signed out of the probe')",
+    "T9": "Cleanup: every disposable account is confirmed deleted (sign-in with it fails afterwards)",
 }
+
+# Evidence for T5, not a verdict of its own: after a social sign-in reached the seeded user, does the ORIGINAL password
+# still sign in? Outcome password_ok (with the user id it reached) or password_rejected.
+EVIDENCE_CASES = {"T5P"}
 
 
 def evaluate(data: dict) -> list[Verdict]:
@@ -153,33 +159,62 @@ def evaluate(data: dict) -> list[Verdict]:
         out.append(Verdict("T4", CASES["T4"], "FAIL" if bad else "PASS",
                            "a cancelled run produced a user" if bad else f"{len(t4)} cancellation(s), no user"))
 
-    # T5 / T6: the security gates.
-    for case, kind in (("T5", "unverified"), ("T6", "verified")):
-        runs = of(case)
-        seeds = {d: s for d, s in seeded.items() if s.get("kind") == kind}
-        if not seeds or not runs:
-            out.append(Verdict(case, CASES[case], "BLOCKED",
-                               f"needs a seeded {kind} email/password account and a social sign-in with that email"))
-            continue
-        breaches, checked = [], 0
+    # T5: reaching the same user id is not itself a takeover. The breach is the unverified registrant KEEPING access:
+    # the original password still working after the real owner has signed in through the provider.
+    seeds = {d: x for d, x in seeded.items() if x.get("kind") == "unverified"}
+    runs = [r for r in of("T5") if r.get("email_sha256") in seeds]
+    if not seeds or not runs:
+        out.append(Verdict("T5", CASES["T5"], "BLOCKED",
+                           "needs a seeded unverified email/password account and a social sign-in with that email"))
+    else:
+        checks = {r.get("email_sha256"): r for r in of("T5P")}
+        breached, pending, unexplained, mitigated, separate = [], [], [], [], []
         for r in runs:
-            seed = seeds.get(r.get("email_sha256", ""))
-            if not seed:
-                continue
-            checked += 1
-            if r["outcome"] == "ok" and r.get("user_id") == seed["user_id"]:
-                breaches.append(r)
-            elif r["outcome"].startswith("rejected:") and r["outcome"].split(":", 1)[1] not in REFUSAL_CODES:
-                breaches.append(r)  # an unexplained refusal is not evidence of safety
-        if checked == 0:
-            out.append(Verdict(case, CASES[case], "BLOCKED", "no social sign-in matched a seeded email"))
-        elif breaches:
-            out.append(Verdict(case, CASES[case], "FAIL",
-                               f"{len(breaches)} social sign-in(s) reached the seeded {kind} account's user id "
-                               "(or failed with an unrecognised code)"))
+            seed = seeds[r["email_sha256"]]
+            if r["outcome"].startswith("rejected:"):
+                (separate if r["outcome"].split(":", 1)[1] in REFUSAL_CODES else unexplained).append(r)
+            elif r["outcome"] == "ok" and r.get("user_id") == seed["user_id"]:
+                check = checks.get(r["email_sha256"])
+                if check is None:
+                    pending.append(r)
+                elif check["outcome"] == "password_ok":
+                    breached.append(r)
+                elif check["outcome"] == "password_rejected":
+                    mitigated.append(r)
+                else:
+                    pending.append(r)
+            else:
+                separate.append(r)
+        if breached:
+            out.append(Verdict("T5", CASES["T5"], "FAIL",
+                               f"{len(breached)} account(s) linked to the social identity and the original password still "
+                               "signs in: the unverified registrant keeps access"))
+        elif unexplained:
+            out.append(Verdict("T5", CASES["T5"], "FAIL",
+                               f"{len(unexplained)} sign-in(s) failed with an unrecognised code, which is not evidence of safety"))
+        elif pending:
+            out.append(Verdict("T5", CASES["T5"], "BLOCKED",
+                               f"{len(pending)} sign-in(s) reached the seeded user: test whether the original password "
+                               "still works (record --case T5P)"))
         else:
-            out.append(Verdict(case, CASES[case], "PASS",
-                               f"{checked} social sign-in(s) with a seeded {kind} email did not reach that account"))
+            out.append(Verdict("T5", CASES["T5"], "PASS",
+                               f"{len(separate)} kept separate or refused; {len(mitigated)} linked with the original password "
+                               "no longer working"))
+
+    # T6: for a verified account the same person owns both identities, so linking is a policy question, not a takeover:
+    # it must not happen implicitly.
+    seeds = {d: x for d, x in seeded.items() if x.get("kind") == "verified"}
+    runs = [r for r in of("T6") if r.get("email_sha256") in seeds]
+    if not seeds or not runs:
+        out.append(Verdict("T6", CASES["T6"], "BLOCKED",
+                           "needs a seeded verified email/password account and a social sign-in with that email"))
+    else:
+        breaches = [r for r in runs
+                    if (r["outcome"] == "ok" and r.get("user_id") == seeds[r["email_sha256"]]["user_id"])
+                    or (r["outcome"].startswith("rejected:") and r["outcome"].split(":", 1)[1] not in REFUSAL_CODES)]
+        out.append(Verdict("T6", CASES["T6"], "FAIL" if breaches else "PASS",
+                           f"{len(breaches)} sign-in(s) linked implicitly or failed with an unrecognised code" if breaches
+                           else f"{len(runs)} sign-in(s) did not link implicitly"))
 
     # T7: same provider identity across platforms.
     t7 = [r for r in of("T7") if r["outcome"] == "ok"]
@@ -203,6 +238,17 @@ def evaluate(data: dict) -> list[Verdict]:
         bad = [r for r in t8 if r["outcome"] != "signed_out"]
         out.append(Verdict("T8", CASES["T8"], "FAIL" if bad else "PASS",
                            "a probe run did not sign out" if bad else f"{len(t8)} run(s) signed out"))
+    # T9: every seeded account, and every account a social sign-in created, must be confirmed gone.
+    t9 = of("T9")
+    if not t9:
+        out.append(Verdict("T9", CASES["T9"], "BLOCKED", "no cleanup recorded"))
+    else:
+        bad = [r for r in t9 if r["outcome"] != "deleted"]
+        missing = [d for d in seeded if d not in {r.get("email_sha256") for r in t9}]
+        out.append(Verdict("T9", CASES["T9"], "FAIL" if bad else ("BLOCKED" if missing else "PASS"),
+                           f"{len(bad)} account(s) still exist" if bad
+                           else (f"{len(missing)} seeded account(s) not confirmed deleted" if missing
+                                 else f"{len(t9)} account(s) confirmed deleted")))
     return out
 
 
@@ -277,8 +323,8 @@ def cmd_seed_record(args: argparse.Namespace) -> int:
 
 
 def cmd_record(args: argparse.Namespace) -> int:
-    if args.case not in CASES:
-        sys.exit(f"unknown case {args.case}; one of {', '.join(CASES)}")
+    if args.case not in CASES and args.case not in EVIDENCE_CASES:
+        sys.exit(f"unknown case {args.case}; one of {', '.join([*CASES, *EVIDENCE_CASES])}")
     if args.outcome == "ok" and not args.user_id:
         sys.exit("--outcome ok needs --user-id (from the app's probe dialog)")
     rec = {"case": args.case, "platform": args.platform, "provider": args.provider, "outcome": args.outcome,
@@ -323,7 +369,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--case", required=True)
     r.add_argument("--platform", required=True, choices=["ios", "android"])
     r.add_argument("--provider", required=True, choices=["google", "apple"])
-    r.add_argument("--outcome", required=True, help="ok | cancelled | signed_out | rejected:<CODE>")
+    r.add_argument("--outcome", required=True, help="ok | cancelled | signed_out | deleted | still_exists | password_ok | password_rejected | rejected:<CODE>")
     r.add_argument("--user-id")
     r.add_argument("--email", help="as shown in the app dialog; stored only as SHA-256")
     sub.add_parser("report")
