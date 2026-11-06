@@ -6,7 +6,7 @@
 //  (Debug + probe URL), so Release builds never show a button that can't sign anyone in.
 //
 //  Apple's button is Apple's own control (`ASAuthorizationAppleIDButton`, white on the dark welcome).
-//  Google's button follows Google's light-theme spec (white fill, #747775 outline, #1F1F1F label) with the
+//  Google's button follows Google's Neutral theme (#F2F2F2 fill, no stroke, #1F1F1F label) with the
 //  official "G" mark loaded from the GoogleSignIn SDK's own resource bundle, never a redrawn copy.
 //
 
@@ -75,9 +75,9 @@ struct WelcomeSocialActions: View {
                     .foregroundStyle(Color(red: 0.122, green: 0.122, blue: 0.122))
                     .frame(maxWidth: .infinity)
                     .frame(height: MMMetrics.ctaHeight)
-                    .background(Color.white, in: Capsule())
-                    // Inset, so the 1pt outline never spills past the fill and gets clipped into stray edges.
-                    .overlay(Capsule().strokeBorder(Color(red: 0.455, green: 0.467, blue: 0.459), lineWidth: 1))
+                    // Google's Neutral theme (#F2F2F2, no stroke): the same geometry as Apple's white control,
+                    // without the outline that made Google read heavier on the dark welcome.
+                    .background(Color(red: 0.949, green: 0.949, blue: 0.949), in: Capsule())
                     // Nothing paints past the rounded ends (the snapshot showed hairlines at the extremes).
                     .clipShape(Capsule())
                     .contentShape(Capsule())

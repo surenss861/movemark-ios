@@ -26,7 +26,6 @@ struct WelcomeEvidenceCaption: View {
     // The serif lines scale with Dynamic Type like every mmFont line, so the room name never drops below the date.
     @ScaledMetric(relativeTo: .title2) private var roomSize: CGFloat = 27
     @ScaledMetric(relativeTo: .title2) private var compactRoomSize: CGFloat = 24
-    @ScaledMetric(relativeTo: .caption) private var noteSize: CGFloat = 11.5
 
     private static let index = "01"
     private static let room = "Kitchen"
@@ -41,7 +40,7 @@ struct WelcomeEvidenceCaption: View {
         }
         .shadow(color: .black.opacity(0.35), radius: 6, y: 1)  // legibility over the moving footage, never a plate
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Example move-in record: Kitchen, April 14, 12 photos. Illustrative, not your evidence.")
+        .accessibilityLabel("Example record: Kitchen, April 14, 12 photos. An illustration, not your evidence.")
         .accessibilityIdentifier("welcome.exampleRecord")
     }
 
@@ -56,7 +55,8 @@ struct WelcomeEvidenceCaption: View {
                 .frame(width: 9)
 
             VStack(alignment: .leading, spacing: 0) {
-                Text(isCompact ? "\(Self.index) / EXAMPLE RECORD" : "\(Self.index) / EXAMPLE MOVE-IN RECORD")
+                // One sample indicator on every size; the index line says "example", nothing repeats it.
+                Text("\(Self.index) / EXAMPLE RECORD")
                     .mmFont(10.5, .semibold)
                     .tracking(1.3)
                     .foregroundStyle(.white.opacity(0.58))
@@ -72,12 +72,6 @@ struct WelcomeEvidenceCaption: View {
                     .foregroundStyle(.white.opacity(0.78))
                     .padding(.top, 2)
 
-                if !isCompact {
-                    Text("Illustrative · not your evidence")
-                        .font(.system(size: noteSize, weight: .regular, design: .serif).italic())
-                        .foregroundStyle(.white.opacity(0.5))
-                        .padding(.top, 8)
-                }
             }
             .fixedSize(horizontal: false, vertical: true)
         }

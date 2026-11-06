@@ -9,12 +9,12 @@ import SwiftUI
 
 /// Pulls the footage toward neutral. The master carries saturated teal cabinetry in the lit doorway;
 /// left as shot it reads as the brand colour behind the headline. A grey layer in `.saturation` blend
-/// takes most of the chroma out without touching luminance, so the frame stays as dark and as deep as
-/// it was — only calmer. No hue is added.
+/// takes the chroma down without touching luminance. 0.6, not more: at 0.85 the frame went flat grey and the
+/// footage read as washed out; 0.6 still tames the teal but keeps the room's warmth. No hue is added.
 struct WelcomeNeutralGrade: View {
     var body: some View {
         Color(white: 0.5)
-            .opacity(0.85)
+            .opacity(0.6)
             .blendMode(.saturation)
             .ignoresSafeArea()
             .allowsHitTesting(false)
@@ -29,6 +29,13 @@ struct WelcomeNeutralGrade: View {
 struct WelcomeReadabilityVeil: View {
     var body: some View {
         ZStack {
+            // Edge falloff gives the frame photographic depth instead of a uniform grey wash.
+            RadialGradient(
+                colors: [.clear, MMInk.hero.opacity(0.38)],
+                center: UnitPoint(x: 0.55, y: 0.38),
+                startRadius: 120,
+                endRadius: 620
+            )
             LinearGradient(
                 stops: [
                     .init(color: MMInk.hero.opacity(0.30), location: 0.00),
