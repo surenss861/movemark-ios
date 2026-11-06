@@ -40,6 +40,12 @@ enum class SocialProvider(val id: String, val buttonTitle: String) {
     companion object {
         /** Platform order: Google first on Android (Apple first on iOS). */
         val androidOrder = listOf(GOOGLE, APPLE)
+
+        /**
+         * What the Android welcome shows. Apple is left out until its browser flow exists: a control that can't
+         * sign anyone in must not look usable.
+         */
+        val androidShown = androidOrder.filter { it != APPLE }
     }
 }
 

@@ -42,23 +42,21 @@ class WelcomeSocialActionsTest {
             )
         }
         compose.onNodeWithText("Start move-in proof").assertExists()
-        // Google first on Android.
-        // Unclipped positions: on a short test screen the block scrolls, so clipped bounds can coincide.
-        val google = compose.onNodeWithTag("welcome.social.google").fetchSemanticsNode().positionInRoot.y
-        val apple = compose.onNodeWithTag("welcome.social.apple").fetchSemanticsNode().positionInRoot.y
-        assertTrue("Google above Apple", google < apple)
+        // Google is shown; Apple is not, until its Android flow exists (no control that can't sign anyone in).
+        compose.onNodeWithTag("welcome.social.google").assertExists()
+        compose.onNodeWithTag("welcome.social.apple").assertDoesNotExist()
+        compose.onNodeWithText("Continue with Apple").assertDoesNotExist()
 
         compose.onNodeWithText("Continue with Google").performScrollTo().performClick()
-        compose.onNodeWithText("Continue with Apple").performScrollTo().performClick()
         compose.onNodeWithText("I already have a vault").performScrollTo().performClick()
-        assertEquals(listOf(SocialProvider.GOOGLE, SocialProvider.APPLE), picked)
+        assertEquals(listOf(SocialProvider.GOOGLE), picked)
         assertTrue(emailTapped)
     }
 
     @Test
     fun exampleRecordIsAnIllustrativeCaptionNotAClaimCard() {
         compose.setContent { WelcomeScreen(onStartMoveIn = {}, onSignIn = {}) }
-        compose.onNodeWithContentDescription("Example move-in record: Kitchen, April 14, 12 photos. Illustrative, not your evidence.")
+        compose.onNodeWithContentDescription("Example record: Kitchen, April 14, 12 photos. An illustration, not your evidence.")
             .assertExists()
         compose.onNodeWithText("DAMAGE CLAIM").assertDoesNotExist()
         compose.onNodeWithText("Already documented").assertDoesNotExist()
@@ -74,7 +72,6 @@ class WelcomeSocialActionsTest {
             )
         }
         compose.onNodeWithTag("welcome.social.google").assertIsNotEnabled()
-        compose.onNodeWithTag("welcome.social.apple").assertIsNotEnabled()
         compose.onNodeWithTag("welcome.social.error").assertExists()
     }
 }

@@ -21,15 +21,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,18 +72,34 @@ fun WelcomeEvidenceCaption(
             .fillMaxWidth()
             .testTag("welcome.exampleRecord")
             .clearAndSetSemantics {
-                contentDescription = "Example move-in record: Kitchen, April 14, 12 photos. Illustrative, not your evidence."
+                contentDescription = "Example record: Kitchen, April 14, 12 photos. An illustration, not your evidence."
             },
     ) {
-        Image(
-            painter = painterResource(drawableResId),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
+        // Graded down like the iOS footage (less chroma, less brightness, a foot that falls into the background), so
+        // the photograph supports the record and the actions instead of leading the page. Shorter on small screens.
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(if (compact) 2.1f else 1.6f)
+                .aspectRatio(if (compact) 2.8f else 1.9f)
                 .clip(RoundedCornerShape(4.dp)),
-        )
+        ) {
+            Image(
+                painter = painterResource(drawableResId),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                colorFilter = ColorFilter.colorMatrix(PhotoGrade),
+                modifier = Modifier.matchParentSize(),
+            )
+            Box(
+                Modifier.matchParentSize().background(
+                    Brush.verticalGradient(
+                        0f to MMColors.AppBackground.copy(alpha = 0.10f),
+                        0.55f to MMColors.AppBackground.copy(alpha = 0.25f),
+                        1f to MMColors.AppBackground.copy(alpha = 0.78f),
+                    ),
+                ),
+            )
+        }
 
         Row(
             modifier = Modifier
@@ -100,7 +120,7 @@ fun WelcomeEvidenceCaption(
             Spacer(Modifier.width(14.dp))
             Column {
                 Text(
-                    if (compact) "01 / EXAMPLE RECORD" else "01 / EXAMPLE MOVE-IN RECORD",
+                    "01 / EXAMPLE RECORD",
                     fontSize = 10.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     letterSpacing = 1.3.sp,
@@ -119,17 +139,14 @@ fun WelcomeEvidenceCaption(
                     fontWeight = FontWeight.Medium,
                     color = MMColors.TextPrimary.copy(alpha = 0.78f),
                 )
-                if (!compact) {
-                    Text(
-                        "Illustrative · not your evidence",
-                        fontSize = 11.5.sp,
-                        fontFamily = FontFamily.Serif,
-                        fontStyle = FontStyle.Italic,
-                        color = MMColors.TextSecondary.copy(alpha = 0.8f),
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
             }
         }
     }
+}
+
+/** Saturation 0.6 and brightness 0.78: the staged kitchen calmed toward the iOS footage's grade. */
+private val PhotoGrade = ColorMatrix().apply {
+    setToSaturation(0.6f)
+    val k = 0.78f
+    timesAssign(ColorMatrix(floatArrayOf(k, 0f, 0f, 0f, 0f, 0f, k, 0f, 0f, 0f, 0f, 0f, k, 0f, 0f, 0f, 0f, 0f, 1f, 0f)))
 }

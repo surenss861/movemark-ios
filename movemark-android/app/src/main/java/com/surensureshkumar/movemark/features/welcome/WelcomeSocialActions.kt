@@ -1,6 +1,8 @@
 package com.surensureshkumar.movemark.features.welcome
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,10 +25,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.sp
+import com.surensureshkumar.movemark.R
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.features.auth.social.SocialProvider
+
+private val GoogleNeutral = Color(0xFFF2F2F2)
 
 /** State for the "or continue with" block on Welcome. Null means the block is hidden (Release, or no probe). */
 data class WelcomeSocialState(
@@ -35,9 +41,9 @@ data class WelcomeSocialState(
 )
 
 /*
- * Google first on Android. Both follow their providers' light-on-dark button specs: white fill, near-black
- * label, Google's #747775 outline. The official provider marks ship with the provider SDK/branding assets
- * (pending), so for now these are text-only. That is acceptable only because the block is Debug-and-probe-only.
+ * Google's Neutral button (#F2F2F2, no stroke, #1F1F1F label) with the official "G" from Google's sign-in
+ * branding pack (res/drawable-*dpi/google_signin_mark_neutral.png; its #F2F2F2 tile is the button fill).
+ * Same geometry as iOS. Apple is not shown on Android until its flow exists (SocialProvider.androidShown).
  */
 @Composable
 fun WelcomeSocialActions(
@@ -59,17 +65,17 @@ fun WelcomeSocialActions(
             )
             Box(Modifier.weight(1f).height(1.dp).background(Color.White.copy(alpha = 0.16f)))
         }
-        SocialProvider.androidOrder.forEach { provider ->
+        SocialProvider.androidShown.forEach { provider ->
             val busy = state.busyProvider == provider
             OutlinedButton(
                 onClick = { onSelect(provider) },
                 enabled = state.busyProvider == null,
                 shape = RoundedCornerShape(MMSpacing.CornerRadius.dp),
-                border = BorderStroke(1.dp, Color(0xFF747775)),
+                border = null,
                 colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = Color.White,
+                    containerColor = GoogleNeutral,
                     contentColor = Color(0xFF1F1F1F),
-                    disabledContainerColor = Color.White.copy(alpha = if (busy) 1f else 0.55f),
+                    disabledContainerColor = GoogleNeutral.copy(alpha = if (busy) 1f else 0.55f),
                     disabledContentColor = Color(0xFF1F1F1F).copy(alpha = if (busy) 1f else 0.55f),
                 ),
                 modifier = Modifier
@@ -80,6 +86,14 @@ fun WelcomeSocialActions(
                 if (busy) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color(0xFF1F1F1F))
                 } else {
+                    if (provider == SocialProvider.GOOGLE) {
+                        Image(
+                            painter = painterResource(R.drawable.google_signin_mark_neutral),
+                            contentDescription = null,
+                            modifier = Modifier.size(40.dp),
+                        )
+                        Spacer(Modifier.width(2.dp))
+                    }
                     // Explicit: the app theme's text style is light-on-dark and would override the button's content colour.
                     Text(provider.buttonTitle, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color(0xFF1F1F1F))
                 }

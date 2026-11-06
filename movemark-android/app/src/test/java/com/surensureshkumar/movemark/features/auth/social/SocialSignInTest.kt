@@ -88,8 +88,9 @@ class SocialSignInTest {
     }
 
     @Test
-    fun providerOrderIsGoogleFirstOnAndroid() {
+    fun providerOrderIsGoogleFirstOnAndroidAndAppleIsNotShownYet() {
         assertEquals(listOf(SocialProvider.GOOGLE, SocialProvider.APPLE), SocialProvider.androidOrder)
+        assertEquals(listOf(SocialProvider.GOOGLE), SocialProvider.androidShown)
     }
 
     @Test

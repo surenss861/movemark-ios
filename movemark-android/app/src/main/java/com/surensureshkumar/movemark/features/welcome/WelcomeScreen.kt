@@ -215,24 +215,18 @@ private fun BrandRow(
         animationSpec = MMMotion.welcomeEnterSpec(reduceMotion, durationMillis = 400),
         label = "brandAlpha",
     )
+    // Text-only wordmark, as on iOS's welcome: the launcher icon carries the mark; here it would read as a lockup
+    // competing with the photograph.
     Row(
         modifier = modifier.alpha(alpha),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Image(
-            painter = painterResource(R.drawable.movemark_logo),
-            contentDescription = "MoveMark",
-            contentScale = ContentScale.Fit,
-            modifier = Modifier
-                .size(35.dp)
-                .clip(RoundedCornerShape(8.dp)),
-        )
-        Spacer(Modifier.size(10.dp))
         Text(
             "MoveMark",
-            fontSize = 20.5.sp,
+            fontSize = 17.sp,
             fontWeight = FontWeight.SemiBold,
-            color = MMColors.TextPrimary,
+            color = MMColors.TextPrimary.copy(alpha = 0.85f),
+            modifier = Modifier.padding(vertical = 10.dp),
         )
     }
 }
