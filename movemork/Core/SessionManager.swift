@@ -160,6 +160,11 @@ final class SessionManager {
         userId = user.id
         userEmail = user.email
 
+        #if DEBUG
+        // Sign-in QA compares Neon user ids across providers. The id only: never the email, never a token.
+        if SocialSignInConfig.mode == .live { print("[social-qa] signed in user=\(user.id.uuidString.lowercased())") }
+        #endif
+
         do {
             try await ensureProfileExists(user)
 
