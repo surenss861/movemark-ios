@@ -91,6 +91,10 @@ enum SocialBrowserReturn {
         if let verifier = items.first(where: { $0.name == verifierParameter })?.value, !verifier.isEmpty {
             return verifier
         }
+        #if DEBUG
+        // Sign-in QA: Neon's short error code only. The return page limits it to a plain code, never a token.
+        print("[social-qa] browser-return error=\(items.first(where: { $0.name == "error" })?.value ?? "none")")
+        #endif
         if items.first(where: { $0.name == "error" })?.value == "access_denied" { throw SocialSignInError.cancelled }
         throw SocialSignInError.failed("Sign-in didn’t finish. Try again.")
     }
@@ -121,6 +125,9 @@ final class SystemBrowserPresenter: NSObject, SocialBrowserPresenting, ASWebAuth
                     continuation.resume(throwing: SocialSignInError.cancelled)
                 } else {
                     socialLog.notice("browser sign-in failed: \((error as NSError?)?.code ?? 0, privacy: .public)")
+                    #if DEBUG
+                    print("[social-qa] browser-sheet error=\((error as NSError?)?.code ?? 0)")
+                    #endif
                     continuation.resume(throwing: SocialSignInError.failed("Sign-in didn’t finish. Try again."))
                 }
             }
