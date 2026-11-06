@@ -13,7 +13,10 @@
 //    email (never a token), then signs out of the probe. It never becomes the app's session, so it
 //    can't reach dev or production data.
 //
-//  The app's real session path stays email/password until the probe has proven:
+//  Live mode (`-MoveMarkSocialLive YES`, Debug only) signs in to the app's own Neon Auth and creates a real session
+//  through `SessionManager.signInWithSocial`, for testing with disposable accounts. Release is always `.off`.
+//
+//  No customer build shows the buttons until testing has proven:
 //  - native token acceptance;
 //  - no implicit linking to an existing same-email account;
 //  - the same user id across iOS and Android.
@@ -69,11 +72,36 @@ enum SocialSignInError: LocalizedError, Equatable {
     }
 }
 
+/// How the Welcome buttons behave in this build.
+enum SocialSignInMode: Equatable {
+    /// Hidden. Always, in Release.
+    case off
+    /// Signs in to the isolated probe, shows the identity, signs out. Never the app session.
+    case probe(URL)
+    /// Signs in for real, through the app's own Neon Auth (Debug test builds only).
+    case live
+}
+
 enum SocialSignInConfig {
     static let probeAuthURLKey = "MoveMarkSocialProbeAuthURL"
+    static let liveKey = "MoveMarkSocialLive"
+
+    static var mode: SocialSignInMode {
+        #if DEBUG
+        return resolvedMode(liveFlag: UserDefaults.standard.bool(forKey: liveKey), probeURL: probeAuthURL)
+        #else
+        return .off
+        #endif
+    }
+
+    static func resolvedMode(liveFlag: Bool, probeURL: URL?) -> SocialSignInMode {
+        if liveFlag { return .live }
+        if let probeURL { return .probe(probeURL) }
+        return .off
+    }
 
     /// Release: always false. Debug: only with a valid probe URL (see the file header).
-    static var isEnabled: Bool { probeAuthURL != nil }
+    static var isEnabled: Bool { mode != .off }
 
     static var probeAuthURL: URL? {
         #if DEBUG

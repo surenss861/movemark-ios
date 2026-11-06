@@ -120,6 +120,18 @@ struct SocialSignInTests {
         #expect((SocialSignInConfig.validatedProbeURL(raw, appAuthURL: app) != nil) == accepted)
     }
 
+    @Test func modeIsOffUnlessALiveFlagOrAValidProbeIsGiven() {
+        let probe = URL(string: "https://ep-probe-123.neonauth.c-8.us-east-2.aws.neon.tech/neondb/auth")!
+        #expect(SocialSignInConfig.resolvedMode(liveFlag: false, probeURL: nil) == .off)
+        #expect(SocialSignInConfig.resolvedMode(liveFlag: false, probeURL: probe) == .probe(probe))
+        #expect(SocialSignInConfig.resolvedMode(liveFlag: true, probeURL: nil) == .live)
+        #expect(SocialSignInConfig.resolvedMode(liveFlag: true, probeURL: probe) == .live)
+    }
+
+    @Test func thisTestBuildIsOffWithoutLaunchArguments() {
+        #expect(SocialSignInConfig.mode == .off)
+    }
+
     @Test func providerOrderIsAppleFirstOnIOS() {
         #expect(SocialProvider.iOSOrder == [.apple, .google])
     }

@@ -197,7 +197,7 @@ actor NeonAuthClient {
     }
 
     /// Exchanges a provider's ID token for a Neon Auth session (`POST /sign-in/social` with `idToken`).
-    /// Probe only until account-linking behaviour is proven; the app session never calls this.
+    /// Reached only from the probe and from Debug live testing until account linking is proven safe.
     func signInSocial(_ token: SocialIdentityToken) async throws -> NeonAuthUser {
         let body = try JSONEncoder().encode(SocialSignInRequest(
             provider: token.provider.rawValue,

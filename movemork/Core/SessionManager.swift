@@ -285,6 +285,23 @@ final class SessionManager {
         hasResolvedInitialAuthState = true
     }
 
+    /// Signs in with Apple or Google for real: the provider's ID token becomes a Neon Auth session, then the same
+    /// path as email sign-in decides where the user lands. Reached only in `SocialSignInMode.live` (Debug test builds).
+    func signInWithSocial(_ provider: SocialProvider, credentials: SocialCredentialProviding? = nil) async throws {
+        guard MoveMarkBackendConfig.isConfigured else {
+            throw AuthError.validation("This build is not configured to reach MoveMark’s servers.")
+        }
+        // See signUp: stay `.signedOut` so a failure lands on the screen that can display it.
+        interactiveAuthInFlight = true
+        defer { interactiveAuthInFlight = false }
+
+        let source = credentials ?? NativeSocialCredentialProvider()
+        let token = try await source.credential(for: provider)
+        let user = try await NeonAuthClient.shared.signInSocial(token)
+        await applyAuthenticatedSession(user)
+        hasResolvedInitialAuthState = true
+    }
+
     /// Records onboarding as complete on the profile without changing `authPhase`, so the current
     /// first-run screen (the saved-proof receipt) stays up. Called as soon as the first proof is saved:
     /// if the app is closed on the receipt, the next launch must open the app, not first-run onboarding.

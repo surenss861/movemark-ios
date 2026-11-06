@@ -37,6 +37,7 @@ struct WelcomeScreen: View {
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(SessionManager.self) private var sessionManager: SessionManager?
 
     private var reduceMotion: Bool { systemReduceMotion || forcesReduceMotion }
 
@@ -363,18 +364,25 @@ struct WelcomeScreen: View {
         }
     }
 
-    /// Probe only: signs in to the isolated probe project, shows the identity, signs out of the probe.
-    /// Never touches the app session. A cancelled sheet is silent.
+    /// Live: a real session through `SessionManager`, and the root moves on by itself. Probe: signs in to the isolated
+    /// project, shows the identity, signs out; never the app session. A cancelled sheet is silent in both.
     private func startSocialSignIn(_ provider: SocialProvider) {
-        guard socialBusy == nil, let probeURL = SocialSignInConfig.probeAuthURL else { return }
+        let mode = SocialSignInConfig.mode
+        guard socialBusy == nil, mode != .off else { return }
         MMHaptics.light()
         socialError = nil
         socialBusy = provider
-        let runner = SocialProbeRunner()
         Task { @MainActor in
             defer { socialBusy = nil }
             do {
-                probeResult = try await runner.run(provider, probeURL: probeURL)
+                switch mode {
+                case .live:
+                    try await sessionManager?.signInWithSocial(provider)
+                case .probe(let url):
+                    probeResult = try await SocialProbeRunner().run(provider, probeURL: url)
+                case .off:
+                    break
+                }
             } catch SocialSignInError.cancelled {
                 // Closed the sheet; nothing to say.
             } catch NeonAuthError.rejected(let code, let message) {
