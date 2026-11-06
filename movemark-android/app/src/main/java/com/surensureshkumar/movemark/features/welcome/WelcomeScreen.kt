@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.surensureshkumar.movemark.core.design.MMColors
@@ -119,8 +120,9 @@ fun WelcomeScreen(
                             fontWeight = FontWeight.Medium,
                             color = MMColors.TextPrimary.copy(alpha = 0.88f),
                         )
+                        // The same deliberate two-line break as iOS, on any width; read aloud as one sentence.
                         Text(
-                            text = MoveMarkGrowthCopy.WELCOME_HEADLINE,
+                            text = MoveMarkGrowthCopy.WELCOME_HEADLINE_BROKEN,
                             fontSize = 34.sp,
                             lineHeight = 38.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -163,6 +165,16 @@ fun WelcomeScreen(
                                 fontSize = 15.5.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MMColors.TextPrimary,
+                            )
+                        }
+                        // Short screens with the social block need this line's height, as on iOS.
+                        if (!(compact && social != null)) {
+                            Text(
+                                MoveMarkGrowthCopy.WELCOME_TRUST_LINE,
+                                fontSize = 12.5.sp,
+                                color = MMColors.TextPrimary.copy(alpha = 0.5f),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth(),
                             )
                         }
                     }

@@ -4,6 +4,8 @@ object MoveMarkGrowthCopy {
     const val AUDIENCE_CHIP = "For Ontario apartment renters"
 
     const val WELCOME_HEADLINE = "Prove what was already there."
+    const val WELCOME_HEADLINE_BROKEN = "Prove what was\nalready there."
+    const val WELCOME_TRUST_LINE = "Private evidence"
     const val WELCOME_BODY =
         "Photograph your rental before you unpack. Keep every photo, date and record together."
     const val WELCOME_PAIN_LINE =

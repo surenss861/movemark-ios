@@ -55,7 +55,8 @@ class WelcomeSocialActionsTest {
     fun heroIsTheProofApertureWithOneSpokenLine() {
         compose.setContent { WelcomeScreen(onStartMoveIn = {}, onSignIn = {}) }
         compose.onNodeWithContentDescription("Move-in: before anything changes.").assertExists()
-        compose.onNodeWithText("Prove what was already there.").assertExists()
+        compose.onNodeWithText("Prove what was\nalready there.").assertExists()
+        compose.onNodeWithText("Private evidence").assertExists()
         compose.onNodeWithText("DAMAGE CLAIM").assertDoesNotExist()
         compose.onNodeWithText("Kitchen").assertDoesNotExist()
     }
