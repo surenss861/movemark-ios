@@ -12,7 +12,7 @@ coil = "2.7.0"
 camerax = "1.4.0"
 revenuecat = "8.10.7"
 okhttp = "4.12.0"
-sentry = "7.14.0"
+sentry = "7.22.6"
 room = "2.6.1"
 
 [libraries]
