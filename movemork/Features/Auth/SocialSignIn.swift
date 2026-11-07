@@ -13,8 +13,8 @@
 //  The browser and the app don't share cookies, and don't need to: the challenge stays in the app, in memory, for
 //  one attempt. A verifier without it is refused by Neon (SESSION_CHALLENGE_COOKIE_NOT_FOUND).
 //
-//  Gated: Release is always `.off`. Debug needs `-MoveMarkSocialLive YES`. No customer build shows the buttons until
-//  sign-in and the account-linking tests have passed.
+//  Gated: on for TestFlight installs, so internal testers can use it. Debug needs `-MoveMarkSocialLive YES`. App Store
+//  installs stay `.off`: no customer build shows the buttons until the account-linking tests have passed.
 //
 
 import AuthenticationServices
@@ -54,9 +54,9 @@ enum SocialSignInError: LocalizedError, Equatable {
 
 /// How the Welcome buttons behave in this build.
 enum SocialSignInMode: Equatable {
-    /// Hidden. Always, in Release.
+    /// Hidden. Always on the App Store.
     case off
-    /// Signs in for real, through the app's own Neon Auth (Debug test builds only).
+    /// Signs in for real, through the app's own Neon Auth (TestFlight, and Debug with the live flag).
     case live
 }
 
@@ -67,8 +67,13 @@ enum SocialSignInConfig {
         #if DEBUG
         return resolvedMode(liveFlag: UserDefaults.standard.bool(forKey: liveKey))
         #else
-        return .off
+        return isTestFlightInstall ? .live : .off
         #endif
+    }
+
+    /// TestFlight installs carry a sandbox receipt; App Store installs don't, so customers still see no buttons.
+    private static var isTestFlightInstall: Bool {
+        Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
     }
 
     static func resolvedMode(liveFlag: Bool) -> SocialSignInMode { liveFlag ? .live : .off }
