@@ -15,6 +15,11 @@ proves the result:
   - every storage path any row references exists among the restored objects, and every immutable evidence
     source matches its recorded SHA-256.
 Prints RESTORE_DRILL PASS/FAIL and the time each phase took (the measured RTO for this data size).
+
+Every restore starts fenced (scripts/dr/deletion_log.py): the runtime roles can't log in and the Data API roles
+have no schema. With --deletion-log <dir> (from deletion_log.py pull) the logged deletions are replayed, proven
+gone, and the fence is lifted only if every check passed. Without it the cluster stays fenced, the objects stay
+in <workdir>/objects-fenced, and deletion_log.py replay must finish the job before the service can start.
 To serve the app from it, point DATABASE_URL at the cluster and upload <workdir>/objects to any
 S3-compatible store with the same bucket names (see docs/disaster-recovery.md).
 """
@@ -44,6 +49,10 @@ spec.loader.exec_module(migrate)
 spec_b = importlib.util.spec_from_file_location("backup", ROOT / "scripts" / "dr" / "backup.py")
 backup = importlib.util.module_from_spec(spec_b)
 spec_b.loader.exec_module(backup)
+spec_d = importlib.util.spec_from_file_location("deletion_log", ROOT / "scripts" / "dr" / "deletion_log.py")
+deletion_log = importlib.util.module_from_spec(spec_d)
+sys.modules["deletion_log"] = deletion_log  # dataclasses look their module up here
+spec_d.loader.exec_module(deletion_log)
 
 PG_BIN = backup.PG_BIN
 # Roles the dump's ownership/grants refer to (Neon platform roles + MoveMark's), all NOLOGIN here except the
@@ -102,6 +111,8 @@ def main() -> int:
     ap.add_argument("--evidence", type=pathlib.Path,
                     help="objects pulled from B2 (scripts/dr/offsite.py pull): <dir>/manifest.tsv + <dir>/objects/")
     ap.add_argument("--keep-running", action="store_true", help="leave the restored cluster up (to boot the API on it)")
+    ap.add_argument("--deletion-log", type=pathlib.Path, help="the log from deletion_log.py pull: replay it and lift the fence")
+    ap.add_argument("--accept-log-gap", default="", help="owner's reason for replaying a log that doesn't span this backup")
     args = ap.parse_args()
     archive = args.archive.expanduser()
     work = args.workdir.expanduser()
@@ -125,6 +136,7 @@ def main() -> int:
         shutil.rmtree(work / "objects", ignore_errors=True)
         shutil.copytree(args.evidence.expanduser() / "objects", work / "objects")
         shutil.copy(args.evidence.expanduser() / "manifest.tsv", work / "manifest.tsv")
+    (work / "objects").mkdir(exist_ok=True)  # a database-only archive restored without evidence has none
     check_objects = bool(args.evidence) or not meta.get("database_only")
     for line in (work / "manifest.tsv").read_text().splitlines():
         bucket, key, size, digest = line.split("\t")
@@ -158,12 +170,15 @@ def main() -> int:
             conn.execute(PLATFORM)
         listing = subprocess.run([str(PG_BIN / "pg_restore"), "--list", str(work / "db.dump")],
                                  check=True, capture_output=True, text=True).stdout
-        keep = "\n".join(line for line in listing.splitlines() if "pg_session_jwt" not in line and " SCHEMA - auth " not in line)
+        platform = ("pg_session_jwt", " SCHEMA - auth ", " SCHEMA auth ", " FUNCTION auth user_id")  # PLATFORM provides these
+        keep = "\n".join(line for line in listing.splitlines() if not any(item in line for item in platform))
         (work / "restore.list").write_text(keep + "\n")
         result = subprocess.run([str(PG_BIN / "pg_restore"), "--use-list", str(work / "restore.list"), "--exit-on-error",
                                  "--dbname", db, str(work / "db.dump")], capture_output=True, text=True)
         if result.returncode != 0:
             sys.exit(f"pg_restore failed:\n{result.stderr[-2000:]}")
+        with psycopg.connect(db, autocommit=True) as conn:
+            deletion_log.fence(conn)
         timings["restore_db_s"] = round(time.monotonic() - t0, 2)
 
         t0 = time.monotonic()
@@ -177,6 +192,20 @@ def main() -> int:
             if head != meta["ledger_head"]:
                 problems.append(f"ledger head {head} != {meta['ledger_head']}")
             restored_fp = migrate.fingerprint(conn)
+        # Before the reference checks: a deleted account's rows may point at files a newer manifest dropped.
+        receipt = None
+        if args.deletion_log:
+            t1 = time.monotonic()
+            try:
+                log = deletion_log.verify(deletion_log.read_dir(args.deletion_log.expanduser()), args.key_file.expanduser().read_bytes())
+                with psycopg.connect(db, autocommit=True) as conn:
+                    receipt = deletion_log.replay(conn, log, meta["created_utc"], work / "objects", work / "manifest.tsv",
+                                                  args.accept_log_gap)
+                (work / "replay-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+            except (deletion_log.LogRefused, deletion_log.LogGap, deletion_log.ReplayFailed) as error:
+                problems.append(f"replay refused: {type(error).__name__}: {error}")
+            timings["replay_s"] = round(time.monotonic() - t1, 2)
+        with psycopg.connect(db) as conn:
             refs = conn.execute("""
                 SELECT 'inspection-media', unnest(ARRAY[file_path, thumbnail_path, source_path]) FROM public.evidence_files
                   WHERE inspection_item_id IS NOT NULL
@@ -209,6 +238,12 @@ def main() -> int:
         if drift:
             problems.append(f"schema differs from a from-zero build: {drift[:5]}")
         timings["verify_s"] = round(time.monotonic() - t0, 2)
+        unfenced = receipt is not None and not problems
+        if unfenced:
+            with psycopg.connect(db, autocommit=True) as conn:
+                deletion_log.lift_fence(conn)
+        else:
+            (work / "objects").rename(work / "objects-fenced")
     finally:
         if args.keep_running and not problems:
             print(f"RESTORED_CLUSTER host={sock} port={args.port} dbname=neondb (stop: pg_ctl -D {data_dir} stop)")
@@ -217,8 +252,10 @@ def main() -> int:
             shutil.rmtree(sock, ignore_errors=True)
 
     report = {"backup": meta["created_utc"], "rows": sum(meta["row_counts"].values()), "objects": len(objects),
-              "references_checked": len(refs), "sources_hash_checked": len(sources), "timings": timings}
+              "references_checked": len(refs), "sources_hash_checked": len(sources), "timings": timings,
+              "replay": receipt}
     print(json.dumps(report))
+    print("SERVICE_UNFENCED" if unfenced else "SERVICE_FENCED: run scripts/dr/deletion_log.py replay before anything serves this")
     for p in problems:
         print("PROBLEM:", p)
     print("RESTORE_DRILL", "PASS" if not problems else "FAIL")

@@ -667,6 +667,8 @@ PRIVILEGED_FUNCTIONS = {  # 0980: each SECURITY DEFINER function, executable by 
     "public.legal_user_has_current_acceptance(uuid)": set(),
     "public.legal_gate_open_for_user(uuid)": {"movemark_api"},
     "public.legal_status_for_user(uuid)": {"movemark_api"},
+    # 1060: reached only through the deletion functions and a trigger, so nobody calls it directly.
+    "public.record_deletion(text, uuid)": set(),
 }
 
 

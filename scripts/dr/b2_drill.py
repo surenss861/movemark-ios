@@ -151,15 +151,20 @@ def main() -> int:
         report["push_db"] = run([PY, str(ROOT / "scripts" / "dr" / "offsite.py"), "push-db", str(archive)]).strip()
         report["sync_evidence"] = run([PY, str(ROOT / "scripts" / "dr" / "offsite.py"), "sync-evidence",
                                        "--key-file", str(args.key_file)]).strip()
+        report["deletion_log_export"] = run([PY, str(ROOT / "scripts" / "dr" / "deletion_log.py"), "export", "--key-file",
+                                             str(args.key_file), "--dsn-env", "DEV_POOLED_DSN"]).strip()
         report["backup_s"] = round(time.monotonic() - t0, 1)
 
         t0 = time.monotonic()  # recovery: from B2 alone
         pulled = work / "from-b2"
         report["pull"] = run([PY, str(ROOT / "scripts" / "dr" / "offsite.py"), "pull", "--key-file", str(args.key_file),
                               "--to", str(pulled)]).strip()
+        report["pull_deletion_log"] = run([PY, str(ROOT / "scripts" / "dr" / "deletion_log.py"), "pull", "--key-file",
+                                           str(args.key_file), "--to", str(work / "deletion-log")]).strip()
         restored = subprocess.run([PY, str(ROOT / "scripts" / "dr" / "restore.py"), "--archive",
                                    str(next(pulled.glob("*.mmbk"))), "--key-file", str(args.key_file), "--workdir",
-                                   str(work / "restored"), "--evidence", str(pulled / "evidence"), "--keep-running"],
+                                   str(work / "restored"), "--evidence", str(pulled / "evidence"), "--keep-running",
+                                   "--deletion-log", str(work / "deletion-log")],
                                   capture_output=True, text=True)
         report["restore"] = [line for line in restored.stdout.splitlines() if line.startswith(("{", "PROBLEM", "RESTORE_DRILL"))]
         match = re.search(r"RESTORED_CLUSTER host=(\S+) port=(\d+)", restored.stdout)
@@ -173,9 +178,9 @@ def main() -> int:
         for bucket in BUCKETS:
             blank.create_bucket(Bucket=bucket)
         objects = 0
-        for line in (pulled / "evidence" / "manifest.tsv").read_text().splitlines():
+        for line in (work / "restored" / "manifest.tsv").read_text().splitlines():  # after replay, never the pulled copy
             bucket, key, _, digest = line.split("\t")
-            blank.put_object(Bucket=bucket, Key=key, Body=(pulled / "evidence" / "objects" / bucket / key).read_bytes())
+            blank.put_object(Bucket=bucket, Key=key, Body=(work / "restored" / "objects" / bucket / key).read_bytes())
             objects += 1
         report["restored_objects"] = objects
         report["recovery_s"] = round(time.monotonic() - t0, 1)

@@ -30,6 +30,11 @@ Retention: Object Lock keeps every upload 30 days. The month's first database ba
 `monthly/<YYYYMM>/`. B2 lifecycle rules: `db/` hidden after 35 days and deleted 1 day later; `monthly/` kept
 365 days; `manifests/` kept 400 days; `objects/` not expired (the live evidence set).
 
+**Proposed, not live:** a 90-day maximum for all backups, a prune step, a deletion log and a replay step on
+restore are designed and tested on development only. See `docs/backup-retention-design.md`. Until that rollout
+is finished, this section describes what is in force: files under `objects/` don't expire, and a restore can
+bring deleted accounts back.
+
 ## Recover (B2-only)
 
 ```
@@ -46,6 +51,10 @@ every chunk's tag, every object, row counts, the schema fingerprint equal to a f
 backup's ledger head, every referenced storage path present, every immutable source's SHA-256. Upload
 `<workdir>/objects` to any S3-compatible store with the same bucket names, point the API's `DATABASE_URL`
 and `AWS_*` at them, and it serves the app.
+
+The `restore.py` on `feature/legal-gate` starts every restore fenced, as part of the proposal above: the
+runtime roles can't log in until a replay finishes. No deletion log exists in B2 yet, so with that version add
+`--deletion-log <empty dir> --accept-log-gap "<reason>"` to `restore.py`, or use the version on the deployed branch.
 
 ## Drill
 
