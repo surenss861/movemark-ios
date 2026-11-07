@@ -3,8 +3,8 @@
 //  movemork
 //
 //  The shared root navigation: one compact floating dock — Proof · Reports · Account — on the three root
-//  surfaces only (the shell hides it on pushed screens, camera, receipt and modals). The active tab is
-//  near-black with a short lime line under it; lime stays a signal, never a fill.
+//  surfaces only (the shell hides it on pushed screens, camera, receipt and modals). Dark and centred, at most
+//  310pt wide; the active tab sits in a soft pill.
 //
 
 import SwiftUI
@@ -18,28 +18,23 @@ struct MMProofTabBarV4: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var keyboardVisible = false
 
-    private enum Ink {
-        static let surface = Color(red: 0.980, green: 0.980, blue: 0.973)      // #FAFAF8, warm off-white
-        static let border = Color.black.opacity(0.07)
-        static let ink = Color(red: 0.078, green: 0.078, blue: 0.082)          // #141415
-        static let idle = Color(red: 0.541, green: 0.545, blue: 0.553)         // #8A8B8D
-        static let lime = Color(red: 0.792, green: 0.890, blue: 0.424)         // #CAE36C, as every action
-    }
+    private let cornerRadius: CGFloat = 26
+    private var idle: Color { MoveMarkTheme.Colors.textSecondary.opacity(0.82) }
 
     var body: some View {
         Group {
             if !keyboardVisible {
                 HStack(spacing: 0) {
-                    item(.vaults, title: "Proof", outline: "house", filled: "house.fill")
+                    item(.vaults, title: "Proof", outline: "folder", filled: "folder.fill")
                     item(.exports, title: "Reports", outline: "doc.text", filled: "doc.text.fill")
-                    item(.account, title: "Account", outline: "person", filled: "person.fill")
+                    item(.account, title: "Account", outline: "person.crop.circle", filled: "person.crop.circle.fill")
                 }
-                .padding(.horizontal, 8)
-                .frame(maxWidth: .infinity, minHeight: MoveMarkTheme.Spacing.floatingDockHeight)
-                .background(Ink.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Ink.border, lineWidth: 1))
-                .shadow(color: .black.opacity(0.08), radius: 14, y: 4)
-                .padding(.horizontal, 22)
+                .frame(maxWidth: 310, minHeight: MoveMarkTheme.Spacing.floatingDockHeight)
+                .background(dockBackground)
+                .overlay(dockBorder)
+                .shadow(color: .black.opacity(0.22), radius: 14, y: 6)
+                .padding(.horizontal, 28)
+                .frame(maxWidth: .infinity)
                 .padding(.bottom, MoveMarkTheme.Spacing.floatingDockBottomInset)
                 // Labels grow with Dynamic Type up to a size a dock can hold without clipping.
                 .dynamicTypeSize(...DynamicTypeSize.xxLarge)
@@ -54,6 +49,24 @@ struct MMProofTabBarV4: View {
         }
     }
 
+    private var dockBackground: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            // Solid: at 96% the page's text showed through the labels.
+            .fill(MoveMarkTheme.Colors.evidenceCardRaised)
+    }
+
+    private var dockBorder: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .stroke(
+                LinearGradient(
+                    colors: [MoveMarkTheme.Colors.primary.opacity(0.28), MoveMarkTheme.Colors.cardStroke.opacity(0.85)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                lineWidth: 1
+            )
+    }
+
     private func item(_ tab: RootTab, title: String, outline: String, filled: String) -> some View {
         let isSelected = selectedTab == tab
         return Button {
@@ -64,29 +77,30 @@ struct MMProofTabBarV4: View {
             MMHaptics.selection()
             withAnimation(reduceMotion ? nil : MMMotion.tabIndicator) { selectedTab = tab }
         } label: {
-            VStack(spacing: 4) {
-                // The active icon morphs in (outline → filled, a hair larger); idle icons sit back slightly.
+            VStack(spacing: isSelected ? 4 : 2) {
                 Image(systemName: isSelected ? filled : outline)
-                    .font(.system(size: 21, weight: .regular))
+                    .font(.system(size: 21, weight: isSelected ? .semibold : .regular))
+                    .symbolRenderingMode(.hierarchical)
+                    .scaleEffect(isSelected && !reduceMotion ? 1.04 : 1)
                     .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
-                    .scaleEffect(isSelected || reduceMotion ? 1 : 0.96)
-                    .frame(height: 24)
                 Text(title)
-                    .mmFont(11.5, .semibold)
+                    .mmFont(10, isSelected ? .semibold : .medium)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                ZStack {
-                    if isSelected {
-                        Capsule()
-                            .fill(Ink.lime)
-                            .matchedGeometryEffect(id: "dockSignal", in: tabNamespace)
-                    }
-                }
-                .frame(width: 22, height: 3)
+                    .opacity(isSelected ? 1 : 0.9)
             }
-            .foregroundStyle(isSelected ? Ink.ink : Ink.idle)
-            .padding(.top, 8)
+            .foregroundStyle(isSelected ? MoveMarkTheme.Colors.textPrimary : idle)
             .frame(maxWidth: .infinity, minHeight: 44)
+            .padding(.vertical, 6)
+            .background {
+                if isSelected {
+                    Capsule()
+                        .fill(MoveMarkTheme.Colors.primary.opacity(0.14))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 2)
+                        .matchedGeometryEffect(id: "evidenceDockPill", in: tabNamespace)
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(MMFloatingDockPressStyle())
