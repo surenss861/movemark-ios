@@ -45,7 +45,7 @@ FROM neon_auth."user" u
 WHERE EXISTS (SELECT 1 FROM neon_auth.session s WHERE s."userId" = u.id AND s."updatedAt" > now() - interval '30 days');
 ```
 
-This needs an owner-approved read path on production. The column name is from the Better Auth schema and has not been checked on production.
+This needs an owner-approved read path on production. The columns match `dev`; production has not been checked.
 
 ### Step 6: the enforcement migration
 
@@ -91,7 +91,7 @@ Production changes only move through the runner, so every rollback is a new numb
 | Situation | Action | Data effect |
 |---|---|---|
 | Customers locked out after step 6 | Migration: `UPDATE legal_gate_settings SET enforced = false`. Releases RLS and API together | None; acceptances kept |
-| Policies themselves faulty | Migration with the bodies of `neon/rollback/1050_*.down.sql`, then `1040_*.down.sql` | None; acceptances kept. Tested: schema returns exactly to the prior fingerprint |
+| Policies themselves faulty | Migration with the bodies of `neon/rollback/1050_*.down.sql`, then `1040_*.down.sql` | None; acceptances kept. Tested locally and on a Neon child branch: schema returns exactly to the prior fingerprint |
 | API check faulty | Turn enforcement off, or redeploy the previous commit | None |
 | Abandon the feature before anyone accepted | Above, then `neon/rollback/1030_*.down.sql` | **Destroys acceptance records**; never after customers accept |
 
