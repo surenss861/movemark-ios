@@ -135,8 +135,8 @@ struct NeonDevLifecycleTests {
         let photo2 = try #require(UIImage(data: photo)?.jpegData(compressionQuality: 0.7))  // a second, different file
         let source = try MMEvidenceImport.source(from: photo, captureSource: .library)
         let source2 = try MMEvidenceImport.source(from: photo2, captureSource: .camera)
-        let passwordA = "Qa-\(UUID().uuidString)"
-        let passwordB = "Qa-\(UUID().uuidString)"
+        let passwordA = "T-" + UUID().uuidString   // fresh each run: the accounts are disposable
+        let passwordB = "T-" + UUID().uuidString   // fresh each run: the accounts are disposable
 
         // 1. Create account (email/password) and finish onboarding.
         let session = SessionManager()
@@ -376,7 +376,7 @@ struct NeonDevLifecycleTests {
         try await session.sendPasswordReset(email: emailA)
         try Data(userA.uuidString.lowercased().utf8).write(to: dir.appendingPathComponent("reset-request"))
         let token = try await waitForFile("reset-token", seconds: 120)
-        let newPassword = "Qa-reset-\(UUID().uuidString)"
+        let newPassword = "T-" + UUID().uuidString   // fresh each run: the accounts are disposable
         try await session.completePasswordReset(token: token, newPassword: newPassword, confirmPassword: newPassword)
         #expect(session.authPhase == .signedOut)
         await #expect(throws: (any Error).self) { try await session.signIn(email: emailA, password: passwordA) }

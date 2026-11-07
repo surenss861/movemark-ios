@@ -31,7 +31,7 @@ struct NeonDevHistoryPaginationTests {
 
         let session = SessionManager()
         await NeonAuthClient.shared.endSessionLocally(notify: false)
-        let password = "Qa-\(UUID().uuidString)"
+        let password = "T-" + UUID().uuidString   // fresh each run: the accounts are disposable
         _ = try await session.signUp(email: email, password: password, confirmPassword: password)
         try await session.completeOnboarding(firstName: "QA A")
         let user = try #require(session.userId)
