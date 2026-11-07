@@ -20,7 +20,7 @@ Each step needs its own owner approval. Run `check` before every `apply`, and st
 
 | # | Step | How | Effect on users |
 |---|---|---|---|
-| 0 | Lawyer-final Terms and Privacy Notice, with their public URLs | Owner | None |
+| 0 | Final (lawyer review advised, not required: owner decision 2026-11-07) Terms and Privacy Notice, with their public URLs | Owner | None |
 | 1 | Apply 1030, 1040, 1050 to production | Runner, production flag | None |
 | 2 | Deploy the API (`823c787`) | Merge to the deploy branch | None. **Must follow step 1**: the check fails closed, so without the function every protected route returns 503 |
 | 3 | Publish final documents | A numbered migration calling `publish_legal_document(..., p_is_final => true)` | `acceptance_required` becomes true; nobody is blocked |
