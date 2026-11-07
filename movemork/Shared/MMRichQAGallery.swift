@@ -20,7 +20,9 @@ struct MMRichQAGallery: View {
     let screen: String
 
     var body: some View {
-        if screen == "tabs" {
+        if screen == "legal" {
+            MMLegalQAFixture()
+        } else if screen == "tabs" {
             // Root-tab switching over fixture pages in the production container (MMRootTabQAShell).
             MMRootTabQAShell()
         } else if screen.hasPrefix("room-") {
@@ -445,6 +447,26 @@ private struct ProofQAScreen: View {
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     MMRootDock(selectedTab: .constant(.vaults))
                 }
+        }
+    }
+}
+
+/// `-MMRichQA legal`: the agreement screen with a counting accept, for its UI test.
+private struct MMLegalQAFixture: View {
+    @State private var accepted = 0
+
+    var body: some View {
+        LegalAcceptanceScreen(termsURL: URL(string: "https://movemark.ca/terms"),
+                              privacyURL: URL(string: "https://movemark.ca/privacy"),
+                              onAccept: {
+                                  accepted += 1
+                                  return nil
+                              })
+        .overlay(alignment: .top) {
+            Text("accepted \(accepted)")
+                .font(.caption)
+                .foregroundStyle(.white)
+                .accessibilityIdentifier("legal.acceptedCount")
         }
     }
 }
