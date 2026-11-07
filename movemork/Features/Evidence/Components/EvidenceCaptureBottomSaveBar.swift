@@ -15,12 +15,13 @@ struct EvidenceCaptureBottomSaveBar: View {
     let didJustSave: Bool
     let moveOutMode: Bool
     let onSave: () -> Void
+    @Environment(\.mmEvidenceOnLight) private var onLight
 
     private var statusLine: String {
         if isUploading { return "Saving proof…" }
         if didJustSave { return "Proof saved" }
         if photoCount == 0 { return "Add photos to continue" }
-        return "\(photoCount) photo\(photoCount == 1 ? "" : "s") ready to save"
+        return "\(photoCount) photo\(photoCount == 1 ? "" : "s") ready"
     }
 
     private var statusColor: Color {
@@ -28,7 +29,7 @@ struct EvidenceCaptureBottomSaveBar: View {
             return MoveMarkTheme.Colors.semanticWarning.opacity(0.95)
         }
         if didJustSave { return MoveMarkTheme.Colors.semanticSuccess.opacity(0.95) }
-        return MoveMarkTheme.Colors.textSecondary
+        return onLight ? MMInk.secondary : MoveMarkTheme.Colors.textSecondary
     }
 
     private var saveTitle: String {
@@ -45,20 +46,28 @@ struct EvidenceCaptureBottomSaveBar: View {
                 .animation(MMMotion.fastFade, value: didJustSave)
                 .animation(MMMotion.fastFade, value: isUploading)
 
-            MMButton(
-                title: saveTitle,
-                action: onSave,
-                kind: .primary,
-                size: .standard,
-                isDisabled: photoCount == 0 || isUploading
-            )
+            // The MoveMark action lime, as on the Vault, the room brief and the receipt.
+            Button(action: onSave) {
+                Text(saveTitle)
+                    .font(MoveMarkTheme.Typography.subheadlineMedium)
+                    .foregroundStyle(RoomEvidenceHero.onLime)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 50)
+                    .background(RoomEvidenceHero.lime, in: Capsule())
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(photoCount == 0 || isUploading)
+            .opacity(photoCount == 0 || isUploading ? 0.5 : 1)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(MoveMarkTheme.Colors.evidenceCard)
+        // Solid, down through the home-indicator area, so the page scrolling underneath never shows.
+        .background((onLight ? MMInk.card : MoveMarkTheme.Colors.appBackground).ignoresSafeArea(edges: .bottom))
+        .environment(\.colorScheme, onLight ? .light : .dark)
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(MoveMarkTheme.Colors.cardStroke)
+                .fill(onLight ? MMInk.cardStroke : Color.white.opacity(0.08))
                 .frame(height: 0.5)
         }
     }

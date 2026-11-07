@@ -49,6 +49,9 @@ class AccountViewModel @Inject constructor(
     private val _resetInProgress = MutableStateFlow(false)
     val resetInProgress: StateFlow<Boolean> = _resetInProgress.asStateFlow()
 
+    private val _deleting = MutableStateFlow(false)
+    val deleting: StateFlow<Boolean> = _deleting.asStateFlow()
+
     private val _profileSaving = MutableStateFlow(false)
     val profileSaving: StateFlow<Boolean> = _profileSaving.asStateFlow()
 
@@ -119,10 +122,31 @@ class AccountViewModel @Inject constructor(
         }
     }
 
+    /** Photos not uploaded yet; non-zero means sign-out must warn first. */
+    suspend fun unsavedPhotoCount(): Int = runCatching { sessionManager.unsavedPhotoCount() }.getOrDefault(0)
+
     fun signOut(onDone: () -> Unit) {
         viewModelScope.launch {
             sessionManager.signOut { propertyStore.clear() }
             onDone()
+        }
+    }
+
+    /** Permanently deletes the account and its cloud data, then signs out on this device (iOS `DeleteAccountView`). */
+    fun deleteAccount(onDone: () -> Unit) {
+        if (_deleting.value) return
+        viewModelScope.launch {
+            _deleting.value = true
+            _notice.value = null
+            try {
+                sessionManager.deleteAccount { propertyStore.clear() }
+                onDone()
+            } catch (e: Exception) {
+                Log.e("AccountViewModel", "deleteAccount failed", e)
+                _notice.value = AccountNotice(MMUserMessages.deleteAccount(e), isError = true)
+            } finally {
+                _deleting.value = false
+            }
         }
     }
 

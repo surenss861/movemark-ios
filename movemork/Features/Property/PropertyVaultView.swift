@@ -2,12 +2,12 @@
 //  PropertyVaultView.swift
 //  movemork
 //
-//  MoveMark — Property command center: hero, rooms, documents, details, actions.
+//  MoveMark — The rental record: owns its state, uploads and backend calls; PropertyVaultContent draws it.
 //
 
 import SwiftUI
 import PhotosUI
-import Supabase
+import UniformTypeIdentifiers
 
 private struct VaultDocumentQuickLookItem: Identifiable {
     let id = UUID()
@@ -25,6 +25,11 @@ struct PropertyVaultView: View {
     @Environment(SubscriptionManager.self) private var subscriptionManager
 
     @State private var isUploading = false
+    /// The record slot being uploaded, so only its row shows busy.
+    @State private var uploadingDocType: VaultDocumentType? = nil
+    /// The photo behind a failed upload, kept for Try again; `selectedPhotoItem` is cleared on every exit so
+    /// picking the same photo again still registers.
+    @State private var lastFailedPhotoItem: PhotosPickerItem? = nil
     @State private var uploadError: String? = nil
     @State private var uploadSoftNotice: String? = nil
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
@@ -102,54 +107,6 @@ struct PropertyVaultView: View {
         return propertyStore.readinessScore(for: property)
     }
 
-    private var orderedRooms: [RoomRecord] {
-        guard let next = nextRoom else { return property.rooms }
-        return property.rooms.sorted { lhs, rhs in
-            if lhs.id == next.id { return true }
-            if rhs.id == next.id { return false }
-            let lhsDone = !lhs.evidence.isEmpty
-            let rhsDone = !rhs.evidence.isEmpty
-            if lhsDone != rhsDone { return !lhsDone && rhsDone }
-            return lhs.name < rhs.name
-        }
-    }
-
-    private var walkthroughSubtitle: String {
-        if let label = vaultSummary?.readiness.primaryNextAction?.label,
-           !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return label
-        }
-        if let next = nextRoom, next.evidence.isEmpty {
-            return "Open \(next.name) to capture proof"
-        }
-        if totalRooms == 0 { return "Start documenting the property" }
-        return "Review finished rooms"
-    }
-
-    private var exportsSubtitle: String {
-        propertyStore.isExportReady(for: property)
-            ? "Make and share reports"
-            : "Add proof before making a report"
-    }
-
-    private var vaultProofTrailRows: [MMProofTimelineRow] {
-        MMProofTimelineBuilder.vaultTrail(
-            property: property,
-            nextRoom: nextRoom,
-            isExportReady: exportReady
-        )
-    }
-
-    private var highlightedTrailRowID: String? {
-        if let doc = highlightedDocumentType {
-            return "doc-\(doc.rawValue)"
-        }
-        if let roomId = pulseQueueHeadRoomId {
-            return "room-\(roomId.uuidString)"
-        }
-        return nil
-    }
-
     private var uploadedDocumentCount: Int {
         propertyStore.uploadedSupportingRecordCount(for: property)
     }
@@ -158,140 +115,58 @@ struct PropertyVaultView: View {
         propertyStore.isExportReady(for: property)
     }
 
-    private var missingPriorityDocTypes: [VaultDocumentType] {
-        Self.priorityDocumentTypes.filter { !hasDoc($0) }
-    }
-
     var body: some View {
-        ZStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    PropertyVaultHeroStage(
-                        property: property,
-                        namespace: namespace,
-                        documentedRooms: completedRooms,
-                        totalRooms: totalRooms,
-                        nextRoomName: nextRoom?.name,
-                        missingSupportingDocs: missingRecordsCount
-                    )
-                    .id(property.id)
-                    .padding(.bottom, 8)
-
-                    MMRoomProgressCard(
-                        headline: "\(completedRooms) of \(totalRooms) rooms ready",
-                        nextLine: propertyVaultProofHeroNextLine,
-                        progress: progress,
-                        progressLabel: "\(totalPhotos) photos saved",
-                        primaryTitle: MMNextBestActionMapper.from(
-                            propertyNextAction: propertyStore.primaryNextAction(for: property)
-                        ).title,
-                        onPrimary: { path.append(.walkthrough) }
-                    )
-                    .opacity(contentVisible ? 1 : 0)
-                    .offset(y: contentVisible ? 0 : 8)
-                    .animation(MMMotion.screenTransition.delay(0.06), value: contentVisible)
-                    .padding(.bottom, 14)
-
-                    if let vaultSummaryError, uploadError == nil {
-                        MMErrorBanner(
-                            message: vaultSummaryError,
-                            onRetry: { Task { await loadVaultSummary() } }
-                        )
-                        .opacity(contentVisible ? 1 : 0)
-                        .offset(y: contentVisible ? 0 : 8)
-                        .animation(MMMotion.screenTransition.delay(0.06), value: contentVisible)
-                        .padding(.bottom, 10)
-                    }
-
-                    MMProofTimeline(
-                        title: "Proof trail",
-                        rows: vaultProofTrailRows,
-                        highlightedRowID: highlightedTrailRowID,
-                        appeared: contentVisible
-                    )
-                    .opacity(contentVisible ? 1 : 0)
-                    .offset(y: contentVisible ? 0 : 8)
-                    .animation(MMMotion.screenTransition.delay(0.10), value: contentVisible)
-                    .padding(.bottom, 14)
-
-                    PropertyVaultRoomQueue(
-                        rooms: orderedRooms,
-                        nextRoomID: nextRoom?.id,
-                        pulseQueueHeadRoomId: pulseQueueHeadRoomId,
-                        completedRooms: completedRooms,
-                        totalRooms: totalRooms,
-                        onSeeAll: { path.append(.walkthrough) },
-                        onOpenRoom: { room in path.append(.roomDetail(roomID: room.id)) }
-                    )
-                    .opacity(contentVisible ? 1 : 0)
-                    .offset(y: contentVisible ? 0 : 8)
-                    .animation(MMMotion.screenTransition.delay(0.12), value: contentVisible)
-                    .padding(.bottom, 16)
-
-                    documentsSection
-                        .opacity(contentVisible ? 1 : 0)
-                        .offset(y: contentVisible ? 0 : 8)
-                        .animation(MMMotion.screenTransition.delay(0.15), value: contentVisible)
-                        .padding(.bottom, 16)
-
-                    PropertyVaultSecondaryTools(
-                        openIssuesCount: openIssuesCount,
-                        completedRooms: completedRooms,
-                        readinessScore: readinessScore,
-                        exportsSubtitle: exportsSubtitle,
-                        pulseDisputeTile: pulseDisputeTile,
-                        pulseExportsTile: pulseExportsTile,
-                        onMaintenance: { path.append(.maintenance) },
-                        onMoveOut: { path.append(.moveOut) },
-                        onDisputeBuilder: {
-                            if subscriptionManager.canUseCaseBuilder() {
-                                path.append(.exports)
-                            } else {
-                                activePaywallReason = .disputePacket
-                                showPaywall = true
-                            }
-                        },
-                        onExports: { path.append(.exports) }
-                    )
-                    .opacity(contentVisible ? 1 : 0)
-                    .offset(y: contentVisible ? 0 : 8)
-                    .animation(MMMotion.screenTransition.delay(0.17), value: contentVisible)
-                    .padding(.bottom, 18)
-
-                    detailSection(property)
-                        .opacity(contentVisible ? 1 : 0)
-                        .offset(y: contentVisible ? 0 : 8)
-                        .animation(MMMotion.screenTransition.delay(0.20), value: contentVisible)
-
-                    MMSignedInScrollTailSpacer(kind: .focusedSignedIn)
+        PropertyVaultContent(
+            model: vaultModel,
+            showAllRecords: $showAllSupportingRecords,
+            showDetails: $showPropertyDetails,
+            appeared: contentVisible,
+            onPrimary: {
+                // "Capture Kitchen" opens Kitchen; anything else continues the guided list.
+                if case .captureRoom(let roomID, _) = propertyStore.primaryNextAction(for: property) {
+                    path.append(.roomDetail(roomID: roomID))
+                } else if let next = nextRoom, !MMRoomProofMetrics.isDocumented(next) {
+                    path.append(.roomDetail(roomID: next.id))
+                } else {
+                    path.append(.walkthrough)
                 }
-                .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.top, 4)
-                .mmScrollContentTopInset(2)
-                .padding(.bottom, MoveMarkTheme.Spacing.scrollTailFocusedFlow)
-            }
-        }
+            },
+            onRetrySummary: { Task { await loadVaultSummary() } },
+            onSeeAllRooms: { path.append(.walkthrough) },
+            onOpenRoom: { roomID in path.append(.roomDetail(roomID: roomID)) },
+            onRetryUpload: retryDocumentUpload,
+            onViewRecord: { docType in Task { await previewDocument(type: docType) } },
+            onUploadRecord: { docType in startUpload(for: docType) },
+            onDeleteRecord: { docType in deleteConfirmType = docType.rawValue },
+            onLink: { link in
+                switch link {
+                case .maintenance: path.append(.maintenance)
+                case .moveOut: path.append(.moveOut)
+                case .caseBuilder:
+                    if subscriptionManager.canUseCaseBuilder() {
+                        path.append(.exports)
+                    } else {
+                        activePaywallReason = .disputePacket
+                        showPaywall = true
+                    }
+                case .exports: path.append(.exports)
+                }
+            },
+            onEdit: { showEditProperty = true }
+        )
+        .id(property.id)
         .mmProofToast(message: proofToast, isVisible: proofToastVisible)
-        .mmProofShellBackground(heroFocus: false, ctaBloom: false)
         .sheet(isPresented: $showEditProperty) {
             NavigationStack {
-                EditPropertyView(property: property)
-                    .navigationTitle("Edit property")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
-                            Button("Close") {
-                                showEditProperty = false
-                            }
-                            .foregroundStyle(MoveMarkTheme.Colors.primary)
-                        }
-                    }
+                // The sheet owns its Close: unsaved edits ask before they're dropped.
+                EditPropertyView(property: property, onClose: { showEditProperty = false })
             }
         }
         .sheet(isPresented: $showPaywall) {
             ProPaywallView(
                 reason: activePaywallReason,
-                onClose: { showPaywall = false }
+                onClose: { showPaywall = false },
+                moveInRecorded: propertyStore.currentProperty.map { propertyStore.totalPhotoCount(for: $0) > 0 } ?? false
             )
         }
         .task(id: property.id) {
@@ -314,6 +189,7 @@ struct PropertyVaultView: View {
                 deleteConfirmType = nil
             }
             Button("Delete", role: .destructive) {
+                MMHaptics.warning()
                 if let type = deleteConfirmType {
                     Task { await confirmDeleteDocument(type: type) }
                 }
@@ -332,10 +208,11 @@ struct PropertyVaultView: View {
         .sheet(isPresented: $showReplacePhotoSheet) {
             ReplacePhotoSheet(
                 onDismiss: { showReplacePhotoSheet = false },
-                selection: $selectedPhotoItem
+                selection: $selectedPhotoItem,
+                current: listingPreview
             )
         }
-        .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.pdf]) { result in
+        .fileImporter(isPresented: $showFilePicker, allowedContentTypes: fileImporterContentTypes) { result in
             switch result {
             case .success(let url):
                 handleFileSelection(url: url, docType: pendingFileDocType)
@@ -366,375 +243,87 @@ struct PropertyVaultView: View {
         }
         .overlay {
             if isPreparingDocumentPreview {
-                ZStack {
-                    MoveMarkTheme.Colors.textPrimary.opacity(0.25).ignoresSafeArea()
-                    ProgressView("Opening…")
-                        .tint(MoveMarkTheme.Colors.primary)
-                }
+                MMBusyOverlay(message: "Opening…")
             }
         }
     }
 
-    private var depositDisplayText: String {
-        let raw = property.depositAmount.trimmingCharacters(in: .whitespacesAndNewlines)
-        if raw.isEmpty { return "Deposit protection" }
-        if raw.hasPrefix("$") { return raw }
-        return "$\(raw)"
-    }
+    // MARK: - Presentation model
 
-    private var proofScoreLabel: String {
-        if readinessScore >= 70 { return "Strong proof" }
-        if readinessScore >= 40 { return "Building proof" }
-        return "Early proof"
-    }
-
-    private var propertyVaultProofHeroNextLine: String {
-        if totalRooms > 0,
-           completedRooms < totalRooms,
-           let name = nextRoom?.name,
-           !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "Next: \(name)"
-        }
-        return readinessGuidanceLine
-    }
-
-    private var readinessGuidanceLine: String {
-        if let label = vaultSummary?.readiness.primaryNextAction?.label,
-           !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return label
-        }
-        if totalRooms == 0 {
-            return "Add rooms, then capture photos for each one."
-        }
-        if completedRooms < totalRooms {
-            return "Mark what was already there in rooms still missing photos."
-        }
-        if missingRecordsCount > 0 {
-            return "Add your lease and deposit receipt when you can."
-        }
-        return "Your proof looks strong. Keep documents current."
-    }
-
-    private var documentsSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Receipts & lease docs")
-                        .font(MoveMarkTheme.Typography.captionEmphasis)
-                        .tracking(0.8)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        .textCase(.uppercase)
-
-                    Text("Lease, deposit receipt, and other papers.")
-                        .font(MoveMarkTheme.Typography.detail)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.86))
-                }
-
-                Spacer()
-
-                Text("\(propertyStore.uploadedSupportingRecordCount(for: property)) of \(Self.documentTypeOrder.count) uploaded")
-                    .font(MoveMarkTheme.Typography.tiny)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.56))
-            }
-
-            if let uploadError {
-                MMErrorBanner(
-                    message: uploadError,
-                    retryTitle: MMCopy.tryAgain,
-                    onRetry: retryDocumentUpload
+    private var vaultModel: PropertyVaultModel {
+        PropertyVaultModel(
+            title: PropertyVaultModel.displayTitle(for: property),
+            addressLine: PropertyVaultModel.addressLine(for: property),
+            moveInLine: PropertyVaultModel.moveInLine(for: property),
+            rooms: property.rooms.map { MMRentalRoom($0, isHighlighted: $0.id == pulseQueueHeadRoomId) },
+            nextRoomID: nextRoom.flatMap { MMRoomProofMetrics.isDocumented($0) ? nil : $0.id }
+                ?? property.rooms.first(where: { !MMRoomProofMetrics.isDocumented($0) })?.id,
+            summaryError: vaultSummaryError,
+            records: Self.documentTypeOrder.map { docType in
+                PropertyVaultModel.Record(
+                    type: docType,
+                    isPresent: hasDoc(docType),
+                    addedOn: recordAddedOn(for: docType),
+                    file: recordFile(for: docType),
+                    isHighlighted: highlightedDocumentType == docType
                 )
-            }
-
-            if let uploadSoftNotice, uploadError == nil {
-                MMCard(tone: .quiet, padding: 14, spacing: 8) {
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "info.circle.fill")
-                            .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.9))
-                        Text(uploadSoftNotice)
-                            .font(MoveMarkTheme.Typography.subheadline)
-                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                    }
-                }
-            }
-
-            if let previewErrorMessage {
-                MMErrorBanner(message: previewErrorMessage)
-            }
-
-            if showAllSupportingRecords {
-                VStack(spacing: 0) {
-                    ForEach(Self.documentTypeOrder, id: \.self) { docType in
-                        supportingRecordRow(for: docType)
-
-                        if let last = Self.documentTypeOrder.last, docType != last {
-                            Divider()
-                                .background(MoveMarkTheme.Colors.divider.opacity(0.22))
-                                .padding(.leading, 54)
-                        }
-                    }
-                }
-
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showAllSupportingRecords = false
-                    }
-                } label: {
-                    Text("Collapse records")
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.primary)
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 10)
-            } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(missingPriorityDocTypes.prefix(3), id: \.self) { docType in
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(docType.displayTitle)
-                                    .font(MoveMarkTheme.Typography.subheadlineMedium)
-                                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                                Text(recordSubtitle(for: docType, isPresent: false))
-                                    .font(MoveMarkTheme.Typography.footnote)
-                                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            }
-                            Spacer()
-                            Button {
-                                startUpload(for: docType)
-                            } label: {
-                                recordActionButton(title: "Upload")
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.horizontal, 6)
-                    }
-
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showAllSupportingRecords = true
-                        }
-                    } label: {
-                        Text("See all records")
-                            .font(MoveMarkTheme.Typography.subheadlineMedium)
-                            .foregroundStyle(MoveMarkTheme.Colors.primary)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 6)
-                }
-            }
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(MoveMarkTheme.Colors.fieldFill.opacity(0.94))
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.52), lineWidth: 0.5)
+            },
+            priorityCount: Self.priorityDocumentTypes.count,
+            uploadError: uploadError,
+            softNotice: uploadSoftNotice,
+            previewError: previewErrorMessage,
+            isUploading: isUploading,
+            uploadingType: uploadingDocType,
+            maintenance: maintenanceSummary,
+            moveOut: moveOutSummary,
+            details: PropertyVaultModel.Detail.primary(for: property),
+            moreDetails: PropertyVaultModel.Detail.more(for: property)
         )
     }
 
-    private func recordSubtitle(for docType: VaultDocumentType, isPresent: Bool) -> String {
-        switch docType {
-        case .lease:
-            return isPresent ? "Tenancy agreement attached" : "Tenancy agreement"
-        case .depositReceipt:
-            return isPresent ? "Payment proof attached" : "Payment proof"
-        case .listingScreenshot:
-            return isPresent ? "Original listing attached" : "Original listing"
-        case .cleaningReceipt:
-            return isPresent ? "Cleaning proof attached" : "Cleaning proof"
-        case .utilityProof:
-            return isPresent ? "Utility record attached" : "Utility record"
-        case .moveOutInvoice:
-            return isPresent ? "Move-out cost attached" : "Move-out cost"
-        case .other:
-            return isPresent ? "Additional proof attached" : "Additional proof"
+    /// Open and total cases: the server's summary when loaded, else this rental's hydrated log.
+    private var maintenanceSummary: PropertyVaultModel.Maintenance {
+        if let m = vaultSummary?.maintenance {
+            return .init(open: m.openCount + m.followUpCount, total: m.openCount + m.followUpCount + m.resolvedCount)
         }
+        let isActive = propertyStore.currentProperty?.id == property.id
+        return .init(open: openIssuesCount, total: isActive ? propertyStore.maintenanceLog.count : nil)
     }
 
-    private func recordActionButton(title: String, isBusy: Bool = false) -> some View {
-        Text(isBusy ? "Saving…" : title)
-            .font(MoveMarkTheme.Typography.footnoteEmphasis)
-            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-            .padding(.horizontal, 10)
-            .frame(height: 30)
-            .background(MoveMarkTheme.Colors.cardRaised.opacity(0.55))
-            .overlay(
-                Capsule()
-                    .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.55), lineWidth: 0.8)
-            )
-            .clipShape(Capsule())
+    /// Move-out shows once it's relevant: move-out proof exists, or the lease ends within 45 days.
+    private var moveOutSummary: PropertyVaultModel.MoveOut? {
+        let documentedOut = propertyStore.moveOutDocumentedRoomCount(for: property)
+        let started = documentedOut > 0 || (vaultSummary?.walkthrough.hasMoveOutStarted ?? false)
+        let calendar = Calendar.current
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: Date()),
+                                           to: calendar.startOfDay(for: property.leaseEndDate)).day
+        let leaseEnding = property.leaseEndDate.timeIntervalSince1970 > 0 && (days ?? 999) <= 45
+        guard started || leaseEnding else { return nil }
+        return .init(documented: documentedOut, total: totalRooms,
+                     daysUntilLeaseEnd: leaseEnding && !started ? max(days ?? 0, 0) : nil)
     }
 
-    private func supportingRecordRow(for docType: VaultDocumentType) -> some View {
-        let present = hasDoc(docType)
-        let isHighlighted = highlightedDocumentType == docType
-
-        return SupportingRecordRow(
-            title: docType.displayTitle,
-            subtitle: recordSubtitle(for: docType, isPresent: present),
-            isPresent: present
-        ) {
-            if present {
-                Button {
-                    Task { await previewDocument(type: docType) }
-                } label: {
-                    recordActionButton(title: "View")
-                }
-                .contextMenu {
-                    if docType.acceptsImage {
-                        Button("Replace with photo") {
-                            pendingPhotoDocType = docType.rawValue
-                            showReplacePhotoSheet = true
-                        }
-                    } else {
-                        Button("Replace") {
-                            pendingFileDocType = docType.rawValue
-                            showFilePicker = true
-                        }
-                    }
-
-                    Button("Delete", role: .destructive) {
-                        deleteConfirmType = docType.rawValue
-                    }
-                }
-            } else {
-                if docType.acceptsImage {
-                    Button {
-                        pendingPhotoDocType = docType.rawValue
-                        showReplacePhotoSheet = true
-                    } label: {
-                        recordActionButton(title: "Add", isBusy: isUploading)
-                    }
-                    .disabled(isUploading)
-                } else {
-                    Button {
-                        pendingFileDocType = docType.rawValue
-                        showFilePicker = true
-                    } label: {
-                        recordActionButton(title: "Add")
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(
-                    isHighlighted
-                        ? MoveMarkTheme.Colors.primary.opacity(0.10)
-                        : Color.clear
-                )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(
-                    isHighlighted
-                        ? MoveMarkTheme.Colors.primary.opacity(0.18)
-                        : Color.clear,
-                    lineWidth: 0.8
-                )
-        )
-        .animation(.easeInOut(duration: 0.22), value: isHighlighted)
+    /// When a stored record was added, if the row says.
+    private func recordAddedOn(for docType: VaultDocumentType) -> String? {
+        MMRecordDate.parse(docRow(for: docType.rawValue)?.uploadedAt).map(MMRecordDate.display)
     }
 
-    private func detailSection(_ property: PropertyRecord) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Property details")
-                    .font(MoveMarkTheme.Typography.captionEmphasis)
-                    .tracking(0.8)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    .textCase(.uppercase)
-
-                Spacer()
-
-                Button("Edit") {
-                    showEditProperty = true
-                }
-                .font(MoveMarkTheme.Typography.detailEmphasis)
-                .foregroundStyle(MoveMarkTheme.Colors.primary)
-            }
-
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showPropertyDetails.toggle()
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Text(showPropertyDetails ? "Hide details" : "Show details")
-                        .font(MoveMarkTheme.Typography.subheadlineMedium)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                    Image(systemName: showPropertyDetails ? "chevron.up" : "chevron.down")
-                        .font(MoveMarkTheme.Typography.captionEmphasis)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                }
-            }
-            .buttonStyle(.plain)
-
-            if showPropertyDetails {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Tenancy")
-                        .font(MoveMarkTheme.Typography.footnoteEmphasis)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
-
-                    VStack(spacing: 10) {
-                        detailRow("Move-in", property.moveInDate.formatted(date: .abbreviated, time: .omitted))
-
-                        if let start = property.leaseStartDate {
-                            detailRow("Lease start", start.formatted(date: .abbreviated, time: .omitted))
-                        }
-
-                        detailRow("Lease end", property.leaseEndDate.formatted(date: .abbreviated, time: .omitted))
-
-                        if !property.depositAmount.isEmpty {
-                            detailRow("Deposit", property.depositAmount)
-                        }
-
-                        if !property.rentAmount.isEmpty {
-                            detailRow("Rent", property.rentAmount)
-                        }
-                    }
-                }
-
-                Divider()
-                    .background(MoveMarkTheme.Colors.divider.opacity(0.22))
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Contact")
-                        .font(MoveMarkTheme.Typography.footnoteEmphasis)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
-
-                    VStack(spacing: 10) {
-                        detailRow("Landlord", property.landlordName.isEmpty ? "Not added" : property.landlordName)
-                        detailRow("Email", property.landlordEmail.isEmpty ? "Not added" : property.landlordEmail)
-                    }
-                }
-            }
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(MoveMarkTheme.Colors.card.opacity(0.80))
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.48), lineWidth: 0.5)
-        )
+    /// What a stored record's file is. Photos are stored under generated names, so they read as "Image".
+    private func recordFile(for docType: VaultDocumentType) -> String? {
+        guard let row = docRow(for: docType.rawValue) else { return nil }
+        if docType.acceptsImage { return "Image" }
+        let name = row.fileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "PDF" : name
     }
 
-    private func detailRow(_ title: String, _ value: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(title)
-                .font(MoveMarkTheme.Typography.detail)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.82))
-
-            Spacer(minLength: 12)
-
-            Text(value)
-                .font(MoveMarkTheme.Typography.subheadlineMedium)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.96))
-                .multilineTextAlignment(.trailing)
-        }
-        .padding(.vertical, 4)
+    /// The stored listing image for the listing-proof sheet, when there is one.
+    private var listingPreview: ReplacePhotoSheet.Current? {
+        guard hasDoc(.listingScreenshot), let row = docRow(for: VaultDocumentType.listingScreenshot.rawValue) else { return nil }
+        let bucket = DocumentRepository.storageBucket(forDocumentType: row.documentType)
+        let repo = documentRepo
+        return .init(path: row.thumbnailPath ?? row.filePath,
+                     addedOn: MMRecordDate.parse(row.uploadedAt),
+                     resolve: { path in try? await repo.signedURL(bucket: bucket, path: path) })
     }
 
     private func showFeedback(_ event: VaultFeedbackEvent) {
@@ -892,7 +481,14 @@ struct PropertyVaultView: View {
         return keys.contains { property.vaultDocuments.contains($0) }
     }
 
+    /// PDF for every record; the lease and deposit receipt also take a JPEG or PNG.
+    private var fileImporterContentTypes: [UTType] {
+        VaultDocumentType(rawValue: DocumentRepository.normalizedDocumentType(pendingFileDocType))?.acceptsImageFile == true
+            ? [.pdf, .jpeg, .png] : [.pdf]
+    }
+
     private func startUpload(for docType: VaultDocumentType) {
+        guard !isUploading else { return }
         if docType.acceptsImage {
             pendingPhotoDocType = docType.rawValue
             showReplacePhotoSheet = true
@@ -913,17 +509,14 @@ struct PropertyVaultView: View {
     /// Fetches server-side vault summary (rooms, docs, maintenance, readiness, exports/dispute flags). Fails silently and keeps local store UI when the API is unavailable.
     private func loadVaultSummary() async {
         guard
-            let base = Bundle.main.object(forInfoDictionaryKey: "MoveMarkAPIBaseURL") as? String,
-            !base.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let base = MoveMarkBackendConfig.apiBaseURLString
         else {
             return
         }
         do {
-            let session = try await supabase.auth.session
             let client = try ExportAPIClient(baseURLString: base)
             let summary = try await client.fetchVaultSummary(
                 propertyId: property.id,
-                accessToken: session.accessToken,
                 includeExports: true,
                 includeDispute: true
             )
@@ -962,6 +555,7 @@ struct PropertyVaultView: View {
         }
         await MainActor.run { isPreparingDocumentPreview = true }
         do {
+            MoveMarkStoredFileURLs.remember(rowId: row.id, filePath: row.filePath, thumbnailPath: row.thumbnailPath)
             let remoteURL = try await documentRepo.signedURL(
                 bucket: DocumentRepository.storageBucket(forDocumentType: row.documentType),
                 path: row.filePath
@@ -1024,8 +618,9 @@ struct PropertyVaultView: View {
     }
 
     private func retryDocumentUpload() {
+        guard !isUploading else { return }
         uploadSoftNotice = nil
-        if let docType = lastFailedPhotoDocType, let item = selectedPhotoItem {
+        if let docType = lastFailedPhotoDocType, let item = lastFailedPhotoItem {
             uploadError = nil
             handlePhotoSelection(item: item, docType: docType)
             return
@@ -1038,22 +633,32 @@ struct PropertyVaultView: View {
     }
 
     private func handlePhotoSelection(item: PhotosPickerItem, docType: String) {
-        guard let userId = sessionManager.userId else { return }
+        // Cleared on every path (an ignored or failed pick too), so choosing the same photo again fires.
+        selectedPhotoItem = nil
+        guard !isUploading, let userId = sessionManager.userId else { return }
         uploadError = nil
         uploadSoftNotice = nil
         previewErrorMessage = nil
         lastFailedPhotoDocType = docType
+        lastFailedPhotoItem = item
         isUploading = true
+        uploadingDocType = VaultDocumentType(rawValue: DocumentRepository.normalizedDocumentType(docType))
 
         Task { @MainActor in
-            defer { isUploading = false }
+            defer {
+                isUploading = false
+                uploadingDocType = nil
+            }
             let canonicalType = DocumentRepository.normalizedDocumentType(docType)
+            // Replace never removes the current copy up front: it is retired only after the
+            // new file and its row are both saved.
+            var previousRows: [PropertyDocumentRow] = []
             do {
                 if hasVaultDocMatching(docType) {
-                    try await documentRepo.deleteDocuments(propertyId: property.id, documentType: docType)
+                    previousRows = try await documentRepo.fetchDocuments(propertyId: property.id, documentType: docType)
                 }
             } catch {
-                uploadError = MoveMarkFlowMessage.documentDeleteFailed(error)
+                uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
                 return
             }
 
@@ -1061,18 +666,32 @@ struct PropertyVaultView: View {
                 uploadError = MoveMarkFlowMessage.documentImageReadFailed
                 return
             }
-            let compressed: Data
-            if let image = UIImage(data: data) {
-                compressed = image.jpegData(compressionQuality: 0.82) ?? data
-            } else {
-                compressed = data
-            }
-            let fileName = "\(UUID()).jpg"
-            let path = "\(userId)/\(property.id)/\(canonicalType)/\(fileName)"
-            let targetBucket = DocumentRepository.storageBucket(forDocumentType: canonicalType)
-
+            // JPEG and PNG documents keep their bytes. HEIC/HEIF (not accepted for documents) is the one
+            // conversion: a JPEG of the full image via ImageIO, never upscaled. The thumbnail is derived.
+            let image: MMEvidenceSource
             do {
-                _ = try await documentRepo.uploadDocument(data: compressed, bucket: targetBucket, path: path)
+                image = try MMEvidenceImport.source(from: data, captureSource: .library)
+            } catch {
+                uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
+                return
+            }
+            let keepsBytes = image.mimeType == "image/jpeg" || image.mimeType == "image/png"
+            guard let fileBytes = keepsBytes ? image.data : MMEvidenceImport.derivative(from: image) else {
+                uploadError = MoveMarkFlowMessage.documentImageReadFailed
+                return
+            }
+            let fileName = "\(UUID()).\(keepsBytes ? image.fileExtension : "jpg")"
+
+            // The thumbnail rides on the same upload and is best-effort: previews fall back to `filePath`.
+            let upload: MoveMarkUpload
+            do {
+                upload = try await documentRepo.uploadDocument(
+                    fileBytes,
+                    fileName: fileName,
+                    thumbnail: MMEvidenceImport.thumbnail(from: image),
+                    propertyId: property.id,
+                    documentType: canonicalType
+                )
                 if canonicalType == VaultDocumentType.lease.rawValue {
                     MoveMarkAnalytics.track(.leaseAdded)
                 } else if canonicalType == VaultDocumentType.depositReceipt.rawValue {
@@ -1083,20 +702,13 @@ struct PropertyVaultView: View {
                 return
             }
 
-            // Thumbnail upload is best-effort; a failure here just means this document falls back to `filePath` for previews.
-            var thumbnailPath: String?
-            if let thumbData = MMImageThumbnail.make(from: compressed) {
-                let thumbPath = MMImageThumbnail.thumbnailPath(for: path)
-                thumbnailPath = (try? await documentRepo.uploadDocument(data: thumbData, bucket: targetBucket, path: thumbPath)) != nil ? thumbPath : nil
-            }
-
             let row = PropertyDocumentRow(
                 id: UUID(),
                 propertyId: property.id,
                 userId: userId,
                 documentType: canonicalType,
-                filePath: path,
-                thumbnailPath: thumbnailPath,
+                filePath: upload.path,
+                thumbnailPath: upload.thumbnailPath,
                 fileName: fileName,
                 uploadedAt: nil,
                 metadata: nil
@@ -1104,9 +716,13 @@ struct PropertyVaultView: View {
             do {
                 try await documentRepo.insertDocumentRecord(row)
             } catch {
-                await documentRepo.removeStaleUpload(documentType: canonicalType, path: path)
+                await documentRepo.abandonUpload(upload)
                 uploadError = MoveMarkFlowMessage.documentRecordCreateFailed(error)
                 return
+            }
+
+            for old in previousRows where old.id != row.id {
+                await documentRepo.retireDocument(old)
             }
 
             let metaOK = await propertyStore.refreshDocuments(propertyId: property.id)
@@ -1128,27 +744,34 @@ struct PropertyVaultView: View {
 
             uploadError = nil
             lastFailedPhotoDocType = nil
-            selectedPhotoItem = nil
+            lastFailedPhotoItem = nil
         }
     }
 
     private func handleFileSelection(url: URL, docType: String) {
-        guard let userId = sessionManager.userId else { return }
+        guard !isUploading, let userId = sessionManager.userId else { return }
         uploadError = nil
         uploadSoftNotice = nil
         previewErrorMessage = nil
         lastFailedFileDocType = nil
         isUploading = true
+        uploadingDocType = VaultDocumentType(rawValue: DocumentRepository.normalizedDocumentType(docType))
 
         Task { @MainActor in
-            defer { isUploading = false }
+            defer {
+                isUploading = false
+                uploadingDocType = nil
+            }
             let canonicalType = DocumentRepository.normalizedDocumentType(docType)
+            // Replace never removes the current copy up front: it is retired only after the
+            // new file and its row are both saved.
+            var previousRows: [PropertyDocumentRow] = []
             do {
                 if hasVaultDocMatching(docType) {
-                    try await documentRepo.deleteDocuments(propertyId: property.id, documentType: docType)
+                    previousRows = try await documentRepo.fetchDocuments(propertyId: property.id, documentType: docType)
                 }
             } catch {
-                uploadError = MoveMarkFlowMessage.documentDeleteFailed(error)
+                uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
                 lastFailedFileDocType = docType
                 return
             }
@@ -1172,12 +795,22 @@ struct PropertyVaultView: View {
                 return
             }
 
-            let fileName = url.lastPathComponent
-            let path = "\(userId)/\(property.id)/\(canonicalType)/\(UUID().uuidString)-\(fileName)"
-            let targetBucket = DocumentRepository.storageBucket(forDocumentType: canonicalType)
+            // The upload's content type comes from the extension (PDF, JPEG or PNG); add one if the file has none.
+            var fileName = url.lastPathComponent
+            if url.pathExtension.isEmpty,
+               let ext = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType?.preferredFilenameExtension {
+                fileName += ".\(ext)"
+            }
 
+            let upload: MoveMarkUpload
             do {
-                _ = try await documentRepo.uploadDocument(data: data, bucket: targetBucket, path: path)
+                upload = try await documentRepo.uploadDocument(
+                    data,
+                    fileName: fileName,
+                    thumbnail: nil,
+                    propertyId: property.id,
+                    documentType: canonicalType
+                )
                 if canonicalType == VaultDocumentType.lease.rawValue {
                     MoveMarkAnalytics.track(.leaseAdded)
                 } else if canonicalType == VaultDocumentType.depositReceipt.rawValue {
@@ -1194,7 +827,7 @@ struct PropertyVaultView: View {
                 propertyId: property.id,
                 userId: userId,
                 documentType: canonicalType,
-                filePath: path,
+                filePath: upload.path,
                 fileName: fileName,
                 uploadedAt: nil,
                 metadata: nil
@@ -1202,10 +835,14 @@ struct PropertyVaultView: View {
             do {
                 try await documentRepo.insertDocumentRecord(row)
             } catch {
-                await documentRepo.removeStaleUpload(documentType: canonicalType, path: path)
+                await documentRepo.abandonUpload(upload)
                 uploadError = MoveMarkFlowMessage.documentRecordCreateFailed(error)
                 lastFailedFileDocType = docType
                 return
+            }
+
+            for old in previousRows where old.id != row.id {
+                await documentRepo.retireDocument(old)
             }
 
             let metaOK = await propertyStore.refreshDocuments(propertyId: property.id)
@@ -1231,37 +868,3 @@ struct PropertyVaultView: View {
     }
 }
 
-// MARK: - Replace photo sheet (for image doc types)
-
-private struct ReplacePhotoSheet: View {
-    let onDismiss: () -> Void
-    @Binding var selection: PhotosPickerItem?
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                PhotosPicker(selection: $selection, matching: .images) {
-                    Label("Choose photo", systemImage: "photo.on.rectangle.angled")
-                        .font(MoveMarkTheme.Typography.button)
-                        .foregroundStyle(MoveMarkTheme.Colors.primary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(MoveMarkTheme.Colors.fieldFill)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-                Button("Cancel") { onDismiss() }
-                    .font(MoveMarkTheme.Typography.subheadlineMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-            }
-            .padding(24)
-            .navigationTitle("Replace with photo")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { onDismiss() }
-                        .foregroundStyle(MoveMarkTheme.Colors.primary)
-                }
-            }
-        }
-    }
-}

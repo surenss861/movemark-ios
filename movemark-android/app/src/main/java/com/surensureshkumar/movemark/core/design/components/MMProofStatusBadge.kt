@@ -17,6 +17,7 @@ enum class MMProofStatusTone {
     Success,
     Warning,
     Danger,
+    Info,
     Neutral,
 }
 
@@ -33,6 +34,8 @@ fun MMProofStatusBadge(
             Triple(MMColors.SemanticWarning.copy(0.14f), MMColors.SemanticWarning, MMColors.SemanticWarning.copy(0.45f))
         MMProofStatusTone.Danger ->
             Triple(MMColors.SemanticDanger.copy(0.14f), MMColors.SemanticDanger, MMColors.SemanticDanger.copy(0.45f))
+        MMProofStatusTone.Info ->
+            Triple(MMColors.SemanticInfo.copy(0.16f), MMColors.SemanticInfo, MMColors.SemanticInfo.copy(0.45f))
         MMProofStatusTone.Neutral ->
             Triple(MMColors.FieldFill.copy(0.85f), MMColors.TextSecondary, Color.Transparent)
     }

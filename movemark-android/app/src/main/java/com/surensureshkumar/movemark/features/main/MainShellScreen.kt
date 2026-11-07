@@ -23,15 +23,19 @@ import com.surensureshkumar.movemark.features.reports.ReportsScreen
 import com.surensureshkumar.movemark.features.rooms.RoomsScreen
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
 import com.surensureshkumar.movemark.features.vault.VaultScreen
+import com.surensureshkumar.movemark.domain.ProofPhase
 import java.util.UUID
 
 @Composable
 fun MainShellScreen(
     onOpenRoom: (UUID) -> Unit,
+    onOpenRoomPhase: (UUID, ProofPhase) -> Unit,
     onOpenMoveOutProof: () -> Unit,
+    onOpenDisputePacket: () -> Unit = {},
     onSignOut: () -> Unit,
     onAddProperty: () -> Unit,
     onOpenMaintenance: () -> Unit,
+    onOpenDocuments: () -> Unit,
     viewModel: MainShellViewModel = hiltViewModel(),
 ) {
     var tab by rememberSaveable { mutableStateOf(MainTab.Vault) }
@@ -55,11 +59,13 @@ fun MainShellScreen(
                     MainTab.Vault -> VaultScreen(
                         modifier = Modifier.padding(padding),
                         onOpenRoom = onOpenRoom,
+                        onOpenRoomPhase = onOpenRoomPhase,
                         onOpenMoveOutProof = onOpenMoveOutProof,
                         onAddProperty = onAddProperty,
                         onShowPaywall = { paywallReason = it },
                         onOpenReports = { tab = MainTab.Reports },
                         onOpenMaintenance = onOpenMaintenance,
+                        onOpenDocuments = onOpenDocuments,
                     )
                     MainTab.Rooms -> RoomsScreen(
                         modifier = Modifier.padding(padding),
@@ -71,6 +77,7 @@ fun MainShellScreen(
                         onOpenMoveOutProof = onOpenMoveOutProof,
                         onOpenVault = { tab = MainTab.Vault },
                         onShowPaywall = { paywallReason = it },
+                        onOpenDisputePacket = onOpenDisputePacket,
                     )
                     MainTab.Account -> AccountScreen(
                         modifier = Modifier.padding(padding),

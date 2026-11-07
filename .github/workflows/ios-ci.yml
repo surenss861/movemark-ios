@@ -19,7 +19,7 @@ on:
 
 jobs:
   ios:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,6 +54,6 @@ jobs:
             -project movemork.xcodeproj \
             -scheme movemork \
             -derivedDataPath DerivedData \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -destination 'platform=iOS Simulator,name=iPhone 17' \
             -only-testing:movemorkTests \
             CODE_SIGNING_ALLOWED=NO

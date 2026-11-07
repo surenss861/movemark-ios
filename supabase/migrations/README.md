@@ -1,3 +1,10 @@
+> **HISTORICAL — NOT RUNNABLE.** The Supabase project these migrations targeted was deleted
+> (2026-10). MoveMark now runs on Neon: the live, ordered schema is `movemork/neon/migrations/`
+> (`0001` reconstructed base schema, `0100–0340` generated from the files below by
+> `neon/port_migrations.py`, then Neon-only `09xx` hardening). These files are kept only as the
+> source and provenance for that port. Do not apply them anywhere, and do not edit them —
+> change `neon/port_migrations.py` or add a new `neon/migrations/09xx` file instead.
+
 # MoveMark production migrations
 
 Run these in order (by filename). Use Supabase Dashboard SQL editor or `supabase db push` if using Supabase CLI.

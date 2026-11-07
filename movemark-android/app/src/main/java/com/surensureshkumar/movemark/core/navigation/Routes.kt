@@ -14,6 +14,8 @@ object Routes {
     const val AddProperty = "add_property"
 
     const val MaintenanceLog = "maintenance_log"
+    const val Documents = "documents"
+    const val EditRental = "edit_rental"
     const val MaintenanceIssueArg = "issueId"
     const val MaintenanceIssueDetail = "maintenance_issue/{issueId}"
 
@@ -27,6 +29,7 @@ object Routes {
         "room_proof/${phase.key}/$roomId"
 
     const val MoveOutRooms = "move_out_rooms"
+    const val DisputePacket = "dispute_packet"
 
     const val SavedProofReceipt = "saved_proof_receipt/{proofPhase}/{roomId}"
     const val SavedProofReceiptArg = "roomId"

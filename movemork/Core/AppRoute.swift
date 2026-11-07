@@ -16,5 +16,5 @@ enum AppRoute: Hashable {
     case moveOut
     case moveOutRoomDetail(roomID: UUID)
     case exports
-    case account
+    case disputePacket
 }

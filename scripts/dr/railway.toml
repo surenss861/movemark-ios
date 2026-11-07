@@ -1,0 +1,9 @@
+# Railway service `movemark-backup` (config file path: scripts/dr/railway.toml). A cron service: Railway starts
+# the container on schedule, it runs one backup and exits; a non-zero exit marks the run failed.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "scripts/dr/Dockerfile"
+
+[deploy]
+cronSchedule = "17 */6 * * *"
+restartPolicyType = "NEVER"

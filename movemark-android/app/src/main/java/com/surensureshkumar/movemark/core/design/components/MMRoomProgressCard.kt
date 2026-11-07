@@ -1,24 +1,16 @@
 package com.surensureshkumar.movemark.core.design.components
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.surensureshkumar.movemark.core.design.MMColors
-import com.surensureshkumar.movemark.core.design.MMMotion
 
 @Composable
 fun MMRoomProgressCard(
@@ -30,43 +22,36 @@ fun MMRoomProgressCard(
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
     progressLabel: String? = null,
+    documentedCount: Int? = null,
+    totalCount: Int? = null,
 ) {
-    val clamped = progress.coerceIn(0f, 1f)
-    val progressWidth by animateFloatAsState(
-        targetValue = clamped,
-        animationSpec = MMMotion.welcomeEnterSpec(reduceMotion, durationMillis = 360),
-        label = "roomProgress",
-    )
+    val showsFigure = documentedCount != null && totalCount != null && totalCount > 0
 
-    MMProofCard(modifier = modifier) {
-        Column(Modifier.padding(16.dp)) {
-            Text("Room proof", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MMColors.TextMuted)
-            Spacer(Modifier.height(4.dp))
-            Text(headline, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = MMColors.TextPrimary)
-            Spacer(Modifier.height(4.dp))
-            Text(nextLine, fontSize = 13.sp, color = MMColors.TextSecondary)
-            Spacer(Modifier.height(12.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(MMColors.FieldFill.copy(alpha = 0.85f)),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(progressWidth.coerceAtLeast(if (clamped > 0f) 0.04f else 0f))
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(MMColors.Primary.copy(alpha = 0.88f)),
+    MMCaseFilePlate(modifier = modifier, emphasis = false) {
+        if (showsFigure) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                MMCoverageFigure(
+                    documented = documentedCount,
+                    total = totalCount,
+                    modifier = Modifier.weight(1f),
+                )
+                MMCoverageRing(
+                    progress = progress,
+                    reduceMotion = reduceMotion,
+                    size = 58.dp,
+                    modifier = Modifier.padding(start = 8.dp),
                 )
             }
-            if (!progressLabel.isNullOrBlank()) {
-                Spacer(Modifier.height(8.dp))
-                Text(progressLabel, fontSize = 12.sp, color = MMColors.TextMuted)
-            }
-            Spacer(Modifier.height(12.dp))
-            MMButton(text = primaryTitle, onClick = onPrimary)
+        } else {
+            Text(headline, fontSize = 17.sp, color = MMColors.TextPrimary)
         }
+        Spacer(Modifier.height(8.dp))
+        Text(nextLine, fontSize = 14.sp, color = MMColors.TextSecondary)
+        if (!progressLabel.isNullOrBlank()) {
+            Spacer(Modifier.height(6.dp))
+            Text(progressLabel, fontSize = 12.sp, color = MMColors.TextMuted)
+        }
+        Spacer(Modifier.height(14.dp))
+        MMButton(text = primaryTitle, onClick = onPrimary)
     }
 }

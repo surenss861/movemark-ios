@@ -4,6 +4,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -35,30 +43,42 @@ import com.surensureshkumar.movemark.core.design.components.MMProofTaskCard
 import com.surensureshkumar.movemark.core.design.components.MMProofSectionHeader
 import com.surensureshkumar.movemark.core.design.components.MMVaultProofHeroCard
 import com.surensureshkumar.movemark.data.models.PropertyRow
+import com.surensureshkumar.movemark.data.models.VaultSummary
 import com.surensureshkumar.movemark.domain.LifecycleNudge
+import com.surensureshkumar.movemark.domain.ProofPhase
 import com.surensureshkumar.movemark.domain.RoomProofMetrics
+import com.surensureshkumar.movemark.domain.VaultDocumentKind
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.UUID
 
 @Composable
 fun VaultScreen(
     onOpenRoom: (UUID) -> Unit,
     onOpenMoveOutProof: () -> Unit,
+    onOpenRoomPhase: (UUID, ProofPhase) -> Unit = { id, _ -> onOpenRoom(id) },
     onAddProperty: () -> Unit,
     onShowPaywall: (PaywallReason) -> Unit,
     onOpenReports: () -> Unit = {},
     onOpenMaintenance: () -> Unit = {},
+    onOpenDocuments: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: VaultViewModel = hiltViewModel(),
 ) {
     val property by viewModel.property.collectAsState()
     val properties by viewModel.properties.collectAsState()
+    val summaries by viewModel.summaries.collectAsState()
     val loading by viewModel.loading.collectAsState()
     val error by viewModel.error.collectAsState()
     val hasPro by viewModel.hasPro.collectAsState()
     val propertyCount by viewModel.propertyCount.collectAsState()
     val previewImageUrl by viewModel.previewImageUrl.collectAsState()
     val previewImagePath by viewModel.previewImagePath.collectAsState()
+    val maintenanceLog by viewModel.maintenanceLog.collectAsState()
+    val pendingRooms by viewModel.pendingRooms.collectAsState()
     val reduceMotion = MMMotion.rememberReduceMotion()
     var hasAnimatedIn by remember { mutableStateOf(reduceMotion) }
 
@@ -77,7 +97,7 @@ fun VaultScreen(
     ) {
         MMProofSectionHeader(
             title = "Your proof",
-            subtitle = "What rental needs proof next?",
+            subtitle = "Document now. Prove it later.",
             modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "vaultHeader"),
             trailingAction = {
                 TextButton(onClick = {
@@ -91,6 +111,15 @@ fun VaultScreen(
                 }
             },
         )
+        // Photos still only on this phone (not uploaded yet): one quiet row that opens their room.
+        if (pendingRooms.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            MMPendingUploadsRow(
+                count = pendingRooms.sumOf { it.count },
+                failed = pendingRooms.any { it.failedCount > 0 },
+                onOpen = { viewModel.openPendingRoom(pendingRooms.first(), onOpenRoomPhase) },
+            )
+        }
         Spacer(Modifier.height(16.dp))
 
         when {
@@ -126,10 +155,15 @@ fun VaultScreen(
                     documented == 0 -> "Start with one room"
                     else -> "$documented of $total rooms documented"
                 }
+                val openIssues = maintenanceLog.count { it.status != "resolved" }
+                val records = p.supportingRecordCount
+                val exportReady = documented > 0 && (3 - records) <= 2
                 val primaryTitle = when {
                     documented == 0 -> "Start room proof"
-                    next != null -> "Continue room proof"
-                    else -> "Review rooms"
+                    next != null -> "Capture ${next.name}"
+                    records < 3 -> "Add docs"
+                    openIssues > 0 -> "Continue move-in proof"
+                    else -> "Make your move-in report"
                 }
 
                 MMVaultProofHeroCard(
@@ -141,11 +175,25 @@ fun VaultScreen(
                     progress = progress,
                     primaryTitle = primaryTitle,
                     onPrimary = {
-                        (next ?: p.rooms.firstOrNull())?.let { onOpenRoom(it.id) }
+                        when {
+                            documented == 0 || next != null ->
+                                (next ?: p.rooms.firstOrNull())?.let { onOpenRoom(it.id) }
+                            records < 3 -> onOpenDocuments()
+                            openIssues > 0 -> onOpenMaintenance()
+                            else -> onOpenReports()
+                        }
                     },
                     reduceMotion = reduceMotion,
                     previewImageUrl = previewImageUrl,
                     previewImagePath = previewImagePath,
+                    documentedCount = documented,
+                    totalRooms = total,
+                    photoCount = RoomProofMetrics.totalPhotoCount(p),
+                    recordCount = records,
+                    issueCount = openIssues,
+                    lastProofLine = formatProofAdded(RoomProofMetrics.lastProofAt(p)),
+                    reportReadyLine = if (exportReady) "Move-in report ready" else null,
+                    onViewReport = if (exportReady) onOpenReports else null,
                     modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "vaultHero"),
                 )
 
@@ -162,7 +210,7 @@ fun VaultScreen(
                             when (nudge) {
                                 is LifecycleNudge.FinishRoomsBeforeUnpacking ->
                                     (next ?: p.rooms.firstOrNull())?.let { onOpenRoom(it.id) }
-                                is LifecycleNudge.AddLeaseAndDepositDocs -> Unit
+                                is LifecycleNudge.AddLeaseAndDepositDocs -> onOpenDocuments()
                                 is LifecycleNudge.MakeMoveInReport -> onOpenReports()
                                 is LifecycleNudge.MidLeaseMaintenance -> onOpenMaintenance()
                                 is LifecycleNudge.MoveOutProofReminder ->
@@ -176,10 +224,11 @@ fun VaultScreen(
                 }
 
                 Spacer(Modifier.height(12.dp))
+                val leaseCount = VaultDocumentKind.leaseAndDepositCount(p.documentTypes)
                 MMProofTaskCard(
                     title = "Lease & deposit records",
-                    reason = "Helps if your deposit is questioned later.",
-                    onClick = { /* future: lease docs */ },
+                    reason = "$leaseCount of 2 added",
+                    onClick = onOpenDocuments,
                     showChevron = true,
                     modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "leaseCard"),
                 )
@@ -218,6 +267,7 @@ fun VaultScreen(
                     otherRentals.forEach { row ->
                         OtherRentalRow(
                             row = row,
+                            summary = summaries[row.id.lowercase()],
                             onClick = {
                                 viewModel.activateProperty(UUID.fromString(row.id))
                             },
@@ -230,16 +280,58 @@ fun VaultScreen(
     }
 }
 
+private fun formatProofAdded(raw: String?): String? {
+    if (raw.isNullOrBlank()) return null
+    return runCatching {
+        val instant = Instant.parse(raw)
+        DateTimeFormatter.ofPattern("MMM d · h:mm a", Locale.US)
+            .withZone(ZoneId.systemDefault())
+            .format(instant)
+    }.getOrElse { raw }
+}
+
 @Composable
 private fun OtherRentalRow(
     row: PropertyRow,
+    summary: VaultSummary?,
     onClick: () -> Unit,
 ) {
     val location = listOf(row.city, row.provinceState).filter { it.isNotBlank() }.joinToString(", ")
+    val rooms = summary?.takeIf { it.roomsTotal > 0 }?.let { "${it.roomsDocumented} of ${it.roomsTotal} rooms documented" }
     MMCompactProofRow(
         title = row.title,
         subtitle = if (location.isNotBlank()) location else "Tap to switch vault",
-        meta = "Tap to switch vault".takeIf { location.isNotBlank() },
+        meta = rooms ?: "Tap to switch vault".takeIf { location.isNotBlank() },
         onClick = onClick,
     )
+}
+
+/** The Proof home's quiet row while any room still has photos only on this phone (iOS `MMPendingUploadsRow`). */
+@Composable
+internal fun MMPendingUploadsRow(count: Int, failed: Boolean, onOpen: () -> Unit) {
+    val title = if (count == 1) "1 photo not uploaded yet" else "$count photos not uploaded yet"
+    androidx.compose.foundation.layout.Row(
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(onClickLabel = "Open the room", role = androidx.compose.ui.semantics.Role.Button, onClick = onOpen)
+            .padding(vertical = 10.dp),
+    ) {
+        androidx.compose.material3.Icon(
+            imageVector = if (failed) Icons.Filled.Error
+            else Icons.Filled.PhoneAndroid,
+            contentDescription = null,
+            tint = if (failed) MMColors.SemanticDanger else MMColors.TextSecondary,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(title, color = MMColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+        androidx.compose.material3.Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MMColors.TextSecondary,
+            modifier = Modifier.size(18.dp),
+        )
+    }
 }

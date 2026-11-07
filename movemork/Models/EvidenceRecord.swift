@@ -13,6 +13,9 @@ nonisolated struct EvidencePhoto: Identifiable, Codable, Hashable {
     let filePath: String
     /// Small (~320px) JPEG path for grid/list thumbnails; `nil` until re-captured (fall back to `filePath`).
     var thumbnailPath: String? = nil
+    /// The row's `created_at` exactly as the server sent it — the keyset cursor for the next photo page
+    /// (a parsed `Date` loses the microseconds the ordering depends on).
+    var serverCreatedAt: String? = nil
 }
 
 nonisolated struct EvidenceRecord: Identifiable, Codable, Hashable {
@@ -22,11 +25,14 @@ nonisolated struct EvidenceRecord: Identifiable, Codable, Hashable {
     var issueTags: [String]
     var condition: RoomRecord.ConditionRating
     var createdAt: Date
-    /// After hydration, matches `photos.count`. Before upload completes in memory-only flows, may reflect count without `photos` filled.
+    /// The entry's true number of photos. `photos` may hold only the first ones (snapshot v2 loads a bounded
+    /// number per entry; the rest load on demand), so never derive the count from `photos`.
     var photoCount: Int
     /// File paths from `evidence_files` for thumbnails and previews after reload.
     var photos: [EvidencePhoto]
     var stage: Stage
+    /// `created_at` exactly as the server sent it — the keyset cursor for loading older entries.
+    var serverCreatedAt: String? = nil
 
     enum Stage: String, Codable, CaseIterable, Hashable {
         case moveIn = "Move-in"
@@ -35,7 +41,7 @@ nonisolated struct EvidenceRecord: Identifiable, Codable, Hashable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, title, notes, issueTags, condition, createdAt, photoCount, photos, stage
+        case id, title, notes, issueTags, condition, createdAt, photoCount, photos, stage, serverCreatedAt
     }
 
     init(
@@ -56,7 +62,7 @@ nonisolated struct EvidenceRecord: Identifiable, Codable, Hashable {
         self.condition = condition
         self.createdAt = createdAt
         self.photos = photos
-        self.photoCount = photos.isEmpty ? photoCount : photos.count
+        self.photoCount = max(photoCount, photos.count)
         self.stage = stage
     }
 
@@ -70,8 +76,9 @@ nonisolated struct EvidenceRecord: Identifiable, Codable, Hashable {
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         photos = try c.decodeIfPresent([EvidencePhoto].self, forKey: .photos) ?? []
         let decodedCount = try c.decode(Int.self, forKey: .photoCount)
-        photoCount = photos.isEmpty ? decodedCount : photos.count
+        photoCount = max(decodedCount, photos.count)
         stage = try c.decode(Stage.self, forKey: .stage)
+        serverCreatedAt = try c.decodeIfPresent(String.self, forKey: .serverCreatedAt)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -85,5 +92,6 @@ nonisolated struct EvidenceRecord: Identifiable, Codable, Hashable {
         try c.encode(photoCount, forKey: .photoCount)
         try c.encode(photos, forKey: .photos)
         try c.encode(stage, forKey: .stage)
+        try c.encodeIfPresent(serverCreatedAt, forKey: .serverCreatedAt)
     }
 }

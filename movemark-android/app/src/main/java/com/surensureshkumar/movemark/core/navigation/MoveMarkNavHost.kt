@@ -17,17 +17,23 @@ import com.surensureshkumar.movemark.data.auth.AuthState
 import com.surensureshkumar.movemark.domain.ProofPhase
 import com.surensureshkumar.movemark.features.auth.AuthMode
 import com.surensureshkumar.movemark.features.auth.AuthScreen
+import com.surensureshkumar.movemark.features.documents.DocumentsScreen
 import com.surensureshkumar.movemark.features.firstrun.CreatePropertyScreen
 import com.surensureshkumar.movemark.features.firstrun.FirstRunRoomPickerScreen
 import com.surensureshkumar.movemark.features.maintenance.MaintenanceIssueDetailScreen
 import com.surensureshkumar.movemark.features.maintenance.MaintenanceLogScreen
 import com.surensureshkumar.movemark.features.main.MainShellScreen
 import com.surensureshkumar.movemark.features.moveout.MoveOutRoomsScreen
+import com.surensureshkumar.movemark.features.dispute.DisputePacketScreen
+import com.surensureshkumar.movemark.features.property.EditRentalScreen
+import com.surensureshkumar.movemark.domain.DisputePacketModel
 import com.surensureshkumar.movemark.features.onboarding.OnboardingNameScreen
 import com.surensureshkumar.movemark.features.proof.RoomProofScreen
 import com.surensureshkumar.movemark.features.proof.SavedProofReceiptScreen
+import com.surensureshkumar.movemark.features.auth.PasswordResetLink
+import com.surensureshkumar.movemark.features.auth.PasswordResetScreen
 import com.surensureshkumar.movemark.features.proof.camera.CameraCaptureScreen
-import com.surensureshkumar.movemark.features.welcome.WelcomeScreen
+import com.surensureshkumar.movemark.features.welcome.WelcomeRoute
 import com.surensureshkumar.movemark.features.welcome.WelcomeViewModel
 import dagger.hilt.android.EntryPointAccessors
 import java.util.UUID
@@ -45,6 +51,14 @@ fun MoveMarkNavHost() {
         )
     }
     val mainTabRequest = remember(entryPoints) { entryPoints.mainTabRequest() }
+    val sessionManager = remember(entryPoints) { entryPoints.sessionManager() }
+    val resetToken by PasswordResetLink.token.collectAsState()
+    resetToken?.let { token ->
+        PasswordResetScreen(
+            onReset = { password, confirm -> sessionManager.completePasswordReset(token, password, confirm) },
+            onDone = PasswordResetLink::consume,
+        )
+    }
     val navController = rememberNavController()
     val welcomeVm: WelcomeViewModel = hiltViewModel()
     val authState by welcomeVm.authState.collectAsState()
@@ -82,7 +96,7 @@ fun MoveMarkNavHost() {
 
     NavHost(navController = navController, startDestination = Routes.Welcome) {
         composable(Routes.Welcome) {
-            WelcomeScreen(
+            WelcomeRoute(
                 onStartMoveIn = {
                     navController.navigate(Routes.auth("signUp"))
                 },
@@ -122,9 +136,13 @@ fun MoveMarkNavHost() {
                 onOpenRoom = { roomId ->
                     navController.navigate(Routes.roomProof(roomId.toString(), ProofPhase.MoveIn))
                 },
+                onOpenRoomPhase = { roomId, phase ->
+                    navController.navigate(Routes.roomProof(roomId.toString(), phase))
+                },
                 onOpenMoveOutProof = {
                     navController.navigate(Routes.MoveOutRooms)
                 },
+                onOpenDisputePacket = { navController.navigate(Routes.DisputePacket) },
                 onSignOut = {
                     navController.navigate(Routes.Welcome) {
                         popUpTo(0) { inclusive = true }
@@ -132,7 +150,17 @@ fun MoveMarkNavHost() {
                 },
                 onAddProperty = { navController.navigate(Routes.AddProperty) },
                 onOpenMaintenance = { navController.navigate(Routes.MaintenanceLog) },
+                onOpenDocuments = { navController.navigate(Routes.Documents) },
             )
+        }
+        composable(Routes.Documents) {
+            DocumentsScreen(
+                onBack = { navController.popBackStack() },
+                onEditRental = { navController.navigate(Routes.EditRental) },
+            )
+        }
+        composable(Routes.EditRental) {
+            EditRentalScreen(onClose = { navController.popBackStack() })
         }
         composable(Routes.MaintenanceLog) {
             MaintenanceLogScreen(
@@ -157,6 +185,21 @@ fun MoveMarkNavHost() {
         composable(Routes.AddProperty) {
             CreatePropertyScreen(
                 onCreated = { navController.popBackStack() },
+                askLease = true,
+            )
+        }
+        composable(Routes.DisputePacket) {
+            DisputePacketScreen(
+                onBack = { navController.popBackStack() },
+                onCaptureMoveOut = { roomId -> navController.navigate(Routes.roomProof(roomId.toString(), ProofPhase.MoveOut)) },
+                onMissing = { target ->
+                    when (target) {
+                        DisputePacketModel.Missing.Target.RentalRecord -> navController.navigate(Routes.Documents)
+                        DisputePacketModel.Missing.Target.MoveOut -> navController.navigate(Routes.MoveOutRooms)
+                        DisputePacketModel.Missing.Target.Rooms -> { mainTabRequest.request(MainTab.Rooms); navController.popBackStack() }
+                        DisputePacketModel.Missing.Target.Reports -> { mainTabRequest.request(MainTab.Reports); navController.popBackStack() }
+                    }
+                },
             )
         }
         composable(Routes.MoveOutRooms) {
@@ -164,6 +207,14 @@ fun MoveMarkNavHost() {
                 onBack = { navController.popBackStack() },
                 onOpenRoom = { roomId ->
                     navController.navigate(Routes.roomProof(roomId.toString(), ProofPhase.MoveOut))
+                },
+                onCaptureMoveIn = {
+                    mainTabRequest.request(MainTab.Rooms)
+                    navController.popBackStack()
+                },
+                onOpenReports = {
+                    mainTabRequest.request(MainTab.Reports)
+                    navController.popBackStack()
                 },
             )
         }

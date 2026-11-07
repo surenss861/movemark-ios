@@ -7,11 +7,14 @@
 
 import Foundation
 import Observation
-import Supabase
 
 @MainActor
 @Observable
 final class PropertyStore {
+    /// Nothing to tear down on the main actor; a nonisolated deinit skips the executor hop, which aborted in the
+    /// Swift runtime (TaskLocal scope) when SwiftUI released a store from trait-collection teardown.
+    nonisolated deinit {}
+
     var currentProperty: PropertyRecord?
     /// All properties for the current user (for switching). Updated by fetchAll.
     var properties: [PropertyRow] = []
@@ -36,6 +39,8 @@ final class PropertyStore {
 
     /// Keeps first-run receipt visible after the first save even though rooms are now documented.
     var firstRunAwaitingReceiptDismissal = false
+    /// `get_vault_summaries()` result (one aggregate query for every rental), with the time it was fetched.
+    var vaultSummaries: (fetchedAt: Date, byProperty: [UUID: VaultSummary])? = nil
 
     /// After first-run receipt dismissal, vault tab can open walkthrough or stay on root.
     @ObservationIgnored

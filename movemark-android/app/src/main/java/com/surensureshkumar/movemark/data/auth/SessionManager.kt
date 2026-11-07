@@ -1,12 +1,17 @@
 package com.surensureshkumar.movemark.data.auth
 
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
+import android.util.Log
+import com.surensureshkumar.movemark.data.backend.BackendConfig
+import com.surensureshkumar.movemark.data.backend.NeonAuthClient
+import com.surensureshkumar.movemark.data.backend.NeonAuthException
+import com.surensureshkumar.movemark.data.backend.NeonAuthUser
+import com.surensureshkumar.movemark.data.backend.StoredFileUrls
+import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceCenter
+import com.surensureshkumar.movemark.data.property.PropertyStore
+import com.surensureshkumar.movemark.data.remote.ExportApiClient
+import com.surensureshkumar.movemark.data.subscription.ReportCreditsManager
 import com.surensureshkumar.movemark.data.subscription.SubscriptionRepository
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.auth.providers.builtin.Email
-import io.github.jan.supabase.auth.status.SessionStatus
+import dagger.Lazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -14,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -26,12 +32,19 @@ enum class AuthState {
 
 class AuthException(message: String) : Exception(message)
 
+/** The signed-in user, backed by Neon Auth ([NeonAuthClient] owns the session and its tokens). */
 @Singleton
 class SessionManager @Inject constructor(
-    private val client: SupabaseClient,
+    private val auth: NeonAuthClient,
+    private val config: BackendConfig,
     private val profileRepository: ProfileRepository,
     private val subscriptionRepository: SubscriptionRepository,
-    @Suppress("UNUSED_PARAMETER") dataStore: DataStore<Preferences>,
+    private val exportApi: ExportApiClient,
+    private val fileUrls: StoredFileUrls,
+    private val propertyStore: Lazy<PropertyStore>,
+    private val pendingEvidence: Lazy<PendingEvidenceCenter>,
+    private val localFiles: LocalUserFiles,
+    private val reportCredits: Lazy<ReportCreditsManager>,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -52,49 +65,59 @@ class SessionManager @Inject constructor(
 
     init {
         scope.launch {
-            client.auth.sessionStatus.collect { status ->
-                when (status) {
-                    is SessionStatus.Authenticated -> applyUser(status.session.user?.id, status.session.user?.email)
-                    is SessionStatus.NotAuthenticated -> clearUser()
-                    is SessionStatus.Initializing -> _authState.value = AuthState.Loading
-                    else -> Unit
-                }
+            // Identity comes from the session persisted on this device; no network needed to restore it.
+            val user = withContext(Dispatchers.IO) { runCatching { auth.currentUser() }.getOrNull() }
+            if (user != null) applyUser(user) else clearUser()
+        }
+        scope.launch {
+            // Neon Auth rejected the stored session (expired, revoked, password reset elsewhere).
+            auth.sessionExpired.collect {
+                Log.i(TAG, "session expired; signing out locally")
+                endLocalSession()
             }
         }
     }
 
     suspend fun signUp(email: String, password: String) {
         validateCredentials(email, password)
-        client.auth.signUpWith(Email) {
-            this.email = email.trim()
-            this.password = password
-        }
-        val user = client.auth.currentUserOrNull()
+        val trimmed = email.trim()
+        val user = auth.signUp(trimmed, password)
             ?: throw AuthException("Account created. Confirm your email, then sign in.")
-        val uid = UUID.fromString(user.id)
-        profileRepository.ensureProfileExists(uid, email.trim())
-        applyUser(user.id, user.email ?: email.trim())
-        subscriptionRepository.logIn(user.id)
+        profileRepository.ensureProfileExists(UUID.fromString(user.id), user.email.ifBlank { trimmed })
+        applyUser(user)
     }
 
     suspend fun signIn(email: String, password: String) {
-        validateCredentials(email, password)
-        client.auth.signInWith(Email) {
-            this.email = email.trim()
-            this.password = password
-        }
-        val user = client.auth.currentUserOrNull()
-            ?: throw AuthException("Sign in failed. Check your email and password.")
-        val uid = UUID.fromString(user.id)
-        profileRepository.ensureProfileExists(uid, user.email ?: email.trim())
-        applyUser(user.id, user.email ?: email.trim())
-        subscriptionRepository.logIn(user.id)
-    }
-
-    suspend fun resetPassword(email: String) {
+        requireConfigured()
         val trimmed = email.trim()
         if (trimmed.isEmpty()) throw AuthException("Enter your email.")
-        client.auth.resetPasswordForEmail(trimmed)
+        if (password.isEmpty()) throw AuthException("Enter your password.")
+        val user = auth.signIn(trimmed, password)
+        profileRepository.ensureProfileExists(UUID.fromString(user.id), user.email.ifBlank { trimmed })
+        applyUser(user)
+    }
+
+    /**
+     * Sets a new password from a `movemark://reset-password` link (iOS `completePasswordReset`). Neon Auth revokes
+     * the account's sessions, so a signed-in device signs out afterwards.
+     */
+    suspend fun completePasswordReset(token: String, newPassword: String, confirmPassword: String) {
+        requireConfigured()
+        if (newPassword.length < 8) throw AuthException("Password must be at least 8 characters.")
+        if (newPassword != confirmPassword) throw AuthException("Passwords do not match.")
+        auth.resetPassword(token, newPassword)
+        if (_authState.value == AuthState.SignedIn) {
+            auth.endSessionLocally(notify = false)
+            endLocalSession()
+        }
+    }
+
+    /** Asks Neon Auth to email a reset link (the link opens [completePasswordReset] through movemark://reset-password). */
+    suspend fun resetPassword(email: String) {
+        requireConfigured()
+        val trimmed = email.trim()
+        if (trimmed.isEmpty()) throw AuthException("Enter your email.")
+        auth.requestPasswordReset(trimmed)
     }
 
     suspend fun refreshProfile() {
@@ -109,38 +132,88 @@ class SessionManager @Inject constructor(
         _userFullName.value = fullName.trim()
     }
 
+    /**
+     * Hard reset: always clears local state, even if the server-side sign-out fails (e.g. offline). Signing out on
+     * purpose (after the unsaved-photos warning) also removes this user's pending photos and downloaded reports
+     * from the device (iOS `AccountView.signOut`).
+     */
     suspend fun signOut(onCleared: suspend () -> Unit) {
+        _userId.value?.let { pendingEvidence.get().clearUser(it.toString()) }
+        localFiles.clear()
         subscriptionRepository.logOut()
-        client.auth.signOut()
+        auth.signOut()
+        fileUrls.clear()
         clearUser()
         onCleared()
     }
 
-    suspend fun accessToken(): String? =
-        client.auth.currentSessionOrNull()?.accessToken
+    /** Photos of the signed-in user still only on this device (the sign-out warning). */
+    suspend fun unsavedPhotoCount(): Int =
+        _userId.value?.let { pendingEvidence.get().pendingCount(it.toString()) } ?: 0
 
-    private fun validateCredentials(email: String, password: String) {
-        if (email.trim().isEmpty()) throw AuthException("Enter your email.")
-        if (password.length < 6) throw AuthException("Password must be at least 6 characters.")
+    /**
+     * Permanently deletes the account and its cloud data (`DELETE /api/account`), then signs out on this device.
+     * The session is already gone server-side, so only local state is cleared.
+     */
+    suspend fun deleteAccount(onCleared: suspend () -> Unit) {
+        exportApi.deleteAccount()
+        // The account is gone: nothing of it stays on this device (pending photos, downloaded reports, captures).
+        _userId.value?.let { pendingEvidence.get().clearUser(it.toString()) }
+        localFiles.clear()
+        subscriptionRepository.logOut()
+        auth.endSessionLocally(notify = false)
+        fileUrls.clear()
+        clearUser()
+        onCleared()
     }
 
-    private fun applyUser(id: String?, email: String?) {
-        _userId.value = id?.let { runCatching { UUID.fromString(it) }.getOrNull() }
-        _userEmail.value = email
+    private suspend fun endLocalSession() {
+        subscriptionRepository.logOut()
+        fileUrls.clear()
+        clearUser()
+        propertyStore.get().clear()
+    }
+
+    private fun requireConfigured() {
+        if (!config.isConfigured) throw AuthException(NeonAuthException.NotConfigured().message.orEmpty())
+    }
+
+    private fun validateCredentials(email: String, password: String) {
+        requireConfigured()
+        if (email.trim().isEmpty()) throw AuthException("Enter your email.")
+        // Neon Auth's minimum; iOS checks the same before sending.
+        if (password.length < 8) throw AuthException("Password must be at least 8 characters.")
+    }
+
+    private fun applyUser(user: NeonAuthUser) {
+        val id = runCatching { UUID.fromString(user.id) }.getOrNull()
+        _userId.value = id
+        _userEmail.value = user.email
         _authState.value = if (id != null) AuthState.SignedIn else AuthState.SignedOut
         if (id != null) {
+            // Settle what an interrupted save left (empty entries, uploads to release, photos already saved).
+            pendingEvidence.get().reconcileAll(id.toString())
             scope.launch {
+                // RevenueCat's app user id is the Neon Auth user id (lowercase uuid), as on iOS.
+                subscriptionRepository.logIn(id.toString().lowercase())
                 subscriptionRepository.refreshCustomerInfo()
+                runCatching { reportCredits.get().refresh(id) }
                 refreshProfile()
             }
         }
     }
 
     private fun clearUser() {
+        // Nothing cached about one account's report credits may leak into the next.
+        scope.launch { reportCredits.get().refresh(null) }
         _userId.value = null
         _userEmail.value = null
         _userFullName.value = null
         _hasFetchedProfile.value = false
         _authState.value = AuthState.SignedOut
+    }
+
+    private companion object {
+        const val TAG = "SessionManager"
     }
 }

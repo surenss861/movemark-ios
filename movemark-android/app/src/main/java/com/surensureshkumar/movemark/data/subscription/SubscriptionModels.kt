@@ -8,6 +8,8 @@ data class PlanPackageUi(
     val periodLabel: String,
     val price: String,
     val isYearly: Boolean,
+    /** A one-time Report Pack (one more move-in report), not a Pro plan. */
+    val isReportPack: Boolean = false,
     /** Present only when [BillingConfig.isRevenueCatMode]. */
     val revenueCatPackage: Package? = null,
 )
