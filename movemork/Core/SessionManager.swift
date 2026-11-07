@@ -49,7 +49,13 @@ final class SessionManager {
         case signedIn
     }
 
-    var authPhase: AuthPhase = .loading
+    var authPhase: AuthPhase = .loading {
+        didSet {
+            #if DEBUG
+            if authPhase != oldValue { print("[social-qa] phase=\(authPhase)") }
+            #endif
+        }
+    }
     var userEmail: String = ""
     var firstName: String = ""
     var userId: UUID? = nil
@@ -141,6 +147,9 @@ final class SessionManager {
             return
         }
         guard authPhase != .signedOut else { return }
+        #if DEBUG
+        print("[social-qa] sign-out cause=expiry-signal validSession=\(hasValidCurrentSession)")
+        #endif
         await signOut()
     }
 
@@ -431,6 +440,9 @@ final class SessionManager {
 
     /// Hard reset: always clear local state even if the server-side sign-out fails (e.g. offline).
     func signOut() async {
+        #if DEBUG
+        print("[social-qa] sign-out called")
+        #endif
         await NeonAuthClient.shared.signOut()
 
         clearAuthenticatedFields()

@@ -155,6 +155,9 @@ actor NeonAuthClient {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401 || status == 403 {
             neonAuthLog.notice("session rejected by Neon Auth (HTTP \(status)); signing out locally")
+            #if DEBUG
+            print("[social-qa] token rejected status=\(status)")
+            #endif
             await endSessionLocally(notify: true)
             throw NeonAuthError.sessionExpired
         }

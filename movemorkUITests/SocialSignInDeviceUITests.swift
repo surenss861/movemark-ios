@@ -61,3 +61,33 @@ final class SocialSignInDeviceUITests: XCTestCase {
         app.terminate()
     }
 }
+
+/// Session persistence on a phone that is already signed in: quit, reopen as from the Home Screen (no live flag), and
+/// record where the app lands. Taps nothing.
+final class SocialSessionPersistenceDeviceUITests: XCTestCase {
+    private func attach(_ name: String) {
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
+    /// Records the running app without relaunching it.
+    func testRecordCurrentScreen() {
+        XCUIApplication().activate()
+        Thread.sleep(forTimeInterval: 3)
+        attach("current-screen")
+    }
+
+    func testSessionSurvivesAForceQuit() {
+        continueAfterFailure = true
+        let app = XCUIApplication()
+        for pass in 1...2 {
+            app.launch()
+            Thread.sleep(forTimeInterval: 12)
+            attach("persistence-\(pass)")
+            XCTAssertFalse(app.descendants(matching: .any)["welcome.primaryCTA"].exists, "pass \(pass): back on Welcome")
+            app.terminate()
+        }
+    }
+}
