@@ -27,7 +27,6 @@ final class EvidenceDurabilitySnapshotTests: XCTestCase {
         let uploading: Bool = { if case .uploading = state { return true } else { return false } }()
         return ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Rectangle().fill(MoveMarkTheme.Colors.divider).frame(height: 0.5)
                 EvidenceNewEntryHeader(moveOutMode: false, photoCount: 3, syncState: state, onRetry: {})
                 ProofPhotoGridView(images: Self.photos, isUploading: uploading, onRemove: uploading ? nil : { _ in })
                 if state == .failed {
@@ -38,12 +37,13 @@ final class EvidenceDurabilitySnapshotTests: XCTestCase {
             .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
             .padding(.vertical, 18)
         }
-        .background(MoveMarkTheme.Colors.appBackground.ignoresSafeArea())
+        .background(MMInk.sheet.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
             EvidenceCaptureBottomSaveBar(photoCount: 3, tagCount: 0, condition: .good, isUploading: uploading,
                                          didJustSave: false, moveOutMode: false, onSave: {})
         }
-        .environment(\.colorScheme, .dark)
+        .environment(\.mmEvidenceOnLight, true)
+        .environment(\.colorScheme, .light)
     }
 
     func testRoomStatusSavedOnThisIPhone() {

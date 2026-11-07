@@ -15,6 +15,7 @@ struct EvidenceCaptureBottomSaveBar: View {
     let didJustSave: Bool
     let moveOutMode: Bool
     let onSave: () -> Void
+    @Environment(\.mmEvidenceOnLight) private var onLight
 
     private var statusLine: String {
         if isUploading { return "Saving proof…" }
@@ -28,7 +29,7 @@ struct EvidenceCaptureBottomSaveBar: View {
             return MoveMarkTheme.Colors.semanticWarning.opacity(0.95)
         }
         if didJustSave { return MoveMarkTheme.Colors.semanticSuccess.opacity(0.95) }
-        return MoveMarkTheme.Colors.textSecondary
+        return onLight ? MMInk.secondary : MoveMarkTheme.Colors.textSecondary
     }
 
     private var saveTitle: String {
@@ -62,11 +63,11 @@ struct EvidenceCaptureBottomSaveBar: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         // Solid, down through the home-indicator area, so the page scrolling underneath never shows.
-        .background(MoveMarkTheme.Colors.appBackground.ignoresSafeArea(edges: .bottom))
-        .environment(\.colorScheme, .dark)
+        .background((onLight ? MMInk.card : MoveMarkTheme.Colors.appBackground).ignoresSafeArea(edges: .bottom))
+        .environment(\.colorScheme, onLight ? .light : .dark)
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(Color.white.opacity(0.08))
+                .fill(onLight ? MMInk.cardStroke : Color.white.opacity(0.08))
                 .frame(height: 0.5)
         }
     }

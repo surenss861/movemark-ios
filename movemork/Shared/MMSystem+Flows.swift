@@ -13,6 +13,18 @@ import SwiftUI
 
 // MARK: - Dark evidence surface
 
+private struct MMEvidenceOnLightKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// The room brief's light working surface. Off everywhere else, so Edit evidence and the sheets stay dark.
+    var mmEvidenceOnLight: Bool {
+        get { self[MMEvidenceOnLightKey.self] }
+        set { self[MMEvidenceOnLightKey.self] = newValue }
+    }
+}
+
 /// A sheet on the evidence surface: #111312, white text, white/12% strokes, native dark bar (Cancel / title).
 struct MMEvidenceSheetScaffold<Content: View, Footer: View>: View {
     var title: String
@@ -67,12 +79,13 @@ struct MMEvidenceSheetScaffold<Content: View, Footer: View>: View {
 struct MMEvidenceCaption: View {
     let title: String
     var detail: String? = nil
+    @Environment(\.mmEvidenceOnLight) private var onLight
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(title).mmFont(13, .medium).foregroundStyle(MMInk.heroSecondary)
+            Text(title).mmFont(13, .medium).foregroundStyle(onLight ? MMInk.secondary : MMInk.heroSecondary)
             Spacer(minLength: 8)
-            if let detail { Text(detail).mmFont(12.5).foregroundStyle(MMInk.heroSecondary) }
+            if let detail { Text(detail).mmFont(12.5).foregroundStyle(onLight ? MMInk.secondary : MMInk.heroSecondary) }
         }
         .accessibilityElement(children: .combine)
     }
@@ -85,20 +98,23 @@ struct MMEvidenceField: View {
     @Binding var text: String
     var axis: Axis = .horizontal
     var accessibilityID: String? = nil
+    @Environment(\.mmEvidenceOnLight) private var onLight
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             MMEvidenceCaption(title: title)
-            TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(Color.white.opacity(0.38)), axis: axis)
+            TextField("", text: $text,
+                      prompt: Text(placeholder).foregroundStyle(onLight ? MMInk.secondary : Color.white.opacity(0.38)), axis: axis)
                 .lineLimit(axis == .vertical ? 2...6 : 1...1)
                 .mmFont(16)
-                .foregroundStyle(.white)
-                .tint(.white)
+                .foregroundStyle(onLight ? MMInk.text : .white)
+                .tint(onLight ? MMInk.text : .white)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 13)
                 .frame(minHeight: 50)
-                .background(MMInk.evidenceRaised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(MMInk.evidenceStroke, lineWidth: 1))
+                .background(onLight ? MMInk.card : MMInk.evidenceRaised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(onLight ? MMInk.cardStroke : MMInk.evidenceStroke, lineWidth: 1))
                 .accessibilityLabel(title)
                 .accessibilityIdentifier(accessibilityID ?? title)
         }
@@ -110,16 +126,22 @@ struct MMEvidenceChip: View {
     let title: String
     var isSelected = false
     let action: () -> Void
+    @Environment(\.mmEvidenceOnLight) private var onLight
+
+    private var ink: Color {
+        if onLight { return isSelected ? .white : MMInk.text }
+        return isSelected ? MMInk.evidence : Color.white.opacity(0.88)
+    }
 
     var body: some View {
         Button(action: action) {
             Text(title)
                 .mmFont(14, isSelected ? .semibold : .regular)
-                .foregroundStyle(isSelected ? MMInk.evidence : Color.white.opacity(0.88))
+                .foregroundStyle(ink)
                 .padding(.horizontal, 14)
                 .frame(minHeight: 36)
-                .background(isSelected ? Color.white : Color.clear, in: Capsule())
-                .overlay(Capsule().strokeBorder(isSelected ? Color.clear : MMInk.evidenceStroke, lineWidth: 1))
+                .background(isSelected ? (onLight ? MMInk.text : Color.white) : (onLight ? MMInk.card : Color.clear), in: Capsule())
+                .overlay(Capsule().strokeBorder(isSelected ? Color.clear : (onLight ? MMInk.cardStroke : MMInk.evidenceStroke), lineWidth: 1))
                 .clipShape(Capsule())
         }
         .buttonStyle(MMLightPressStyle())
@@ -174,25 +196,27 @@ struct MMEvidenceNotice: View {
 
     static let dangerOnDark = Color(red: 1.0, green: 0.478, blue: 0.431)
     static let warningOnDark = Color(red: 0.949, green: 0.737, blue: 0.341)
+    static let dangerOnLight = Color(red: 0.741, green: 0.196, blue: 0.157)
+    @Environment(\.mmEvidenceOnLight) private var onLight
 
     private var mark: (String, Color) {
         switch tone {
-        case .error: ("exclamationmark.circle.fill", Self.dangerOnDark)
-        case .warning: ("exclamationmark.triangle.fill", Self.warningOnDark)
-        case .info: ("info.circle.fill", MMInk.heroSecondary)
-        case .success: ("checkmark.circle.fill", MMInk.limeMark)
+        case .error: ("exclamationmark.circle.fill", onLight ? Self.dangerOnLight : Self.dangerOnDark)
+        case .warning: ("exclamationmark.triangle.fill", onLight ? MoveMarkTheme.Light.attention : Self.warningOnDark)
+        case .info: ("info.circle.fill", onLight ? MMInk.secondary : MMInk.heroSecondary)
+        case .success: ("checkmark.circle.fill", onLight ? MMInk.text : MMInk.limeMark)
         }
     }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: mark.0).foregroundStyle(mark.1).font(.system(size: 15))
-            Text(message).mmFont(14).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
+            Text(message).mmFont(14).foregroundStyle(onLight ? MMInk.text : .white).fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
             if let actionTitle, let action {
                 // 44pt tap target without growing the notice: the extra height overlaps the padding.
                 Button(action: action) {
-                    Text(actionTitle).mmFont(14, .semibold).foregroundStyle(.white)
+                    Text(actionTitle).mmFont(14, .semibold).foregroundStyle(onLight ? MMInk.text : .white)
                         .frame(minHeight: 44)
                         .contentShape(Rectangle())
                 }
@@ -201,8 +225,9 @@ struct MMEvidenceNotice: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(MMInk.evidenceRaised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(MMInk.evidenceStroke, lineWidth: 0.75))
+        .background(onLight ? MMInk.card : MMInk.evidenceRaised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .strokeBorder(onLight ? MMInk.cardStroke : MMInk.evidenceStroke, lineWidth: 0.75))
         .accessibilityElement(children: .combine)
     }
 }

@@ -18,12 +18,13 @@ import UIKit
 /// The small label over a dark sheet or screen ("EDIT EVIDENCE", "MOVEMARK PRO"). A label, not a lockup.
 struct MMDarkEyebrow: View {
     let text: String
+    @Environment(\.mmEvidenceOnLight) private var onLight
 
     var body: some View {
         Text(text.uppercased())
             .mmFont(11, .semibold)
             .tracking(0.8)
-            .foregroundStyle(MMInk.heroSecondary)
+            .foregroundStyle(onLight ? MMInk.secondary : MMInk.heroSecondary)
             .accessibilityLabel(text)
     }
 }
@@ -61,12 +62,13 @@ struct MMEvidenceSheetHeader: View {
 struct MMEvidenceSectionLabel: View {
     let title: String
     var detail: String? = nil
+    @Environment(\.mmEvidenceOnLight) private var onLight
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             MMDarkEyebrow(text: title)
             Spacer(minLength: 8)
-            if let detail { Text(detail).mmFont(12.5).foregroundStyle(MMInk.heroSecondary) }
+            if let detail { Text(detail).mmFont(12.5).foregroundStyle(onLight ? MMInk.secondary : MMInk.heroSecondary) }
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)

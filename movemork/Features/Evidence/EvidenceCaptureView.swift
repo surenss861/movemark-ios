@@ -170,6 +170,10 @@ struct EvidenceCaptureView: View {
         previewTarget = RoomPhotoPreviewTarget(id: photo.id)
     }
 
+    /// A room with no saved evidence is a working surface: the Vault's dark header over a light sheet. A documented
+    /// room keeps its full-bleed photo.
+    private var onLightSurface: Bool { existingEntries.isEmpty }
+
     var body: some View {
         GeometryReader { geo in
             ScrollViewReader { proxy in
@@ -249,7 +253,19 @@ struct EvidenceCaptureView: View {
             }
             }
         }
-        .background(MoveMarkTheme.Colors.appBackground.ignoresSafeArea())
+        .background {
+            if onLightSurface {
+                // Dark above the sheet, so pulling the page down shows the header, not the sheet.
+                VStack(spacing: 0) {
+                    MMInk.hero.frame(height: 320)
+                    MMInk.sheet
+                }
+                .ignoresSafeArea()
+            } else {
+                MoveMarkTheme.Colors.appBackground.ignoresSafeArea()
+            }
+        }
+        .environment(\.mmEvidenceOnLight, onLightSurface)
         .safeAreaInset(edge: .bottom) {
             if showsSaveBar {
                 EvidenceCaptureBottomSaveBar(
@@ -261,6 +277,7 @@ struct EvidenceCaptureView: View {
                     moveOutMode: moveOutMode,
                     onSave: { saveEvidence() }
                 )
+                .environment(\.mmEvidenceOnLight, onLightSurface)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -402,7 +419,7 @@ struct EvidenceCaptureView: View {
             }
         }
         .toolbarBackground(heroScrolledAway ? .visible : .hidden, for: .navigationBar)
-        .toolbarBackground(MoveMarkTheme.Colors.appBackground.opacity(0.92), for: .navigationBar)
+        .toolbarBackground(onLightSurface ? MMInk.hero : MoveMarkTheme.Colors.appBackground.opacity(0.92), for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .mmProofToast(message: proofToast, isVisible: proofToastVisible)

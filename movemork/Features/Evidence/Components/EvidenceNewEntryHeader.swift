@@ -13,6 +13,9 @@ struct EvidenceNewEntryHeader: View {
     let photoCount: Int
     let syncState: MMEvidenceSyncState?
     var onRetry: (() -> Void)? = nil
+    @Environment(\.mmEvidenceOnLight) private var onLight
+
+    private var quiet: Color { onLight ? MMInk.secondary : MoveMarkTheme.Colors.textMuted }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -21,9 +24,10 @@ struct EvidenceNewEntryHeader: View {
                     .font(MoveMarkTheme.Typography.kicker)
                     .tracking(1.0)
                     .textCase(.uppercase)
-                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                    .foregroundStyle(quiet)
                 Spacer()
-                if photoCount > 0 {
+                // The light brief states the count once, in its header.
+                if photoCount > 0, !onLight {
                     Text(photoCount == 1 ? "1 photo" : "\(photoCount) photos")
                         .font(MoveMarkTheme.Typography.monoMeta)
                         .foregroundStyle(MoveMarkTheme.Colors.textMuted)

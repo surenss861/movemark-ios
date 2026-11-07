@@ -260,7 +260,8 @@ final class VisualSnapshotTests: XCTestCase {
             }
             .ignoresSafeArea(edges: .top)
         }
-        .background(MoveMarkTheme.Colors.appBackground)
+        .background(entries.isEmpty ? MMInk.sheet : MoveMarkTheme.Colors.appBackground)
+        .environment(\.mmEvidenceOnLight, entries.isEmpty)
         .environment(\.colorScheme, .dark)
     }
 

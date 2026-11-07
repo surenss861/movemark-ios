@@ -30,12 +30,16 @@ enum MMEvidenceSyncState: Equatable {
 struct MMEvidenceSyncStatusLine: View {
     let state: MMEvidenceSyncState
     var onRetry: (() -> Void)? = nil
+    @Environment(\.mmEvidenceOnLight) private var onLight
+
+    private var quiet: Color { onLight ? MMInk.secondary : MMInk.heroSecondary }
+    private var strong: Color { onLight ? MMInk.text : .white }
 
     private var icon: (String, Color) {
         switch state {
-        case .savedLocally: ("iphone", MMInk.heroSecondary)
-        case .uploading: ("arrow.up.circle", MMInk.heroSecondary)
-        case .failed: ("exclamationmark.circle.fill", MMEvidenceNotice.dangerOnDark)
+        case .savedLocally: ("iphone", quiet)
+        case .uploading: ("arrow.up.circle", quiet)
+        case .failed: ("exclamationmark.circle.fill", onLight ? MMEvidenceNotice.dangerOnLight : MMEvidenceNotice.dangerOnDark)
         }
     }
 
@@ -47,13 +51,13 @@ struct MMEvidenceSyncStatusLine: View {
                 .accessibilityHidden(true)
             Text(state.message)
                 .mmFont(13, .medium)
-                .foregroundStyle(state == .failed ? Color.white : MMInk.heroSecondary)
+                .foregroundStyle(state == .failed ? strong : quiet)
                 .fixedSize(horizontal: false, vertical: true)
             if state == .failed, let onRetry {
                 Button(action: onRetry) {
                     Text("Retry")
                         .mmFont(13, .semibold)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(strong)
                         .underline()
                         .frame(minHeight: 44)
                         .contentShape(Rectangle())

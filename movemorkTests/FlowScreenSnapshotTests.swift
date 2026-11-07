@@ -39,8 +39,9 @@ final class FlowScreenSnapshotTests: XCTestCase {
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
         }
-        .background(MMInk.evidence)
-        .environment(\.colorScheme, .dark)
+        .background(MMInk.sheet)
+        .environment(\.mmEvidenceOnLight, true)
+        .environment(\.colorScheme, .light)
     }
 
     func testEvidenceCaptureForm() {
