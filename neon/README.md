@@ -7,3 +7,5 @@ Apply order: `migrations/` sorted by filename. On Neon, **Auth must be enabled o
 Regenerate ported files after changing `supabase/migrations`: `python3 neon/port_migrations.py`
 
 Run the gate (local Postgres): `movemark-api-py/.venv/bin/python -m pytest movemork/neon/tests -q`
+
+Legal gate: `1030`/`1040`/`1050` add the records and the Data API policies; all are inert until `legal_gate_settings.enforced` is true and documents are published. Rollback bodies are in `rollback/` (they ship as the next numbered migration, never pasted). `legal_gate_dev.py` seeds draft documents and flips the switch on dev or a child of dev only. See `docs/legal-gate/`.
