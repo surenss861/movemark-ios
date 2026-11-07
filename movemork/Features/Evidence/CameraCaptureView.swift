@@ -48,7 +48,9 @@ struct CameraCaptureView: UIViewControllerRepresentable {
     /// pending photos. Called on the main actor, in shutter order.
     /// Keeps the shot (written to this iPhone before it returns true). The camera shows the shot as taken
     /// only once this says it is durable; false shows an error instead of a thumbnail.
-    var onCapture: (MMCameraCapture) async -> Bool
+    /// Must stay `@MainActor`: as a plain async closure it crashed on the second shot on device (Release and Debug),
+    /// passing a bad MMCameraCapture through the conversions Approachable Concurrency adds. See CameraShutterDeviceUITests.
+    var onCapture: @MainActor (MMCameraCapture) async -> Bool
     /// Back to the room with the photos taken (Done, or the thumbnail to review them).
     var onDone: () -> Void = {}
     var onCancel: () -> Void
@@ -64,7 +66,7 @@ struct CameraCaptureView: UIViewControllerRepresentable {
 final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
     private let roomName: String
     private let prompts: [String]
-    private let onCapture: (MMCameraCapture) async -> Bool
+    private let onCapture: @MainActor (MMCameraCapture) async -> Bool
     private let onDone: () -> Void
     private let onCancel: () -> Void
     private var total: Int
@@ -96,7 +98,7 @@ final class EvidenceCameraViewController: UIViewController, AVCapturePhotoCaptur
     private static let onLime = UIColor(red: 0.067, green: 0.086, blue: 0.035, alpha: 1)
 
     init(roomName: String, pendingCount: Int, prompts: [String],
-         onCapture: @escaping (MMCameraCapture) async -> Bool, onDone: @escaping () -> Void, onCancel: @escaping () -> Void) {
+         onCapture: @escaping @MainActor (MMCameraCapture) async -> Bool, onDone: @escaping () -> Void, onCancel: @escaping () -> Void) {
         self.roomName = roomName
         self.total = pendingCount
         self.prompts = prompts
