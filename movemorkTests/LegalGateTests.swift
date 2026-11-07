@@ -40,3 +40,11 @@ struct LegalGateTests {
         UserDefaults.standard.removeObject(forKey: "MoveMarkLastAuthMethod")
     }
 }
+
+extension LegalGateTests {
+    /// Production has no gate yet: the status call fails, and `enter` must carry on as if there were nothing to accept.
+    @Test func aServerWithoutTheGateDecodesToNoGate() {
+        let missing = try? JSONDecoder().decode(LegalStatus.self, from: Data(#"{"code":"PGRST202","message":"Could not find the function"}"#.utf8))
+        #expect(missing == nil || missing?.needsAcceptance == false)
+    }
+}
