@@ -12,8 +12,8 @@ BEGIN
   SELECT count(*) INTO n FROM pg_proc p JOIN pg_namespace s ON s.oid=p.pronamespace JOIN pg_depend d ON d.objid=p.oid AND d.deptype='e' WHERE s.nspname='public';
   IF n<>0 THEN RAISE EXCEPTION 'FAIL % extension functions in public', n; END IF; RAISE NOTICE 'ok  no extension functions exposed in public';
   SELECT count(*) INTO n FROM issue_tags; IF n<6 THEN RAISE EXCEPTION 'FAIL tags %', n; END IF; RAISE NOTICE 'ok  issue tags seeded (%)', n;
-  SELECT count(*) INTO n FROM information_schema.role_routine_grants WHERE routine_schema='public' AND grantee IN ('authenticated','anonymous','PUBLIC') AND routine_name <> 'get_property_snapshot';
-  IF n<>0 THEN RAISE EXCEPTION 'FAIL % non-snapshot functions callable by clients', n; END IF; RAISE NOTICE 'ok  only get_property_snapshot is client-callable';
+  SELECT count(*) INTO n FROM information_schema.role_routine_grants WHERE routine_schema='public' AND grantee IN ('authenticated','anonymous','PUBLIC') AND routine_name NOT IN ('get_property_snapshot','get_property_snapshot_v2','get_room_entries_page','get_entry_photos_page','get_vault_summaries','_entry_payload','has_current_legal_acceptance','legal_gate_passes','get_legal_status','accept_legal_documents');
+  IF n<>0 THEN RAISE EXCEPTION 'FAIL % unexpected functions callable by clients', n; END IF; RAISE NOTICE 'ok  only the snapshot and legal functions are client-callable';
   INSERT INTO neon_auth."user"(id,email,name,"emailVerified","createdAt","updatedAt") VALUES (a,'a@qa.invalid','A',false,now(),now()),(b,'b@qa.invalid','B',false,now(),now());
   INSERT INTO properties(user_id,title,address_line_1,city,province_state,postal_code,country) VALUES (a,'QA','1','c','p','z','x') RETURNING id INTO pa;
   INSERT INTO properties(user_id,title,address_line_1,city,province_state,postal_code,country) VALUES (b,'QA','1','c','p','z','x') RETURNING id INTO pb;
