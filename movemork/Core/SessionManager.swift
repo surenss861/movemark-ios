@@ -45,10 +45,15 @@ final class SessionManager {
         /// Plist / build settings missing usable Neon Auth, Data API or MoveMark API URLs (no launch crash).
         case misconfigured
         case signedOut
+        /// Signed in, but the server has no acceptance of the current legal documents.
+        case needsLegalAcceptance
         case needsOnboarding
         case signedIn
     }
 
+    /// Set while the legal gate is showing; never a record of acceptance.
+    var legalStatus: LegalStatus?
+    private var phaseAfterLegal: AuthPhase = .signedIn
     var authPhase: AuthPhase = .loading {
         didSet {
             #if DEBUG
@@ -189,20 +194,63 @@ final class SessionManager {
 
             if let profile = profiles.first {
                 firstName = profile.fullName ?? ""
-                authPhase = profile.onboardingCompletedAt != nil ? .signedIn : .needsOnboarding
+                await enter(profile.onboardingCompletedAt != nil ? .signedIn : .needsOnboarding)
             } else {
                 // Definitively no profile row — a genuinely new account.
                 firstName = ""
-                authPhase = .needsOnboarding
+                await enter(.needsOnboarding)
             }
         } catch {
             // Indeterminate: the profile could not be read. Stay signed in and let the property layer
             // offer a retry. Preferring `.signedIn` over `.needsOnboarding` is deliberate — onboarding
             // *writes* (it overwrites full_name), so guessing wrong there damages an existing account,
             // while guessing wrong here self-corrects on the next launch.
-            authPhase = .signedIn
+            await enter(.signedIn)
         }
     }
+
+    /// The server decides whether the legal gate comes first. A server without the gate, or an unreachable one, must
+    /// not lock anyone out here: enforcement lives in the database and the API, and this only offers the step.
+    private func enter(_ phase: AuthPhase) async {
+        guard let status: LegalStatus = try? await dataAPI.rpc("get_legal_status", params: [String: String]()).execute().value,
+              status.needsAcceptance
+        else {
+            legalStatus = nil
+            authPhase = phase
+            return
+        }
+        legalStatus = status
+        phaseAfterLegal = phase
+        authPhase = .needsLegalAcceptance
+    }
+
+    /// Records the renter's acceptance. Returns a message to show when it didn't go through.
+    func acceptLegalDocuments() async -> String? {
+        guard let documents = legalStatus?.documents else { return "Couldn’t load the documents. Try again." }
+        let params = LegalAcceptanceParams(p_method: LegalAcceptanceMethod.last.rawValue,
+                                           p_terms_version: documents.terms.version,
+                                           p_privacy_notice_version: documents.privacyNotice.version)
+        do {
+            let status: LegalStatus = try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+            if status.needsAcceptance {
+                // The documents changed while this screen was open: show the current ones.
+                legalStatus = status
+                return "These documents were just updated. Please review them and agree again."
+            }
+            legalStatus = nil
+            authPhase = phaseAfterLegal
+            return nil
+        } catch {
+            if String(describing: error).contains("LEGAL_VERSION_NOT_ACTIVE"),
+               let status: LegalStatus = try? await dataAPI.rpc("get_legal_status", params: [String: String]()).execute().value {
+                legalStatus = status
+                return "These documents were just updated. Please review them and agree again."
+            }
+            return "Couldn’t save your agreement. Check your connection and try again."
+        }
+    }
+
+    var legalGateIsNewAccount: Bool { phaseAfterLegal == .needsOnboarding }
 
     /// Ensures a row exists in public.profiles for the session user (required for properties.user_id FK).
     ///
@@ -233,6 +281,7 @@ final class SessionManager {
 
     @discardableResult
     func signUp(email: String, password: String, confirmPassword: String) async throws -> SignUpResult {
+        LegalAcceptanceMethod.email.remember()
         guard MoveMarkBackendConfig.isConfigured else {
             throw AuthError.validation("This build is not configured to reach MoveMark’s servers.")
         }
@@ -277,6 +326,7 @@ final class SessionManager {
     }
 
     func signIn(email: String, password: String) async throws {
+        LegalAcceptanceMethod.email.remember()
         guard MoveMarkBackendConfig.isConfigured else {
             throw AuthError.validation("This build is not configured to reach MoveMark’s servers.")
         }
@@ -312,6 +362,7 @@ final class SessionManager {
         #if DEBUG
         print("[social-qa] attempt provider=\(provider.rawValue)")
         #endif
+        (provider == .apple ? LegalAcceptanceMethod.apple : .google).remember()
         let start = try await NeonAuthClient.shared.beginBrowserSignIn(provider: provider, callbackURL: SocialBrowserReturn.callbackURL)
         let returned = try await (browser ?? SystemBrowserPresenter()).open(start.url)
         let verifier = try SocialBrowserReturn.verifier(from: returned)

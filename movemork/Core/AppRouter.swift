@@ -11,6 +11,7 @@ struct AppRouter: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(PropertyStore.self) private var propertyStore
     @Environment(SubscriptionManager.self) private var subscriptionManager
+    @State private var showDeleteAccount = false
     @State private var passwordResetLink: PasswordResetLink.Payload?
 
     var body: some View {
@@ -26,6 +27,12 @@ struct AppRouter: View {
 
             case .signedOut:
                 WelcomeScreen()
+
+            case .needsLegalAcceptance:
+                sessionManager.legalAcceptanceScreen(onDeleteAccount: { showDeleteAccount = true })
+                    .sheet(isPresented: $showDeleteAccount) {
+                        NavigationStack { DeleteAccountView() }
+                    }
 
             case .needsOnboarding:
                 FirstRunProofFlowView(requiresOnboarding: true)
