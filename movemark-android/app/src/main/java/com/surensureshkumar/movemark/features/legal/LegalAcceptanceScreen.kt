@@ -147,7 +147,7 @@ fun LegalAcceptanceScreen(
             onDismissRequest = { confirmDelete = false },
             title = { Text("Delete your account?") },
             text = {
-                Text("This permanently deletes your account and the records in it. An active subscription keeps billing until you cancel it in Google Play.")
+                Text("This deletes your account and the records in it. Encrypted backup copies last longer. An active subscription keeps billing until you cancel it in Google Play.")
             },
             confirmButton = {
                 TextButton(onClick = { confirmDelete = false; onDeleteAccount() }) { Text("Delete account") }

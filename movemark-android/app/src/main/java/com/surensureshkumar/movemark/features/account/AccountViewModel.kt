@@ -33,10 +33,10 @@ class AccountViewModel @Inject constructor(
         const val TERMS_URL =
             "https://movemark.ca/terms"
         const val SUPPORT_URL =
-            "https://silver-peripheral-2ef.notion.site/Contact-Support-32f38275720980248f36d19e1ea533d8"
+            "https://movemark.ca/support"
         const val ACCOUNT_DELETION_URL =
-            "https://silver-peripheral-2ef.notion.site/MoveMark-Account-Data-Deletion-32f3827572098020aa45d0bacc3d13a5"
-        const val SUPPORT_EMAIL = "support@movemark.app"
+            "https://movemark.ca/delete-account"
+        const val SUPPORT_EMAIL = "connect@movemark.ca"
     }
 
     val isMockMode: Boolean get() = subscriptionRepository.isMockMode

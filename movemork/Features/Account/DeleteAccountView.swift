@@ -39,13 +39,13 @@ struct DeleteAccountView: View {
             isPresented: $showFinalConfirm,
             titleVisibility: .visible
         ) {
-            Button("Delete Permanently", role: .destructive) {
+            Button("Delete Account", role: .destructive) {
                 MMHaptics.warning()
                 Task { await performDeletion() }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Your account, proof vaults, reports, photos, and stored evidence will be permanently deleted. Unused Report Pack credits are also removed.")
+            Text("Your account, proof vaults, reports, photos, and stored evidence will be deleted. Encrypted backup copies last longer. Unused Report Pack credits are also removed.")
         }
     }
 

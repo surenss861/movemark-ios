@@ -153,7 +153,7 @@ struct AccountHomeView: View {
             section(nil) {
                 row("Delete account", tint: Ink.danger, showsChevron: false, action: .deleteAccount)
             } footer: {
-                Text("Permanently deletes your account, proof, reports and stored evidence.")
+                Text("Deletes your account, proof, reports and stored evidence.")
                     .foregroundStyle(Ink.secondary)
             }
             .padding(.top, 34 * k)
@@ -320,7 +320,7 @@ struct DeleteAccountContent: View {
                     .mmFont(26, .semibold)
                     .foregroundStyle(Ink.text)
                     .accessibilityAddTraits(.isHeader)
-                Text("This permanently deletes your MoveMark account, proof vaults, reports, photos and stored evidence. Unused Report Pack credits are also removed. It cannot be undone.")
+                Text("This deletes your MoveMark account, proof vaults, reports, photos and stored evidence. Unused Report Pack credits are also removed. Encrypted backup copies last longer. It cannot be undone.")
                     .mmFont(16)
                     .foregroundStyle(Ink.text)
                     .fixedSize(horizontal: false, vertical: true)
@@ -347,7 +347,7 @@ struct DeleteAccountContent: View {
                     Button(action: onDelete) {
                         HStack(spacing: 8) {
                             if isDeleting { ProgressView().controlSize(.small).tint(.white) }
-                            Text(isDeleting ? "Deleting…" : "Delete account permanently").mmFont(16, .semibold)
+                            Text(isDeleting ? "Deleting…" : "Delete account").mmFont(16, .semibold)
                         }
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity, minHeight: 50)

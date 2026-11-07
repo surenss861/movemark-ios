@@ -30,11 +30,11 @@
 	<key>LegalTermsURL</key>
 	<string>https://movemark.ca/terms</string>
 	<key>LegalSupportURL</key>
-	<string>https://silver-peripheral-2ef.notion.site/Contact-Support-32f38275720980248f36d19e1ea533d8</string>
+	<string>https://movemark.ca/support</string>
 	<key>LegalAccountDeletionURL</key>
-	<string>https://silver-peripheral-2ef.notion.site/MoveMark-Account-Data-Deletion-32f3827572098020aa45d0bacc3d13a5</string>
+	<string>https://movemark.ca/delete-account</string>
 	<key>LegalSupportEmail</key>
-	<string>support@movemark.app</string>
+	<string>connect@movemark.ca</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

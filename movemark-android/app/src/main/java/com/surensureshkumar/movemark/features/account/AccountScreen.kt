@@ -267,7 +267,7 @@ fun AccountScreen(
             MMSettingsDivider()
             MMSettingsRow(
                 title = if (deleting) "Deleting account…" else "Delete account",
-                subtitle = "Permanently delete your account and all proof",
+                subtitle = "Delete your account and all proof",
                 enabled = !deleting,
                 onClick = { confirmDelete = true },
             )
@@ -302,7 +302,7 @@ fun AccountScreen(
             title = { Text("Delete your account?") },
             text = {
                 Text(
-                    "This permanently deletes your account, rentals, photos, records and reports. It can’t be undone.",
+                    "This deletes your account, rentals, photos, records and reports. Encrypted backup copies last longer. An active subscription keeps billing until you cancel it in Google Play. It can’t be undone.",
                 )
             },
             confirmButton = {
