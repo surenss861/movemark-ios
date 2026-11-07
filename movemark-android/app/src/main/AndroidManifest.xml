@@ -33,6 +33,13 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="movemark" android:host="reset-password" />
             </intent-filter>
+            <!-- Social sign-in return: movemark://auth/callback?neon_auth_session_verifier=… -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="movemark" android:host="auth" android:path="/callback" />
+            </intent-filter>
         </activity>
 
         <!-- Sentry starts from MoveMarkApplication (only with a DSN, personal data off), never on its own. -->

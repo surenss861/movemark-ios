@@ -1,5 +1,6 @@
 package com.surensureshkumar.movemark.data.auth
 
+import com.surensureshkumar.movemark.features.auth.social.SocialBrowserReturn
 import android.util.Log
 import com.surensureshkumar.movemark.data.backend.BackendConfig
 import com.surensureshkumar.movemark.data.backend.NeonAuthClient
@@ -94,6 +95,16 @@ class SessionManager @Inject constructor(
         if (password.isEmpty()) throw AuthException("Enter your password.")
         val user = auth.signIn(trimmed, password)
         profileRepository.ensureProfileExists(UUID.fromString(user.id), user.email.ifBlank { trimmed })
+        applyUser(user)
+    }
+
+    /** Social sign-in through Neon's browser flow. [open] shows the URL and returns the verifier. */
+    suspend fun signInWithSocial(provider: String, open: suspend (String) -> String) {
+        requireConfigured()
+        val start = auth.beginBrowserSignIn(provider, SocialBrowserReturn.CALLBACK_URL)
+        val verifier = open(start.url)
+        val user = auth.finishBrowserSignIn(verifier, start.challengeCookies)
+        profileRepository.ensureProfileExists(UUID.fromString(user.id), user.email)
         applyUser(user)
     }
 

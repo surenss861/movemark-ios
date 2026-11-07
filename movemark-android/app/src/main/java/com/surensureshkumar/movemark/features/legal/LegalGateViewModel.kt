@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.surensureshkumar.movemark.data.legal.LegalDocuments
 import com.surensureshkumar.movemark.data.legal.LegalRepository
+import com.surensureshkumar.movemark.features.auth.social.SocialBrowserSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,7 +50,7 @@ class LegalGateViewModel @Inject constructor(private val repository: LegalReposi
         if (_state.value.isSaving) return
         _state.value = _state.value.copy(isSaving = true, error = null)
         viewModelScope.launch {
-            runCatching { repository.accept("email", documents) }
+            runCatching { repository.accept(SocialBrowserSession.lastMethod, documents) }
                 .onSuccess { status ->
                     _state.value = LegalGateState(
                         required = status.needsAcceptance,

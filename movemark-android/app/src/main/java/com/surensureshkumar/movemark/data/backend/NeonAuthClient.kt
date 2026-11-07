@@ -45,6 +45,9 @@ import java.util.Base64
 @Serializable
 data class NeonAuthUser(val id: String, val email: String)
 
+/** The browser flow's URL and this attempt's challenge. */
+class BrowserSignInStart(val url: String, val challengeCookies: String)
+
 sealed class NeonAuthException(message: String) : Exception(message) {
     class NotConfigured : NeonAuthException("This build is not configured to reach MoveMark’s servers.")
 
@@ -197,17 +200,58 @@ class NeonAuthClient(
     }
 
     /**
-     * Exchanges a provider's ID token for a Neon Auth session (`POST /sign-in/social` with `idToken`). [nonce] is
-     * the value as it appears in the token's `nonce` claim. Probe only until account linking is proven safe.
+     * Starts Neon Auth's browser flow: the URL for the Custom Tab, and the challenge cookies the exchange needs. They
+     * belong to this one attempt and are never stored. (Managed Neon Auth ignores native ID tokens.)
      */
-    suspend fun signInSocial(provider: String, idToken: String, nonce: String?): NeonAuthUser {
-        val token = buildMap<String, JsonElement> {
-            put("token", JsonPrimitive(idToken))
-            if (nonce != null) put("nonce", JsonPrimitive(nonce))
+    suspend fun beginBrowserSignIn(provider: String, callbackUrl: String): BrowserSignInStart {
+        val base = baseUrl ?: throw NeonAuthException.NotConfigured()
+        val url = base.resolvePath("sign-in/social")
+        val payload = JsonObject(mapOf("provider" to JsonPrimitive(provider), "callbackURL" to JsonPrimitive(callbackUrl)))
+        val request = Request.Builder()
+            .url(url)
+            .header("Origin", base.origin())
+            .post(payload.toString().toRequestBody(JSON_MEDIA))
+            .build()
+        val response = http.send(request)
+        if (!response.isSuccessful) throw rejection(response, "sign-in/social")
+        val challenge = response.headers.values("Set-Cookie")
+            .mapNotNull { Cookie.parse(url, it) }
+            .filter { it.name.contains("session_chal") && it.value.isNotEmpty() }
+            .joinToString("; ") { "${it.name}=${it.value}" }
+        val start = runCatching { json.parseToJsonElement(response.bodyString()).jsonObject["url"]!!.jsonPrimitive.content }.getOrNull()
+        if (challenge.isEmpty() || start == null || !start.startsWith("https://")) throw NeonAuthException.InvalidResponse()
+        return BrowserSignInStart(start, challenge)
+    }
+
+    /** Exchanges the single-use verifier and this attempt's challenge for the real session (`GET /get-session`). */
+    suspend fun finishBrowserSignIn(verifier: String, challengeCookies: String): NeonAuthUser {
+        val base = baseUrl ?: throw NeonAuthException.NotConfigured()
+        val endpoint = base.resolvePath("get-session")
+        val url = endpoint.newBuilder().addQueryParameter("neon_auth_session_verifier", verifier).build()
+        val request = Request.Builder()
+            .url(url)
+            .header("Cookie", challengeCookies)
+            .header("Origin", base.origin())
+            .get()
+            .build()
+        val response = http.send(request)
+        if (!response.isSuccessful) throw rejection(response, "get-session")
+        val cookie = response.headers.values("Set-Cookie")
+            .mapNotNull { Cookie.parse(endpoint, it) }
+            .firstOrNull { it.name.endsWith("session_token") && it.value.isNotEmpty() }
+        lock.withLock {
+            accessToken = null
+            loadedFromStorage = true
+            stored = cookie?.let { Stored(it.name, it.value) }
         }
-        val payload = JsonObject(mapOf("provider" to JsonPrimitive(provider), "idToken" to JsonObject(token)))
-        val body = post("sign-in/social", payload, storeSession = true)
-        return finishSignIn(body)
+        return finishSignIn(response.bodyString())
+    }
+
+    private fun rejection(response: HttpResult, path: String): NeonAuthException {
+        val err = runCatching { json.parseToJsonElement(response.bodyString()).jsonObject }.getOrNull()
+        val code = err?.get("code")?.jsonPrimitive?.contentOrNull
+        Log.i(TAG, "$path failed HTTP ${response.code} code=${code ?: "-"}")
+        return NeonAuthException.Rejected(code, err?.get("message")?.jsonPrimitive?.contentOrNull.orEmpty())
     }
 
     private suspend fun finishSignIn(body: String): NeonAuthUser {

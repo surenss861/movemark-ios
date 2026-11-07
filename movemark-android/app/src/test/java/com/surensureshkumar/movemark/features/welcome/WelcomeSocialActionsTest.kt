@@ -40,10 +40,10 @@ class WelcomeSocialActionsTest {
             )
         }
         compose.onNodeWithText("Start move-in proof").assertExists()
-        // Google is shown; Apple is not, until its Android flow exists (no control that can't sign anyone in).
+        // Both providers show: they share the browser flow.
         compose.onNodeWithTag("welcome.social.google").assertExists()
-        compose.onNodeWithTag("welcome.social.apple").assertDoesNotExist()
-        compose.onNodeWithText("Continue with Apple").assertDoesNotExist()
+        compose.onNodeWithTag("welcome.social.apple").assertExists()
+        compose.onNodeWithText("Continue with Apple").assertExists()
 
         compose.onNodeWithText("Continue with Google").performScrollTo().performClick()
         compose.onNodeWithText("I already have a vault").performScrollTo().performClick()

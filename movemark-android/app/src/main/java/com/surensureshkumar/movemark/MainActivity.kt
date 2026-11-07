@@ -1,5 +1,8 @@
 package com.surensureshkumar.movemark
 
+import androidx.lifecycle.lifecycleScope
+import com.surensureshkumar.movemark.features.auth.social.SocialBrowserSession
+import kotlinx.coroutines.launch
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
@@ -17,7 +20,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // A reset link that launched the app (not again after a configuration change).
-        if (savedInstanceState == null) PasswordResetLink.offer(intent?.dataString)
+        if (savedInstanceState == null && !SocialBrowserSession.offer(intent?.data)) PasswordResetLink.offer(intent?.dataString)
         // System bars follow the app's surfaces, not the phone's theme: MoveMark has one dark theme, and everything
         // under the bars is dark, so the icons are light even on a light-mode phone. A future light screen must set
         // its own appearance (WindowCompat.getInsetsController) and restore it on leaving.
@@ -32,9 +35,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        lifecycleScope.launch { SocialBrowserSession.hostResumed() }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        PasswordResetLink.offer(intent.dataString)
+        if (!SocialBrowserSession.offer(intent.data)) PasswordResetLink.offer(intent.dataString)
     }
 }
