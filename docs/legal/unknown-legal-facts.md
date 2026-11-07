@@ -2,6 +2,50 @@
 
 Working paper for the owner and the reviewing Ontario technology/privacy lawyer. It goes with `terms-of-service.md` and `privacy-policy.md`, and is not for publication.
 
+## What still needs the owner
+
+Updated 2026-11-07, after the two documents were tightened into publish-ready text. The owner decided a lawyer is advisable but not a blocker. Everything below this section is kept as the backlog.
+
+**1. Fill in the placeholders.** These are the only ones left:
+
+- `[OWNER: legal name of the operator]` (U1): Terms section 1, Privacy section 1
+- `[OWNER: effective date]` (U4): both documents
+- `[OWNER: governing province]` (L1): Terms section 20
+- `[OWNER: mailing address, if needed]` (U2): Terms section 23, Privacy section 17
+
+**2. Change the apps before publishing, or the apps will contradict the documents.** The documents now tell the truth about these; the apps don't yet.
+
+- C1, C7: both apps still say "permanently deleted". The documents say live data goes and backups stay.
+- C8: the Android delete dialog doesn't warn that a subscription keeps running.
+- C4: Android sign-up shows no link to the Terms or Privacy Policy, and neither client on `feature/legal-gate` calls the acceptance functions yet. Migrations 1030 to 1050 are on `dev` only. Terms section 1 relies on "by creating an account or using MoveMark".
+- C15: the apps still link to the old Notion pages and show `support@movemark.app`.
+- C6: marketing and report wording ("Prove what was already there", "Private evidence") goes further than Terms section 3. Terms section 3 now says these words don't mean legal proof, but the copy itself hasn't changed.
+
+**3. Confirm these facts. The documents state them as true, from repo docs or project notes rather than live settings.**
+
+- U9: B2 lifecycle rules are really set (about 36 days, 365 days, 400 days in Privacy section 10), and both buckets are in the United States. If the rules aren't set, those periods are false.
+- Neon history retention is 7 days on production, and Object Lock is 30 days.
+- U25: Titan hosts connect@movemark.ca.
+- U19: the plain present-tense statements are ones you're willing to stand behind: we don't sell personal information, no advertising use, no AI or image-analysis service, Consumer data not shared with Business.
+- U10: password-reset email goes through Neon Auth. If Postmark is added, Privacy section 7 already says providers may change, but it should be named.
+- Current plan and cancellation rules in Terms sections 10 and 11 (U18), including "credits currently have no expiry date".
+
+**4. Choices made by leaving something out. Add these back only if you decide them.**
+
+- No privacy officer is named (U3). Privacy questions go to connect@movemark.ca. PIPEDA still expects someone to be designated, so decide who that is even if the policy doesn't name them.
+- No minimum age is stated (L5, C5). Terms section 4 only requires being able to form a binding contract. Privacy section 15 says the apps don't ask your age.
+- No liability cap (L2). No figure was ever chosen, so the bullet was removed. Terms section 18 (L4) was kept as drafted.
+- The Language section was removed (L10). If MoveMark is offered in Quebec, French versions and Law 25 still need attention.
+- The sentence saying contracts give comparable protection abroad was removed, because nobody has confirmed those contracts exist (U14). The Location column was removed from the provider table because several regions are unknown (U8, U13).
+- No claim about encryption at rest (U15), or that access to production is restricted (C16). Privacy section 13 says the people who run MoveMark can technically read data.
+- "We ask for your express consent" was replaced with consent by adding the material, because the apps don't collect express consent (C4).
+- movemark.ca isn't covered by the Privacy Policy, because its cookies and analytics weren't checked (U11).
+- Delete rental isn't mentioned, because it isn't in the released apps (C11). Add it to Privacy section 11 when it ships.
+
+**5. Rollout plan.** `docs/legal-gate/rollout-plan.md` step 0 still says "Lawyer-final", and `is_final` should not be set while the DRAFT banner is on the documents. That file wasn't changed here.
+
+**Disclosed, not fixed.** C1, C2, C3, C9, C10, C12, C13 and C17 are now stated plainly in the documents. They remain open product work, and the wording must change if the behaviour does.
+
 **Prepared:** 2026-11-07, from a read of the code only. No database, dashboard, live site or credential was used.
 
 **What was read**
@@ -18,7 +62,9 @@ Working paper for the owner and the reviewing Ontario technology/privacy lawyer.
 - Provider dashboards. Facts about B2 lifecycle rules, Neon retention and the email sender come from repo docs, not live settings.
 - Whether the Apple and Google store listings or privacy labels match these drafts.
 
-**Key to the brackets in the drafts:** `[UNKNOWN: …]` = section A. `[LAWYER DECISION: …]` = section B. `[CONFLICT C#: …]` = section C.
+**Key to the brackets in the first drafts:** `[UNKNOWN: …]` = section A. `[LAWYER DECISION: …]` = section B. `[CONFLICT C#: …]` = section C. These brackets are gone from the documents now, and only `[OWNER: …]` remains.
+
+**Reading the sections below:** they were written against the first drafts. "Draft says" lines, and any mention of an `[UNKNOWN]` in a draft, describe that version. Privacy section numbers haven't changed. In the Terms, the Language section (21) was removed, so the old sections 22, 23 and 24 are now 21, 22 and 23.
 
 ---
 
@@ -228,6 +274,11 @@ Webhook code grants credits on purchase, and ignores other Report Pack events. A
 **C23. Possible late report after deletion. (Low, inferred, untested)**
 
 A report job already running when an account is deleted could upload its PDF after storage cleanup (`export_job_processor.py`). The file would stay in live storage with no row or owner, and be mirrored to B2.
+
+**C24. The fingerprint can't be used by the renter. (Low, added 2026-11-07)**
+
+The first Privacy draft said the fingerprint lets you "detect changes to the original". No screen or report shows it, and no endpoint serves originals (C3, C13), so a renter can't do that alone. The documents now only say it's stored and could help show a file changed.
+**Fix:** show the fingerprint in reports or provide originals on request, or keep the current wording.
 
 ---
 
