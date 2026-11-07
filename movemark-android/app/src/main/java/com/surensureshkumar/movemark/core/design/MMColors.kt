@@ -22,6 +22,13 @@ object MMColors {
     val EvidenceCardRaised = Color(0xFF1A1C1B)
     val TabBarFill = Color(0xF008130F)
     val Primary = Color(0xFF21B866)
+
+    /**
+     * The primary action, matching iOS's lime (MMInk.lime / onLime). Used through MMButtonStyle.Action; Welcome adopts
+     * it first. The app-wide move is a later token change; green stays for genuine success and saved states.
+     */
+    val ActionPrimary = Color(0xFFCAE36C)
+    val OnActionPrimary = Color(0xFF111608)
     val PrimaryPressed = Color(0xFF18A957)
     val TextPrimary = Color(0xFFF2F8F1)
     val TextSecondary = Color(0xFFA8B8AD)

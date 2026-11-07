@@ -13,6 +13,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
@@ -37,7 +38,8 @@ import java.util.Base64
  *   accept. It is minted from the cookie by `GET /token` and refreshed here, once, for every caller —
  *   repositories never see expiry or refresh.
  *
- * Email/password only; no OAuth.
+ * Email/password for the app session. [signInSocial] (an OIDC ID token from Google/Apple) exists for the
+ * isolated social-sign-in probe only; see features/auth/social/SocialSignIn.kt for the gate.
  */
 
 @Serializable
@@ -194,6 +196,20 @@ class NeonAuthClient(
         return finishSignIn(body)
     }
 
+    /**
+     * Exchanges a provider's ID token for a Neon Auth session (`POST /sign-in/social` with `idToken`). [nonce] is
+     * the value as it appears in the token's `nonce` claim. Probe only until account linking is proven safe.
+     */
+    suspend fun signInSocial(provider: String, idToken: String, nonce: String?): NeonAuthUser {
+        val token = buildMap<String, JsonElement> {
+            put("token", JsonPrimitive(idToken))
+            if (nonce != null) put("nonce", JsonPrimitive(nonce))
+        }
+        val payload = JsonObject(mapOf("provider" to JsonPrimitive(provider), "idToken" to JsonObject(token)))
+        val body = post("sign-in/social", payload, storeSession = true)
+        return finishSignIn(body)
+    }
+
     private suspend fun finishSignIn(body: String): NeonAuthUser {
         val user = runCatching {
             val obj = json.parseToJsonElement(body).jsonObject["user"]!!.jsonObject
@@ -263,14 +279,16 @@ class NeonAuthClient(
 
     // ---- HTTP ----
 
-    private suspend fun post(path: String, fields: Map<String, String>, storeSession: Boolean): String {
+    private suspend fun post(path: String, fields: Map<String, String>, storeSession: Boolean): String =
+        post(path, JsonObject(fields.mapValues { JsonPrimitive(it.value) }), storeSession)
+
+    private suspend fun post(path: String, payload: JsonObject, storeSession: Boolean): String {
         val base = baseUrl ?: throw NeonAuthException.NotConfigured()
         val url = base.resolvePath(path)
-        val payload = JsonObject(fields.mapValues { JsonPrimitive(it.value) }).toString()
         val request = Request.Builder()
             .url(url)
             .header("Origin", base.origin())
-            .post(payload.toRequestBody(JSON_MEDIA))
+            .post(payload.toString().toRequestBody(JSON_MEDIA))
             .build()
         val response = http.send(request)
         if (!response.isSuccessful) {

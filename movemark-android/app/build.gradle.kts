@@ -85,12 +85,19 @@ android {
                 buildConfigField("String", "NEON_DATA_API_URL", "\"${localProp("NEON_DATA_API_URL")}\"")
                 buildConfigField("String", "MOVEMARK_API_BASE_URL", "\"${localProp("MOVEMARK_API_BASE_URL")}\"")
             }
+            // Social sign-in probe (feature/social-welcome): debug only, and only when local.properties names the
+            // isolated probe project. The Google *web* client id is a public identifier (no secret ships).
+            buildConfigField("String", "SOCIAL_PROBE_AUTH_URL", "\"${localProp("SOCIAL_PROBE_AUTH_URL")}\"")
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${localProp("GOOGLE_WEB_CLIENT_ID")}\"")
         }
         release {
             // Release is hard-wired to production; local.properties can never redirect it.
             buildConfigField("String", "NEON_AUTH_URL", "\"$prodNeonAuthUrl\"")
             buildConfigField("String", "NEON_DATA_API_URL", "\"$prodNeonDataApiUrl\"")
             buildConfigField("String", "MOVEMARK_API_BASE_URL", "\"$prodMoveMarkApiBaseUrl\"")
+            // Social sign-in stays off in release until the probe gates pass; local.properties can't turn it on.
+            buildConfigField("String", "SOCIAL_PROBE_AUTH_URL", "\"\"")
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"\"")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -177,6 +184,9 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.revenuecat)
     implementation(libs.okhttp)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
     implementation(libs.sentry.android)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

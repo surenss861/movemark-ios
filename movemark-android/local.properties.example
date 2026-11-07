@@ -22,3 +22,9 @@ MOVEMARK_UPLOAD_KEY_PASSWORD=
 
 # Crash reporting: the MoveMark Android Sentry project's DSN. Empty = Sentry disabled.
 SENTRY_DSN=
+
+# Social sign-in probe (debug only; feature/social-welcome). Leave empty to hide the buttons.
+# The isolated Neon Auth probe project's auth URL, never the dev or production one.
+SOCIAL_PROBE_AUTH_URL=
+# The Google OAuth *web* client id (a public identifier, not a secret) registered on the probe project.
+GOOGLE_WEB_CLIENT_ID=
