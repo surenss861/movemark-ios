@@ -126,7 +126,7 @@ def owner_count(owner: Any, table: str, row_id: str) -> int:
 # --- 1030 alone changes nothing --------------------------------------------------------
 
 def test_a_fresh_build_enforces_nothing_and_accepts_nobody() -> None:
-    with migrate.scratch_db(migrations_through("1040")) as conn:
+    with migrate.scratch_db(migrations_through("1050")) as conn:
         assert conn.execute("SELECT enforced FROM legal_gate_settings").fetchall() == [(False,)]
         assert conn.execute("SELECT count(*) FROM legal_documents").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM legal_acceptances").fetchone()[0] == 0
@@ -153,7 +153,7 @@ def test_gate_off_leaves_a_legacy_user_working_but_reports_acceptance_outstandin
 
 
 def test_enforced_with_nothing_published_blocks_nobody(owner: Any) -> None:
-    with migrate.scratch_db(migrations_through("1040")) as conn:
+    with migrate.scratch_db(migrations_through("1050")) as conn:
         conn.execute("UPDATE legal_gate_settings SET enforced = true")
         uid = str(uuid.uuid4())
         assert conn.execute("SELECT legal_gate_open_for_user(%s)", (uid,)).fetchone()[0] is True
@@ -237,19 +237,35 @@ def test_snapshot_rpcs_return_nothing_protected(dsn: str, owner: Any, legacy: di
     assert legacy["property"] not in json.dumps(v2["property"]) and "Wall" not in json.dumps([v1, v2, page, photos])
 
 
-def test_known_gap_tables_outside_the_first_wave_stay_reachable(dsn: str, owner: Any, legacy: dict[str, Any], active: dict[str, str]) -> None:
-    """Pins the gap in docs/legal-gate/rls-coverage.md, so closing it (next wave) has to change this test."""
+def test_second_wave_tables_are_closed_too(dsn: str, owner: Any, legacy: dict[str, Any], active: dict[str, str]) -> None:
+    dispute = one(owner, "INSERT INTO disputes (property_id, user_id, dispute_type) VALUES (%s, %s, 'deposit_withheld') RETURNING id",
+                  (legacy["property"], legacy["user"]))[0]
+    owner.execute("INSERT INTO dispute_evidence_links (dispute_id, maintenance_issue_id) VALUES (%s, %s)", (dispute, legacy["maintenance"]))
+    second_wave = ("maintenance_issues", "move_out_checklists", "disputes", "dispute_evidence_links", "inspection_item_tags")
     with as_user(dsn, legacy["user"]) as c:
-        assert [str(r[0]) for r in rows(c, "SELECT id FROM maintenance_issues")] == [legacy["maintenance"]]
-        assert len(rows(c, "SELECT id FROM move_out_checklists")) == 1
-        # ... including through both snapshot RPCs, the one place a gated caller gets row content back.
-        assert len(one(c, "SELECT get_property_snapshot(%s)", (legacy["property"],))[0]["maintenance_issues"]) == 1
-        assert len(one(c, "SELECT get_property_snapshot_v2(%s)", (legacy["property"],))[0]["maintenance_issues"]) == 1
-        # Writes that re-check the property fail because the property is gated; a plain own-row DELETE does not.
+        for table in second_wave:
+            assert one(c, f"SELECT count(*) FROM {table}")[0] == 0, table
+        assert one(c, "SELECT get_property_snapshot(%s)", (legacy["property"],))[0]["maintenance_issues"] == []
+        v2 = one(c, "SELECT get_property_snapshot_v2(%s)", (legacy["property"],))[0]
+        assert (v2["maintenance_issues"], v2["maintenance_count"]) == ([], 0)
+        assert rows(c, "DELETE FROM maintenance_issues RETURNING id") == []
+        assert rows(c, "UPDATE move_out_checklists SET keys_returned = true RETURNING id") == []
+        c.commit()
         with pytest.raises(errors.InsufficientPrivilege):
             c.execute("INSERT INTO maintenance_issues (property_id, user_id, title) VALUES (%s, %s, 'x')", (legacy["property"], legacy["user"]))
+    assert owner_count(owner, "maintenance_issues", legacy["maintenance"]) == 1
+    accept(dsn, legacy["user"], active)
     with as_user(dsn, legacy["user"]) as c:
-        assert len(rows(c, "DELETE FROM maintenance_issues RETURNING id")) == 1
+        for table in second_wave:
+            assert one(c, f"SELECT count(*) FROM {table}")[0] >= 1, table
+
+
+def test_every_client_data_table_carries_the_gate_and_the_open_ones_are_named(owner: Any) -> None:
+    """A table added later must take a side deliberately."""
+    tables = {r[0] for r in rows(owner, """SELECT c.relname FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace
+        AND c.relkind = 'r' AND has_table_privilege('authenticated', c.oid, 'SELECT')""")}
+    gated = {r[0] for r in rows(owner, "SELECT tablename FROM pg_policies WHERE schemaname = 'public' AND policyname LIKE '%%_legal_gate'")}
+    assert tables - gated == {"profiles", "issue_tags", "legal_documents", "legal_acceptances"}
 
 
 # --- what must keep working -------------------------------------------------------------
@@ -376,7 +392,7 @@ def test_versions_other_than_the_active_ones_are_refused(dsn: str, owner: Any, a
 
 
 def test_accepting_with_nothing_published_is_refused(owner: Any) -> None:
-    with migrate.scratch_db(migrations_through("1040")) as conn:
+    with migrate.scratch_db(migrations_through("1050")) as conn:
         conn.execute("SET ROLE authenticated")
         conn.execute("SELECT set_config('request.jwt.claims', %s, false)", (json.dumps({"sub": str(uuid.uuid4())}),))
         with pytest.raises(errors.InvalidParameterValue, match="LEGAL_DOCUMENTS_UNAVAILABLE"):
@@ -549,21 +565,25 @@ def test_rollback_of_each_migration_restores_the_previous_schema_exactly() -> No
         through_1020 = migrate.fingerprint(before)
     with migrate.scratch_db(migrations_through("1030")) as mid:
         through_1030 = migrate.fingerprint(mid)
-    with migrate.scratch_db(migrations_through("1040")) as conn:
-        through_1040 = migrate.fingerprint(conn)
-        assert through_1040 != through_1030 != through_1020
+    with migrate.scratch_db(migrations_through("1040")) as mid:
+        through_1040 = migrate.fingerprint(mid)
+    with migrate.scratch_db(migrations_through("1050")) as conn:
+        through_1050 = migrate.fingerprint(conn)
+        assert through_1050 != through_1040 != through_1030 != through_1020
+        conn.execute((down / "1050_legal_gate_rls_wave2.down.sql").read_text())
+        assert migrate.diff(through_1040, migrate.fingerprint(conn), "1040", "rolled back") == []
         conn.execute((down / "1040_legal_gate_rls.down.sql").read_text())
         assert migrate.diff(through_1030, migrate.fingerprint(conn), "1030", "rolled back") == []
         conn.execute((down / "1030_legal_acceptance.down.sql").read_text())
         assert migrate.diff(through_1020, migrate.fingerprint(conn), "1020", "rolled back") == []
-        for version in ("1030", "1040"):  # and forward again
+        for version in ("1030", "1040", "1050"):  # and forward again
             conn.execute(next((NEON / "migrations").glob(f"{version}_*.sql")).read_text())
-        assert migrate.diff(through_1040, migrate.fingerprint(conn), "1040", "reapplied") == []
+        assert migrate.diff(through_1050, migrate.fingerprint(conn), "1050", "reapplied") == []
 
 
 def test_rolling_back_enforcement_keeps_acceptances_and_reopens_data(dsn: str) -> None:
-    uid, down = str(uuid.uuid4()), NEON / "rollback" / "1040_legal_gate_rls.down.sql"
-    with migrate.scratch_db(migrations_through("1040")) as conn:
+    uid, down = str(uuid.uuid4()), NEON / "rollback"
+    with migrate.scratch_db(migrations_through("1050")) as conn:
         conn.execute('INSERT INTO neon_auth."user" (id, email) VALUES (%s, %s)', (uid, "r@qa.test"))
         conn.execute("""INSERT INTO properties (user_id, title, address_line_1, city, province_state, postal_code, country)
                         VALUES (%s, 'x', 'x', 'x', 'x', 'x', 'x')""", (uid,))
@@ -579,6 +599,7 @@ def test_rolling_back_enforcement_keeps_acceptances_and_reopens_data(dsn: str) -
             return found
 
         assert visible() == 0
-        conn.execute(down.read_text())
+        conn.execute((down / "1050_legal_gate_rls_wave2.down.sql").read_text())
+        conn.execute((down / "1040_legal_gate_rls.down.sql").read_text())
         assert visible() == 1  # enforcement went with the policies; the switch and the records stayed
         assert conn.execute("SELECT enforced FROM legal_gate_settings").fetchone()[0] is True
