@@ -300,6 +300,9 @@ final class SessionManager {
         interactiveAuthInFlight = true
         defer { interactiveAuthInFlight = false }
 
+        #if DEBUG
+        print("[social-qa] attempt provider=\(provider.rawValue)")
+        #endif
         let start = try await NeonAuthClient.shared.beginBrowserSignIn(provider: provider, callbackURL: SocialBrowserReturn.callbackURL)
         let returned = try await (browser ?? SystemBrowserPresenter()).open(start.url)
         let verifier = try SocialBrowserReturn.verifier(from: returned)

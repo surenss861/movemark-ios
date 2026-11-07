@@ -134,6 +134,13 @@ struct SocialSignInTests {
         #expect(throws: SocialSignInError.self) { _ = try SocialBrowserReturn.verifier(from: URL(string: raw)!) }
     }
 
+    @Test func anExistingAccountConflictTellsThePersonHowToGetIn() {
+        let url = URL(string: "movemark://auth/callback?error=account_not_linked")!
+        #expect(throws: SocialSignInError.failed(SocialBrowserReturn.accountConflictMessage)) {
+            _ = try SocialBrowserReturn.verifier(from: url)
+        }
+    }
+
     @Test func aDeclinedConsentIsTreatedAsCancelled() {
         #expect(throws: SocialSignInError.cancelled) {
             _ = try SocialBrowserReturn.verifier(from: URL(string: "movemark://auth/callback?error=access_denied")!)

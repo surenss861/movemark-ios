@@ -82,6 +82,9 @@ enum SocialBrowserReturn {
     static let callbackURL = URL(string: "https://account.movemark.ca/auth/return")!
     static let appScheme = "movemark"
     static let verifierParameter = "neon_auth_session_verifier"
+    /// Neon refused to attach this provider to an existing account. Nothing was created or changed, so the person's
+    /// vault is untouched; the way in is whichever method they used first.
+    static let accountConflictMessage = "This email already has a MoveMark vault. Sign in the way you created it."
 
     /// The verifier from `movemark://auth/callback?…`. Anything else is a failed sign-in, never a session.
     static func verifier(from url: URL) throws -> String {
@@ -95,8 +98,11 @@ enum SocialBrowserReturn {
         // Sign-in QA: Neon's short error code only. The return page limits it to a plain code, never a token.
         print("[social-qa] browser-return error=\(items.first(where: { $0.name == "error" })?.value ?? "none")")
         #endif
-        if items.first(where: { $0.name == "error" })?.value == "access_denied" { throw SocialSignInError.cancelled }
-        throw SocialSignInError.failed("Sign-in didn’t finish. Try again.")
+        switch items.first(where: { $0.name == "error" })?.value {
+        case "access_denied": throw SocialSignInError.cancelled
+        case "account_not_linked": throw SocialSignInError.failed(accountConflictMessage)
+        default: throw SocialSignInError.failed("Sign-in didn’t finish. Try again.")
+        }
     }
 }
 

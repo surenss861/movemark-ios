@@ -370,7 +370,10 @@ struct WelcomeScreen: View {
                 // Closed the sheet; nothing to say.
             } catch NeonAuthError.rejected(let code, let message) {
                 let shown = NeonAuthError.rejected(code: code, message: message).localizedDescription
-                socialError = "\(shown) [\(code ?? "no code")]"
+                #if DEBUG
+                print("[social-qa] session-exchange rejected=\(code ?? "no code")")
+                #endif
+                socialError = shown
             } catch {
                 socialError = error.localizedDescription
             }
