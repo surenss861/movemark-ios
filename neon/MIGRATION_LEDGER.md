@@ -112,6 +112,14 @@ Every Supabase dependency found in the iOS app, the Android app, the FastAPI API
 | Report-pack credit balances (Postgres only) | Lost with Supabase. Rebuild from RevenueCat non-subscription purchase history, keyed by event id, so `grant_report_credit` stays idempotent | S6 | 🟡 |
 | `user_entitlements` (Pro cache) | Rebuilt from RevenueCat webhooks / restore | S6 | 🟡 |
 
+## 6a. Legal acceptance (new on Neon, no Supabase predecessor)
+
+| Item | Where | Status |
+|---|---|---|
+| Records, helpers, client RPCs | `1030` | ✅ local · see `docs/legal-gate/` for branches |
+| Restrictive Data API policies, first wave | `1040` | ✅ local · inert until enforced |
+| Production publish, enforcement | Not written: `docs/legal-gate/rollout-plan.md` | ⛔ needs owner approval |
+
 ## 7. Lost with the Supabase project (no replacement possible)
 
 User accounts and identities, all rental, room, evidence, maintenance, document and export rows, all stored photos, documents and PDFs, and credit balances. The only recovery path is a Supabase support export. If one arrives, it's imported into Neon and checked against `0001` (the reconstruction then doubles as a schema diff).
