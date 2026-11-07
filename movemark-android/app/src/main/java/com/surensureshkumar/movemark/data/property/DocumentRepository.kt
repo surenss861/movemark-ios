@@ -82,6 +82,15 @@ class DocumentRepository(
         }
     }
 
+    /**
+     * Deletes every copy of this document type from the rental record (iOS `deleteDocuments`): the API removes the
+     * rows and their files together, and rows already gone are not an error, so a retry is safe.
+     */
+    suspend fun deleteDocuments(propertyId: UUID, kind: VaultDocumentKind) {
+        val ids = existingDocuments(propertyId, kind).map { it.id }
+        if (ids.isNotEmpty()) storage.deleteDocuments(ids)
+    }
+
     /** Temporary download URL for a stored document path. */
     suspend fun signedUrl(path: String): String = fileUrls.documentUrl(path)
 

@@ -10,16 +10,21 @@ import com.surensureshkumar.movemark.core.util.MMUserMessages
 import com.surensureshkumar.movemark.data.auth.SessionManager
 import com.surensureshkumar.movemark.data.evidence.EvidenceCaptureSource
 import com.surensureshkumar.movemark.data.evidence.EvidenceImport
-import com.surensureshkumar.movemark.data.evidence.EvidenceSaveOutcome
 import com.surensureshkumar.movemark.data.evidence.EvidenceSource
-import com.surensureshkumar.movemark.data.evidence.PendingEvidence
+import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceCenter
+import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceDraft
+import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceInput
+import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceItem
+import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceKey
+import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceSync
+import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceSyncResult
 import com.surensureshkumar.movemark.data.models.RoomRecord
-import com.surensureshkumar.movemark.data.property.EvidenceUploadContext
 import com.surensureshkumar.movemark.data.property.InspectionRepository
 import com.surensureshkumar.movemark.data.property.PropertyStore
 import com.surensureshkumar.movemark.domain.ProofPhase
 import com.surensureshkumar.movemark.core.navigation.Routes
 import com.surensureshkumar.movemark.features.proof.camera.CameraCaptureResultHolder
+import com.surensureshkumar.movemark.features.proof.camera.CameraPhotoStorage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -30,14 +35,18 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
 import java.util.UUID
 import javax.inject.Inject
 
 private const val UPLOAD_TAG = "MoveMarkUpload"
+private const val RESTORE_WAIT_MS = 15_000L
 
 @HiltViewModel
 class RoomProofViewModel @Inject constructor(
@@ -47,6 +56,7 @@ class RoomProofViewModel @Inject constructor(
     private val receiptCache: SavedProofReceiptCache,
     private val cameraResultHolder: CameraCaptureResultHolder,
     private val inspectionRepository: InspectionRepository,
+    private val pendingCenter: PendingEvidenceCenter,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     /** Signed URL for a saved evidence photo (the Room hero plate); null if signing fails. */
@@ -97,25 +107,127 @@ class RoomProofViewModel @Inject constructor(
     private val _loadingOlder = MutableStateFlow(false)
     val loadingOlder: StateFlow<Boolean> = _loadingOlder.asStateFlow()
 
-    private var uploadContext: EvidenceUploadContext? = null
     private var pendingReceipt: SavedProofReceiptPayload? = null
+
+    private var restoredKey: PendingEvidenceKey? = null
 
     init {
         if (roomId == null) {
             _message.value = "Invalid room. Please go back and try again."
+        } else {
+            viewModelScope.launch { restorePending() }
         }
     }
 
+    /** Back from the camera: shots it wrote to the pending set appear, then any hand-off (gallery picks) is added. */
     fun consumeCameraCaptures() {
         val id = roomId ?: return
         viewModelScope.launch {
+            val key = restoredKey
+            if (key != null && !_saveState.value.isBusy) showStored(key)
             cameraResultHolder.consume(id)?.let { addUris(it) }
         }
+    }
+
+    /** This room's new-entry pending set on this phone (null until the user and rental are known). */
+    private fun pendingKey(appendTo: UUID? = null): PendingEvidenceKey? {
+        val userId = sessionManager.userId.value ?: return null
+        val propertyId = propertyStore.currentProperty.value?.id ?: return null
+        val roomId = roomId ?: return null
+        return PendingEvidenceKey.of(userId, propertyId, roomId, proofPhase == ProofPhase.MoveOut, appendTo)
+    }
+
+    private fun currentPendingDraft(): PendingEvidenceDraft = _draft.value.let {
+        PendingEvidenceDraft(it.title, it.notes, it.tags.sorted(), it.conditionRating)
+    }
+
+    /**
+     * Brings back what an earlier visit left on this phone (after leaving, a crash or a process kill), then checks
+     * it against the server: photos an interrupted save had in fact saved leave the phone, and an interrupted
+     * Add photos set is sent again (the renter already asked for it).
+     */
+    private suspend fun restorePending() {
+        val key = withTimeoutOrNull(RESTORE_WAIT_MS) {
+            sessionManager.userId.first { it != null }
+            propertyStore.currentProperty.first { it != null }
+            pendingKey()
+        } ?: return
+        restoredKey = key
+        val shownBefore = showStored(key)
+        when (val outcome = pendingCenter.reconcile(key)) {
+            is PendingEvidenceSync.ReconcileOutcome.Checked -> if (outcome.alreadySaved > 0 && !_saveState.value.isBusy) {
+                refreshAfterSave()
+                showStored(key)
+                if (_photos.value.isEmpty() && shownBefore > 0) {
+                    val saved = pendingCenter.store.manifest(key)?.savedCount?.takeIf { it > 0 } ?: outcome.alreadySaved
+                    _entryNotice.tryEmit(if (saved == 1) "1 photo saved" else "$saved photos saved")
+                }
+            }
+            else -> Unit
+        }
+        // Add photos sets of this room that didn't finish.
+        pendingCenter.store.manifests(key.userId)
+            .filter { it.key.base == key && it.key.appendTo != null && it.items.isNotEmpty() }
+            .forEach { sendAppend(it.key) }
+    }
+
+    /** Rebuilds the form or the retry from what is on this phone for [key]. Returns how many photos are shown. */
+    private suspend fun showStored(key: PendingEvidenceKey): Int {
+        val restored = pendingCenter.store.restore(key)
+        if (restored == null || restored.items.isEmpty()) {
+            if (!_saveState.value.isBusy) {
+                _photos.value = emptyList()
+                if (_saveState.value is RoomProofSaveState.PartialSuccess || _saveState.value is RoomProofSaveState.Failed) {
+                    _saveState.value = RoomProofSaveState.Idle
+                    _message.value = null
+                }
+            }
+            return 0
+        }
+        val manifest = restored.manifest
+        val photos = withContext(Dispatchers.Default) {
+            restored.items.map { (item, source) ->
+                PendingPhoto(
+                    id = item.id,
+                    bytes = EvidenceImport.thumbnail(source) ?: ByteArray(0),
+                    status = if (item.status == PendingEvidenceItem.Status.Pending) PhotoUploadStatus.Pending else PhotoUploadStatus.Failed,
+                    sha256 = source.sha256Hex,
+                )
+            }
+        }
+        _photos.value = photos
+        val linked = manifest.entryId != null && (manifest.savedCount > 0 || restored.items.any { it.item.unresolved != null })
+        if (linked) {
+            // A partial save: the entry exists; these photos are its retry.
+            val requested = maxOf(manifest.requestedCount, manifest.savedCount + photos.size)
+            _saveState.value = RoomProofSaveState.PartialSuccess(manifest.savedCount, photos.size)
+            _message.value = RoomProofUploadMessages.partial(manifest.savedCount, requested)
+            pendingReceipt = room.value?.let { r ->
+                propertyStore.currentProperty.value?.let { p ->
+                    buildReceiptPayload(r, p.id, manifest.savedCount, requested, manifest.draft.tags.size)
+                }
+            }
+        } else {
+            val d = manifest.draft
+            _draft.value = EntryDraft(d.title, d.notes, d.conditionRating, d.tags.toSet())
+            if (photos.any { it.status == PhotoUploadStatus.Failed }) {
+                _saveState.value = RoomProofSaveState.Failed(RoomProofUploadMessages.FULL_FAILURE)
+                _message.value = RoomProofUploadMessages.NOT_UPLOADED_YET
+            } else {
+                _saveState.value = RoomProofSaveState.Idle
+                _message.value = null
+            }
+        }
+        return photos.size
     }
 
     fun addUris(uris: List<Uri>) {
         if (_saveState.value.isBusy) return
         viewModelScope.launch {
+            val key = pendingKey() ?: run {
+                _message.value = "Sign in required."
+                return@launch
+            }
             val imported = withContext(Dispatchers.IO) { importSources(uris) }
             val sources = imported.mapNotNull { it.getOrNull() }
             if (sources.isEmpty() && uris.isNotEmpty()) {
@@ -123,20 +235,46 @@ class RoomProofViewModel @Inject constructor(
                 return@launch
             }
             // The same file picked twice is one photo (its source hash is its identity).
-            val existing = _photos.value.mapNotNull { it.evidence?.source?.sha256Hex }.toSet()
-            val newPhotos = withContext(Dispatchers.Default) {
-                sources
-                    .distinctBy { it.sha256Hex }
-                    .filter { it.sha256Hex !in existing }
-                    .mapNotNull { source ->
-                        val preview = EvidenceImport.thumbnail(source) ?: return@mapNotNull null
-                        PendingPhoto(bytes = preview, evidence = PendingEvidence(source))
+            val existing = _photos.value.mapNotNull { it.sha256 }.toSet()
+            val fresh = sources.distinctBy { it.sha256Hex }.filter { it.sha256Hex !in existing }
+            val inputs = fresh.map { PendingEvidenceInput(UUID.randomUUID(), it) }
+            if (inputs.isNotEmpty()) {
+                // On disk first: a photo is shown as taken only once it is safe on this phone.
+                try {
+                    pendingCenter.admit(inputs, key, room.value?.name ?: "Room", currentPendingDraft())
+                } catch (e: Exception) {
+                    Log.e(UPLOAD_TAG, "Couldn't keep photos on the device", e)
+                    _message.value = RoomProofUploadMessages.COULD_NOT_KEEP
+                    return@launch
+                }
+                val newPhotos = withContext(Dispatchers.Default) {
+                    inputs.map { input ->
+                        PendingPhoto(
+                            id = input.id.toString().lowercase(),
+                            bytes = EvidenceImport.thumbnail(input.source) ?: ByteArray(0),
+                            sha256 = input.source.sha256Hex,
+                        )
                     }
-            }
-            if (newPhotos.isNotEmpty()) {
+                }
                 _photos.value = _photos.value + newPhotos
-                _saveState.value = RoomProofSaveState.Idle
+                if (_saveState.value !is RoomProofSaveState.PartialSuccess) _saveState.value = RoomProofSaveState.Idle
                 _message.value = if (sources.size < uris.size) importFailureMessage(imported) else null
+            }
+            // The camera's working copies are now in the pending store (or were duplicates); drop them.
+            withContext(Dispatchers.IO) { deleteCameraCopies(uris) }
+        }
+    }
+
+    /** Removes a photo that isn't saved yet (iOS: the thumbnail's remove button). */
+    fun removePhoto(id: String) {
+        if (_saveState.value.isBusy) return
+        val key = pendingKey() ?: return
+        _photos.value = _photos.value.filterNot { it.id == id }
+        viewModelScope.launch {
+            pendingCenter.remove(listOf(id), key)
+            if (_photos.value.isEmpty()) {
+                if (_saveState.value is RoomProofSaveState.Failed) _saveState.value = RoomProofSaveState.Idle
+                _message.value = null
             }
         }
     }
@@ -146,10 +284,22 @@ class RoomProofViewModel @Inject constructor(
         runCatching { EvidenceImport.source(context, uri, captureSourceOf(uri)) }
     }
 
+    private fun deleteCameraCopies(uris: List<Uri>) {
+        val captures = CameraPhotoStorage.capturesDir(context).canonicalPath
+        uris.filter { captureSourceOf(it) == EvidenceCaptureSource.Camera }.forEach { uri ->
+            val file = uri.path?.let(::File) ?: return@forEach
+            if (file.canonicalPath.startsWith(captures)) file.delete()
+        }
+    }
+
     private fun importFailureMessage(results: List<Result<EvidenceSource>>): String =
         results.firstNotNullOfOrNull { it.exceptionOrNull()?.message }
             ?: "Could not read selected photos. Try different images."
 
+    /**
+     * Saves the room's pending photos (the form's, or a partial save's retry) through [PendingEvidenceCenter]: the
+     * photos are already on this phone; they leave it only once confirmed.
+     */
     fun save() {
         if (_saveState.value.isBusy) return
         val userId = sessionManager.userId.value ?: run {
@@ -164,137 +314,91 @@ class RoomProofViewModel @Inject constructor(
             _message.value = "Room not found."
             return
         }
-        val toUpload = _photos.value.filter {
-            it.status == PhotoUploadStatus.Pending || it.status == PhotoUploadStatus.Failed
-        }
-        if (toUpload.isEmpty()) {
+        val key = pendingKey() ?: return
+        if (_photos.value.isEmpty()) {
             _message.value = "Add at least one photo before saving."
             return
         }
+        val isFormSave = _saveState.value !is RoomProofSaveState.PartialSuccess
+        val draft = currentPendingDraft()
 
         viewModelScope.launch {
             _saveState.value = RoomProofSaveState.Preparing
             _message.value = null
-            pendingReceipt = null
             try {
-                val uploadCtx = uploadContext ?: withContext(Dispatchers.IO) {
-                    val d = _draft.value
-                    propertyStore.createEvidenceUploadContext(
-                        roomId = room.id,
-                        title = d.title.trim().ifEmpty { room.name },
-                        notes = d.notes.trim(),
-                        propertyId = property.id,
-                        userId = userId,
-                        proofPhase = proofPhase,
-                        conditionRating = d.conditionRating,
-                        issueTags = d.tags.toList(),
+                if (isFormSave) pendingCenter.updateDraft(draft, key)
+                _photos.value = _photos.value.map { it.copy(status = PhotoUploadStatus.Uploading) }
+                val result = pendingCenter.send(key) { index, total ->
+                    _saveState.value = RoomProofSaveState.Uploading(index, total)
+                }
+                if (result.confirmed > 0) {
+                    withContext(Dispatchers.IO) {
+                        propertyStore.applyEvidenceSync(
+                            roomId = room.id,
+                            entryId = result.entryId,
+                            title = draft.title.trim().ifEmpty { room.name },
+                            confirmed = result.confirmed,
+                            phase = proofPhase,
+                            userId = userId,
+                        )
+                    }
+                }
+                val pendingIds = result.pending.map { it.item.id }.toSet()
+                val stillPending = _photos.value.filter { it.id in pendingIds }.map { it.copy(status = PhotoUploadStatus.Failed) }
+
+                if (result.nothingLinked && result.pending.isNotEmpty()) {
+                    // Nothing saved and no entry holds anything of it: the photos stay in the form as they were.
+                    _photos.value = stillPending
+                    val failure = RoomProofUploadMessages.failure(
+                        (result.failure as? PendingEvidenceSyncResult.Failure.Unreachable)?.error ?: result.lastError,
                     )
-                }.also { uploadContext = it }
-
-                var uploadedThisRun = 0
-                var lastFailure: Throwable? = null
-                val batchSize = toUpload.size
-
-                toUpload.forEachIndexed { index, photo ->
-                    _saveState.value = RoomProofSaveState.Uploading(index + 1, batchSize)
-                    setPhotoStatus(photo.id, PhotoUploadStatus.Uploading)
-                    val evidence = photo.evidence ?: return@forEachIndexed setPhotoStatus(photo.id, PhotoUploadStatus.Failed)
-                    when (val outcome = withContext(Dispatchers.IO) { propertyStore.saveEvidencePhoto(uploadCtx, evidence) }) {
-                        is EvidenceSaveOutcome.Saved -> {
-                            setPhotoStatus(photo.id, PhotoUploadStatus.Uploaded)
-                            uploadedThisRun++
-                        }
-                        is EvidenceSaveOutcome.Pending -> {
-                            // Keep the row id and any unresolved upload: the retry settles it before re-sending.
-                            updatePhoto(photo.id) { it.copy(status = PhotoUploadStatus.Failed, evidence = outcome.item) }
-                            lastFailure = outcome.error ?: lastFailure
-                        }
-                    }
+                    _saveState.value = RoomProofSaveState.Failed(failure)
+                    _message.value = failure
+                    return@launch
                 }
 
-                val totalUploaded = _photos.value.count { it.status == PhotoUploadStatus.Uploaded }
-                val failedCount = _photos.value.count { it.status == PhotoUploadStatus.Failed }
-
-                when {
-                    uploadedThisRun > 0 -> {
-                        withContext(Dispatchers.IO) {
-                            propertyStore.commitEvidenceUpload(
-                                context = uploadCtx,
-                                uploadedCount = uploadedThisRun,
-                                attemptedCount = batchSize,
-                            )
-                        }
-                    }
-                    totalUploaded == 0 -> {
-                        withContext(Dispatchers.IO) {
-                            uploadContext?.let { propertyStore.abandonEvidenceUpload(it) }
-                        }
-                        uploadContext = null
-                        val failure = RoomProofUploadMessages.failure(lastFailure)
-                        _saveState.value = RoomProofSaveState.Failed(failure)
-                        _message.value = failure
-                        return@launch
-                    }
+                // The entry exists now: the form is done with either way.
+                _draft.value = EntryDraft()
+                val issueCount = draft.tags.size
+                if (!result.isComplete) {
+                    _photos.value = stillPending
+                    pendingReceipt = buildReceiptPayload(room, property.id, result.savedTotal, result.requestedTotal, issueCount)
+                    _saveState.value = RoomProofSaveState.PartialSuccess(result.savedTotal, stillPending.size)
+                    _message.value = RoomProofUploadMessages.partial(result.savedTotal, result.requestedTotal)
+                    return@launch
                 }
-
-                when {
-                    failedCount > 0 -> {
-                        val attempted = _photos.value.size
-                        pendingReceipt = buildReceiptPayload(
-                            room = room,
-                            propertyId = property.id,
-                            savedCount = totalUploaded,
-                            attemptedCount = attempted,
-                            issueCount = uploadCtx.issueTags.toSet().size,
-                        )
-                        _saveState.value = RoomProofSaveState.PartialSuccess(totalUploaded, failedCount)
-                        _message.value = RoomProofUploadMessages.partial(totalUploaded, attempted)
-                    }
-                    else -> {
-                        val attempted = _photos.value.size
-                        val payload = buildReceiptPayload(
-                            room = room,
-                            propertyId = property.id,
-                            savedCount = totalUploaded,
-                            attemptedCount = attempted,
-                            issueCount = uploadCtx.issueTags.toSet().size,
-                        )
-                        receiptCache.put(payload)
-                        _photos.value = emptyList()
-                        _draft.value = EntryDraft()
-                        uploadContext = null
-                        _saveState.value = RoomProofSaveState.Success(totalUploaded)
-                        _message.value = null
-                        _proofSaved.tryEmit(payload)
-                    }
-                }
+                val payload = buildReceiptPayload(room, property.id, result.savedTotal, result.requestedTotal, issueCount)
+                receiptCache.put(payload)
+                _photos.value = emptyList()
+                pendingReceipt = null
+                _saveState.value = RoomProofSaveState.Success(result.savedTotal)
+                _message.value = null
+                _proofSaved.tryEmit(payload)
             } catch (e: Exception) {
                 Log.e(UPLOAD_TAG, "Save proof failed", e)
                 val friendly = MMUserMessages.proofSave(e)
+                _photos.value = _photos.value.map { it.copy(status = PhotoUploadStatus.Failed) }
                 _saveState.value = RoomProofSaveState.Failed(friendly)
                 _message.value = friendly
             } finally {
-                if (_saveState.value is RoomProofSaveState.Preparing ||
-                    _saveState.value is RoomProofSaveState.Uploading
-                ) {
-                    _saveState.value = RoomProofSaveState.Idle
-                }
+                if (_saveState.value.isBusy) _saveState.value = RoomProofSaveState.Idle
             }
         }
     }
 
     fun retryFailedUploads() {
         if (_saveState.value.isBusy) return
-        val hasFailed = _photos.value.any { it.status == PhotoUploadStatus.Failed }
-        if (!hasFailed) return
+        if (_photos.value.isEmpty()) return
         save()
     }
 
+    /**
+     * Leave with what was saved. The photos that didn't make it stay on this phone (and on the Proof home's
+     * "not uploaded yet" row) and come back when the room is opened again.
+     */
     fun continueWithSavedProof() {
         val payload = pendingReceipt ?: return
         receiptCache.put(payload)
-        _photos.value = emptyList()
-        uploadContext = null
         pendingReceipt = null
         _saveState.value = RoomProofSaveState.Idle
         _message.value = null
@@ -305,6 +409,11 @@ class RoomProofViewModel @Inject constructor(
 
     fun updateDraft(transform: (EntryDraft) -> EntryDraft) {
         _draft.value = transform(_draft.value)
+        // Typed details are kept with the photos, so a restore brings both back.
+        val key = pendingKey() ?: return
+        if (_photos.value.isEmpty() || _saveState.value.isBusy || _saveState.value is RoomProofSaveState.PartialSuccess) return
+        val draft = currentPendingDraft()
+        viewModelScope.launch { pendingCenter.updateDraft(draft, key) }
     }
 
     /** Edit a saved entry's details (iOS `saveEditedEvidence`). Returns false on failure. */
@@ -331,25 +440,47 @@ class RoomProofViewModel @Inject constructor(
         }
     }
 
-    /** Add photos to an existing entry (iOS `appendPhotos`). */
+    /**
+     * Add photos to an existing entry (iOS `appendPhotos`). The photos go to this phone first (their own set,
+     * keyed to the entry) and leave it only once saved; an unfinished set is sent again when the room reopens.
+     */
     fun appendPhotos(entryId: UUID, uris: List<Uri>) {
-        val userId = sessionManager.userId.value ?: return
-        val property = propertyStore.currentProperty.value ?: return
-        val roomId = roomId ?: return
+        val key = pendingKey(appendTo = entryId) ?: return
         if (uris.isEmpty()) return
         runEntryAction(success = null, failure = RoomProofUploadMessages.FULL_FAILURE) {
             val sources = withContext(Dispatchers.IO) { importSources(uris) }.mapNotNull { it.getOrNull() }
             if (sources.isEmpty()) throw IllegalStateException("Could not read selected photos.")
-            val pending = sources.distinctBy { it.sha256Hex }.map { PendingEvidence(it) }
-            val result = withContext(Dispatchers.IO) {
-                propertyStore.appendPhotosToEvidence(entryId, roomId, proofPhase, pending, property.id, userId)
-            }
-            _entryNotice.tryEmit(
-                if (result.hadPartialFailure) RoomProofUploadMessages.partial(result.savedCount, result.attemptedCount)
-                else if (result.savedCount == 1) "1 photo added" else "${result.savedCount} photos added",
-            )
-            result.hydrationRefreshed
+            val inputs = sources.distinctBy { it.sha256Hex }.map { PendingEvidenceInput(UUID.randomUUID(), it) }
+            pendingCenter.admit(inputs, key, room.value?.name ?: "Room")
+            sendAppend(key)
+            true
         }
+    }
+
+    /** Sends one Add photos set and reports the outcome. */
+    private suspend fun sendAppend(key: PendingEvidenceKey) {
+        val result = pendingCenter.send(key)
+        if (result.confirmed > 0) {
+            sessionManager.userId.value?.let { withContext(Dispatchers.IO) { propertyStore.refreshActive(it) } }
+        }
+        val notice = when {
+            result.failure == PendingEvidenceSyncResult.Failure.EntryMissing -> {
+                restoredKey?.let { showStored(it) }
+                "That entry was deleted, so its photos moved to a new entry here. Save to upload them."
+            }
+            result.pending.isNotEmpty() && result.confirmed == 0 ->
+                "${RoomProofUploadMessages.FULL_FAILURE} The photos are kept on this phone."
+            result.pending.isNotEmpty() ->
+                "${RoomProofUploadMessages.partial(result.savedTotal, result.requestedTotal)} The rest are kept on this phone."
+            result.confirmed == 1 -> "1 photo added"
+            result.confirmed > 1 -> "${result.confirmed} photos added"
+            else -> null
+        }
+        notice?.let { _entryNotice.tryEmit(it) }
+    }
+
+    private suspend fun refreshAfterSave() {
+        sessionManager.userId.value?.let { withContext(Dispatchers.IO) { propertyStore.refreshActive(it) } }
     }
 
     private fun runEntryAction(

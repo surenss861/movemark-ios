@@ -245,7 +245,7 @@ fun MaintenanceIssueDetailScreen(
                                     photo.signedUrl?.let { url ->
                                         AsyncImage(
                                             model = rememberSignedImageRequest(url, photo.displayPath),
-                                            contentDescription = null,
+                                            contentDescription = "Maintenance photo",
                                             modifier = Modifier.fillMaxSize(),
                                         )
                                     }

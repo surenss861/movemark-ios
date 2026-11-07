@@ -22,6 +22,11 @@ import com.surensureshkumar.movemark.domain.ProofPhase
 import com.surensureshkumar.movemark.domain.RoomProofMetrics
 import com.surensureshkumar.movemark.features.reports.components.ChecklistItemState
 import com.surensureshkumar.movemark.features.reports.components.ReportChecklistItem
+import com.surensureshkumar.movemark.data.remote.ExportApiException
+import com.surensureshkumar.movemark.data.auth.SessionManager
+import com.surensureshkumar.movemark.data.subscription.MoveInGate
+import com.surensureshkumar.movemark.data.subscription.ReportCreditPolicy
+import com.surensureshkumar.movemark.data.subscription.ReportCreditsManager
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -82,7 +87,9 @@ class ReportsViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val propertyStore: PropertyStore,
     private val exportRepository: ExportRepository,
-    subscriptionRepository: SubscriptionRepository,
+    private val subscriptionRepository: SubscriptionRepository,
+    private val credits: ReportCreditsManager,
+    private val sessionManager: SessionManager,
 ) : ViewModel() {
 
     val hasPro: StateFlow<Boolean> = subscriptionRepository.hasPro
@@ -225,6 +232,29 @@ class ReportsViewModel @Inject constructor(
         }
     }
 
+    private val _paywallRequests = MutableSharedFlow<PaywallReason>(extraBufferCapacity = 1)
+
+    /** The server refused a report with 402: open the paywall for it (iOS `handleExportRequestError`). */
+    val paywallRequests: SharedFlow<PaywallReason> = _paywallRequests.asSharedFlow()
+
+    /** Shared handling of a refused export POST. Returns true when it was handled (paywall or already building). */
+    private suspend fun handleRefusal(error: Exception, reason: PaywallReason): Boolean = when (error) {
+        is ExportApiException.PaymentRequired -> {
+            subscriptionRepository.refreshCustomerInfo()
+            credits.refresh(sessionManager.userId.value)
+            // The server is the source of truth; a purchase may still be syncing to it.
+            if (credits.isPurchaseLikelySyncing) _banner.value = ReportCreditPolicy.PURCHASE_STILL_SYNCING to true
+            else _paywallRequests.tryEmit(reason)
+            true
+        }
+        is ExportApiException.AlreadyActive -> {
+            _banner.value = (error.message ?: "") to false
+            refreshExports()
+            true
+        }
+        else -> false
+    }
+
     private fun queueMoveInReport() {
         val property = propertyStore.currentProperty.value ?: return
         if (_actionInProgress.value) return
@@ -233,16 +263,31 @@ class ReportsViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
+            // Free accounts: one move-in report, plus one per Report Pack (server balance wins once known).
+            val userId = sessionManager.userId.value
+            when (credits.moveInGate(userId, subscriptionRepository.hasPro.value)) {
+                MoveInGate.Allowed -> Unit
+                MoveInGate.Paywall -> {
+                    _paywallRequests.tryEmit(PaywallReason.UnlimitedExports)
+                    return@launch
+                }
+                // Copy only: no credit is assumed while a purchase reaches the server.
+                MoveInGate.StillSyncing -> {
+                    _banner.value = ReportCreditPolicy.PURCHASE_STILL_SYNCING to true
+                    return@launch
+                }
+            }
             _actionInProgress.value = true
             _banner.value = null
             try {
                 withContext(Dispatchers.IO) {
                     exportRepository.queueMoveInReport(property.id)
                 }
+                if (!subscriptionRepository.hasPro.value) userId?.let { credits.recordMoveInExport(it) }
                 _banner.value = "Report queued. Building your PDF…" to false
                 refreshExports()
             } catch (e: Exception) {
-                _banner.value = exportRepository.userMessage(e) to true
+                if (!handleRefusal(e, PaywallReason.UnlimitedExports)) _banner.value = exportRepository.userMessage(e) to true
             } finally {
                 _actionInProgress.value = false
             }
@@ -266,7 +311,7 @@ class ReportsViewModel @Inject constructor(
                 _banner.value = "Move-out report queued. Building your PDF…" to false
                 refreshExports()
             } catch (e: Exception) {
-                _banner.value = exportRepository.userMessage(e) to true
+                if (!handleRefusal(e, PaywallReason.MoveOutReport)) _banner.value = exportRepository.userMessage(e) to true
             } finally {
                 _moveOutActionInProgress.value = false
             }
@@ -305,7 +350,7 @@ class ReportsViewModel @Inject constructor(
                 _banner.value = "Dispute packet queued. Building your PDF…" to false
                 refreshExports()
             } catch (e: Exception) {
-                _banner.value = exportRepository.userMessage(e) to true
+                if (!handleRefusal(e, PaywallReason.DisputePacket)) _banner.value = exportRepository.userMessage(e) to true
             } finally {
                 _disputeActionInProgress.value = false
             }

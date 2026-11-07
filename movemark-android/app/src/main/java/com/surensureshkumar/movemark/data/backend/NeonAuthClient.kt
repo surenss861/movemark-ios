@@ -62,6 +62,7 @@ sealed class NeonAuthException(message: String) : Exception(message) {
             "PASSWORD_TOO_SHORT" -> "Password is too short."
             "PASSWORD_TOO_LONG" -> "Password is too long."
             "INVALID_EMAIL" -> "Enter a valid email."
+            "INVALID_TOKEN" -> "This reset link is invalid or has expired. Request a new one."
             else -> message.ifEmpty { "Couldn’t reach MoveMark. Try again." }
         }
     }
@@ -253,6 +254,11 @@ class NeonAuthClient(
     /** Emails a reset link. Answers the same whether or not the address has an account. */
     suspend fun requestPasswordReset(email: String) {
         post("request-password-reset", mapOf("email" to email), storeSession = false)
+    }
+
+    /** Sets a new password from the token in a reset link. Neon Auth revokes the account's other sessions. */
+    suspend fun resetPassword(token: String, newPassword: String) {
+        post("reset-password", mapOf("token" to token, "newPassword" to newPassword), storeSession = false)
     }
 
     // ---- HTTP ----

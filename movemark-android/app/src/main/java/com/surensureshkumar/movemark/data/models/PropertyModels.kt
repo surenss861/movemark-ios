@@ -327,6 +327,11 @@ data class CreatePropertyInput(
     val landlordPhone: String = "",
     val depositAmount: String = "",
     val rentAmount: String = "",
+    /** Stored as move_in_date (yyyy-MM-dd). */
+    val moveInDate: java.time.LocalDate = java.time.LocalDate.now(),
+    /** Stored as lease_start / lease_end; null when no lease was entered (first-run setup asks for none). */
+    val leaseStart: java.time.LocalDate? = null,
+    val leaseEnd: java.time.LocalDate? = null,
 ) {
     val titleValue: String
         get() = title.trim().ifEmpty { addressLine1.trim().ifEmpty { "My rental" } }

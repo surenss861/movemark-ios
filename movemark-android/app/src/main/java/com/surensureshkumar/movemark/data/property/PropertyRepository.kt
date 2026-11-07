@@ -1,5 +1,7 @@
 package com.surensureshkumar.movemark.data.property
 
+import com.surensureshkumar.movemark.domain.RentalDates
+
 import com.surensureshkumar.movemark.data.backend.PostgrestClient
 import com.surensureshkumar.movemark.data.models.CreatePropertyInput
 import com.surensureshkumar.movemark.data.models.EntryPhotosPage
@@ -12,8 +14,6 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import java.text.SimpleDateFormat
-import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -22,7 +22,6 @@ import javax.inject.Singleton
 class PropertyRepository @Inject constructor(
     private val postgrest: PostgrestClient,
 ) {
-    private val dbDate = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     private companion object {
         const val MAX_PROPERTIES = 300
         const val MAX_ROOMS = 200
@@ -134,9 +133,18 @@ class PropertyRepository @Inject constructor(
             landlordName = input.landlordName.trim().takeIf { it.isNotEmpty() },
             landlordEmail = input.landlordEmail.trim().takeIf { it.isNotEmpty() },
             landlordPhone = input.landlordPhone.trim().takeIf { it.isNotEmpty() },
-            moveInDate = dbDate.format(java.util.Date()),
+            depositAmount = com.surensureshkumar.movemark.domain.RentalEditForm.parseAmount(input.depositAmount)?.takeIf { it >= 0 },
+            rentAmount = com.surensureshkumar.movemark.domain.RentalEditForm.parseAmount(input.rentAmount)?.takeIf { it >= 0 },
+            moveInDate = RentalDates.format(input.moveInDate),
+            leaseStart = input.leaseStart?.let(RentalDates::format),
+            leaseEnd = input.leaseEnd?.let(RentalDates::format),
         )
         return postgrest.insertReturning<PropertyRow, PropertyRow>("properties", row).single()
+    }
+
+    /** Edit rental: writes the edited columns of one property (RLS limits it to the owner's rows). */
+    suspend fun updateProperty(propertyId: UUID, patch: com.surensureshkumar.movemark.domain.PropertyPatch) {
+        postgrest.update("properties", patch) { eq("id", propertyId.toString()) }
     }
 
     suspend fun insertDefaultRooms(propertyId: UUID) {

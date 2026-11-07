@@ -28,6 +28,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -62,6 +72,12 @@ fun ProPaywallScreen(
     val error by viewModel.errorMessage.collectAsState()
     val restoreMessage by viewModel.restoreMessage.collectAsState()
     val purchaseSuccess by viewModel.purchaseSuccess.collectAsState()
+    val restoreNote by viewModel.restoreNote.collectAsState()
+    val packWasBought by viewModel.purchaseWasReportPack.collectAsState()
+    val plans = packages.filterNot { it.isReportPack }
+    val reportPack = packages.firstOrNull { it.isReportPack }
+    // Came for one report: the Report Pack is the first answer, before the Pro story (iOS prefersReportPackFirst).
+    val offersReportPack = reason == PaywallReason.UnlimitedExports
     val isMockMode = viewModel.isMockMode
     val busy = loading || purchasing
 
@@ -109,6 +125,23 @@ fun ProPaywallScreen(
                     fontSize = 12.sp,
                 )
             }
+            if (purchaseSuccess) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    if (packWasBought) "Report Pack unlocked" else "Pro unlocked",
+                    color = MMColors.Primary,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
+            if (offersReportPack && !(loading && packages.isEmpty())) {
+                Spacer(Modifier.height(20.dp))
+                ReportPackSection(
+                    pack = reportPack,
+                    enabled = !busy && !purchaseSuccess && activity != null,
+                    onBuy = { pack -> activity?.let { viewModel.purchaseReportPack(it, pack) { } } },
+                )
+            }
             Spacer(Modifier.height(16.dp))
             MMProofCard {
                 Text("MoveMark Pro includes", color = MMColors.TextPrimary, fontWeight = FontWeight.SemiBold)
@@ -149,7 +182,7 @@ fun ProPaywallScreen(
                     }
                 }
                 else -> {
-                    packages.forEach { plan ->
+                    plans.forEach { plan ->
                         PlanCard(
                             plan = plan,
                             selected = selected?.id == plan.id,
@@ -162,7 +195,7 @@ fun ProPaywallScreen(
                         Text(it, color = MMColors.SemanticDanger, fontSize = 14.sp)
                         Spacer(Modifier.height(8.dp))
                     }
-                    restoreMessage?.let {
+                    (restoreNote ?: restoreMessage)?.let {
                         Text(it, color = MMColors.Primary, fontSize = 14.sp)
                         Spacer(Modifier.height(8.dp))
                     }
@@ -201,6 +234,49 @@ fun ProPaywallScreen(
             }
             Spacer(Modifier.height(24.dp))
         }
+    }
+}
+
+/** One report, no subscription — offered first when the renter only needs a single move-in report. */
+@Composable
+private fun ReportPackSection(pack: PlanPackageUi?, enabled: Boolean, onBuy: (PlanPackageUi) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("ONE REPORT ONLY", color = MMColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp)
+        if (pack == null) {
+            Text("Report Pack isn’t available right now. Pro still unlocks unlimited reports.", color = MMColors.TextSecondary, fontSize = 13.sp)
+            return@Column
+        }
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 64.dp)
+                .clickable(enabled = enabled, role = Role.Button) { onBuy(pack) }
+                .semantics(mergeDescendants = true) {
+                    contentDescription = "Buy Report Pack, one move-in report, no subscription, ${pack.price}"
+                },
+            shape = RoundedCornerShape(14.dp),
+            color = MMColors.CardRaised,
+            border = BorderStroke(0.75.dp, MMColors.CardStroke),
+        ) {
+            val large = LocalDensity.current.fontScale >= 1.5f
+            val copy: @Composable () -> Unit = {
+                Column {
+                    Text("Report Pack", color = MMColors.TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Text("One move-in report · no subscription", color = MMColors.TextSecondary, fontSize = 13.sp)
+                }
+            }
+            val price: @Composable () -> Unit = { Text(pack.price, color = MMColors.TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) }
+            if (large) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { copy(); price() }
+            } else {
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Description, contentDescription = null, tint = MMColors.TextPrimary, modifier = Modifier.padding(end = 12.dp))
+                    Box(Modifier.weight(1f)) { copy() }
+                    price()
+                }
+            }
+        }
+        Text("The move-out report and evidence packet stay on Pro.", color = MMColors.TextSecondary, fontSize = 12.5.sp)
     }
 }
 

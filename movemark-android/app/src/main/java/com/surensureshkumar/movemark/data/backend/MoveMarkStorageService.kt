@@ -115,7 +115,14 @@ class MoveMarkStorageService(
     // ---- Upload ----
 
     /** Room evidence: immutable source + working derivative + thumbnail, verified and finalized. */
-    suspend fun uploadEvidence(prepared: PreparedEvidence, propertyId: String, roomId: String, isMoveOut: Boolean): MoveMarkUpload =
+    /** [onTicket] runs once the ticket is issued, before any byte is sent (the pending store records it first). */
+    suspend fun uploadEvidence(
+        prepared: PreparedEvidence,
+        propertyId: String,
+        roomId: String,
+        isMoveOut: Boolean,
+        onTicket: suspend (MoveMarkUpload) -> Unit = {},
+    ): MoveMarkUpload =
         uploadSourced(
             prepared,
             mapOf(
@@ -124,6 +131,7 @@ class MoveMarkStorageService(
                 "roomId" to roomId.lowercase(),
                 "phase" to if (isMoveOut) "move_out" else "move_in",
             ),
+            onTicket,
         )
 
     /** Maintenance evidence, same three objects as room evidence. */
@@ -172,7 +180,11 @@ class MoveMarkStorageService(
         return MoveMarkUpload(ticket.uploadTicketId, ticket.bucket, ticket.path, thumbnailPath)
     }
 
-    private suspend fun uploadSourced(prepared: PreparedEvidence, fields: Map<String, String>): MoveMarkUpload {
+    private suspend fun uploadSourced(
+        prepared: PreparedEvidence,
+        fields: Map<String, String>,
+        onTicket: suspend (MoveMarkUpload) -> Unit = {},
+    ): MoveMarkUpload {
         val source = prepared.source
         val body = buildJsonObject {
             fields.forEach { (key, value) -> put(key, value) }
@@ -196,6 +208,7 @@ class MoveMarkStorageService(
         val released = MoveMarkUpload(ticket.uploadTicketId, ticket.bucket, ticket.path, null)
 
         try {
+            onTicket(released.copy(sourcePath = sourcePart.path, capturedAt = source.capturedAt))
             put(source.data, sourcePart.url, sourcePart.headers)
             put(prepared.derivative, ticket.url, ticket.headers)
         } catch (e: Throwable) {

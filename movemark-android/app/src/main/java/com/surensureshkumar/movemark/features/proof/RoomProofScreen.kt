@@ -61,12 +61,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -338,7 +340,11 @@ fun RoomProofScreen(
                                     color = MMColors.TextMuted,
                                 )
                             }
-                            RoomProofPhotoGrid(photos = photos, reduceMotion = reduceMotion)
+                            RoomProofPhotoGrid(
+                                photos = photos,
+                                reduceMotion = reduceMotion,
+                                onRemove = if (isBusy) null else viewModel::removePhoto,
+                            )
                             EntryDetailsForm(
                                 draft = draft,
                                 onChange = { next -> viewModel.updateDraft { next } },
@@ -451,7 +457,7 @@ fun RoomPhotoViewer(
         Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
             HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
                 val photo = photos[page]
-                val url by produceState<String?>(initialValue = null, photo.filePath) { value = signPhotoUrl(photo.filePath) }
+                val url by rememberSignedUrl(photo.filePath) { signPhotoUrl(photo.filePath) }
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     if (url == null) {
                         CircularProgressIndicator(color = androidx.compose.ui.graphics.Color.White)
@@ -492,7 +498,7 @@ fun RoomPhotoViewer(
                 ) {
                     itemsIndexed(photos, key = { _, p -> p.id }) { index, p ->
                         val path = p.thumbnailPath ?: p.filePath
-                        val thumb by produceState<String?>(initialValue = null, path) { value = signPhotoUrl(path) ?: signPhotoUrl(p.filePath) }
+                        val thumb by rememberSignedUrl(path) { signPhotoUrl(path) ?: signPhotoUrl(p.filePath) }
                         val selected = index == pager.currentPage
                         Box(
                             Modifier
@@ -501,7 +507,13 @@ fun RoomPhotoViewer(
                                 .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.08f))
                                 .border(2.dp, if (selected) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(10.dp))
                                 .alpha(if (selected) 1f else 0.6f)
-                                .clickable { scope.launch { pager.animateScrollToPage(index) } },
+                                .clickable(onClickLabel = "Show this photo", role = androidx.compose.ui.semantics.Role.Image) {
+                                    scope.launch { pager.animateScrollToPage(index) }
+                                }
+                                .semantics {
+                                    this.selected = selected
+                                    contentDescription = "Photo ${index + 1} of ${photos.size}"
+                                },
                         ) {
                             if (thumb != null) {
                                 SubcomposeAsyncImage(model = thumb, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())

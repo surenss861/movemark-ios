@@ -57,6 +57,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import com.surensureshkumar.movemark.features.reports.components.ReportPdfViewer
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
 
 @Composable
@@ -66,6 +67,8 @@ fun ReportsScreen(
     onOpenVault: () -> Unit,
     onShowPaywall: (PaywallReason) -> Unit,
     modifier: Modifier = Modifier,
+    /** The dispute packet opens its builder, as on iOS; null keeps the in-place action. */
+    onOpenDisputePacket: (() -> Unit)? = null,
     viewModel: ReportsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -78,6 +81,23 @@ fun ReportsScreen(
         if (!reduceMotion) appeared = true
     }
 
+    var viewing by remember { mutableStateOf<ReportLocalPdf?>(null) }
+    viewing?.let { payload ->
+        ReportPdfViewer(
+            file = payload.file,
+            title = payload.displayTitle,
+            onShare = {
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", payload.file)
+                shareLocalPdf(context, uri, payload.displayTitle)
+            },
+            onClose = { viewing = null },
+        )
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.paywallRequests.collect { onShowPaywall(it) }
+    }
+
     LaunchedEffect(Unit) {
         viewModel.reportPdf.collect { payload ->
             val uri = FileProvider.getUriForFile(
@@ -86,18 +106,8 @@ fun ReportsScreen(
                 payload.file,
             )
             when (payload.action) {
-                ReportPdfAction.View -> {
-                    val viewIntent = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(uri, "application/pdf")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    runCatching {
-                        context.startActivity(Intent.createChooser(viewIntent, "View report"))
-                    }.onFailure {
-                        shareLocalPdf(context, uri, payload.displayTitle)
-                    }
-                }
+                // Read it in the app (iOS QuickLook): no other PDF app needed.
+                ReportPdfAction.View -> viewing = payload
                 ReportPdfAction.Share -> shareLocalPdf(context, uri, payload.displayTitle)
             }
         }
@@ -204,7 +214,7 @@ fun ReportsScreen(
                     primaryTitle = disputeCtaTitle,
                     primaryEnabled = disputeCtaEnabled,
                     primaryLoading = disputeCtaLoading,
-                    onPrimary = {
+                    onPrimary = onOpenDisputePacket ?: {
                         viewModel.onDisputePrimaryAction(
                             hasPro = hasPro,
                             onContinueRoomProof = onContinueRoomProof,

@@ -245,7 +245,7 @@ def test_property_snapshot_is_owner_scoped(dsn: str, two_rentals: Any) -> None:
 @pytest.mark.parametrize("fn", [
     "claim_next_export_job()", "reap_stuck_export_jobs()",
     "grant_report_credit('{A}', 'evt', NULL)", "consume_report_credit('{A}', 'evt')",
-    "delete_user_owned_data('{B}')",
+    "delete_user_owned_data('{B}')", "delete_property_owned_data('{A}', '{B}')",
 ])
 def test_privileged_functions_denied_to_users(dsn: str, fn: str) -> None:
     with as_user(dsn, A) as c, pytest.raises(errors.InsufficientPrivilege):
@@ -657,6 +657,7 @@ PRIVILEGED_FUNCTIONS = {  # 0980: each SECURITY DEFINER function, executable by 
     "public.grant_report_credit(uuid, text, text)": {"movemark_api"},
     "public.delete_user_owned_data(uuid)": {"movemark_api"},
     "public.delete_auth_user(uuid)": {"movemark_api"},
+    "public.delete_property_owned_data(uuid, uuid)": {"movemark_api"},  # 1020
 }
 
 
@@ -871,3 +872,58 @@ def test_backup_credentials_cannot_grant_anything(dsn: str, owner: Any) -> None:
     assert not one(owner, "SELECT has_table_privilege('anonymous', 'public.properties', 'SELECT')")[0]
     assert not one(owner, "SELECT pg_has_role('anonymous', 'pg_read_all_data', 'MEMBER')")[0]
     assert not one(owner, "SELECT pg_has_role('movemark_backup', 'movemark_backend', 'MEMBER')")[0]
+
+
+# --- 1020 delete one rental ---------------------------------------------------------------
+
+def _delete_rental_as_api(owner: Any, user: str, prop: str) -> list[tuple[str, str | None, str]]:
+    owner.execute("SET ROLE movemark_api")
+    try:
+        return rows(owner, "SELECT kind, document_type, object_key FROM public.delete_property_owned_data(%s, %s)", (user, prop))
+    finally:
+        owner.execute("RESET ROLE")
+
+
+RENTAL_TABLES = ("rooms", "inspections", "maintenance_issues", "property_documents", "move_out_checklists", "disputes", "exports", "evidence_files")
+
+
+def _rental_rows(owner: Any, prop: str) -> int:
+    return sum(one(owner, f"SELECT count(*) FROM {t} WHERE property_id = %s", (prop,))[0] for t in RENTAL_TABLES) \
+        + one(owner, "SELECT count(*) FROM properties WHERE id = %s", (prop,))[0]
+
+
+def test_delete_rental_refuses_a_rental_that_is_not_the_callers(owner: Any, graph: dict[str, Any]) -> None:
+    before = _rental_rows(owner, graph["x"]["property"])
+    assert _delete_rental_as_api(owner, graph["Y"], graph["x"]["property"]) == []
+    assert _delete_rental_as_api(owner, graph["X"], str(uuid.uuid4())) == []
+    assert _rental_rows(owner, graph["x"]["property"]) == before
+
+
+def test_delete_rental_removes_only_that_rental_and_returns_its_object_keys(owner: Any, graph: dict[str, Any]) -> None:
+    x, x2, y, X, Y = graph["x"], graph["x2"], graph["y"], graph["X"], graph["Y"]
+    owner.execute("INSERT INTO exports (user_id, property_id, export_type, status, file_path) VALUES (%s, %s, 'dispute_packet', 'completed', %s)",
+                  (X, x["property"], f"{X}/exports/1.pdf"))
+    owner.execute("SELECT grant_report_credit(%s, 'rc:del-rental', NULL)", (X,))
+    others = (_rental_rows(owner, x2["property"]), _rental_rows(owner, y["property"]))
+
+    keys = _delete_rental_as_api(owner, X, x["property"])
+
+    assert sorted(keys, key=lambda k: k[2]) == sorted([
+        ("inspection", None, f"{X}/{x['property']}/move-in/{x['room']}/1.jpg"),
+        ("inspection", None, f"{X}/{x['property']}/move-in/{x['room']}/1_thumb.jpg"),
+        ("document", "lease", f"{X}/{x['property']}/lease/l.pdf"),
+        ("export", None, f"{X}/exports/1.pdf"),
+    ], key=lambda k: k[2])
+    assert _rental_rows(owner, x["property"]) == 0
+    assert one(owner, "SELECT count(*) FROM inspection_items WHERE id = %s OR room_id = %s", (x["item"], x["room"]))[0] == 0
+    assert one(owner, "SELECT count(*) FROM dispute_evidence_links WHERE id = %s", (graph["x_link"],))[0] == 0
+    # The owner's other rental, the other account and user-level rows are untouched.
+    assert (_rental_rows(owner, x2["property"]), _rental_rows(owner, y["property"])) == others
+    assert one(owner, "SELECT count(*) FROM profiles WHERE id = %s", (X,))[0] == 1
+    assert one(owner, "SELECT count(*) FROM user_report_credits WHERE user_id = %s", (X,))[0] == 1
+    assert one(owner, "SELECT count(*) FROM issue_tags")[0] >= 6
+    # Deleting it again is a no-op, and account deletion still works for both accounts afterwards.
+    assert _delete_rental_as_api(owner, X, x["property"]) == []
+    for u in (X, Y):
+        owner.execute("SELECT delete_user_owned_data(%s)", (u,))
+        owner.execute("DELETE FROM neon_auth.\"user\" WHERE id = %s", (u,))
