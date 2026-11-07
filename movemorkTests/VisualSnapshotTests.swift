@@ -236,14 +236,20 @@ final class VisualSnapshotTests: XCTestCase {
 
     // MARK: Room (current dark design — regression only until Room is rebuilt and approved)
 
-    private func roomScreen(entries: [EvidenceRecord], name: String) -> some View {
+    private func roomScreen(entries: [EvidenceRecord], name: String, moveOut: Bool = false, pending: UIImage? = nil) -> some View {
         GeometryReader { geo in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     RoomEvidenceHero(
-                        roomName: name, entries: entries, moveOutMode: false,
-                        topInset: geo.safeAreaInsets.top, containerSize: geo.size,
-                        resolvePhotoURL: { _ in nil }
+                        roomName: name, entries: entries, moveOutMode: moveOut,
+                        // The live screen's inset includes the navigation bar, which this harness doesn't have.
+                        topInset: geo.safeAreaInsets.top + (entries.isEmpty ? 44 : 0), containerSize: geo.size,
+                        resolvePhotoURL: { _ in nil },
+                        hasPendingPhotos: pending != nil,
+                        pickerSelection: entries.isEmpty ? .constant([]) : nil,
+                        pendingPreview: pending,
+                        pendingCount: pending == nil ? 0 : 3,
+                        fillsScreen: pending == nil
                     )
                     if !entries.isEmpty {
                         RoomEvidenceBody(entries: entries, moveOutMode: false, isBusy: false,
@@ -260,6 +266,34 @@ final class VisualSnapshotTests: XCTestCase {
 
     func testRoomEmpty() {
         assertSnapshot(of: host(roomScreen(entries: [], name: "Balcony/Patio")), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    /// Largest current iPhone (6.9", 440 × 956 pt).
+    private static let max = ViewImageConfig(
+        safeArea: pro.safeArea,
+        size: CGSize(width: 440, height: 956),
+        traits: pro.traits
+    )
+
+    func testRoomEmptySmallPhone() {
+        assertSnapshot(of: host(roomScreen(entries: [], name: "Kitchen")), as: Self.strategy(Self.small), named: "small")
+    }
+
+    func testRoomEmptyLargePhone() {
+        assertSnapshot(of: host(roomScreen(entries: [], name: "Kitchen")), as: Self.strategy(Self.max), named: "max")
+    }
+
+    func testRoomEmptyLargestText() {
+        assertSnapshot(of: host(roomScreen(entries: [], name: "Kitchen")), as: Self.strategy(Self.proAX), named: "ax")
+    }
+
+    func testRoomEmptyMoveOut() {
+        assertSnapshot(of: host(roomScreen(entries: [], name: "Kitchen", moveOut: true)), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    func testRoomEmptyWithAPendingPhoto() {
+        assertSnapshot(of: host(roomScreen(entries: [], name: "Kitchen", pending: Self.photo("snap-kitchen"))),
+                       as: Self.strategy(Self.pro), named: "pro")
     }
 
     func testRoomPopulated() {

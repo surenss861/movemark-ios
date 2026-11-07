@@ -101,7 +101,7 @@ struct WelcomeHero: View {
 }
 
 /// Four L-shaped corner marks, like registration marks on a print.
-private struct RegistrationMarks: Shape {
+struct RegistrationMarks: Shape {
     var length: CGFloat
     func path(in r: CGRect) -> Path {
         var p = Path()

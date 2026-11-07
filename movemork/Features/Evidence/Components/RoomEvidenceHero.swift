@@ -22,6 +22,14 @@ enum RoomCapturePrompts {
         "Floors",
         "Windows / blinds",
     ]
+
+    /// The room brief's shot list: the same four shots, each with a quiet symbol.
+    static let shots: [(prompt: String, symbol: String)] = zip(items, [
+        "door.left.hand.open",
+        "square.split.1x2",
+        "square.grid.3x3",
+        "window.vertical.closed",
+    ]).map { (prompt: $0, symbol: $1) }
 }
 
 struct RoomEvidenceHero: View {
@@ -40,11 +48,21 @@ struct RoomEvidenceHero: View {
     var isBusy: Bool = false
     var onTakePhotos: () -> Void = {}
     var pickerSelection: Binding<[PhotosPickerItem]>? = nil
+    /// The newest photo not saved yet: the evidence frame shows it, so the brief turns into the record.
+    var pendingPreview: UIImage? = nil
+    var pendingCount: Int = 0
+    /// The brief fills the screen and holds its actions at the bottom, unless something follows it (the new
+    /// entry form, or a notice, which must not be pushed below the fold).
+    var fillsScreen: Bool = false
 
     /// Room-level comparison line ("MOVE-IN 4 · MOVE-OUT 3 PHOTOS"), when both phases have photos.
     var compareLine: String? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// Everything in the brief except the evidence frame, for sizing the frame to the screen.
+    @ScaledMetric(relativeTo: .body) private var briefChrome: CGFloat = 480
+    @ScaledMetric(relativeTo: .body) private var captionSize: CGFloat = 15
     @State private var selectedPhotoID: UUID?
     @State private var showAddChoice = false
     @State private var showLibrary = false
@@ -272,65 +290,26 @@ struct RoomEvidenceHero: View {
 
     // MARK: - Empty
 
-    /// The room brief: which room, that it has no proof yet, what to photograph, and the one action.
+    /// The room brief: which room and its state, the frame this room's proof will fill, the shots to take,
+    /// and the one action. The frame borrows Welcome's registration marks: what MoveMark records goes inside.
     private var emptyField: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
-                kicker(moveOutMode ? "Move-out evidence" : "Move-in evidence", color: MoveMarkTheme.Colors.textMuted)
-                Text(roomName)
-                    .font(MoveMarkTheme.Typography.roomTitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
-                Text("No proof yet")
-                    .font(MoveMarkTheme.Typography.subheadlineMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-            }
-            .padding(.top, topInset + 28)
+            briefIdentity
+                .padding(.top, topInset + 20)
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text(moveOutMode ? "Capture these before you return the keys:" : "Capture these before you unpack:")
-                    .font(MoveMarkTheme.Typography.subheadline)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                ForEach(RoomCapturePrompts.items, id: \.self) { prompt in
-                    HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        Image(systemName: "viewfinder")
-                            .font(MoveMarkTheme.Typography.footnote)
-                            .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                        Text(prompt)
-                            .font(MoveMarkTheme.Typography.body)
-                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.92))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-            .padding(.top, 26)
+            evidenceAperture
+                .padding(.top, 20)
 
-            VStack(spacing: 6) {
-                // The one action, in the Vault's lime; once photos are picked the save bar takes over.
-                Button(action: onTakePhotos) {
-                    Label("Take photos", systemImage: "camera.fill")
-                        .font(MoveMarkTheme.Typography.subheadlineMedium)
-                        .foregroundStyle(hasPendingPhotos ? MoveMarkTheme.Colors.textPrimary : Self.onLime)
-                        .frame(maxWidth: .infinity)
-                        .frame(minHeight: 50)
-                        .background(hasPendingPhotos ? AnyShapeStyle(MoveMarkTheme.Surface.interactive) : AnyShapeStyle(Self.lime),
-                                    in: Capsule())
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .disabled(isBusy)
-                .opacity(isBusy ? 0.5 : 1)
-                if let pickerSelection {
-                    RoomGalleryPicker(selection: pickerSelection, isDisabled: isBusy, quiet: true)
-                }
-            }
-            .padding(.top, 26)
+            shotList
+                .padding(.top, 20)
+
+            Spacer(minLength: 18)
+
+            briefActions
         }
         .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
         .padding(.bottom, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: fillsScreen ? briefHeight : nil, alignment: .topLeading)
         .background(alignment: .top) {
             LinearGradient(
                 colors: [MoveMarkTheme.Colors.cardRaised.opacity(0.85), MoveMarkTheme.Colors.appBackground],
@@ -338,6 +317,130 @@ struct RoomEvidenceHero: View {
                 endPoint: .bottom
             )
             .frame(height: topInset + 360)
+        }
+    }
+
+    /// The visible page: the screen, less the scroll tail under the brief.
+    private var briefHeight: CGFloat {
+        containerSize.height + topInset - MoveMarkTheme.Spacing.scrollTailFocusedFlow
+    }
+
+    /// As tall as the screen allows, up to a 5:4 frame; never so small it stops reading as a photograph.
+    private var apertureHeight: CGFloat {
+        let width = containerSize.width - MoveMarkTheme.Spacing.screenHorizontal * 2
+        let tallest = width * 0.8
+        guard fillsScreen, !dynamicTypeSize.isAccessibilitySize else { return min(tallest, 200) }
+        return min(tallest, max(116, briefHeight - topInset - briefChrome))
+    }
+
+    private var briefIdentity: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            kicker(moveOutMode ? "Move-out evidence" : "Move-in evidence", color: MoveMarkTheme.Colors.textMuted)
+            Text(roomName)
+                .font(MoveMarkTheme.Typography.roomTitle)
+                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            Text(pendingCount > 0 ? "Not saved yet" : "No proof yet")
+                .font(MoveMarkTheme.Typography.subheadlineMedium)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+        }
+    }
+
+    /// Waiting for its first photo, then showing the newest one. Unfinished on purpose, never a broken image.
+    private var evidenceAperture: some View {
+        ZStack(alignment: .bottomLeading) {
+            if let pendingPreview {
+                Color.clear
+                    .overlay {
+                        Image(uiImage: pendingPreview)
+                            .resizable()
+                            .scaledToFill()
+                    }
+                    .clipped()
+                    .accessibilityElement()
+                    .accessibilityLabel("Newest photo of \(roomName), not saved yet")
+                    .transition(.opacity)
+                // Real photos are often pale walls: keeps the marks and the count legible on any of them.
+                LinearGradient(colors: [.black.opacity(0.3), .clear, .clear, .black.opacity(0.45)],
+                               startPoint: .top, endPoint: .bottom)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                glassChip(pendingCount == 1 ? "1 photo" : "\(pendingCount) photos", icon: "photo.on.rectangle", tint: .white)
+                    .padding(14)
+                    .accessibilityHidden(true)
+            } else {
+                MoveMarkTheme.Colors.appBackgroundRaised.opacity(0.7)
+                Text("This room’s record starts with your first photo.")
+                    .font(.system(size: captionSize, weight: .regular, design: .serif).italic())
+                    .foregroundStyle(.white.opacity(0.82))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 20)
+            }
+            RegistrationMarks(length: 14)
+                .stroke(.white.opacity(0.7), lineWidth: 1)
+                .accessibilityHidden(true)
+        }
+        .frame(maxWidth: .infinity)
+        // The caption can grow the empty frame at the largest text sizes; a photo stays in its crop.
+        .frame(minHeight: apertureHeight, maxHeight: pendingPreview == nil ? nil : apertureHeight)
+        .clipped()
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: pendingCount)
+    }
+
+    /// A photographer's shot list, not a checklist: nothing here reads as already done.
+    private var shotList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(moveOutMode ? "Capture these before you return the keys" : "Capture these before you unpack")
+                .font(MoveMarkTheme.Typography.footnote)
+                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 8)
+            ForEach(Array(RoomCapturePrompts.shots.enumerated()), id: \.offset) { index, shot in
+                Rectangle()
+                    .fill(MoveMarkTheme.Colors.divider)
+                    .frame(height: 1)
+                    .accessibilityHidden(true)
+                HStack(alignment: .firstTextBaseline, spacing: 14) {
+                    Text(String(format: "%02d", index + 1))
+                        .font(MoveMarkTheme.Typography.monoMeta)
+                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                        .accessibilityHidden(true)
+                    Text(shot.prompt)
+                        .font(MoveMarkTheme.Typography.subheadline)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.92))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    Image(systemName: shot.symbol)
+                        .font(MoveMarkTheme.Typography.footnote)
+                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                        .accessibilityHidden(true)
+                }
+                .padding(.vertical, 9)
+            }
+        }
+    }
+
+    private var briefActions: some View {
+        VStack(spacing: 6) {
+            // The one action, in the Vault's lime; once photos are picked the save bar takes over.
+            Button(action: onTakePhotos) {
+                Label("Take photos", systemImage: "camera.fill")
+                    .font(MoveMarkTheme.Typography.subheadlineMedium)
+                    .foregroundStyle(hasPendingPhotos ? MoveMarkTheme.Colors.textPrimary : Self.onLime)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 50)
+                    .background(hasPendingPhotos ? AnyShapeStyle(MoveMarkTheme.Surface.interactive) : AnyShapeStyle(Self.lime),
+                                in: Capsule())
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(isBusy)
+            .opacity(isBusy ? 0.5 : 1)
+            if let pickerSelection {
+                RoomGalleryPicker(selection: pickerSelection, isDisabled: isBusy, quiet: true)
+            }
         }
     }
 

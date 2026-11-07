@@ -188,6 +188,9 @@ struct EvidenceCaptureView: View {
                         isBusy: isUploading || pendingRetry != nil,
                         onTakePhotos: { presentCameraIfAllowed() },
                         pickerSelection: $selectedItems,
+                        pendingPreview: loadedImages.last,
+                        pendingCount: loadedImages.count,
+                        fillsScreen: !hasUnsavedPhotos && errorMessage == nil && successMessage == nil,
                         compareLine: compareLine
                     )
 
@@ -358,9 +361,12 @@ struct EvidenceCaptureView: View {
         .toolbar {
             if let onBack {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Back") {
+                    Button {
                         if hasUnsavedPhotos { showDiscardConfirm = true } else { onBack() }
+                    } label: {
+                        Image(systemName: "chevron.backward")
                     }
+                    .accessibilityLabel("Back")
                     .foregroundStyle(.white)
                     .disabled(isUploading)
                 }
