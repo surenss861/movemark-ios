@@ -14,6 +14,8 @@ struct AuthenticatedShellView: View {
     var body: some View {
         NavigationStack(path: $path) {
             VaultRootView(path: $path)
+                // Kept alive behind another root tab: the whole stack leaves the accessibility tree.
+                .mmRootTabAccessibilityGate()
                 .navigationDestination(for: AppRoute.self) { route in
                     switch route {
                     case .vaultDetail(let propertyId):

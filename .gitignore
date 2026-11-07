@@ -3,6 +3,7 @@
 
 # Credentials — never commit these
 Config/Secrets.xcconfig
+Config/NavLab.local.xcconfig
 .sentryclirc
 movemark-api/.env
 movemark-api/.env.local

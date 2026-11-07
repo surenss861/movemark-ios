@@ -7,7 +7,8 @@
 //  - Left, the expanded active capsule: a lime circle holding the active tab's icon in charcoal, then its title.
 //  - Right, the compact capsule: the other destinations as icon-only 44 pt buttons.
 //  Selecting a tab makes it the expanded capsule; the previous one drops into the compact group. The three tabs
-//  are one row of persistent items that reorder, so each icon travels rather than fading out and in.
+//  are one row of persistent items, so each icon travels rather than fading out and in. The lime circle stays
+//  anchored: it never visits the compact capsule. Icons, capsule width and title change in one spring transaction.
 //
 //  The dock never drives the page animation: the selection is set with animations off (the shell swaps pages
 //  in one frame); the dock animates its own `visualTab` on its own spring, so a burst of taps navigates
@@ -85,6 +86,8 @@ enum MMPillDockSpec {
     static let titleMinimumScale: CGFloat = 0.8
 
     static let spring = MMMotion.tabDockPill
+    static let titleOut = Animation.easeOut(duration: 0.07)
+    static let titleIn = Animation.easeOut(duration: 0.13).delay(0.09)
 }
 
 // MARK: - Pill dock
@@ -106,13 +109,6 @@ struct MMFloatingPillDock: View {
     /// Which tab sits in each compact slot. A selection swaps exactly two tabs: the new one leaves its slot for
     /// the lime circle and the previous one drops into that same slot; the third icon never moves between slots.
     @State private var compactSlots: [RootTab] = []
-    /// For one frame after a tap: the lime circle sits behind the tapped icon in its compact slot, then travels
-    /// with it into the active capsule, so the circle is never empty and the selected icon never flies alone.
-    @State private var circleStart: CGPoint?
-    /// The tab whose icon is already drawn on lime (from the tap until the dock has caught up).
-    @State private var litTab: RootTab?
-    /// When the dock last started changing; a tap while it is still moving retargets directly (see onChange).
-    @State private var lastChange = Date.distantPast
     private var slots: [RootTab] {
         compactSlots.count == 2 && !compactSlots.contains(shown) ? compactSlots : Self.order.filter { $0 != shown }
     }
@@ -154,44 +150,10 @@ struct MMFloatingPillDock: View {
         .onChange(of: selectedTab) { _, new in
             var next = slots
             if let i = next.firstIndex(of: new) { next[i] = shown }
-            if reduceMotion {
-                // Reduce Motion: the dock changes state in one frame; nothing travels.
-                withTransaction(Transaction(animation: nil)) {
-                    visualTab = new
-                    compactSlots = next
-                    litTab = nil
-                    circleStart = nil
-                }
-                return
-            }
-            let moving = Date().timeIntervalSince(lastChange) < 0.3
-            lastChange = Date()
-            if moving {
-                // Mid-burst the capsules are still travelling, so a jump to the tapped slot's target position
-                // could land outside where the capsule is drawn. Retarget everything from where it is instead.
-                withAnimation(Spec.spring) {
-                    visualTab = new
-                    compactSlots = next
-                    circleStart = nil
-                    litTab = nil
-                }
-                return
-            }
-            // Frame 1 (not animated): the circle lights up behind the tapped icon where it is.
-            withTransaction(Transaction(animation: nil)) {
-                circleStart = iconCenter(new)
-                litTab = new
-            }
-            // Then one spring: icon + circle travel into the active capsule, the previous icon drops into the slot
-            // just vacated. A later tap retargets from wherever things are; nothing queues.
-            DispatchQueue.main.async {
-                guard selectedTab == new else { return }
-                withAnimation(Spec.spring) {
-                    visualTab = new
-                    compactSlots = next
-                    circleStart = nil
-                }
-                litTab = nil
+            // One transaction for everything that moves. A later tap retargets from wherever things are.
+            withAnimation(reduceMotion ? nil : Spec.spring) {
+                visualTab = new
+                compactSlots = next
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
@@ -220,8 +182,7 @@ struct MMFloatingPillDock: View {
             Circle()
                 .fill(Spec.lime)
                 .frame(width: Spec.button, height: Spec.button)
-                .offset(x: (circleStart ?? iconCenter(shown)).x - Spec.button / 2,
-                        y: (circleStart ?? iconCenter(shown)).y - Spec.button / 2)
+                .offset(x: Spec.capsulePadding, y: Spec.capsulePadding)
                 .accessibilityHidden(true)
 
             // The rest of the active capsule (its title) also reselects, as the capsule is one control visually.
@@ -232,27 +193,29 @@ struct MMFloatingPillDock: View {
                 .onTapGesture { onReselect(selectedTab) }
                 .accessibilityHidden(true)
 
+            // The titles, under the icons, so an icon stays visible all the way to the lime circle. The old one leaves
+            // before the new one arrives, so two titles never overlap.
+            ZStack(alignment: .leading) {
+                ForEach(Self.order, id: \.self) { tab in
+                    Text(tab.dockTitle)
+                        .font(.system(size: Spec.titleSize, weight: Spec.titleWeight))
+                        .foregroundStyle(Spec.ivory)
+                        .lineLimit(1)
+                        .minimumScaleFactor(Spec.titleMinimumScale)
+                        .frame(width: titleWidths[tab] ?? 60, alignment: .leading)
+                        .opacity(tab == shown ? 1 : 0)
+                        .animation(reduceMotion ? nil : (tab == shown ? Spec.titleIn : Spec.titleOut), value: shown)
+                }
+            }
+            .frame(width: titleWidths[shown] ?? 60, height: rowHeight, alignment: .leading)
+            .offset(x: Spec.capsulePadding + Spec.button + Spec.iconTitleSpacing)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+
             // One persistent button per tab; it travels with its icon.
             ForEach(Self.order, id: \.self) { tab in
                 tabButton(tab)
             }
-
-            // The active title: replaced in one frame (never two, never a stale one, never an empty capsule).
-            Text(shown.dockTitle)
-                .font(.system(size: Spec.titleSize, weight: Spec.titleWeight))
-                .foregroundStyle(Spec.ivory)
-                .lineLimit(1)
-                .minimumScaleFactor(Spec.titleMinimumScale)
-                .frame(width: titleWidths[shown] ?? 60, height: rowHeight, alignment: .leading)
-                // Drawn over the icons on the capsule colour: a travelling icon slides under the title instead of
-                // crossing the text.
-                // (button-high, so it stays inside the capsule's rounded end)
-                .background(Spec.charcoal.frame(height: Spec.button))
-                .offset(x: Spec.capsulePadding + Spec.button + Spec.iconTitleSpacing)
-                .id(shown)
-                .transition(.identity)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
 
         }
         .frame(width: totalWidth, height: rowHeight, alignment: .topLeading)
@@ -261,7 +224,7 @@ struct MMFloatingPillDock: View {
     }
 
     private func tabButton(_ tab: RootTab) -> some View {
-        let onLime = litTab.map { $0 == tab } ?? (tab == shown)
+        let onLime = tab == shown
         let center = iconCenter(tab)
         return Button {
             // Navigation reads the real selection, never the dock's (possibly mid-animation) visual state.
@@ -322,15 +285,6 @@ private struct DockItemAccessibility: ViewModifier {
 }
 
 extension RootTab {
-    /// Position in the fixed reading order.
-    var dockIndex: Int {
-        switch self {
-        case .vaults: 0
-        case .exports: 1
-        case .account: 2
-        }
-    }
-
     var dockTitle: String {
         switch self {
         case .vaults: "Proof"

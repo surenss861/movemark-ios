@@ -157,6 +157,10 @@ struct AccountHomeView: View {
                     .foregroundStyle(Ink.secondary)
             }
             .padding(.top, 34 * k)
+            #if MM_NAV_LAB
+            // Internal nav-lab builds only (never the App Store configuration).
+            MMNavLabRow().padding(.top, 30 * k)
+            #endif
             about.padding(.top, 30 * k)
             if rootTabBarVisible {
                 MMSignedInScrollTailSpacer(kind: .accountTab)
@@ -168,6 +172,8 @@ struct AccountHomeView: View {
         .padding(.top, 24 * k)
         .frame(maxWidth: .infinity, alignment: .leading)
         .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        // Root-tab switch: only this content region may move / resolve (MMTabContentTransition); no-op at rest.
+        .mmTabContentRegion(cover: Ink.sheet)
         .background(
             UnevenRoundedRectangle(topLeadingRadius: sheetRadius, topTrailingRadius: sheetRadius, style: .continuous)
                 .fill(Ink.sheet)

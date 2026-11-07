@@ -20,7 +20,10 @@ struct MMRichQAGallery: View {
     let screen: String
 
     var body: some View {
-        if screen.hasPrefix("room-") {
+        if screen == "tabs" {
+            // Root-tab switching over fixture pages in the production container (MMRootTabQAShell).
+            MMRootTabQAShell()
+        } else if screen.hasPrefix("room-") {
             RoomQAScreen(screen: screen)
         } else if screen.hasPrefix("proof-") {
             ProofQAScreen(screen: screen)
