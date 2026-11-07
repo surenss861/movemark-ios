@@ -1,5 +1,10 @@
 # MoveMark on Neon (recovery)
 
+> **Canonical migration history (owner decision, 2026-11-07).** `movemork/neon/migrations/` is the only source of truth for Consumer schema changes: tables, columns, indexes, constraints, RLS, functions and triggers. No other migration history in the API, iOS or Android projects. `supabase/migrations/` is frozen history. MoveMark Business keeps its own separate history.
+>
+> Rules: test on `dev` first; production only through `migrate.py`, with explicit approval, a tested sequence, backup verification and a rollback plan; files are immutable once applied to production, so corrections are new forward migrations; the ledger `movemark_meta.schema_migrations` says what is really applied, not the presence of a file.
+
+
 Database for the Neon recovery. See [[RECONSTRUCTION]] for every schema assumption and the gate results.
 
 Apply order: `migrations/` sorted by filename. On Neon, **Auth must be enabled on the branch first**: 0300/0340 reference `neon_auth."user"`, which Neon Auth creates. Data API supplies `authenticated`, `anonymous` and `auth.user_id()`. Never apply `tests/neon_platform_shim.sql` to Neon.
