@@ -156,6 +156,11 @@ def test_no_client_or_runtime_role_reaches_the_table(owner: Any, role: str, priv
     assert one(owner, "SELECT has_table_privilege(%s, 'public.deletion_tombstones', %s)", (role, privilege))[0] is False
 
 
+@pytest.mark.parametrize("role", RUNTIME_ROLES)
+def test_no_role_can_call_the_trigger_function(owner: Any, role: str) -> None:
+    assert one(owner, "SELECT has_function_privilege(%s, 'public.record_property_deletion()', 'EXECUTE')", (role,))[0] is False
+
+
 def test_rls_is_on_with_no_policies(owner: Any) -> None:
     assert one(owner, "SELECT relrowsecurity FROM pg_class WHERE oid = 'public.deletion_tombstones'::regclass")[0] is True
     assert one(owner, "SELECT count(*) FROM pg_policies WHERE tablename = 'deletion_tombstones'")[0] == 0
