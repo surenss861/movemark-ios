@@ -80,7 +80,7 @@ final class EvidenceDurabilitySnapshotTests: XCTestCase {
     private func proofRoot(count: Int, failed: Bool = false) -> some View {
         ProofHomeView(model: proofModel, resolvePhotoURL: { _ in nil })
             .mmPendingUploads(count: count, failed: failed, onOpen: {})
-            .safeAreaInset(edge: .bottom, spacing: 0) { MMProofTabBarV4(selectedTab: .constant(.vaults)) }
+            .safeAreaInset(edge: .bottom, spacing: 0) { MMRootDock(selectedTab: .constant(.vaults)) }
             .environment(\.mmEvidenceImageOverride, { path in
                 Self.photo((path as NSString).deletingPathExtension.components(separatedBy: "/").last ?? path)
             })

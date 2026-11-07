@@ -63,7 +63,7 @@ struct AuthenticatedTabShellView: View {
         .environment(\.mmRootTabBarVisible, showsRootTabBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if showsRootTabBar {
-                MMProofTabBarV4(selectedTab: selectedTabBinding, onReselect: reselect)
+                MMRootDock(selectedTab: selectedTabBinding, onReselect: reselect)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }

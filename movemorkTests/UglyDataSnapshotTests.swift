@@ -148,7 +148,7 @@ final class UglyDataSnapshotTests: XCTestCase {
 
     private func proofScreen(_ model: ProofHomeModel) -> some View {
         withPhotos(ProofHomeView(model: model, resolvePhotoURL: { _ in nil })
-            .safeAreaInset(edge: .bottom, spacing: 0) { MMProofTabBarV4(selectedTab: .constant(.vaults)) })
+            .safeAreaInset(edge: .bottom, spacing: 0) { MMRootDock(selectedTab: .constant(.vaults)) })
     }
 
     func testProof30Rooms300Photos() {
@@ -333,7 +333,7 @@ final class UglyDataSnapshotTests: XCTestCase {
         }
         return ReportsHomeView(model: m)
             .environment(\.mmRootTabBarVisible, true)
-            .safeAreaInset(edge: .bottom, spacing: 0) { MMProofTabBarV4(selectedTab: .constant(.exports)) }
+            .safeAreaInset(edge: .bottom, spacing: 0) { MMRootDock(selectedTab: .constant(.exports)) }
     }
 
     func testReportsLongTitles() {
@@ -345,7 +345,7 @@ final class UglyDataSnapshotTests: XCTestCase {
     private func accountScreen(name: String?, email: String) -> some View {
         AccountHomeView(model: AccountHomeModel(email: email, name: name, isPro: true, appVersion: "1.4 (6)"))
             .environment(\.mmRootTabBarVisible, true)
-            .safeAreaInset(edge: .bottom, spacing: 0) { MMProofTabBarV4(selectedTab: .constant(.account)) }
+            .safeAreaInset(edge: .bottom, spacing: 0) { MMRootDock(selectedTab: .constant(.account)) }
     }
 
     func testAccountOneCharNameLongEmail() {

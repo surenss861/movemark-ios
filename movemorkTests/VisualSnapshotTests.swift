@@ -124,7 +124,7 @@ final class VisualSnapshotTests: XCTestCase {
     private func proofScreen(_ state: String) -> some View {
         ProofHomeView(model: proofModel(state), resolvePhotoURL: { _ in nil })
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                MMProofTabBarV4(selectedTab: .constant(.vaults))
+                MMRootDock(selectedTab: .constant(.vaults))
             }
     }
 
@@ -206,7 +206,7 @@ final class VisualSnapshotTests: XCTestCase {
         LinearGradient(colors: dark ? [Color(white: 0.10), Color(white: 0.06)] : [Color(white: 0.97), Color(white: 0.90)],
                        startPoint: .top, endPoint: .bottom)
             .ignoresSafeArea()
-            .safeAreaInset(edge: .bottom, spacing: 0) { MMProofTabBarV4(selectedTab: .constant(tab)) }
+            .safeAreaInset(edge: .bottom, spacing: 0) { MMRootDock(selectedTab: .constant(tab)) }
     }
 
     func testDockProofOnLight() {
@@ -363,7 +363,7 @@ final class VisualSnapshotTests: XCTestCase {
         ReportsHomeView(model: reportsModel(state), initialScrollAnchor: atBottom ? .bottom : nil)
             .environment(\.mmRootTabBarVisible, true)
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                MMProofTabBarV4(selectedTab: .constant(.exports))
+                MMRootDock(selectedTab: .constant(.exports))
             }
     }
 
@@ -427,7 +427,7 @@ final class VisualSnapshotTests: XCTestCase {
         AccountHomeView(model: accountModel(state), initialScrollAnchor: atBottom ? .bottom : nil)
             .environment(\.mmRootTabBarVisible, true)
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                MMProofTabBarV4(selectedTab: .constant(.account))
+                MMRootDock(selectedTab: .constant(.account))
             }
     }
 

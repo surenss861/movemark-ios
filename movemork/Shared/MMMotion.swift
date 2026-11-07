@@ -19,6 +19,8 @@ enum MMMotion {
     static let tabSwitch = Animation.easeOut(duration: 0.2)
     /// Root tabs: the dock's lime signal and active icon glide (tactile, no bounce).
     static let tabIndicator = Animation.spring(response: 0.28, dampingFraction: 0.88)
+    /// Root tabs: the pill dock transforms to the new tab (~240 ms, no visible overshoot).
+    static let tabDockPill = Animation.spring(response: 0.24, dampingFraction: 0.88)
     /// Root tabs: the incoming page resolves over the outgoing one, which stays put underneath.
     static let tabContentFade = Animation.easeOut(duration: 0.18)
     /// Reduce Motion: a plain short fade, no settle.

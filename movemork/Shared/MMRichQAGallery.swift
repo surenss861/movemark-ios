@@ -440,7 +440,7 @@ private struct ProofQAScreen: View {
             // Same mounting as AuthenticatedTabShellView: the bar is a bottom safe-area inset.
             ProofHomeView(model: model, resolvePhotoURL: { await Self.resolve($0) })
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    MMProofTabBarV4(selectedTab: .constant(.vaults))
+                    MMRootDock(selectedTab: .constant(.vaults))
                 }
         }
     }
