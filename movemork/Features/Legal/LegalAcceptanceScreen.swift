@@ -13,8 +13,6 @@
 import SwiftUI
 
 struct LegalAcceptanceScreen: View {
-    /// A new account hasn't started its Vault yet; an existing one is returning to it.
-    let isNewAccount: Bool
     let termsURL: URL?
     let privacyURL: URL?
     var onAccept: () async -> String? = { nil }
@@ -49,7 +47,7 @@ struct LegalAcceptanceScreen: View {
             Text("MoveMark")
                 .mmFont(15, .semibold)
                 .foregroundStyle(MMInk.heroSecondary)
-            Text(isNewAccount ? "Before we create your Vault." : "Before you continue.")
+            Text("One last thing.")
                 .font(MoveMarkTheme.Typography.roomTitle)
                 .foregroundStyle(.white)
                 .fixedSize(horizontal: false, vertical: true)
@@ -64,7 +62,7 @@ struct LegalAcceptanceScreen: View {
 
     private var sheet: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Your rental photos, documents and reports are private records. Here’s how MoveMark handles them.")
+            Text("Before you start protecting your rental, please review and agree to our terms.")
                 .mmFont(16)
                 .foregroundStyle(MMInk.text)
                 .fixedSize(horizontal: false, vertical: true)
@@ -125,7 +123,7 @@ struct LegalAcceptanceScreen: View {
                     .font(.system(size: 22))
                     .foregroundStyle(MMInk.text)
                     .accessibilityHidden(true)
-                Text("I agree to MoveMark’s Terms of Service and acknowledge its Privacy Policy.")
+                Text("I agree to the Terms of Service and acknowledge the Privacy Policy.")
                     .mmFont(15)
                     .foregroundStyle(MMInk.text)
                     .multilineTextAlignment(.leading)
@@ -143,7 +141,7 @@ struct LegalAcceptanceScreen: View {
 
     private var actions: some View {
         VStack(spacing: 4) {
-            MMPrimaryButton(title: "Continue", isLoading: isSaving, isDisabled: !agreed || isSaving) { accept() }
+            MMPrimaryButton(title: "Continue to my Vault", isLoading: isSaving, isDisabled: !agreed || isSaving) { accept() }
                 .accessibilityIdentifier("legal.continue")
             HStack(spacing: 20) {
                 quiet("Sign out", action: onSignOut)
@@ -185,7 +183,6 @@ extension SessionManager {
     @MainActor
     func legalAcceptanceScreen(onDeleteAccount: @escaping () -> Void) -> LegalAcceptanceScreen {
         LegalAcceptanceScreen(
-            isNewAccount: legalGateIsNewAccount,
             termsURL: legalDocumentURL(\.terms, infoKey: "LegalTermsURL"),
             privacyURL: legalDocumentURL(\.privacyNotice, infoKey: "LegalPrivacyPolicyURL"),
             onAccept: { await self.acceptLegalDocuments() },

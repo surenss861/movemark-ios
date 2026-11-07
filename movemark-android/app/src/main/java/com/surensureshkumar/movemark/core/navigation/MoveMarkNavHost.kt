@@ -130,7 +130,6 @@ fun MoveMarkNavHost() {
             val accountVm: AccountViewModel = hiltViewModel()
             LegalAcceptanceScreen(
                 state = legal,
-                isNewAccount = needsOnboarding == true,
                 onAccept = { legalVm.accept() },
                 onSignOut = { accountVm.signOut {} },
                 onDeleteAccount = { accountVm.deleteAccount {} },

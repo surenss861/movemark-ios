@@ -150,17 +150,10 @@ final class AuthScreenSnapshotTests: XCTestCase {
                      inNavigation: false)
     }
 
-    private func legalScreen(new: Bool) -> LegalAcceptanceScreen {
-        LegalAcceptanceScreen(isNewAccount: new, termsURL: URL(string: "https://movemark.ca/terms"),
-                              privacyURL: URL(string: "https://movemark.ca/privacy"))
-    }
-
-    func testLegalGateNewAccount() {
-        assertScreen(legalScreen(new: true), devices: ScreenSnapshot.allDevices, inNavigation: false)
-    }
-
-    func testLegalGateExistingAccount() {
-        assertScreen(legalScreen(new: false), devices: ScreenSnapshot.allDevices, inNavigation: false)
+    func testLegalGate() {
+        let screen = LegalAcceptanceScreen(termsURL: URL(string: "https://movemark.ca/terms"),
+                                           privacyURL: URL(string: "https://movemark.ca/privacy"))
+        assertScreen(screen, devices: ScreenSnapshot.allDevices, inNavigation: false)
     }
 
     func testFirstRunRoom() {

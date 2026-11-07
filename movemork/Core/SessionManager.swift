@@ -250,7 +250,6 @@ final class SessionManager {
         }
     }
 
-    var legalGateIsNewAccount: Bool { phaseAfterLegal == .needsOnboarding }
 
     /// Ensures a row exists in public.profiles for the session user (required for properties.user_id FK).
     ///

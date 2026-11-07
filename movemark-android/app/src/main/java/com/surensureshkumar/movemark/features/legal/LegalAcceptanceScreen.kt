@@ -58,7 +58,6 @@ private val OnLime = Color(0xFF111608)
 @Composable
 fun LegalAcceptanceScreen(
     state: LegalGateState,
-    isNewAccount: Boolean,
     onAccept: () -> Unit,
     onSignOut: () -> Unit,
     onDeleteAccount: () -> Unit,
@@ -80,7 +79,7 @@ fun LegalAcceptanceScreen(
                 Text("MoveMark", color = Color.White.copy(alpha = 0.62f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.padding(top = 8.dp))
                 Text(
-                    if (isNewAccount) "Before we create your Vault." else "Before you continue.",
+                    "One last thing.",
                     color = Color.White,
                     fontSize = 34.sp,
                     lineHeight = 40.sp,
@@ -93,7 +92,7 @@ fun LegalAcceptanceScreen(
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
                 Text(
-                    "Your rental photos, documents and reports are private records. Here’s how MoveMark handles them.",
+                    "Before you start protecting your rental, please review and agree to our terms.",
                     color = Ink,
                     fontSize = 16.sp,
                 )
@@ -114,7 +113,7 @@ fun LegalAcceptanceScreen(
                     )
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        "I agree to MoveMark’s Terms of Service and acknowledge its Privacy Policy.",
+                        "I agree to the Terms of Service and acknowledge the Privacy Policy.",
                         color = Ink,
                         fontSize = 15.sp,
                     )
@@ -134,7 +133,7 @@ fun LegalAcceptanceScreen(
                     .clickable(enabled = enabled, role = Role.Button, onClick = onAccept),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(if (state.isSaving) "Saving…" else "Continue", color = OnLime, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text(if (state.isSaving) "Saving…" else "Continue to my Vault", color = OnLime, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TextButton(onClick = onSignOut, enabled = !state.isSaving) { Text("Sign out", color = Quiet) }
