@@ -1,5 +1,8 @@
 package com.surensureshkumar.movemark.core.navigation
 
+import com.surensureshkumar.movemark.features.account.AccountViewModel
+import com.surensureshkumar.movemark.features.legal.LegalAcceptanceScreen
+import com.surensureshkumar.movemark.features.legal.LegalGateViewModel
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -65,8 +68,14 @@ fun MoveMarkNavHost() {
     val hasProperty by welcomeVm.hasProperty.collectAsState()
     val firstRunComplete by welcomeVm.firstRunComplete.collectAsState()
     val needsOnboarding by welcomeVm.needsOnboarding.collectAsState()
+    val legalVm: LegalGateViewModel = hiltViewModel()
+    val legal by legalVm.state.collectAsState()
 
-    LaunchedEffect(authState, hasProperty, firstRunComplete, needsOnboarding) {
+    LaunchedEffect(authState) {
+        if (authState == AuthState.SignedIn) legalVm.refresh() else legalVm.reset()
+    }
+
+    LaunchedEffect(authState, hasProperty, firstRunComplete, needsOnboarding, legal.required) {
         when (authState) {
             AuthState.Loading -> Unit
             AuthState.SignedOut -> {
@@ -78,6 +87,8 @@ fun MoveMarkNavHost() {
             }
             AuthState.SignedIn -> {
                 val dest = when {
+                    legal.required == null -> return@LaunchedEffect
+                    legal.required == true -> Routes.LegalAcceptance
                     needsOnboarding == null -> return@LaunchedEffect
                     needsOnboarding == true -> Routes.Onboarding
                     hasProperty == false -> Routes.CreateProperty
@@ -113,6 +124,16 @@ fun MoveMarkNavHost() {
             AuthScreen(
                 initialMode = if (mode == "signUp") AuthMode.SignUp else AuthMode.SignIn,
                 onDismiss = { navController.popBackStack() },
+            )
+        }
+        composable(Routes.LegalAcceptance) {
+            val accountVm: AccountViewModel = hiltViewModel()
+            LegalAcceptanceScreen(
+                state = legal,
+                isNewAccount = needsOnboarding == true,
+                onAccept = { legalVm.accept() },
+                onSignOut = { accountVm.signOut {} },
+                onDeleteAccount = { accountVm.deleteAccount {} },
             )
         }
         composable(Routes.Onboarding) {

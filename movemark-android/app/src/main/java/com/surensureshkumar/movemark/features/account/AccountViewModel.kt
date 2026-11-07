@@ -29,9 +29,9 @@ class AccountViewModel @Inject constructor(
 ) : ViewModel() {
     companion object {
         const val PRIVACY_URL =
-            "https://silver-peripheral-2ef.notion.site/MoveMark-Privacy-Policy-32f38275720980658acbe9aafa4e331b"
+            "https://movemark.ca/privacy"
         const val TERMS_URL =
-            "https://silver-peripheral-2ef.notion.site/MoveMark-Terms-of-Service-32f382757209804aa569e43311b492b1"
+            "https://movemark.ca/terms"
         const val SUPPORT_URL =
             "https://silver-peripheral-2ef.notion.site/Contact-Support-32f38275720980248f36d19e1ea533d8"
         const val ACCOUNT_DELETION_URL =
