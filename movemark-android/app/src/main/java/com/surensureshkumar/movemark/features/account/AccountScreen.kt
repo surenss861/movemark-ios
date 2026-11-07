@@ -350,6 +350,10 @@ private fun AccountInlineMessage(message: String, isError: Boolean) {
 }
 
 private fun openUrl(context: android.content.Context, url: String) {
+    if (url.startsWith("https://movemark.ca/")) {
+        com.surensureshkumar.movemark.core.ui.openInAppBrowser(context, url)
+        return
+    }
     runCatching {
         context.startActivity(
             Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),

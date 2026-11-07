@@ -226,10 +226,10 @@ fun ProPaywallScreen(
             Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth()) {
                 TextButton(onClick = {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AccountViewModel.TERMS_URL)))
+                    com.surensureshkumar.movemark.core.ui.openInAppBrowser(context, AccountViewModel.TERMS_URL)
                 }) { Text("Terms of Use", color = MMColors.TextSecondary) }
                 TextButton(onClick = {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AccountViewModel.PRIVACY_URL)))
+                    com.surensureshkumar.movemark.core.ui.openInAppBrowser(context, AccountViewModel.PRIVACY_URL)
                 }) { Text("Privacy Policy", color = MMColors.TextSecondary) }
             }
             Spacer(Modifier.height(24.dp))

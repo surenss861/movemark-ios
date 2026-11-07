@@ -1,4 +1,5 @@
 [versions]
+browser = "1.8.0"
 agp = "8.13.0"
 kotlin = "2.0.21"
 ksp = "2.0.21-1.0.28"
@@ -18,6 +19,7 @@ sentry = "7.22.6"
 room = "2.6.1"
 
 [libraries]
+androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version = "1.15.0" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle" }

@@ -39,13 +39,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.surensureshkumar.movemark.core.ui.openInAppBrowser
 
 private val Hero = Color(0xFF161817)
 private val Sheet = Color(0xFFF8F8F8)
@@ -64,7 +65,7 @@ fun LegalAcceptanceScreen(
 ) {
     var agreed by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
-    val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
     val terms = state.documents?.terms?.url ?: "https://movemark.ca/terms"
     val privacy = state.documents?.privacyNotice?.url ?: "https://movemark.ca/privacy"
 
@@ -97,9 +98,9 @@ fun LegalAcceptanceScreen(
                     fontSize = 16.sp,
                 )
                 Column(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(14.dp))) {
-                    DocumentRow("Terms of Service") { uriHandler.openUri(terms) }
+                    DocumentRow("Terms of Service") { openInAppBrowser(context, terms) }
                     HorizontalDivider(color = Stroke)
-                    DocumentRow("Privacy Policy") { uriHandler.openUri(privacy) }
+                    DocumentRow("Privacy Policy") { openInAppBrowser(context, privacy) }
                 }
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 48.dp)

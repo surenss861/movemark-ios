@@ -41,6 +41,7 @@ struct AppRouter: View {
                 SignedInRootView()
             }
         }
+        .mmInAppLegalBrowser()
         /// Single place that clears property context whenever auth ends — not only manual sign-out from Account.
         .onOpenURL { url in
             if let link = PasswordResetLink.payload(from: url) {
