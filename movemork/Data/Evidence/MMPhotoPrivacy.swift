@@ -134,7 +134,7 @@ extension MMEvidenceImport {
     static func sourceOffMain(from data: Data, captureSource: MMEvidenceCaptureSource,
                               privacy: MMPhotoPrivacy = MMPhotoPrivacyPolicy.shared.current) async throws -> MMEvidenceSource {
         assertOffMain()
-        try source(from: data, captureSource: captureSource, privacy: privacy)
+        return try source(from: data, captureSource: captureSource, privacy: privacy)
     }
 
     /// A library pick as evidence plus its display preview, off the main actor.
@@ -173,7 +173,7 @@ extension MMEvidenceImport {
     @concurrent
     static func previewFileContents(_ data: Data) async throws -> Data {
         assertOffMain()
-        try VaultDocumentPreviewFile.contents(for: data)
+        return try VaultDocumentPreviewFile.contents(for: data)
     }
 
     /// Debug builds stop here if image work ever lands on the main thread again (Sentry App Hang audit). The unit
