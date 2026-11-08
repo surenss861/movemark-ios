@@ -63,6 +63,7 @@ struct EvidenceCaptureView: View {
     @State var restoredKey: PendingEvidenceKey? = nil
     var pendingCenter: PendingEvidenceCenter { PendingEvidenceCenter.shared }
     static let newEntryAnchor = "evidence.newEntry"
+    static let syncStatusAnchor = "evidence.newEntry.status"
     @State var isLoadingHistory = false
     /// Set after a save where not every photo made it; cleared once the rest are saved.
     @State var pendingRetry: EvidenceRetryState? = nil
@@ -120,6 +121,10 @@ struct EvidenceCaptureView: View {
     private var showsSaveBar: Bool {
         !loadedImages.isEmpty || isUploading || didJustSave
     }
+
+    /// A partial save waiting for its retry (no save bar): its notice is pinned above the bottom edge instead of
+    /// ending the form, so Try again is always fully on screen (it was clipped or off-screen at the form's end).
+    private var pinsRetryNotice: Bool { pendingRetry != nil && !showsSaveBar }
 
     /// Photos picked or shot but not saved yet, or a partial save still waiting for its retry.
     var hasUnsavedPhotos: Bool { !loadedImages.isEmpty || pendingRetry != nil }
@@ -246,10 +251,16 @@ struct EvidenceCaptureView: View {
             } action: { _, past in
                 withAnimation(.easeInOut(duration: 0.2)) { heroScrolledAway = past }
             }
-            // A partial save must be seen: bring its warning and retry button on screen.
+            // A partial save must be seen: bring its status line (and its Retry) on screen. The notice with Try
+            // again is pinned at the bottom. (Scrolling the entry's bottom into view pushed the status line under
+            // the bar.)
             .onChange(of: pendingRetry?.statusLine) { _, line in
                 guard line != nil else { return }
-                withAnimation(MMMotion.cardReveal) { proxy.scrollTo(Self.newEntryAnchor, anchor: .bottom) }
+                Task { @MainActor in
+                    // After the pinned notice's reveal: a scroll started while the bottom inset changes is dropped.
+                    try? await Task.sleep(for: .milliseconds(300))
+                    withAnimation(MMMotion.cardReveal) { proxy.scrollTo(Self.syncStatusAnchor, anchor: .center) }
+                }
             }
             }
         }
@@ -279,9 +290,22 @@ struct EvidenceCaptureView: View {
                 )
                 .environment(\.mmEvidenceOnLight, onLightSurface)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if pinsRetryNotice, let message = errorMessage ?? pendingRetry?.statusLine {
+                MMEvidenceNotice(
+                    message: message,
+                    actionTitle: retryAction == nil ? nil : MMCopy.tryAgain,
+                    action: retryAction
+                )
+                .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
+                .padding(.vertical, 12)
+                // Same solid surface as the save bar, down through the home-indicator area.
+                .background((onLightSurface ? MMInk.card : MoveMarkTheme.Colors.appBackground).ignoresSafeArea(edges: .bottom))
+                .environment(\.mmEvidenceOnLight, onLightSurface)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .animation(MMMotion.cardReveal, value: showsSaveBar)
+        .animation(MMMotion.cardReveal, value: pinsRetryNotice)
         .fullScreenCover(item: $savedReceipt) { receipt in
             SavedRoomReceiptScreen(receipt: receipt, resolvePhotoURL: resolvePhotoURL) { action in
                 savedReceipt = nil
@@ -445,6 +469,7 @@ struct EvidenceCaptureView: View {
             }
             EvidenceNewEntryHeader(moveOutMode: moveOutMode, photoCount: loadedImages.count,
                                    syncState: syncState, onRetry: { saveEvidence() })
+                .id(Self.syncStatusAnchor)
             if !loadedImages.isEmpty {
                 ProofPhotoGridView(images: loadedImages, isUploading: isUploading,
                                    onRemove: { removePendingPhoto(at: $0) })
@@ -460,8 +485,8 @@ struct EvidenceCaptureView: View {
                 selectedItems: $selectedItems,
                 loadedImages: loadedImages,
                 isUploading: isUploading,
-                // A partial save stays visible until its remaining photos are saved.
-                errorMessage: errorMessage ?? pendingRetry?.statusLine,
+                // A partial save stays visible until its remaining photos are saved (pinned at the bottom while it waits).
+                errorMessage: pinsRetryNotice ? nil : (errorMessage ?? pendingRetry?.statusLine),
                 successMessage: successMessage,
                 moveOutMode: moveOutMode,
                 fixedIssueTags: fixedIssueTags,

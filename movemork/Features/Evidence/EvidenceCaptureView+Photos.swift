@@ -113,6 +113,14 @@ extension EvidenceCaptureView {
     /// Brings back what an earlier visit left on this iPhone, then checks it against the server: photos an
     /// interrupted save had in fact saved leave the phone, an Add photos set reopens its sheet.
     func restorePendingCaptures() async {
+        #if DEBUG
+        // `-MMRichQA evidence-retry`: the fixture's partial save arrives like a restored one.
+        if let seed = MMEvidenceRetryQAFixture.seed {
+            MMEvidenceRetryQAFixture.seed = nil
+            pendingRetry = seed
+            return
+        }
+        #endif
         guard let key = pendingKey, restoredKey != key else { return }
         restoredKey = key
         guard loadedSources.isEmpty, pendingRetry == nil, !isUploading else { return }
