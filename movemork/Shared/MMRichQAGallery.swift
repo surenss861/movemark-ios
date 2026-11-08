@@ -458,7 +458,7 @@ private struct MMLegalQAFixture: View {
     var body: some View {
         LegalAcceptanceScreen(termsURL: URL(string: "https://movemark.ca/terms"),
                               privacyURL: URL(string: "https://movemark.ca/privacy"),
-                              onAccept: {
+                              onAccept: { _ in
                                   accepted += 1
                                   return nil
                               })
