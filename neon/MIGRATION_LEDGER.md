@@ -118,6 +118,7 @@ Every Supabase dependency found in the iOS app, the Android app, the FastAPI API
 |---|---|---|
 | Records, helpers, client RPCs | `1030` | ✅ local · see `docs/legal-gate/` for branches |
 | Restrictive Data API policies, both waves | `1040`, `1050` | ✅ local · inert until enforced |
+| Age-eligibility attestation (D1) | `1055` | ✅ local · counts only once enforced; 3-arg kept for 20261107.1 |
 | Production publish, enforcement | Not written: `docs/legal-gate/rollout-plan.md` | ⛔ needs owner approval |
 
 ## 7. Lost with the Supabase project (no replacement possible)
