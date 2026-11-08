@@ -171,6 +171,7 @@ final class SessionManager {
     }
 
     private func clearAuthenticatedFields() {
+        MMPhotoPrivacyPolicy.shared.reset()
         userId = nil
         userEmail = ""
         firstName = ""
@@ -185,6 +186,7 @@ final class SessionManager {
 
         userId = user.id
         userEmail = user.email
+        MMPhotoPrivacyPolicy.shared.restore(userId: user.id)  // this account's photo rule, until the server answers
 
         #if DEBUG
         // Sign-in QA compares Neon user ids across providers. The id only: never the email, never a token.
@@ -226,7 +228,11 @@ final class SessionManager {
     /// that answers with an error is different: with enforcement on, the Vault would read as empty, so the renter gets
     /// a retry instead (``LegalStatusFailure``).
     private func enter(_ phase: AuthPhase) async {
-        switch await fetchLegalStatus(retries: 1) {
+        let result = await fetchLegalStatus(retries: 1)
+        if case .success(let status) = result {
+            MMPhotoPrivacyPolicy.shared.apply(serverCategory: status.ageCategory, userId: userId)
+        }
+        switch result {
         case .success(let status) where status.needsAcceptance:
             legalStatus = status
             phaseAfterLegal = phase
@@ -269,7 +275,9 @@ final class SessionManager {
         guard !isRecheckingLegalStatus, authPhase == .signedIn || authPhase == .needsOnboarding else { return }
         isRecheckingLegalStatus = true
         defer { isRecheckingLegalStatus = false }
-        guard case .success(let status) = await fetchLegalStatus(retries: 0), status.needsAcceptance,
+        guard case .success(let status) = await fetchLegalStatus(retries: 0) else { return }
+        MMPhotoPrivacyPolicy.shared.apply(serverCategory: status.ageCategory, userId: userId)
+        guard status.needsAcceptance,
               authPhase == .signedIn || authPhase == .needsOnboarding
         else { return }
         legalStatus = status
@@ -279,8 +287,8 @@ final class SessionManager {
 
     /// Records the renter's acceptance, with the age confirmation when the server takes one. Returns a message to
     /// show when it didn't go through.
-    func acceptLegalDocuments() async -> String? {
-        guard let current = legalStatus, let call = LegalAcceptanceCall.make(for: current, method: LegalAcceptanceMethod.last) else {
+    func acceptLegalDocuments(band: LegalAgeBand? = nil) async -> String? {
+        guard let current = legalStatus, let call = LegalAcceptanceCall.make(for: current, method: LegalAcceptanceMethod.last, band: band) else {
             return "Couldn’t load the documents. Try again."
         }
         do {
@@ -290,6 +298,8 @@ final class SessionManager {
                 status = try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
             case .withAge(let params):
                 status = try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+            case .withAgeBand(let params):
+                status = try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
             case .updateRequired:
                 return "Update MoveMark from the App Store to continue."
             }
@@ -298,6 +308,7 @@ final class SessionManager {
                 legalStatus = status
                 return "These documents were just updated. Please review them and agree again."
             }
+            MMPhotoPrivacyPolicy.shared.apply(serverCategory: status.ageCategory, userId: userId)
             legalStatus = nil
             authPhase = phaseAfterLegal
             return nil

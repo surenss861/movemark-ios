@@ -25,15 +25,15 @@ These pages must be live with the final text (`LEGAL_FINAL=true` on Vercel) **be
 ## Notes for the reviewer (paste into "Notes", edit the bracketed parts)
 
 ```
-MoveMark helps renters document a rental's condition (photos, notes, documents) and produce move-in, move-out and dispute PDF reports. Canada only. Users must be 18 or older (self-declared in the app).
+MoveMark helps renters document a rental's condition (photos, notes, documents) and produce move-in, move-out and dispute PDF reports. Canada only. Users must be 13 or older (14 or older in Quebec); the app asks for an age range, self-declared and not verified.
 
 SIGN IN
 1. Launch the app. On the Welcome screen tap "I already have a vault" (or "Start move-in proof" to create a new account).
 2. Sign in with the email and password in Sign-in Information. The demo account already has a sample rental.
 Sign in with Apple and Sign in with Google are also offered in this build. Both open a secure browser sheet (account.movemark.ca) and return to the app. You may use your own Apple ID; the email-and-password demo account is the most reliable path.
 
-AGREEMENT AND AGE CONFIRMATION
-If the Terms or Privacy Policy have been updated since the account last agreed, a screen titled "One last thing." appears after sign-in. Open the documents if you wish, tick "I agree to the Terms of Service and acknowledge the Privacy Policy." and "I'm 18 or older.", then tap "Continue to my Vault". Neither box is pre-ticked. MoveMark is for adults (18+, Quebec included) under its eligibility policy for this release. The age confirmation is the user's own declaration: no date of birth is collected and age is not verified. [OWNER: say whether the documents are published on production at review time; if not, this screen does not appear.]
+AGREEMENT AND AGE RANGE
+If the Terms or Privacy Policy have been updated since the account last agreed, a screen titled "One last thing." appears after sign-in. Open the documents if you wish, tick "I agree to the Terms of Service and acknowledge the Privacy Policy.", answer "How old are you?" (Under 13 / 13 / 14 to 17 / 18 or older; "13" also asks "Do you live in Quebec?"), then tap "Continue to my Vault". Nothing is pre-selected. No date of birth is collected and the answer is not verified; it is the user's own declaration. "Under 13", and 13 in Quebec, show "MoveMark isn't available for you yet" and can't continue (parental consent is a later release). For 13 to 17, photos are saved without location or camera details. The demo account is an adult account: choose "18 or older". [OWNER: say whether the documents are published on production at review time; if not, this screen does not appear.]
 
 SUBSCRIPTION (auto-renewable) AND REPORT PACK (consumable)
 1. Open the Account tab, tap "Subscription" (shows "Free").

@@ -150,6 +150,13 @@ final class AuthScreenSnapshotTests: XCTestCase {
                      inNavigation: false)
     }
 
+    /// The age-range question (migration 1055's 'bands_v1'), nothing selected.
+    func testLegalGateAgeRange() {
+        let screen = LegalAcceptanceScreen(termsURL: URL(string: "https://movemark.ca/terms"),
+                                           privacyURL: URL(string: "https://movemark.ca/privacy"), age: .ageRange)
+        assertScreen(screen, devices: ScreenSnapshot.allDevices, inNavigation: false)
+    }
+
     func testLegalGate() {
         let screen = LegalAcceptanceScreen(termsURL: URL(string: "https://movemark.ca/terms"),
                                            privacyURL: URL(string: "https://movemark.ca/privacy"))

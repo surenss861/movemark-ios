@@ -32,7 +32,10 @@ enum MMEvidencePicker {
             MMEvidenceAuditLog.record("library.picker", data)
             #endif
             do {
-                selection.append(try MMEvidenceImport.source(from: data, captureSource: .library))
+                // Hashing, decoding, the preview and a teen account's stripping, all off the main actor.
+                let item = try await MMEvidenceImport.librarySelectionItem(data)
+                selection.sources.append(item.source)
+                selection.previews.append(item.preview)
             } catch {
                 selection.rejectionMessage = error.localizedDescription
             }

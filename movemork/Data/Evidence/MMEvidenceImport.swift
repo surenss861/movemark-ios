@@ -82,8 +82,19 @@ nonisolated enum MMEvidenceImport {
 
     // MARK: Source
 
-    /// Wraps the platform's file bytes as source evidence. Reads metadata only; the bytes are untouched.
-    static func source(from data: Data, captureSource: MMEvidenceCaptureSource) throws -> MMEvidenceSource {
+    /// Wraps the platform's file bytes as source evidence. Reads metadata only; the bytes are untouched, except for a
+    /// teen account (``MMPhotoPrivacy``), whose file is first stripped of location and identifying metadata, so the
+    /// stripped file is what is hashed, queued and uploaded.
+    static func source(from data: Data, captureSource: MMEvidenceCaptureSource,
+                       privacy: MMPhotoPrivacy = MMPhotoPrivacyPolicy.shared.current) throws -> MMEvidenceSource {
+        if privacy == .teen {
+            guard data.count <= maxSourceBytes else { throw MMEvidenceImportError.tooLarge(bytes: data.count) }
+            if let image = CGImageSourceCreateWithData(data as CFData, nil), let type = CGImageSourceGetType(image) as String?,
+               accepted[type] == nil {
+                throw MMEvidenceImportError.unsupportedFormat(UTType(type)?.preferredFilenameExtension?.uppercased() ?? type)
+            }
+            return try source(from: teenSafe(data), captureSource: captureSource, privacy: .standard)
+        }
         guard let image = CGImageSourceCreateWithData(data as CFData, nil),
               let type = CGImageSourceGetType(image) as String?,
               CGImageSourceGetCount(image) > 0
@@ -191,8 +202,9 @@ nonisolated enum MMEvidenceImport {
         return reencoded as Data
     }
 
-    /// No GPS, no camera or device fields, no EXIF beyond what ImageIO writes for the pixels themselves.
-    static func carriesNoIdentifyingMetadata(_ data: Data) -> Bool {
+    /// No GPS, no camera or device fields, no EXIF beyond what ImageIO writes for the pixels themselves. With
+    /// `allowCaptureDate`, the capture date and its offset may stay (teen sources and derivatives keep them).
+    static func carriesNoIdentifyingMetadata(_ data: Data, allowCaptureDate: Bool = false) -> Bool {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
         else { return false }
@@ -203,7 +215,7 @@ nonisolated enum MMEvidenceImport {
                     kCGImagePropertyTIFFHostComputer, kCGImagePropertyTIFFArtist, kCGImagePropertyTIFFDateTime]
         where tiff[key] != nil { return false }
         let exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any] ?? [:]
-        for key in [kCGImagePropertyExifDateTimeOriginal, kCGImagePropertyExifLensMake, kCGImagePropertyExifLensModel,
+        for key in (allowCaptureDate ? [] : [kCGImagePropertyExifDateTimeOriginal]) + [kCGImagePropertyExifLensMake, kCGImagePropertyExifLensModel,
                     kCGImagePropertyExifBodySerialNumber, kCGImagePropertyExifLensSerialNumber, kCGImagePropertyExifCameraOwnerName,
                     kCGImagePropertyExifUserComment]
         where exif[key] != nil { return false }
@@ -211,7 +223,11 @@ nonisolated enum MMEvidenceImport {
            let tags = CGImageMetadataCopyTags(metadata) as? [CGImageMetadataTag] {
             for tag in tags {
                 let prefix = CGImageMetadataTagCopyPrefix(tag) as String? ?? ""
-                if ["exifEX", "aux", "photoshop", "xmp", "dc", "Iptc4xmpCore", "GPano"].contains(prefix) { return false }
+                let name = CGImageMetadataTagCopyName(tag) as String? ?? ""
+                if allowCaptureDate, prefix == "photoshop", name == "DateCreated" { continue }  // the capture date, as XMP
+                if ["exifEX", "aux", "photoshop", "xmp", "dc", "Iptc4xmpCore", "GPano", "iptc", "Iptc4xmpExt"].contains(prefix) { return false }
+                if prefix == "exif", name.hasPrefix("GPS") || ["UserComment", "MakerNote"].contains(name) { return false }
+                if prefix == "tiff", ["Make", "Model", "Software", "HostComputer", "Artist"].contains(name) { return false }
             }
         }
         return true
@@ -232,6 +248,10 @@ nonisolated enum MMEvidenceImport {
             kCGImageSourceThumbnailMaxPixelSize: maxPixels,      // pixels, not points
             kCGImageSourceShouldCacheImmediately: true,
         ] as CFDictionary
+    }
+
+    static func renderJPEG(_ data: Data, maxPixels: Int, quality: CGFloat, keepCaptureDate: Bool) -> Data? {
+        render(data, maxPixels: maxPixels, quality: quality, keepCaptureDate: keepCaptureDate)
     }
 
     private static func render(_ data: Data, maxPixels: Int, quality: CGFloat, keepCaptureDate: Bool) -> Data? {

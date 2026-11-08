@@ -11,18 +11,19 @@ import SwiftUI
 @main
 struct movemorkApp: App {
     init() {
+        guard MoveMarkCrashReporting.shouldStart(isDebugBuild: MoveMarkCrashReporting.isDebugBuild,
+                                                 environment: ProcessInfo.processInfo.environment,
+                                                 arguments: ProcessInfo.processInfo.arguments)
+        else { return }
         SentrySDK.start { options in
             options.dsn = "https://b1bf88391a6e0a03d52c1006cd029d19@o4510691451666432.ingest.us.sentry.io/4511664827596800"
             options.debug = false
             options.sendDefaultPii = false
             options.tracesSampleRate = 0.0
-            // Without this every build reports as "production", so simulator/test-run hangs
-            // (slow debug cold launches under xcodebuild) were firing production alerts.
-            #if DEBUG
-            options.environment = "development"
-            #else
-            options.environment = "production"
-            #endif
+            // Crash and App Hang reports stay on (Sentry defaults). Failed-request events are off: they carried
+            // request URLs (ids, presigned query strings) and only duplicated what the app already shows.
+            options.enableCaptureFailedRequests = false
+            options.environment = "production"  // only Release builds outside tests start Sentry
             if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
                let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
                 options.releaseName = "\(version) (\(build))"
@@ -68,5 +69,25 @@ struct movemorkApp: App {
                 #endif
             }
         }
+    }
+}
+
+/// When Sentry starts: Release builds only, and never under XCTest (unit or UI tests), so simulator and test-run
+/// noise (slow Debug cold launches read as App Hangs) never reaches the production project.
+nonisolated enum MoveMarkCrashReporting {
+    static var isDebugBuild: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
+    }
+
+    static func shouldStart(isDebugBuild: Bool, environment: [String: String], arguments: [String]) -> Bool {
+        if isDebugBuild { return false }
+        if environment["XCTestConfigurationFilePath"] != nil || environment["XCTestBundlePath"] != nil
+            || environment["XCTestSessionIdentifier"] != nil { return false }
+        if arguments.contains("-MoveMarkUITest") || arguments.contains("-XCTest") { return false }
+        return true
     }
 }

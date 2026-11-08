@@ -398,7 +398,7 @@ struct MaintenanceIssueDetailView: View {
                 // The picked file is the source evidence (its real type, never relabelled); the derivative
                 // and thumbnail are made from it and the whole set is verified before the row is written.
                 guard let data = try? await item.loadTransferable(type: Data.self),
-                      let source = try? MMEvidenceImport.source(from: data, captureSource: .library) else {
+                      let source = try? await MMEvidenceImport.sourceOffMain(from: data, captureSource: .library) else {
                     skipped += 1
                     continue
                 }

@@ -17,12 +17,15 @@ struct LegalAcceptanceScreen: View {
     let privacyURL: URL?
     /// The age statement to confirm; `nil` when the server requires one this build doesn't know (update the app).
     var age: LegalAgeRequirement? = .thirteenQuebecFourteen
-    var onAccept: () async -> String? = { nil }
+    /// The chosen range for the age-range question (nil for the single-box statements).
+    var onAccept: (LegalAgeBand?) async -> String? = { _ in nil }
     var onSignOut: () -> Void = {}
     var onDeleteAccount: () -> Void = {}
 
     @State private var agreed = false
     @State private var ageConfirmed = false
+    @State private var ageChoice: LegalAgeChoice?
+    @State private var livesInQuebec: Bool?
     @State private var isSaving = false
     @State private var errorMessage: String?
 
@@ -42,7 +45,11 @@ struct LegalAcceptanceScreen: View {
             .ignoresSafeArea()
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { actions }
-        .onChange(of: age) { _, _ in ageConfirmed = false }  // a changed statement needs a fresh confirmation
+        .onChange(of: age) { _, _ in  // a changed statement needs a fresh answer
+            ageConfirmed = false
+            ageChoice = nil
+            livesInQuebec = nil
+        }
         .environment(\.colorScheme, .light)
     }
 
@@ -129,7 +136,9 @@ struct LegalAcceptanceScreen: View {
     /// with sign-out and deletion below; nothing suggests changing the answer.
     @ViewBuilder
     private var ageConfirmation: some View {
-        if let age {
+        if age == .ageRange {
+            ageRangeQuestion
+        } else if let age {
             VStack(alignment: .leading, spacing: 8) {
                 checkbox(age.confirmation, isOn: ageConfirmed, identifier: "legal.age") { ageConfirmed.toggle() }
                 Text(age.explanation)
@@ -171,7 +180,76 @@ struct LegalAcceptanceScreen: View {
     }
 
     /// Both boxes, a known age statement, and nothing in flight.
-    var canContinue: Bool { agreed && ageConfirmed && age != nil && !isSaving }
+    /// The range to record, when the answer is an eligible one.
+    var chosenBand: LegalAgeBand? { ageChoice?.band(livesInQuebec: livesInQuebec) }
+
+    var canContinue: Bool {
+        guard agreed, !isSaving, let age else { return false }
+        return age == .ageRange ? chosenBand != nil : ageConfirmed
+    }
+
+    /// One question, four plain answers, nothing pre-selected, no date of birth. Under 13, and 13 in Quebec, get a
+    /// clear "not available yet" with sign-out and deletion below; nothing suggests changing the answer.
+    private var ageRangeQuestion: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(LegalAgeRequirement.ageRange.confirmation)
+                .mmFont(15, .semibold)
+                .foregroundStyle(MMInk.text)
+            ForEach(LegalAgeChoice.allCases, id: \.self) { choice in
+                radio(choice.label, isOn: ageChoice == choice, identifier: "legal.age.\(choice.rawValue)") {
+                    ageChoice = choice
+                    if choice != .thirteen { livesInQuebec = nil }
+                }
+            }
+            if ageChoice == .thirteen {
+                Text("Do you live in Quebec?")
+                    .mmFont(15, .semibold)
+                    .foregroundStyle(MMInk.text)
+                    .padding(.top, 4)
+                HStack(spacing: 20) {
+                    radio("Yes", isOn: livesInQuebec == true, identifier: "legal.age.quebec.yes") { livesInQuebec = true }
+                    radio("No", isOn: livesInQuebec == false, identifier: "legal.age.quebec.no") { livesInQuebec = false }
+                }
+            }
+            if let ageChoice, ageChoice.isUnavailable(livesInQuebec: livesInQuebec) {
+                MMEvidenceNotice(message: "MoveMark isn’t available for you yet. We’re working on a way for a parent or guardian to set it up with you. You can sign out or delete this account below.")
+                    .environment(\.mmEvidenceOnLight, true)
+                    .accessibilityIdentifier("legal.age.unavailable")
+            } else if chosenBand == .teen {
+                Text("Because you’re under 18, photos you add are saved without their location or camera details. Your records are stored in the United States, nobody else sees them unless you share a report, and you can delete everything from Account at any time.")
+                    .mmFont(13)
+                    .foregroundStyle(MMInk.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("legal.age.teenNotice")
+            } else {
+                Text(LegalAgeRequirement.ageRange.explanation)
+                    .mmFont(13)
+                    .foregroundStyle(MMInk.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func radio(_ text: String, isOn: Bool, identifier: String, select: @escaping () -> Void) -> some View {
+        Button {
+            MMHaptics.selection()
+            select()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: isOn ? "largecircle.fill.circle" : "circle")
+                    .font(.system(size: 22))
+                    .foregroundStyle(MMInk.text)
+                    .accessibilityHidden(true)
+                Text(text).mmFont(15).foregroundStyle(MMInk.text)
+                Spacer(minLength: 0)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+        .accessibilityAddTraits(isOn ? [.isSelected, .isButton] : .isButton)
+    }
 
     private var actions: some View {
         VStack(spacing: 4) {
@@ -206,7 +284,7 @@ struct LegalAcceptanceScreen: View {
         errorMessage = nil
         isSaving = true
         Task { @MainActor in
-            errorMessage = await onAccept()
+            errorMessage = await onAccept(chosenBand)
             isSaving = false
         }
     }
@@ -220,7 +298,7 @@ extension SessionManager {
             termsURL: legalDocumentURL(\.terms, infoKey: "LegalTermsURL"),
             privacyURL: legalDocumentURL(\.privacyNotice, infoKey: "LegalPrivacyPolicyURL"),
             age: legalStatus.map(\.age) ?? .thirteenQuebecFourteen,
-            onAccept: { await self.acceptLegalDocuments() },
+            onAccept: { band in await self.acceptLegalDocuments(band: band) },
             onSignOut: { Task { await self.signOut() } },
             onDeleteAccount: onDeleteAccount
         )

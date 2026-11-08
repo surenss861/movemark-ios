@@ -21,6 +21,9 @@ struct ProofSavedReceiptModel {
     var imageName: String?
     var primaryActionLabel: String
     var secondaryActionLabel: String = "View evidence"
+    /// A teen account's photos are saved without location and identifying metadata (Option B); the receipt says so
+    /// instead of "Source files preserved".
+    var metadataRemovedForPrivacy: Bool = MMPhotoPrivacyPolicy.shared.current == .teen
 }
 
 struct ProofSavedReceiptView: View {
@@ -126,7 +129,11 @@ struct ProofSavedReceiptView: View {
     private var assurances: some View {
         VStack(alignment: .leading, spacing: 10) {
             Rectangle().fill(Ink.rule).frame(height: 1)
-            assurance("lock.shield", "Source files preserved")
+            if model.metadataRemovedForPrivacy {
+                assurance("location.slash", "Location and camera details removed for privacy")
+            } else {
+                assurance("lock.shield", "Source files preserved")
+            }
             assurance("archivebox", "Recorded in your proof vault")
             Rectangle().fill(Ink.rule).frame(height: 1)
         }

@@ -61,6 +61,10 @@ struct MoveMarkDownloadURLs: Sendable {
 }
 
 enum MoveMarkStorageError: LocalizedError {
+    /// The API found location or identifying metadata in a teen account's upload (it can't be stripped from a PDF).
+    static let teenMetadataCode = "teen_metadata_present"
+    static let teenMetadataMessage = "For privacy, this file can’t be added: it contains photo location or camera details. Add the photo itself, or a PDF without that information."
+
     case notConfigured
     case notFound
     case rejected(status: Int, code: String?, message: String)
@@ -75,6 +79,7 @@ enum MoveMarkStorageError: LocalizedError {
             if status == 413 || code == "too_large" { return "This file is too large to upload." }
             if status == 429 { return "That’s a lot at once. Wait a minute, then try again." }
             if code == "unsupported_type" { return "This file type isn’t supported." }
+            if code == Self.teenMetadataCode { return Self.teenMetadataMessage }
             return message.isEmpty ? "Couldn’t save the file. Try again." : message
         case .uploadFailed: return "Couldn’t upload the file. Check your connection and try again."
         case .invalidResponse: return "Couldn’t reach MoveMark. Try again."
@@ -160,12 +165,19 @@ struct MoveMarkStorageService: Sendable {
         let headers: [String: String]
         let thumbnail: Part?
         let source: Part?
+        /// True when the API will only accept the row after finalize (always for sourced evidence; for a teen
+        /// account's documents too, whose bytes the API checks for metadata at finalize).
+        var finalizeRequired: Bool? = nil
     }
 
     private func uploadSourced(_ source: MMEvidenceSource, onTicket: (MoveMarkUpload) async -> Void = { _ in },
                                fields: [String: String]) async throws -> MoveMarkUpload {
-        guard let derivative = MMEvidenceImport.derivative(from: source) else { throw MMEvidenceImportError.unreadable }
-        let thumbnail = MMEvidenceImport.thumbnail(from: source)
+        // Resize, re-encode and thumbnail off the main actor; a teen account's source is (re)stripped here too, so a
+        // photo queued before the rule was known still leaves without location or identifying metadata.
+        let prepared = try await MMEvidenceImport.prepareForUpload(source, privacy: MMPhotoPrivacyPolicy.shared.current)
+        let source = prepared.source
+        let derivative = prepared.derivative
+        let thumbnail = prepared.thumbnail
         var body: [String: Any] = fields
         body["contentType"] = "image/jpeg"
         body["size"] = derivative.count
@@ -233,7 +245,20 @@ struct MoveMarkStorageService: Sendable {
                 storageLog.error("thumbnail PUT failed: \(error.localizedDescription, privacy: .public)")
             }
         }
-        return MoveMarkUpload(ticketId: ticket.uploadTicketId, bucket: ticket.bucket, path: ticket.path, thumbnailPath: thumbnailPath)
+        let uploaded = MoveMarkUpload(ticketId: ticket.uploadTicketId, bucket: ticket.bucket, path: ticket.path, thumbnailPath: thumbnailPath)
+        if ticket.finalizeRequired == true {
+            // A teen account's document: the API checks the stored bytes; the row must name exactly what it verified.
+            struct Finalized: Decodable { let status: String; let thumbnail: Bool? }
+            let finalized: Finalized
+            do {
+                finalized = try await api("POST", "api/storage/uploads/\(ticket.uploadTicketId)/finalize", json: nil)
+            } catch {
+                throw await release(uploaded, after: error)
+            }
+            return MoveMarkUpload(ticketId: ticket.uploadTicketId, bucket: ticket.bucket, path: ticket.path,
+                                  thumbnailPath: finalized.thumbnail == true ? ticket.thumbnail?.path : nil)
+        }
+        return uploaded
     }
 
     private func put(_ data: Data, to urlString: String, headers: [String: String]) async throws {

@@ -103,3 +103,30 @@ So by this document's own bar, teens aren't fully supported yet. **Proposed fall
   - the written assessment and the lawyer's sign-off;
   - new document versions;
   - Android support for the age step.
+
+## Owner decision, 2026-11-08 (final for Phase 1): 13+ (14+ in Quebec), age range, teen photo privacy
+
+**This supersedes the 18+ section above, which was never deployed.** Consumer is meant for all ages over time, with consent protections. Phase 1 serves 13+ (14+ in Quebec). Phase 2 (a later binary, after legal review) adds under-13 and 13-in-Quebec with parental or guardian consent.
+
+**Age flow (build 20261108.2, migration 1055 `bands_v1`).** The agreement screen asks "How old are you?" with four answers: Under 13, 13, 14 to 17, 18 or older. "13" also asks "Do you live in Quebec?".
+- Under 13, and 13 in Quebec: "MoveMark isn't available for you yet". Continue stays disabled, with Sign out and Delete account below. Nothing is recorded.
+- 13 (outside Quebec) or 14 to 17: the range `13_17` is recorded, the account category becomes `teen`, and the teen notice is shown.
+- 18 or older: `18_plus` is recorded, and the category becomes `adult`.
+- No date of birth is asked. The answer is self-declared, **not verified**.
+
+**Teen safeguards (minors doc items 1 to 3):**
+1. **Teen notice:** shown on selection, and in Privacy section 10.
+2. **No GPS for teens:** **met by Option B.**
+   - **Device:** for `teen` accounts, every photo (camera and library) and every JPEG/PNG document is stripped before it is saved to the pending queue or uploaded (`MMEvidenceImport.source(..., privacy: .teen)`, re-checked in `prepareForUpload`). The strip removes GPS, make, model, software, serials, owner, lens, maker notes, IPTC and XMP. The capture date and offset and the orientation stay. HEIC becomes a full-resolution JPEG.
+   - **Server:** for teen accounts, the API checks the stored bytes at finalize, because uploads go straight to object storage on presigned URLs. Migration 1056 refuses any teen row that isn't from a checked ticket. Legacy evidence uploads without a source, HEIC sources, unchecked tickets and file swaps are refused. A PDF carrying photo location is refused.
+   - **Receipt and report:** the receipt says "Location and camera details removed for privacy". The report adds a privacy note that never mentions age.
+   - **The in-app camera** has no location permission and adds no GPS (verified: `CameraCaptureView` sets no location metadata, and the app has no `NSLocationWhenInUseUsageDescription`).
+3. **Written child-access and capacity assessment, and lawyer sign-off:** being drafted separately by another agent. **[LEGAL]**
+
+**What "enforced" covers, and what it doesn't:**
+- Before enforcement, accounts that never answered the range (old builds; documents not yet published) have no category, so they keep adult behaviour. A teen using 20261107.1 or 20261108.1 is not protected until they update and answer.
+- Once enforcement is on, every account with access has answered through the 5-argument call, so every teen account is covered. Builds 20261107.1 (3-argument) and 20261108.1 (4-argument) can't accept under `bands_v1` and fail closed.
+- The trusted backend (no JWT) isn't restricted.
+- Categories can change on re-declaration (a teen turning 18). It's self-declared.
+
+**Android** must ship the same flow and protection before Android launch. The spec is in `_scratch/consumer-1.4-rc2.md`.

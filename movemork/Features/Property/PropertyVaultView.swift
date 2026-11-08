@@ -570,7 +570,7 @@ struct PropertyVaultView: View {
                 .appendingPathExtension(ext)
             // Quick Look can share what it shows, so an image document is shown as a copy without its location,
             // camera and device metadata (D2). A JPEG or PNG that can't be cleaned isn't shown rather than leaked.
-            try VaultDocumentPreviewFile.contents(for: data).write(to: temp, options: .atomic)
+            try await MMEvidenceImport.previewFileContents(data).write(to: temp, options: .atomic)
             await MainActor.run {
                 if let old = documentPreviewTempURL {
                     try? FileManager.default.removeItem(at: old)
@@ -668,21 +668,21 @@ struct PropertyVaultView: View {
                 uploadError = MoveMarkFlowMessage.documentImageReadFailed
                 return
             }
-            // JPEG and PNG documents keep their bytes. HEIC/HEIF (not accepted for documents) is the one
-            // conversion: a JPEG of the full image via ImageIO, never upscaled. The thumbnail is derived.
-            let image: MMEvidenceSource
+            // JPEG and PNG documents keep their bytes (a teen account's are stripped of location and identifying
+            // metadata first). HEIC/HEIF (not accepted for documents) is the one conversion: a JPEG of the full image
+            // via ImageIO, never upscaled. The thumbnail is derived. All of it off the main actor.
+            let prepared: (bytes: Data, fileExtension: String, thumbnail: Data?)
             do {
-                image = try MMEvidenceImport.source(from: data, captureSource: .library)
+                prepared = try await MMEvidenceImport.documentImage(data)
+            } catch MMEvidenceImportError.unreadable {
+                uploadError = MoveMarkFlowMessage.documentImageReadFailed
+                return
             } catch {
                 uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
                 return
             }
-            let keepsBytes = image.mimeType == "image/jpeg" || image.mimeType == "image/png"
-            guard let fileBytes = keepsBytes ? image.data : MMEvidenceImport.derivative(from: image) else {
-                uploadError = MoveMarkFlowMessage.documentImageReadFailed
-                return
-            }
-            let fileName = "\(UUID()).\(keepsBytes ? image.fileExtension : "jpg")"
+            let fileBytes = prepared.bytes
+            let fileName = "\(UUID()).\(prepared.fileExtension)"
 
             // The thumbnail rides on the same upload and is best-effort: previews fall back to `filePath`.
             let upload: MoveMarkUpload
@@ -690,7 +690,7 @@ struct PropertyVaultView: View {
                 upload = try await documentRepo.uploadDocument(
                     fileBytes,
                     fileName: fileName,
-                    thumbnail: MMEvidenceImport.thumbnail(from: image),
+                    thumbnail: prepared.thumbnail,
                     propertyId: property.id,
                     documentType: canonicalType
                 )
@@ -790,7 +790,7 @@ struct PropertyVaultView: View {
             defer { url.stopAccessingSecurityScopedResource() }
             let data: Data
             do {
-                data = try Data(contentsOf: url)
+                data = try await MMEvidenceImport.documentFile(at: url)  // off the main actor; teen JPEG/PNG stripped
             } catch {
                 uploadError = MoveMarkFlowMessage.documentUploadFailed(error)
                 lastFailedFileDocType = docType
@@ -867,26 +867,5 @@ struct PropertyVaultView: View {
             uploadError = nil
             lastFailedFileDocType = nil
         }
-    }
-}
-
-/// What the document preview writes to disk for Quick Look.
-enum VaultDocumentPreviewFile {
-    struct UncleanableImage: LocalizedError {
-        var errorDescription: String? { "This image couldn’t be prepared for viewing." }
-    }
-
-    /// JPEG and PNG come back without metadata; PDFs and anything else unchanged (they are the renter's own files and
-    /// MoveMark doesn't rewrite them).
-    static func contents(for data: Data) throws -> Data {
-        guard isJPEGOrPNG(data) else { return data }
-        guard let copy = MMEvidenceImport.sharedCopy(of: data) else { throw UncleanableImage() }
-        return copy
-    }
-
-    static func isJPEGOrPNG(_ data: Data) -> Bool {
-        let bytes = [UInt8](data.prefix(8))
-        if bytes.count >= 3, bytes[0] == 0xFF, bytes[1] == 0xD8, bytes[2] == 0xFF { return true }
-        return bytes == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
     }
 }

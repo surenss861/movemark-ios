@@ -179,6 +179,13 @@ enum MoveMarkFlowMessage {
     // MARK: - Receipts & lease docs
 
     static func documentUploadFailed(_ error: Error) -> String {
+        if case MoveMarkStorageError.rejected(_, MoveMarkStorageError.teenMetadataCode, _)? = error as? MoveMarkStorageError {
+            return MoveMarkStorageError.teenMetadataMessage
+        }
+        if let failure = error as? MoveMarkUploadFailure,
+           case MoveMarkStorageError.rejected(_, MoveMarkStorageError.teenMetadataCode, _)? = failure.underlying as? MoveMarkStorageError {
+            return MoveMarkStorageError.teenMetadataMessage
+        }
         if isLikelyStorageFailure(error) {
             return "Couldn’t upload the file. Check your connection and try again."
         }
