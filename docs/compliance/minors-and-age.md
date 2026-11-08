@@ -54,7 +54,7 @@ Build this only after teens work, and keep it out of launch.
 
 ## Launch implementation, release 1.4 RC2 (2026-11-08)
 
-Owner decision D1: a simple, mandatory age-eligibility confirmation, no date of birth. Minimum 13, 14 in Quebec.
+Owner decision D1: a simple, mandatory age-eligibility confirmation, no date of birth. The minimum was first set at 13 (14 in Quebec); **superseded the same day by 18+ (see the next section)**. The code below supports both; the server's `age_requirement` picks one.
 
 **What shipped in code (local, not deployed):**
 - App (build 20261108.1): a second, unticked box on "One last thing.": "I'm 13 or older (14 or older if I live in Quebec).", with a short plain-language note for under-18s under it (what's stored, stored in the US, nobody sees it unless a report is shared, delete from Account). Continue stays disabled until both boxes are ticked. Someone who can't confirm stops there, with Sign out and Delete account below; nothing suggests changing the answer.
@@ -77,4 +77,29 @@ Owner decision D1: a simple, mandatory age-eligibility confirmation, no date of 
 
 So by this document's own bar, teens aren't fully supported yet. **Proposed fallback for the owner:** launch 18+ (`age_requirement = 'age_18'`, the Terms and Privacy minimum changed to 18, new document versions). That needs no new build. Or keep 13+ and accept item 2 explicitly (or strip GPS from originals for everyone, which reverses D2), with item 3 done before launch.
 
-**Quebec basis, verified 2026-11-08:** the CAI's page on minors (cai.gouv.qc.ca, "Mineurs") states that personal information about a minor under 14 can no longer be collected from them without the consent of the person with parental authority or the tutor, unless the collection is clearly for the minor's benefit. That is the basis for "14 in Quebec". **Not verified:** the exact statutory section (understood to be s. 4.1 of the Act respecting the protection of personal information in the private sector, CQLR c P-39.1, added by Law 25). legisquebec.gouv.qc.ca refused automated fetches, and the CAI page cites no section numbers. Also not verified: that 14 to 17 year olds may consent on their own under the private-sector act (the CAI page doesn't address it), Ontario minors' contract capacity, and whether "clearly for the minor's benefit" could apply. All of this needs legal review.
+**Quebec basis, checked 2026-11-08 (for any later move below 18):** the CAI's page on minors (cai.gouv.qc.ca, "Mineurs") states that personal information about a minor under 14 can no longer be collected from them without the consent of the person with parental authority or the tutor, unless the collection is clearly for the minor's benefit. That is the basis for "14 in Quebec". **Not verified:** the exact statutory section (understood to be s. 4.1 of the Act respecting the protection of personal information in the private sector, CQLR c P-39.1, added by Law 25). legisquebec.gouv.qc.ca refused automated fetches, and the CAI page cites no section numbers. Also not verified: that 14 to 17 year olds may consent on their own under the private-sector act (the CAI page doesn't address it), Ontario minors' contract capacity, and whether "clearly for the minor's benefit" could apply. All of this needs legal review.
+
+## Owner decision, 2026-11-08: the initial release is 18+
+
+**Decision.** MoveMark Consumer launches **18+ everywhere it is offered, Quebec included**. This is MoveMark's product eligibility policy for the initial release. It is **not** a claim that Canadian or Quebec law requires 18.
+
+**Why:**
+- The teen safeguards this document requires aren't complete. "No GPS retained for teens" can't be met, because D2 keeps original photos and image documents with their metadata, GPS included, in private storage for everyone, and a yes/no confirmation can't single out teens.
+- The written assessment of likely child access and teen capacity, and the lawyer's sign-off on minors' contracts and consent, haven't been done.
+- Originals may keep GPS, which the OPC Children's Privacy Code treats as sensitive for under-18s (location off by default).
+
+**How it is implemented (no app rebuild):**
+- Migration 1055 defaults `legal_gate_settings.age_requirement` to `'age_18'`, so production starts at 18+. `'age_13_qc_14'` stays allowed for a later change.
+- Build 1.4 (20261108.1) already maps `age_18` to "I'm 18 or older." and an adult-oriented note.
+- The Terms (section 1) and Privacy (section 10) say 18+, including Quebec, and say the confirmation is a self-declaration.
+
+**What the confirmation is and isn't.** It is the user's own declaration, recorded with the time and the document versions. **It is not age verification:** no date of birth, no document, no check. The legal texts, the review notes and this document must never describe it as verified. If MoveMark learns an account belongs to someone under 18, it deletes the account.
+
+**Still under review:**
+- Quebec requirements (the under-14 parental-consent rule, consent at 14 to 17, French-language obligations), which matter if eligibility ever goes below 18.
+- Whether 18+ makes child access unlikely enough under the OPC Code. Write the conclusion down; an unenforced policy line alone carries little weight with the OPC.
+- Lowering the age later would need, before switching `age_requirement`:
+  - teen safeguards, including GPS handling for originals;
+  - the written assessment and the lawyer's sign-off;
+  - new document versions;
+  - Android support for the age step.
