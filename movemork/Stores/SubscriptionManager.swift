@@ -65,6 +65,24 @@ final class SubscriptionManager {
         return !packages.isEmpty
     }
 
+    /// The loaded offering sells a Report Pack. False until offerings load, and false today: App Store Connect /
+    /// RevenueCat carry only the monthly and yearly subscriptions. Copy that names the Report Pack depends on this.
+    var offersReportPack: Bool {
+        currentOffering?.availablePackages.contains { Self.isReportPackProduct($0.storeProduct.productIdentifier) } ?? false
+    }
+
+    /// Same match as the paywall's Report Pack row.
+    static func isReportPackProduct(_ productID: String) -> Bool {
+        reportPackProductIDs.contains(productID) || productID.localizedCaseInsensitiveContains("report_pack")
+    }
+
+    /// Restore found nothing to restore. Names the Report Pack only when the store sells one.
+    var restoreFoundNothingMessage: String {
+        offersReportPack
+            ? "No active MoveMark subscription or Report Pack was found for this Apple ID."
+            : "No active MoveMark subscription was found for this Apple ID."
+    }
+
     /// Aggregate for screens that only need a single “busy” flag (e.g. Account restore while offerings also refresh).
     var isLoading: Bool { isRefreshingOfferings || isStoreKitBusy }
 

@@ -160,7 +160,7 @@ struct AccountView: View {
             } else if let err = subscriptionManager.lastRestoreErrorMessage {
                 restoreFeedback = .init(message: err, isError: true)
             } else {
-                restoreFeedback = .init(message: "No active MoveMark subscription or Report Pack was found for this Apple ID.")
+                restoreFeedback = .init(message: subscriptionManager.restoreFoundNothingMessage)
             }
         }
     }
