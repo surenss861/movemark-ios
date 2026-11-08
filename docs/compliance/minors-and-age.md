@@ -51,3 +51,30 @@ Build this only after teens work, and keep it out of launch.
 - **Sentry and RevenueCat review** under Apple 5.1.4 and Play's Families policy, which may restrict SDKs.
 - **Store changes:** Play target audience, Data safety and rating updates.
 - **Outside Canada:** COPPA verifiable parental consent, plus national ages, before any US or EU launch.
+
+## Launch implementation, release 1.4 RC2 (2026-11-08)
+
+Owner decision D1: a simple, mandatory age-eligibility confirmation, no date of birth. Minimum 13, 14 in Quebec.
+
+**What shipped in code (local, not deployed):**
+- App (build 20261108.1): a second, unticked box on "One last thing.": "I'm 13 or older (14 or older if I live in Quebec).", with a short plain-language note for under-18s under it (what's stored, stored in the US, nobody sees it unless a report is shared, delete from Account). Continue stays disabled until both boxes are ticked. Someone who can't confirm stops there, with Sign out and Delete account below; nothing suggests changing the answer.
+- Server (migration 1055): `accept_legal_documents(method, terms, notice, p_age_attestation)` records the confirmed statement code and time, and refuses anything other than the current `legal_gate_settings.age_requirement`. Once enforcement is on, an acceptance without the current attestation doesn't count, for RLS and the API alike.
+- The statement is server-chosen: `age_13_qc_14` now; `age_18` is a ready fallback (switch the setting by migration, publish matching documents; build 20261108.1 already has the 18+ wording).
+
+**Old clients.** Build 20261107.1 calls the three-argument function. While enforcement is off nobody is gated, so its users use the app without any age confirmation; that is the honest state of the soft phase. Once enforcement is on, its acceptances stop counting and it can't record new ones (`LEGAL_AGE_ATTESTATION_REQUIRED`), so those users are blocked until they update. Minimum client that carries the attestation: **1.4 (20261108.1)**. Detection is the RPC signature inside the database, never a header. No compatibility window is built in; one would need the owner's explicit acceptance (for example, delay enforcement until 20261107.1 usage is negligible).
+
+**What the server enforcement does and doesn't cover.**
+- Covered: every Data API read and write on rental tables (restrictive RLS, `legal_gate_passes`) and every protected MoveMark API route (`require_legal_acceptance`), once `enforced = true`.
+- Not covered: account creation itself. Neon Auth creates the account (email or Apple/Google) before MoveMark sees it, so an under-age person can still create an account; they just can't reach rental data under enforcement without the confirmation. `profiles` isn't gated, so the profile row (email, name) exists. `DELETE /api/account` stays open by design.
+- The confirmation is self-declared. Nothing verifies it, and the texts say so.
+- Before enforcement, nothing is enforced for anyone.
+- Android has no age step yet. It must ship the 4-argument call before enforcement, or Android users are locked out at enforcement.
+
+**Teens (13 to 17, 14 to 17 in Quebec): flagged for the owner, not silently decided.** Of the three teen items above:
+1. Teen notice: done (shown to everyone, since the app can't tell teens apart).
+2. No GPS retained for teens: **not met**. D2 keeps original photo metadata, GPS included, in private storage for everyone, and a yes/no confirmation can't identify teens. Shared PDFs and shared copies of image documents are stripped.
+3. Written likely-child-access and teen-capacity assessment plus lawyer sign-off: **not done** (owner and lawyer).
+
+So by this document's own bar, teens aren't fully supported yet. **Proposed fallback for the owner:** launch 18+ (`age_requirement = 'age_18'`, the Terms and Privacy minimum changed to 18, new document versions). That needs no new build. Or keep 13+ and accept item 2 explicitly (or strip GPS from originals for everyone, which reverses D2), with item 3 done before launch.
+
+**Quebec basis, verified 2026-11-08:** the CAI's page on minors (cai.gouv.qc.ca, "Mineurs") states that personal information about a minor under 14 can no longer be collected from them without the consent of the person with parental authority or the tutor, unless the collection is clearly for the minor's benefit. That is the basis for "14 in Quebec". **Not verified:** the exact statutory section (understood to be s. 4.1 of the Act respecting the protection of personal information in the private sector, CQLR c P-39.1, added by Law 25). legisquebec.gouv.qc.ca refused automated fetches, and the CAI page cites no section numbers. Also not verified: that 14 to 17 year olds may consent on their own under the private-sector act (the CAI page doesn't address it), Ontario minors' contract capacity, and whether "clearly for the minor's benefit" could apply. All of this needs legal review.

@@ -15,11 +15,14 @@ import SwiftUI
 struct LegalAcceptanceScreen: View {
     let termsURL: URL?
     let privacyURL: URL?
+    /// The age statement to confirm; `nil` when the server requires one this build doesn't know (update the app).
+    var age: LegalAgeRequirement? = .thirteenQuebecFourteen
     var onAccept: () async -> String? = { nil }
     var onSignOut: () -> Void = {}
     var onDeleteAccount: () -> Void = {}
 
     @State private var agreed = false
+    @State private var ageConfirmed = false
     @State private var isSaving = false
     @State private var errorMessage: String?
 
@@ -39,6 +42,7 @@ struct LegalAcceptanceScreen: View {
             .ignoresSafeArea()
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { actions }
+        .onChange(of: age) { _, _ in ageConfirmed = false }  // a changed statement needs a fresh confirmation
         .environment(\.colorScheme, .light)
     }
 
@@ -77,6 +81,8 @@ struct LegalAcceptanceScreen: View {
 
             agreement
 
+            ageConfirmation
+
             if let errorMessage {
                 MMEvidenceNotice(message: errorMessage)
                     .environment(\.mmEvidenceOnLight, true)
@@ -114,16 +120,41 @@ struct LegalAcceptanceScreen: View {
     }
 
     private var agreement: some View {
+        checkbox("I agree to the Terms of Service and acknowledge the Privacy Policy.", isOn: agreed, identifier: "legal.agree") {
+            agreed.toggle()
+        }
+    }
+
+    /// Mandatory, separate from the terms box, and unticked. No date of birth. Someone who can't confirm it stops here,
+    /// with sign-out and deletion below; nothing suggests changing the answer.
+    @ViewBuilder
+    private var ageConfirmation: some View {
+        if let age {
+            VStack(alignment: .leading, spacing: 8) {
+                checkbox(age.confirmation, isOn: ageConfirmed, identifier: "legal.age") { ageConfirmed.toggle() }
+                Text(age.explanation)
+                    .mmFont(13)
+                    .foregroundStyle(MMInk.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 34)
+            }
+        } else {
+            MMEvidenceNotice(message: "Update MoveMark from the App Store to continue.")
+                .environment(\.mmEvidenceOnLight, true)
+        }
+    }
+
+    private func checkbox(_ text: String, isOn: Bool, identifier: String, toggle: @escaping () -> Void) -> some View {
         Button {
             MMHaptics.selection()
-            agreed.toggle()
+            toggle()
         } label: {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: agreed ? "checkmark.square.fill" : "square")
+                Image(systemName: isOn ? "checkmark.square.fill" : "square")
                     .font(.system(size: 22))
                     .foregroundStyle(MMInk.text)
                     .accessibilityHidden(true)
-                Text("I agree to the Terms of Service and acknowledge the Privacy Policy.")
+                Text(text)
                     .mmFont(15)
                     .foregroundStyle(MMInk.text)
                     .multilineTextAlignment(.leading)
@@ -134,14 +165,17 @@ struct LegalAcceptanceScreen: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("legal.agree")
-        .accessibilityValue(agreed ? "Checked" : "Not checked")
-        .accessibilityAddTraits(agreed ? .isSelected : [])
+        .accessibilityIdentifier(identifier)
+        .accessibilityValue(isOn ? "Checked" : "Not checked")
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
+
+    /// Both boxes, a known age statement, and nothing in flight.
+    var canContinue: Bool { agreed && ageConfirmed && age != nil && !isSaving }
 
     private var actions: some View {
         VStack(spacing: 4) {
-            MMPrimaryButton(title: "Continue to my Vault", isLoading: isSaving, isDisabled: !agreed || isSaving) { accept() }
+            MMPrimaryButton(title: "Continue to my Vault", isLoading: isSaving, isDisabled: !canContinue) { accept() }
                 .accessibilityIdentifier("legal.continue")
             HStack(spacing: 20) {
                 quiet("Sign out", action: onSignOut)
@@ -168,7 +202,7 @@ struct LegalAcceptanceScreen: View {
     }
 
     private func accept() {
-        guard agreed, !isSaving else { return }
+        guard canContinue else { return }
         errorMessage = nil
         isSaving = true
         Task { @MainActor in
@@ -185,6 +219,7 @@ extension SessionManager {
         LegalAcceptanceScreen(
             termsURL: legalDocumentURL(\.terms, infoKey: "LegalTermsURL"),
             privacyURL: legalDocumentURL(\.privacyNotice, infoKey: "LegalPrivacyPolicyURL"),
+            age: legalStatus.map(\.age) ?? .thirteenQuebecFourteen,
             onAccept: { await self.acceptLegalDocuments() },
             onSignOut: { Task { await self.signOut() } },
             onDeleteAccount: onDeleteAccount

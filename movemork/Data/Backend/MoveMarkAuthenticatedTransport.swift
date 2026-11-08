@@ -46,11 +46,17 @@ final class MoveMarkAuthenticatedTransport: Sendable {
 
     func data(for request: URLRequest) async throws -> (Data, URLResponse) {
         let token = try await tokens.validAccessToken(forceRefresh: false)
-        let (data, response) = try await send(request, token: token)
-        guard Self.isAuthRejection(data: data, response: response, origins: origins) else { return (data, response) }
-
-        let fresh = try await tokens.refreshedAccessToken(replacing: token)
-        return try await send(request, token: fresh)
+        var (data, response) = try await send(request, token: token)
+        if Self.isAuthRejection(data: data, response: response, origins: origins) {
+            let fresh = try await tokens.refreshedAccessToken(replacing: token)
+            (data, response) = try await send(request, token: fresh)
+        }
+        // The API refused because the renter hasn't accepted the current documents: the session re-reads the legal
+        // status and shows the gate. The response still goes back to the caller unchanged.
+        if LegalAcceptanceRequiredSignal.matches(data: data, response: response, apiHost: origins.apiHost) {
+            NotificationCenter.default.post(name: .moveMarkLegalAcceptanceRequired, object: nil)
+        }
+        return (data, response)
     }
 
     private func send(_ request: URLRequest, token: String) async throws -> (Data, URLResponse) {

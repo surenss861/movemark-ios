@@ -568,7 +568,9 @@ struct PropertyVaultView: View {
             let temp = FileManager.default.temporaryDirectory
                 .appendingPathComponent("vault-doc-\(UUID().uuidString)", isDirectory: false)
                 .appendingPathExtension(ext)
-            try data.write(to: temp, options: .atomic)
+            // Quick Look can share what it shows, so an image document is shown as a copy without its location,
+            // camera and device metadata (D2). A JPEG or PNG that can't be cleaned isn't shown rather than leaked.
+            try VaultDocumentPreviewFile.contents(for: data).write(to: temp, options: .atomic)
             await MainActor.run {
                 if let old = documentPreviewTempURL {
                     try? FileManager.default.removeItem(at: old)
@@ -868,3 +870,23 @@ struct PropertyVaultView: View {
     }
 }
 
+/// What the document preview writes to disk for Quick Look.
+enum VaultDocumentPreviewFile {
+    struct UncleanableImage: LocalizedError {
+        var errorDescription: String? { "This image couldn’t be prepared for viewing." }
+    }
+
+    /// JPEG and PNG come back without metadata; PDFs and anything else unchanged (they are the renter's own files and
+    /// MoveMark doesn't rewrite them).
+    static func contents(for data: Data) throws -> Data {
+        guard isJPEGOrPNG(data) else { return data }
+        guard let copy = MMEvidenceImport.sharedCopy(of: data) else { throw UncleanableImage() }
+        return copy
+    }
+
+    static func isJPEGOrPNG(_ data: Data) -> Bool {
+        let bytes = [UInt8](data.prefix(8))
+        if bytes.count >= 3, bytes[0] == 0xFF, bytes[1] == 0xD8, bytes[2] == 0xFF { return true }
+        return bytes == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+    }
+}

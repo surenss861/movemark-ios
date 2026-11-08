@@ -151,6 +151,72 @@ nonisolated enum MMEvidenceImport {
                quality: thumbnailQuality, keepCaptureDate: false)
     }
 
+    // MARK: Copies that leave MoveMark
+
+    /// A copy of a stored JPEG or PNG for viewing or sharing outside the app (Quick Look, which has a share button):
+    /// the same pixels, format and orientation, with no GPS, EXIF, TIFF (camera and device), IPTC or XMP. The stored
+    /// original is never touched; it keeps its metadata in private storage (owner decision D2). Lossless where
+    /// ImageIO can copy the image data; otherwise the pixels are re-encoded in the same format without metadata.
+    /// Anything that isn't a single JPEG or PNG image returns `nil`.
+    static func sharedCopy(of data: Data) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              CGImageSourceGetCount(source) == 1,
+              let type = CGImageSourceGetType(source),
+              type as String == UTType.jpeg.identifier || type as String == UTType.png.identifier
+        else { return nil }
+        let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        let orientation = (props?[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value ?? 1
+
+        let lossless = NSMutableData()
+        if let destination = CGImageDestinationCreateWithData(lossless, type, 1, nil) {
+            let options: [CFString: Any] = [
+                kCGImageDestinationMetadata: CGImageMetadataCreateMutable(),
+                kCGImageDestinationMergeMetadata: false,
+                kCGImageMetadataShouldExcludeGPS: true,
+                kCGImageMetadataShouldExcludeXMP: true,
+                kCGImageDestinationOrientation: orientation,
+            ]
+            if CGImageDestinationCopyImageSource(destination, source, options as CFDictionary, nil),
+               carriesNoIdentifyingMetadata(lossless as Data) {
+                return lossless as Data
+            }
+        }
+
+        guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        let reencoded = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(reencoded, type, 1, nil) else { return nil }
+        let props2: [CFString: Any] = [kCGImagePropertyOrientation: orientation, kCGImageDestinationLossyCompressionQuality: 0.95]
+        CGImageDestinationAddImage(destination, image, props2 as CFDictionary)
+        guard CGImageDestinationFinalize(destination), carriesNoIdentifyingMetadata(reencoded as Data) else { return nil }
+        return reencoded as Data
+    }
+
+    /// No GPS, no camera or device fields, no EXIF beyond what ImageIO writes for the pixels themselves.
+    static func carriesNoIdentifyingMetadata(_ data: Data) -> Bool {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        else { return false }
+        if props[kCGImagePropertyGPSDictionary] != nil || props[kCGImagePropertyIPTCDictionary] != nil
+            || props[kCGImagePropertyMakerAppleDictionary] != nil { return false }
+        let tiff = props[kCGImagePropertyTIFFDictionary] as? [CFString: Any] ?? [:]
+        for key in [kCGImagePropertyTIFFMake, kCGImagePropertyTIFFModel, kCGImagePropertyTIFFSoftware,
+                    kCGImagePropertyTIFFHostComputer, kCGImagePropertyTIFFArtist, kCGImagePropertyTIFFDateTime]
+        where tiff[key] != nil { return false }
+        let exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any] ?? [:]
+        for key in [kCGImagePropertyExifDateTimeOriginal, kCGImagePropertyExifLensMake, kCGImagePropertyExifLensModel,
+                    kCGImagePropertyExifBodySerialNumber, kCGImagePropertyExifLensSerialNumber, kCGImagePropertyExifCameraOwnerName,
+                    kCGImagePropertyExifUserComment]
+        where exif[key] != nil { return false }
+        if let metadata = CGImageSourceCopyMetadataAtIndex(source, 0, nil),
+           let tags = CGImageMetadataCopyTags(metadata) as? [CGImageMetadataTag] {
+            for tag in tags {
+                let prefix = CGImageMetadataTagCopyPrefix(tag) as String? ?? ""
+                if ["exifEX", "aux", "photoshop", "xmp", "dc", "Iptc4xmpCore", "GPano"].contains(prefix) { return false }
+            }
+        }
+        return true
+    }
+
     /// On-screen preview of a pending photo (display only; never uploaded).
     static func preview(from source: MMEvidenceSource, maxPixels: Int = 1200) -> UIImage? {
         guard let image = CGImageSourceCreateWithData(source.data as CFData, nil),

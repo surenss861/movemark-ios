@@ -11,6 +11,7 @@ struct AppRouter: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(PropertyStore.self) private var propertyStore
     @Environment(SubscriptionManager.self) private var subscriptionManager
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showDeleteAccount = false
     @State private var passwordResetLink: PasswordResetLink.Payload?
 
@@ -33,6 +34,12 @@ struct AppRouter: View {
                     .sheet(isPresented: $showDeleteAccount) {
                         NavigationStack { DeleteAccountView() }
                     }
+
+            case .legalStatusUnavailable:
+                LegalStatusUnavailableView(
+                    onRetry: { await sessionManager.retryLegalStatus() },
+                    onSignOut: { Task { await sessionManager.signOut() } }
+                )
 
             case .needsOnboarding:
                 FirstRunProofFlowView(requiresOnboarding: true)
@@ -59,6 +66,12 @@ struct AppRouter: View {
             }
             .environment(sessionManager)
         }
+        .onChange(of: scenePhase) { old, new in
+            // Back from the background only: a permission alert or the app switcher (inactive) isn't a return.
+            if old == .background, new == .active {
+                Task { await sessionManager.recheckLegalStatus() }
+            }
+        }
         .onChange(of: sessionManager.authPhase) { _, phase in
             if phase == .signedOut || phase == .misconfigured {
                 propertyStore.clear()
@@ -71,6 +84,38 @@ struct AppRouter: View {
             await subscriptionManager.syncAuth(
                 appUserID: sessionManager.revenueCatAppUserID
             )
+        }
+    }
+}
+
+// MARK: - Legal status unavailable
+
+/// The server answered the legal status with an error. Rare; one honest line, a retry and a way out.
+struct LegalStatusUnavailableView: View {
+    var onRetry: () async -> Void
+    var onSignOut: () -> Void
+    @State private var isRetrying = false
+
+    var body: some View {
+        MMScreen(
+            title: "Can’t open your Vault yet",
+            subtitle: "MoveMark couldn’t check your account just now. Your records are safe. Try again in a moment."
+        ) {
+            VStack(spacing: 8) {
+                MMPrimaryButton(title: "Try again", isLoading: isRetrying, isDisabled: isRetrying) {
+                    isRetrying = true
+                    Task { @MainActor in
+                        await onRetry()
+                        isRetrying = false
+                    }
+                }
+                .accessibilityIdentifier("legal.status.retry")
+                Button("Sign out", action: onSignOut)
+                    .mmFont(14, .medium)
+                    .foregroundStyle(MMInk.secondary)
+                    .frame(minHeight: 44)
+                    .disabled(isRetrying)
+            }
         }
     }
 }

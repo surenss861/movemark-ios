@@ -17,11 +17,11 @@ private nonisolated final class SessionExpiryObserverBox: @unchecked Sendable {
 
     nonisolated init() {}
 
-    nonisolated func install(handler: @escaping () -> Void) {
+    nonisolated func install(name: Notification.Name = .moveMarkSessionExpired, handler: @escaping () -> Void) {
         lock.lock()
         if let token { NotificationCenter.default.removeObserver(token) }
         token = NotificationCenter.default.addObserver(
-            forName: .moveMarkSessionExpired,
+            forName: name,
             object: nil,
             queue: .main,
             using: { _ in handler() }
@@ -47,6 +47,8 @@ final class SessionManager {
         case signedOut
         /// Signed in, but the server has no acceptance of the current legal documents.
         case needsLegalAcceptance
+        /// Signed in, but the server answered the legal status with an error: the Vault isn't opened on a guess.
+        case legalStatusUnavailable
         case needsOnboarding
         case signedIn
     }
@@ -79,12 +81,21 @@ final class SessionManager {
     private var pendingSessionCleanup: Task<Void, Never>?
 
     private let sessionExpiryObserverBox = SessionExpiryObserverBox()
+    private let legalAcceptanceRequiredObserverBox = SessionExpiryObserverBox()
+    private var isRecheckingLegalStatus = false
 
     init() {
         sessionExpiryObserverBox.install { [weak self] in
             guard let self else { return }
             Task { @MainActor in
                 await self.handleSessionExpiredSignal()
+            }
+        }
+
+        legalAcceptanceRequiredObserverBox.install(name: .moveMarkLegalAcceptanceRequired) { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                await self.recheckLegalStatus()
             }
         }
 
@@ -95,6 +106,7 @@ final class SessionManager {
 
     nonisolated deinit {
         sessionExpiryObserverBox.remove()
+        legalAcceptanceRequiredObserverBox.remove()
     }
 
     func bootstrap() async {
@@ -210,28 +222,77 @@ final class SessionManager {
     }
 
     /// The server decides whether the legal gate comes first. A server without the gate, or an unreachable one, must
-    /// not lock anyone out here: enforcement lives in the database and the API, and this only offers the step.
+    /// not lock anyone out here: enforcement lives in the database and the API, and this only offers the step. A server
+    /// that answers with an error is different: with enforcement on, the Vault would read as empty, so the renter gets
+    /// a retry instead (``LegalStatusFailure``).
     private func enter(_ phase: AuthPhase) async {
-        guard let status: LegalStatus = try? await dataAPI.rpc("get_legal_status", params: [String: String]()).execute().value,
-              status.needsAcceptance
-        else {
+        switch await fetchLegalStatus(retries: 1) {
+        case .success(let status) where status.needsAcceptance:
+            legalStatus = status
+            phaseAfterLegal = phase
+            authPhase = .needsLegalAcceptance
+        case .success, .failure(.serverWithoutGate), .failure(.offline):
             legalStatus = nil
             authPhase = phase
-            return
+        case .failure(.unavailable):
+            legalStatus = nil
+            phaseAfterLegal = phase
+            authPhase = .legalStatusUnavailable
         }
+    }
+
+    private func fetchLegalStatus(retries: Int) async -> Result<LegalStatus, LegalStatusFailure> {
+        var attempt = 0
+        while true {
+            do {
+                let status: LegalStatus = try await dataAPI.rpc("get_legal_status", params: [String: String]()).execute().value
+                return .success(status)
+            } catch {
+                let failure = LegalStatusFailure.classify(error)
+                guard failure == .unavailable, attempt < retries else { return .failure(failure) }
+                attempt += 1
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    /// "Try again" on the status-unavailable screen.
+    func retryLegalStatus() async {
+        guard authPhase == .legalStatusUnavailable else { return }
+        await enter(phaseAfterLegal)
+    }
+
+    /// On return to the foreground and on the API's `LEGAL_ACCEPTANCE_REQUIRED`: a document published (or enforcement
+    /// turned on) while the app was open shows the gate now rather than at the next cold launch. Any failure leaves
+    /// the renter where they are; the next launch decides.
+    func recheckLegalStatus() async {
+        guard !isRecheckingLegalStatus, authPhase == .signedIn || authPhase == .needsOnboarding else { return }
+        isRecheckingLegalStatus = true
+        defer { isRecheckingLegalStatus = false }
+        guard case .success(let status) = await fetchLegalStatus(retries: 0), status.needsAcceptance,
+              authPhase == .signedIn || authPhase == .needsOnboarding
+        else { return }
         legalStatus = status
-        phaseAfterLegal = phase
+        phaseAfterLegal = authPhase
         authPhase = .needsLegalAcceptance
     }
 
-    /// Records the renter's acceptance. Returns a message to show when it didn't go through.
+    /// Records the renter's acceptance, with the age confirmation when the server takes one. Returns a message to
+    /// show when it didn't go through.
     func acceptLegalDocuments() async -> String? {
-        guard let documents = legalStatus?.documents else { return "Couldn’t load the documents. Try again." }
-        let params = LegalAcceptanceParams(p_method: LegalAcceptanceMethod.last.rawValue,
-                                           p_terms_version: documents.terms.version,
-                                           p_privacy_notice_version: documents.privacyNotice.version)
+        guard let current = legalStatus, let call = LegalAcceptanceCall.make(for: current, method: LegalAcceptanceMethod.last) else {
+            return "Couldn’t load the documents. Try again."
+        }
         do {
-            let status: LegalStatus = try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+            let status: LegalStatus
+            switch call {
+            case .withoutAge(let params):
+                status = try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+            case .withAge(let params):
+                status = try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+            case .updateRequired:
+                return "Update MoveMark from the App Store to continue."
+            }
             if status.needsAcceptance {
                 // The documents changed while this screen was open: show the current ones.
                 legalStatus = status
@@ -241,10 +302,14 @@ final class SessionManager {
             authPhase = phaseAfterLegal
             return nil
         } catch {
-            if String(describing: error).contains("LEGAL_VERSION_NOT_ACTIVE"),
-               let status: LegalStatus = try? await dataAPI.rpc("get_legal_status", params: [String: String]()).execute().value {
+            let text = String(describing: error)
+            let ageChanged = text.contains("LEGAL_AGE_ATTESTATION")
+            if ageChanged || text.contains("LEGAL_VERSION_NOT_ACTIVE"),
+               case .success(let status) = await fetchLegalStatus(retries: 0) {
                 legalStatus = status
-                return "These documents were just updated. Please review them and agree again."
+                return ageChanged
+                    ? "The age requirement just changed. Please review it and confirm again."
+                    : "These documents were just updated. Please review them and agree again."
             }
             return "Couldn’t save your agreement. Check your connection and try again."
         }
