@@ -35,6 +35,7 @@ GATED = {  # table: id key in seed_rental's result
     "evidence_files": "evidence", "property_documents": "document",
 }
 METHODS = ("email", "apple", "google")
+AGE = "age_13_qc_14"  # 1055's default requirement
 
 
 def sha(text: str) -> str:
@@ -91,7 +92,7 @@ def fresh_user(owner: Any) -> str:
 
 def accept(dsn: str, user: str, active: dict[str, str], method: str = "email") -> dict[str, Any]:
     with as_user(dsn, user) as c:
-        status = one(c, "SELECT accept_legal_documents(%s, %s, %s)", (method, active["terms"], active["privacy_notice"]))[0]
+        status = one(c, "SELECT accept_legal_documents(%s, %s, %s, %s)", (method, active["terms"], active["privacy_notice"], AGE))[0]
         c.commit()
     return status
 
@@ -315,7 +316,7 @@ def test_account_deletion_removes_the_users_acceptances(dsn: str, owner: Any, ac
 
 def test_a_token_for_a_deleted_account_cannot_accept(dsn: str, active: dict[str, str]) -> None:
     with as_user(dsn, str(uuid.uuid4())) as c, pytest.raises(errors.ForeignKeyViolation):
-        c.execute("SELECT accept_legal_documents('email', %s, %s)", (active["terms"], active["privacy_notice"]))
+        c.execute("SELECT accept_legal_documents('email', %s, %s, %s)", (active["terms"], active["privacy_notice"], AGE))
 
 
 # --- accepting ---------------------------------------------------------------------------
@@ -378,7 +379,7 @@ def test_concurrent_acceptances_leave_one_row(dsn: str, owner: Any, active: dict
 @pytest.mark.parametrize("method", ["facebook", "", "EMAIL", None])
 def test_unknown_method_is_refused(dsn: str, owner: Any, active: dict[str, str], method: str | None) -> None:
     with as_user(dsn, fresh_user(owner)) as c, pytest.raises(errors.InvalidParameterValue, match="LEGAL_INVALID_METHOD"):
-        c.execute("SELECT accept_legal_documents(%s, %s, %s)", (method, active["terms"], active["privacy_notice"]))
+        c.execute("SELECT accept_legal_documents(%s, %s, %s, %s)", (method, active["terms"], active["privacy_notice"], AGE))
 
 
 @pytest.mark.parametrize("which", ["terms", "privacy_notice", "both", "null"])
@@ -387,7 +388,7 @@ def test_versions_other_than_the_active_ones_are_refused(dsn: str, owner: Any, a
     notice = "old" if which in ("privacy_notice", "both") else active["privacy_notice"]
     user = fresh_user(owner)
     with as_user(dsn, user) as c, pytest.raises(errors.InvalidParameterValue, match="LEGAL_VERSION_NOT_ACTIVE"):
-        c.execute("SELECT accept_legal_documents('email', %s, %s)", (terms, notice))
+        c.execute("SELECT accept_legal_documents('email', %s, %s, %s)", (terms, notice, AGE))
     assert one(owner, "SELECT count(*) FROM legal_acceptances WHERE user_id = %s", (user,))[0] == 0
 
 
@@ -451,7 +452,7 @@ def test_client_cannot_pass_a_time_or_a_user_to_the_accept_function(dsn: str, ow
 
 
 @pytest.mark.parametrize("fn", ["get_legal_status()", "has_current_legal_acceptance()", "legal_gate_passes()",
-                                "accept_legal_documents('email', 'a', 'b')"])
+                                "accept_legal_documents('email', 'a', 'b')", "accept_legal_documents('email', 'a', 'b', 'age_13_qc_14')"])
 def test_anonymous_calls_nothing(dsn: str, fn: str) -> None:
     with as_user(dsn, None) as c, pytest.raises(errors.InsufficientPrivilege):
         c.execute(f"SELECT {fn}")
@@ -465,6 +466,7 @@ FUNCTIONS = {
     "public.legal_gate_passes()": {"authenticated"},
     "public.get_legal_status()": {"authenticated"},
     "public.accept_legal_documents(text, text, text)": {"authenticated"},
+    "public.accept_legal_documents(text, text, text, text)": {"authenticated"},
     "public.publish_legal_document(text, text, text, text, boolean)": set(),
 }
 
@@ -501,7 +503,7 @@ def test_new_version_requires_acceptance_again_without_touching_data(dsn: str, o
         s = one(c, "SELECT get_legal_status()")[0]
         assert (s["blocked"], s["accepted"]) == (True, None)
         with pytest.raises(errors.InvalidParameterValue, match="LEGAL_VERSION_NOT_ACTIVE"):  # the old screen
-            c.execute("SELECT accept_legal_documents('email', %s, %s)", (active["terms"], active["privacy_notice"] + "-stale"))
+            c.execute("SELECT accept_legal_documents('email', %s, %s, %s)", (active["terms"], active["privacy_notice"] + "-stale", AGE))
     for table, key in GATED.items():
         assert owner_count(owner, table, legacy[key]) == 1
 
@@ -567,18 +569,22 @@ def test_rollback_of_each_migration_restores_the_previous_schema_exactly() -> No
         through_1030 = migrate.fingerprint(mid)
     with migrate.scratch_db(migrations_through("1040")) as mid:
         through_1040 = migrate.fingerprint(mid)
-    with migrate.scratch_db(migrations_through("1050")) as conn:
-        through_1050 = migrate.fingerprint(conn)
-        assert through_1050 != through_1040 != through_1030 != through_1020
+    with migrate.scratch_db(migrations_through("1050")) as mid:
+        through_1050 = migrate.fingerprint(mid)
+    with migrate.scratch_db(migrations_through("1055")) as conn:
+        through_1055 = migrate.fingerprint(conn)
+        assert through_1055 != through_1050 != through_1040 != through_1030 != through_1020
+        conn.execute((down / "1055_legal_age_attestation.down.sql").read_text())
+        assert migrate.diff(through_1050, migrate.fingerprint(conn), "1050", "rolled back") == []
         conn.execute((down / "1050_legal_gate_rls_wave2.down.sql").read_text())
         assert migrate.diff(through_1040, migrate.fingerprint(conn), "1040", "rolled back") == []
         conn.execute((down / "1040_legal_gate_rls.down.sql").read_text())
         assert migrate.diff(through_1030, migrate.fingerprint(conn), "1030", "rolled back") == []
         conn.execute((down / "1030_legal_acceptance.down.sql").read_text())
         assert migrate.diff(through_1020, migrate.fingerprint(conn), "1020", "rolled back") == []
-        for version in ("1030", "1040", "1050"):  # and forward again
+        for version in ("1030", "1040", "1050", "1055"):  # and forward again
             conn.execute(next((NEON / "migrations").glob(f"{version}_*.sql")).read_text())
-        assert migrate.diff(through_1050, migrate.fingerprint(conn), "1050", "reapplied") == []
+        assert migrate.diff(through_1055, migrate.fingerprint(conn), "1055", "reapplied") == []
 
 
 def test_rolling_back_enforcement_keeps_acceptances_and_reopens_data(dsn: str) -> None:
@@ -603,3 +609,102 @@ def test_rolling_back_enforcement_keeps_acceptances_and_reopens_data(dsn: str) -
         conn.execute((down / "1040_legal_gate_rls.down.sql").read_text())
         assert visible() == 1  # enforcement went with the policies; the switch and the records stayed
         assert conn.execute("SELECT enforced FROM legal_gate_settings").fetchone()[0] is True
+
+
+# --- 1055: age attestation ---------------------------------------------------------------
+
+def accept_v3(dsn: str, user: str, active: dict[str, str]) -> dict[str, Any]:
+    """Build 20261107.1's call: three arguments, no attestation."""
+    with as_user(dsn, user) as c:
+        status = one(c, "SELECT accept_legal_documents('email', %s, %s)", (active["terms"], active["privacy_notice"]))[0]
+        c.commit()
+    return status
+
+
+@pytest.fixture
+def soft(owner: Any) -> Iterator[dict[str, str]]:
+    """Documents published, enforcement off: the soft phase."""
+    tag = uuid.uuid4().hex[:8]
+    current = publish(owner, terms=f"t-{tag}", notice=f"p-{tag}")
+    set_enforced(owner, False)
+    yield current
+
+
+def test_old_client_still_accepts_while_enforcement_is_off(dsn: str, owner: Any, soft: dict[str, str]) -> None:
+    user = fresh_user(owner)
+    status = accept_v3(dsn, user, soft)
+    assert (status["acceptance_required"], status["blocked"], status["age_requirement"]) == (False, False, AGE)
+    assert status["accepted"]["age_attestation"] is None
+    assert one(owner, "SELECT age_attestation, age_attested_at FROM legal_acceptances WHERE user_id = %s", (user,)) == (None, None)
+
+
+def test_old_client_acceptance_does_not_count_once_enforced_and_it_cannot_accept_again(dsn: str, owner: Any, legacy: dict[str, Any], soft: dict[str, str]) -> None:
+    accept_v3(dsn, legacy["user"], soft)
+    set_enforced(owner, True)
+    try:
+        with as_user(dsn, legacy["user"]) as c:
+            assert rows(c, "SELECT id FROM properties") == []  # RLS: missing attestation is not accepted
+            s = one(c, "SELECT get_legal_status()")[0]
+            assert (s["acceptance_required"], s["blocked"]) == (True, True)
+            with pytest.raises(errors.InvalidParameterValue, match="LEGAL_AGE_ATTESTATION_REQUIRED"):
+                c.execute("SELECT accept_legal_documents('email', %s, %s)", (soft["terms"], soft["privacy_notice"]))
+        api_open = one(owner, "SELECT legal_gate_open_for_user(%s)", (legacy["user"],))[0]
+        assert api_open is False  # the API dependency agrees
+        # The new client fills in the attestation on the same row; the first acceptance keeps its time and method.
+        before = one(owner, "SELECT id, accepted_at, acceptance_method FROM legal_acceptances WHERE user_id = %s", (legacy["user"],))
+        status = accept(dsn, legacy["user"], soft, method="apple")
+        assert (status["acceptance_required"], status["blocked"], status["accepted"]["age_attestation"]) == (False, False, AGE)
+        after = one(owner, "SELECT id, accepted_at, acceptance_method FROM legal_acceptances WHERE user_id = %s", (legacy["user"],))
+        assert after == before
+        with as_user(dsn, legacy["user"]) as c:
+            assert [str(r[0]) for r in rows(c, "SELECT id FROM properties")] == [legacy["property"]]
+    finally:
+        set_enforced(owner, False)
+
+
+@pytest.mark.parametrize("attestation", [None, "", "under_13", "age_18", "AGE_13_QC_14"])
+def test_ineligible_or_wrong_attestation_is_refused_and_records_nothing(dsn: str, owner: Any, soft: dict[str, str], attestation: str | None) -> None:
+    user = fresh_user(owner)
+    with as_user(dsn, user) as c, pytest.raises(errors.InvalidParameterValue, match="LEGAL_AGE_ATTESTATION_INVALID"):
+        c.execute("SELECT accept_legal_documents('email', %s, %s, %s)", (soft["terms"], soft["privacy_notice"], attestation))
+    assert one(owner, "SELECT count(*) FROM legal_acceptances WHERE user_id = %s", (user,))[0] == 0
+
+
+def test_new_client_records_the_attestation_and_its_time(dsn: str, owner: Any, soft: dict[str, str]) -> None:
+    user = fresh_user(owner)
+    status = accept(dsn, user, soft)
+    assert status["accepted"]["age_attestation"] == AGE
+    att, at = one(owner, "SELECT age_attestation, age_attested_at FROM legal_acceptances WHERE user_id = %s", (user,))
+    assert att == AGE and at is not None
+    accept(dsn, user, soft)  # repeating is a no-op
+    assert one(owner, "SELECT age_attested_at FROM legal_acceptances WHERE user_id = %s", (user,))[0] == at
+
+
+def test_switching_to_the_18_plus_fallback_requires_a_fresh_attestation_once_enforced(dsn: str, owner: Any, legacy: dict[str, Any], soft: dict[str, str]) -> None:
+    accept(dsn, legacy["user"], soft)
+    owner.execute("UPDATE legal_gate_settings SET age_requirement = 'age_18'")
+    set_enforced(owner, True)
+    try:
+        assert status_of(dsn, legacy["user"])["blocked"] is True
+        with as_user(dsn, legacy["user"]) as c, pytest.raises(errors.InvalidParameterValue, match="LEGAL_AGE_ATTESTATION_INVALID"):
+            c.execute("SELECT accept_legal_documents('email', %s, %s, %s)", (soft["terms"], soft["privacy_notice"], AGE))
+        with as_user(dsn, legacy["user"]) as c:
+            s = one(c, "SELECT accept_legal_documents('email', %s, %s, 'age_18')", (soft["terms"], soft["privacy_notice"]))[0]
+            c.commit()
+        assert (s["blocked"], s["age_requirement"], s["accepted"]["age_attestation"]) == (False, "age_18", "age_18")
+    finally:
+        set_enforced(owner, False)
+        owner.execute("UPDATE legal_gate_settings SET age_requirement = 'age_13_qc_14'")
+
+
+def test_settings_and_attestations_only_take_known_codes(owner: Any) -> None:
+    with pytest.raises(errors.CheckViolation):
+        owner.execute("UPDATE legal_gate_settings SET age_requirement = 'age_16'")
+
+
+def test_three_and_four_key_data_api_calls_resolve_to_distinct_overloads(owner: Any) -> None:
+    """PostgREST picks the overload by argument names; neither may have defaults, or a 3-key call is ambiguous."""
+    found = rows(owner, """SELECT pg_get_function_identity_arguments(p.oid), p.pronargdefaults FROM pg_proc p
+                           WHERE p.proname = 'accept_legal_documents' ORDER BY p.pronargs""")
+    assert found == [("p_method text, p_terms_version text, p_privacy_notice_version text", 0),
+                     ("p_method text, p_terms_version text, p_privacy_notice_version text, p_age_attestation text", 0)]
