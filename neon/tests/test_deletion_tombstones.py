@@ -194,14 +194,14 @@ def test_the_runtime_role_can_still_delete_an_account_as_it_does_today(dsn: str,
 
 
 def test_rollback_body_returns_the_earlier_functions_exactly(dsn: str) -> None:
-    """Applied to a scratch copy: fingerprint equals a build through 1050."""
+    """Applied to a scratch copy: fingerprint equals a build through 1055 (the migration before 1060)."""
     import importlib.util
     spec = importlib.util.spec_from_file_location("migrate_for_tombstones", NEON / "migrate.py")
     migrate = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migrate)
     files = sorted((NEON / "migrations").glob("*.sql"))
-    with migrate.scratch_db([p for p in files if p.name[:4] <= "1050"]) as before:
+    with migrate.scratch_db([p for p in files if p.name[:4] <= "1055"]) as before:
         reference = migrate.fingerprint(before)
     with migrate.scratch_db(files) as after:
         after.execute((NEON / "rollback" / "1060_deletion_tombstones.down.sql").read_text())
-        assert migrate.diff(reference, migrate.fingerprint(after), "through 1050", "1060 rolled back") == []
+        assert migrate.diff(reference, migrate.fingerprint(after), "through 1055", "1060 rolled back") == []
