@@ -2,12 +2,14 @@
 -- 1055 — Legal gate: age-eligibility attestation (2026-11-08)
 -- =============================================================================
 -- Owner decision D1: a mandatory age-eligibility confirmation inside the acceptance screen, no date of birth.
--- Minimum 13, 14 in Quebec. Numbered below 1060 on purpose: production gets 1030–1055 from a checkout without
+-- Owner decision 2026-11-08: the initial release is 18+, Quebec included. That is MoveMark's product eligibility
+-- policy, not a statement that Canadian law requires 18. The confirmation is self-declared, not verified. Numbered below 1060 on purpose: production gets 1030–1055 from a checkout without
 -- 1060 (the runner refuses a pending migration numbered below the newest applied one).
 --
 --   legal_gate_settings.age_requirement   The statement the renter must confirm, as a code the apps map to
---                                         their own copy: 'age_13_qc_14' ("13 or older, 14 or older in
---                                         Quebec") or 'age_18' (the 18+ fallback, owner's call). Server-only.
+--                                         their own copy: 'age_18' ("18 or older", the launch policy, and the
+--                                         default) or 'age_13_qc_14' ("13 or older, 14 or older in Quebec",
+--                                         kept allowed for a possible later change). Server-only.
 --   legal_acceptances.age_attestation     The code the renter confirmed, and when. NULL for an acceptance made
 --                                         through the 3-argument function (build 20261107.1 and older).
 --
@@ -28,12 +30,12 @@
 --
 -- Detection is by RPC signature, inside the database: the attestation is a parameter of the function the
 -- token's user calls; no header or client version is trusted. The attestation is self-declared; that is the
--- whole of the age check (Neon Auth creates accounts before MoveMark sees them; see
+-- whole of the age check; it is not age verification (Neon Auth creates accounts before MoveMark sees them; see
 -- docs/compliance/minors-and-age.md).
 -- =============================================================================
 
 ALTER TABLE public.legal_gate_settings
-  ADD COLUMN age_requirement text NOT NULL DEFAULT 'age_13_qc_14'
+  ADD COLUMN age_requirement text NOT NULL DEFAULT 'age_18'
     CHECK (age_requirement IN ('age_13_qc_14', 'age_18'));
 
 ALTER TABLE public.legal_acceptances
