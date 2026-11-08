@@ -68,7 +68,10 @@ nonisolated final class MMPhotoPrivacyPolicy: @unchecked Sendable {
     }
 }
 
-extension MMEvidenceImport {
+/// `nonisolated`: the target's default isolation is MainActor, and an extension doesn't inherit the enum's
+/// `nonisolated`. Without it these helpers ran on the main actor even when marked `@concurrent` (Sentry App Hang audit;
+/// caught by the off-main check below during the RC3 test run).
+nonisolated extension MMEvidenceImport {
     // MARK: Teen stripping
 
     /// The file with only capture date (+ offset) and orientation left. JPEG and PNG keep their format and pixels
@@ -83,7 +86,10 @@ extension MMEvidenceImport {
 
         let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
         let exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any] ?? [:]
-        if isJPEGOrPNG {
+        let orientation = (props[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+        if type == UTType.jpeg.identifier {
+            // Lossless: the compressed image data is copied; only the metadata we pass is written. Orientation goes in as a
+            // metadata tag (ImageIO refuses kCGImageDestinationOrientation together with kCGImageDestinationMetadata).
             let out = NSMutableData()
             if let destination = CGImageDestinationCreateWithData(out, type as CFString, 1, nil) {
                 let metadata = CGImageMetadataCreateMutable()
@@ -92,14 +98,31 @@ extension MMEvidenceImport {
                         CGImageMetadataSetValueMatchingImageProperty(metadata, kCGImagePropertyExifDictionary, key, value as CFTypeRef)
                     }
                 }
+                CGImageMetadataSetValueMatchingImageProperty(metadata, kCGImagePropertyTIFFDictionary, kCGImagePropertyTIFFOrientation,
+                                                             orientation as CFNumber)
                 let options: [CFString: Any] = [
                     kCGImageDestinationMetadata: metadata,
                     kCGImageDestinationMergeMetadata: false,
                     kCGImageMetadataShouldExcludeGPS: true,
-                    kCGImageDestinationOrientation: (props[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value ?? 1,
                 ]
                 if CGImageDestinationCopyImageSource(destination, source, options as CFDictionary, nil),
                    carriesNoIdentifyingMetadata(out as Data, allowCaptureDate: true) {
+                    return out as Data
+                }
+            }
+        } else if type == UTType.png.identifier {
+            // PNG compression is lossless, so re-encoding keeps every pixel; a metadata copy would keep eXIf (GPS) here.
+            var kept: [CFString: Any] = [:]
+            for key in [kCGImagePropertyExifDateTimeOriginal, kCGImagePropertyExifOffsetTimeOriginal] {
+                if let value = exif[key] { kept[key] = value }
+            }
+            let out = NSMutableData()
+            if let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+               let destination = CGImageDestinationCreateWithData(out, type as CFString, 1, nil) {
+                var props: [CFString: Any] = [kCGImagePropertyOrientation: orientation]
+                if !kept.isEmpty { props[kCGImagePropertyExifDictionary] = kept }
+                CGImageDestinationAddImage(destination, image, props as CFDictionary)
+                if CGImageDestinationFinalize(destination), carriesNoIdentifyingMetadata(out as Data, allowCaptureDate: true) {
                     return out as Data
                 }
             }
@@ -176,12 +199,11 @@ extension MMEvidenceImport {
         return try VaultDocumentPreviewFile.contents(for: data)
     }
 
-    /// Debug builds stop here if image work ever lands on the main thread again (Sentry App Hang audit). The unit
-    /// tests call every helper from the main actor, so a regression fails the suite instead of shipping.
+    /// Image work found on the main thread (it shouldn't happen: these helpers are `nonisolated @concurrent`). Counted
+    /// and logged, never trapped, in every build; the unit tests assert the count stays at zero.
     static func assertOffMain() {
-        #if DEBUG
-        dispatchPrecondition(condition: .notOnQueue(.main))
-        #endif
+        guard Thread.isMainThread else { return }
+        MMOffMainCheck.shared.recordViolation()
     }
 
     /// Full-size JPEG, orientation applied, capture date kept, nothing else.
@@ -208,5 +230,25 @@ nonisolated enum VaultDocumentPreviewFile {
         let bytes = [UInt8](data.prefix(8))
         if bytes.count >= 3, bytes[0] == 0xFF, bytes[1] == 0xD8, bytes[2] == 0xFF { return true }
         return bytes == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+    }
+}
+
+/// Counts image work that landed on the main thread. Non-fatal by design (an earlier `dispatchPrecondition` crashed test
+/// runs); the tests read `violations`.
+nonisolated final class MMOffMainCheck: @unchecked Sendable {
+    static let shared = MMOffMainCheck()
+    private let lock = NSLock()
+    private var count = 0
+
+    var violations: Int {
+        lock.lock(); defer { lock.unlock() }
+        return count
+    }
+
+    func recordViolation() {
+        lock.lock(); count += 1; lock.unlock()
+        #if DEBUG
+        print("[evidence] image work ran on the main thread")
+        #endif
     }
 }

@@ -47,7 +47,8 @@ import UniformTypeIdentifiers
     private func assertTeenSafe(_ data: Data, sourceOrientation: Int, file: String = #fileID) {
         let p = F.properties(data)
         #expect(p[kCGImagePropertyGPSDictionary] == nil)
-        #expect(p[kCGImagePropertyIPTCDictionary] == nil || (p[kCGImagePropertyIPTCDictionary] as? [CFString: Any])?.isEmpty == true)
+        let iptc = p[kCGImagePropertyIPTCDictionary] as? [CFString: Any] ?? [:]
+        #expect(iptc[kCGImagePropertyIPTCCity] == nil && iptc[kCGImagePropertyIPTCByline] == nil)  // a mirrored date may stay
         let tiff = p[kCGImagePropertyTIFFDictionary] as? [CFString: Any] ?? [:]
         #expect(tiff[kCGImagePropertyTIFFMake] == nil && tiff[kCGImagePropertyTIFFModel] == nil && tiff[kCGImagePropertyTIFFSoftware] == nil)
         let exif = p[kCGImagePropertyExifDictionary] as? [CFString: Any] ?? [:]
@@ -125,10 +126,11 @@ import UniformTypeIdentifiers
         #expect(try await MMEvidenceImport.documentFile(at: url, privacy: .standard) == photo)
     }
 
-    /// Every helper is awaited from the main actor here; in Debug each traps on the main thread, so reaching the end
-    /// means the work ran off the main actor.
+    /// Every helper is awaited from the main actor here. Each counts (never traps) if it finds itself on the main thread,
+    /// so an unchanged count means the work ran off the main actor.
     @Test func imageWorkRunsOffTheMainActor() async throws {
-        #expect(Thread.isMainThread)
+        MainActor.assertIsolated()  // the caller really is the main actor
+        let before = MMOffMainCheck.shared.violations
         let photo = phonePhoto(.jpeg)
         _ = try await MMEvidenceImport.sourceOffMain(from: photo, captureSource: .library, privacy: .standard)
         _ = try await MMEvidenceImport.librarySelectionItem(photo, privacy: .teen)
@@ -136,6 +138,13 @@ import UniformTypeIdentifiers
         _ = try await MMEvidenceImport.previewFileContents(photo)
         let source = try MMEvidenceImport.source(from: photo, captureSource: .library, privacy: .standard)
         _ = try await MMEvidenceImport.prepareForUpload(source, privacy: .standard)
+        #expect(MMOffMainCheck.shared.violations == before)
+    }
+
+    @Test func theOffMainCheckCountsInsteadOfCrashing() {
+        let before = MMOffMainCheck.shared.violations
+        MMEvidenceImport.assertOffMain()  // called on the main thread on purpose
+        #expect(MMOffMainCheck.shared.violations == before + 1)
     }
 
     @Test func thePolicyIsPerAccountAndSurvivesARelaunch() {

@@ -180,12 +180,15 @@ nonisolated enum MMEvidenceImport {
 
         let lossless = NSMutableData()
         if let destination = CGImageDestinationCreateWithData(lossless, type, 1, nil) {
+            // Orientation as a metadata tag: ImageIO refuses kCGImageDestinationOrientation together with
+            // kCGImageDestinationMetadata, which sent every copy down the re-encode path below.
+            let metadata = CGImageMetadataCreateMutable()
+            CGImageMetadataSetValueMatchingImageProperty(metadata, kCGImagePropertyTIFFDictionary, kCGImagePropertyTIFFOrientation,
+                                                         NSNumber(value: orientation))
             let options: [CFString: Any] = [
-                kCGImageDestinationMetadata: CGImageMetadataCreateMutable(),
+                kCGImageDestinationMetadata: metadata,
                 kCGImageDestinationMergeMetadata: false,
                 kCGImageMetadataShouldExcludeGPS: true,
-                kCGImageMetadataShouldExcludeXMP: true,
-                kCGImageDestinationOrientation: orientation,
             ]
             if CGImageDestinationCopyImageSource(destination, source, options as CFDictionary, nil),
                carriesNoIdentifyingMetadata(lossless as Data) {
@@ -208,8 +211,12 @@ nonisolated enum MMEvidenceImport {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
         else { return false }
-        if props[kCGImagePropertyGPSDictionary] != nil || props[kCGImagePropertyIPTCDictionary] != nil
-            || props[kCGImagePropertyMakerAppleDictionary] != nil { return false }
+        if props[kCGImagePropertyGPSDictionary] != nil || props[kCGImagePropertyMakerAppleDictionary] != nil { return false }
+        // IPTC: ImageIO mirrors the capture date into it; anything else (city, byline, location) identifies.
+        let iptc = props[kCGImagePropertyIPTCDictionary] as? [CFString: Any] ?? [:]
+        let dateOnly = Set([kCGImagePropertyIPTCDateCreated, kCGImagePropertyIPTCTimeCreated,
+                            kCGImagePropertyIPTCDigitalCreationDate, kCGImagePropertyIPTCDigitalCreationTime].map { $0 as String })
+        if !iptc.keys.allSatisfy({ allowCaptureDate && dateOnly.contains($0 as String) }) { return false }
         let tiff = props[kCGImagePropertyTIFFDictionary] as? [CFString: Any] ?? [:]
         for key in [kCGImagePropertyTIFFMake, kCGImagePropertyTIFFModel, kCGImagePropertyTIFFSoftware,
                     kCGImagePropertyTIFFHostComputer, kCGImagePropertyTIFFArtist, kCGImagePropertyTIFFDateTime]
