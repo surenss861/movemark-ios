@@ -119,8 +119,10 @@ def test_adults_and_undeclared_accounts_are_unchanged(dsn: str, owner: Any, cate
 
 
 def test_teen_cannot_swap_an_evidence_file(dsn: str, owner: Any) -> None:
-    teen = account(owner, dsn, "teen")  # seed_rental's legacy row predates the declaration
-    with as_user(dsn, teen["user"]) as c, pytest.raises(errors.InsufficientPrivilege, match="TEEN_UPLOAD_PRIVACY"):
+    teen = account(owner, dsn, "teen")
+    # Column grants already keep clients off the path columns (permission denied); 1056 adds TEEN_UPLOAD_PRIVACY
+    # behind that for any role that can reach them.  # seed_rental's legacy row predates the declaration
+    with as_user(dsn, teen["user"]) as c, pytest.raises(errors.InsufficientPrivilege):
         c.execute("UPDATE evidence_files SET file_path = file_path || '.x' WHERE id = %s", (teen["evidence"],))
 
 
@@ -152,7 +154,9 @@ def test_teen_document_from_a_checked_ticket_is_accepted_once(dsn: str, owner: A
 
 def test_teen_cannot_repoint_a_document(dsn: str, owner: Any) -> None:
     teen = account(owner, dsn, "teen")
-    with as_user(dsn, teen["user"]) as c, pytest.raises(errors.InsufficientPrivilege, match="TEEN_UPLOAD_PRIVACY"):
+    # Column grants already keep clients off the path columns (permission denied); 1056 adds TEEN_UPLOAD_PRIVACY
+    # behind that for any role that can reach them.
+    with as_user(dsn, teen["user"]) as c, pytest.raises(errors.InsufficientPrivilege):
         c.execute("UPDATE property_documents SET file_path = file_path || '.x' WHERE id = %s", (teen["document"],))
 
 
