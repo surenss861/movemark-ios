@@ -35,7 +35,7 @@ GATED = {  # table: id key in seed_rental's result
     "evidence_files": "evidence", "property_documents": "document",
 }
 METHODS = ("email", "apple", "google")
-AGE = "age_13_qc_14"  # 1055's default requirement
+AGE = "age_18"  # 1055's default requirement: the 18+ launch policy
 
 
 def sha(text: str) -> str:
@@ -452,7 +452,7 @@ def test_client_cannot_pass_a_time_or_a_user_to_the_accept_function(dsn: str, ow
 
 
 @pytest.mark.parametrize("fn", ["get_legal_status()", "has_current_legal_acceptance()", "legal_gate_passes()",
-                                "accept_legal_documents('email', 'a', 'b')", "accept_legal_documents('email', 'a', 'b', 'age_13_qc_14')"])
+                                "accept_legal_documents('email', 'a', 'b')", "accept_legal_documents('email', 'a', 'b', 'age_18')"])
 def test_anonymous_calls_nothing(dsn: str, fn: str) -> None:
     with as_user(dsn, None) as c, pytest.raises(errors.InsufficientPrivilege):
         c.execute(f"SELECT {fn}")
@@ -662,7 +662,7 @@ def test_old_client_acceptance_does_not_count_once_enforced_and_it_cannot_accept
         set_enforced(owner, False)
 
 
-@pytest.mark.parametrize("attestation", [None, "", "under_13", "age_18", "AGE_13_QC_14"])
+@pytest.mark.parametrize("attestation", [None, "", "under_18", "age_13_qc_14", "AGE_18"])
 def test_ineligible_or_wrong_attestation_is_refused_and_records_nothing(dsn: str, owner: Any, soft: dict[str, str], attestation: str | None) -> None:
     user = fresh_user(owner)
     with as_user(dsn, user) as c, pytest.raises(errors.InvalidParameterValue, match="LEGAL_AGE_ATTESTATION_INVALID"):
@@ -680,21 +680,27 @@ def test_new_client_records_the_attestation_and_its_time(dsn: str, owner: Any, s
     assert one(owner, "SELECT age_attested_at FROM legal_acceptances WHERE user_id = %s", (user,))[0] == at
 
 
-def test_switching_to_the_18_plus_fallback_requires_a_fresh_attestation_once_enforced(dsn: str, owner: Any, legacy: dict[str, Any], soft: dict[str, str]) -> None:
+def test_production_starts_at_18_plus() -> None:
+    with migrate.scratch_db(migrations_through("1055")) as conn:
+        assert conn.execute("SELECT age_requirement FROM legal_gate_settings").fetchone()[0] == "age_18"
+
+
+def test_changing_the_requirement_needs_a_fresh_attestation_once_enforced(dsn: str, owner: Any, legacy: dict[str, Any], soft: dict[str, str]) -> None:
+    """A later move to 13+ (14+ in Quebec) is a settings change; an 18+ attestation then no longer matches."""
     accept(dsn, legacy["user"], soft)
-    owner.execute("UPDATE legal_gate_settings SET age_requirement = 'age_18'")
+    owner.execute("UPDATE legal_gate_settings SET age_requirement = 'age_13_qc_14'")
     set_enforced(owner, True)
     try:
         assert status_of(dsn, legacy["user"])["blocked"] is True
         with as_user(dsn, legacy["user"]) as c, pytest.raises(errors.InvalidParameterValue, match="LEGAL_AGE_ATTESTATION_INVALID"):
             c.execute("SELECT accept_legal_documents('email', %s, %s, %s)", (soft["terms"], soft["privacy_notice"], AGE))
         with as_user(dsn, legacy["user"]) as c:
-            s = one(c, "SELECT accept_legal_documents('email', %s, %s, 'age_18')", (soft["terms"], soft["privacy_notice"]))[0]
+            s = one(c, "SELECT accept_legal_documents('email', %s, %s, 'age_13_qc_14')", (soft["terms"], soft["privacy_notice"]))[0]
             c.commit()
-        assert (s["blocked"], s["age_requirement"], s["accepted"]["age_attestation"]) == (False, "age_18", "age_18")
+        assert (s["blocked"], s["age_requirement"], s["accepted"]["age_attestation"]) == (False, "age_13_qc_14", "age_13_qc_14")
     finally:
         set_enforced(owner, False)
-        owner.execute("UPDATE legal_gate_settings SET age_requirement = 'age_13_qc_14'")
+        owner.execute("UPDATE legal_gate_settings SET age_requirement = 'age_18'")
 
 
 def test_settings_and_attestations_only_take_known_codes(owner: Any) -> None:
