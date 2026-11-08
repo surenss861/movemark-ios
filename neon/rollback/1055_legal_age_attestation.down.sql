@@ -1,8 +1,10 @@
 -- Rollback of 1055 (age attestation). Ships as the next numbered migration, never pasted (see README).
--- Restores the 1030 definitions; acceptances keep their rows, the attestation columns go. Recorded attestations
--- are lost, so export them first if a lawyer wants them kept.
+-- Restores the 1030 definitions; acceptances keep their rows, the attestation columns go. Recorded attestations,
+-- age ranges and account age categories are lost, so export them first if a lawyer wants them kept.
 
+DROP FUNCTION public.accept_legal_documents(text, text, text, text, text);
 DROP FUNCTION public.accept_legal_documents(text, text, text, text);
+DROP TABLE public.account_age_categories;
 
 CREATE OR REPLACE FUNCTION public.legal_user_has_current_acceptance(target_user_id uuid)
 RETURNS boolean
@@ -91,7 +93,9 @@ END;
 $$;
 
 ALTER TABLE public.legal_acceptances
+  DROP CONSTRAINT legal_acceptances_band_with_bands,
   DROP CONSTRAINT legal_acceptances_age_attested_together,
+  DROP COLUMN age_band,
   DROP COLUMN age_attestation,
   DROP COLUMN age_attested_at;
 ALTER TABLE public.legal_gate_settings DROP COLUMN age_requirement;
