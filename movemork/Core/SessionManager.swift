@@ -300,6 +300,8 @@ final class SessionManager {
                 status = try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
             case .withAgeBand(let params):
                 status = try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+            case .withResidence(let params):
+                status = try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
             case .updateRequired:
                 return "Update MoveMark from the App Store to continue."
             }
@@ -314,7 +316,9 @@ final class SessionManager {
             return nil
         } catch {
             let text = String(describing: error)
-            let ageChanged = text.contains("LEGAL_AGE_ATTESTATION")
+            // The app never sends a Quebec "Yes"; if the server says so anyway, show the same answer as the screen.
+            if text.contains("LEGAL_REGION_NOT_AVAILABLE") { return LegalUnavailable.quebec.message }
+            let ageChanged = text.contains("LEGAL_AGE_ATTESTATION") || text.contains("LEGAL_REGION_REQUIRED")
             if ageChanged || text.contains("LEGAL_VERSION_NOT_ACTIVE"),
                case .success(let status) = await fetchLegalStatus(retries: 0) {
                 legalStatus = status

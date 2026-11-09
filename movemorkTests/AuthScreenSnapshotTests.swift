@@ -150,10 +150,18 @@ final class AuthScreenSnapshotTests: XCTestCase {
                      inNavigation: false)
     }
 
-    /// The age-range question (migration 1055's 'bands_v1'), nothing selected.
+    /// The Quebec question and the age-range question (migration 1057's 'bands_v2'), nothing selected.
     func testLegalGateAgeRange() {
         let screen = LegalAcceptanceScreen(termsURL: URL(string: "https://movemark.ca/terms"),
-                                           privacyURL: URL(string: "https://movemark.ca/privacy"), age: .ageRange)
+                                           privacyURL: URL(string: "https://movemark.ca/privacy"), age: .ageRangeQuebec)
+        assertScreen(screen, devices: ScreenSnapshot.allDevices, inNavigation: false)
+    }
+
+    /// "Yes" to "Do you live in Quebec?": not available yet, no age question, deletion as the main action.
+    func testLegalGateQuebecUnavailable() {
+        let screen = LegalAcceptanceScreen(termsURL: URL(string: "https://movemark.ca/terms"),
+                                           privacyURL: URL(string: "https://movemark.ca/privacy"), age: .ageRangeQuebec,
+                                           livesInQuebec: true)
         assertScreen(screen, devices: ScreenSnapshot.allDevices, inNavigation: false)
     }
 

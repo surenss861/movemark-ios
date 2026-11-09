@@ -24,10 +24,24 @@ struct LegalAcceptanceScreen: View {
 
     @State private var agreed = false
     @State private var ageConfirmed = false
-    @State private var ageChoice: LegalAgeChoice?
     @State private var livesInQuebec: Bool?
+    @State private var ageChoice: LegalAgeChoice?
     @State private var isSaving = false
     @State private var errorMessage: String?
+
+    /// `livesInQuebec` and `ageChoice` start unanswered; they're parameters only to render a state in snapshots.
+    init(termsURL: URL?, privacyURL: URL?, age: LegalAgeRequirement? = .thirteenQuebecFourteen,
+         onAccept: @escaping (LegalAgeBand?) async -> String? = { _ in nil }, onSignOut: @escaping () -> Void = {},
+         onDeleteAccount: @escaping () -> Void = {}, livesInQuebec: Bool? = nil, ageChoice: LegalAgeChoice? = nil) {
+        self.termsURL = termsURL
+        self.privacyURL = privacyURL
+        self.age = age
+        self.onAccept = onAccept
+        self.onSignOut = onSignOut
+        self.onDeleteAccount = onDeleteAccount
+        _livesInQuebec = State(initialValue: livesInQuebec)
+        _ageChoice = State(initialValue: ageChoice)
+    }
 
     var body: some View {
         ScrollView {
@@ -136,7 +150,7 @@ struct LegalAcceptanceScreen: View {
     /// with sign-out and deletion below; nothing suggests changing the answer.
     @ViewBuilder
     private var ageConfirmation: some View {
-        if age == .ageRange {
+        if age?.isRangeQuestion == true {
             ageRangeQuestion
         } else if let age {
             VStack(alignment: .leading, spacing: 8) {
@@ -183,50 +197,66 @@ struct LegalAcceptanceScreen: View {
     /// The range to record, when the answer is an eligible one.
     var chosenBand: LegalAgeBand? { ageChoice?.band(livesInQuebec: livesInQuebec) }
 
-    var canContinue: Bool {
-        guard agreed, !isSaving, let age else { return false }
-        return age == .ageRange ? chosenBand != nil : ageConfirmed
+    /// Set when the answers stop here (Quebec "Yes", or under 13): the primary action becomes account deletion.
+    var unavailable: LegalUnavailable? {
+        guard age?.isRangeQuestion == true else { return nil }
+        return LegalUnavailable.reason(choice: ageChoice, livesInQuebec: livesInQuebec)
     }
 
-    /// One question, four plain answers, nothing pre-selected, no date of birth. Under 13, and 13 in Quebec, get a
-    /// clear "not available yet" with sign-out and deletion below; nothing suggests changing the answer.
+    var canContinue: Bool {
+        guard agreed, !isSaving, let age else { return false }
+        return age.isRangeQuestion ? chosenBand != nil : ageConfirmed
+    }
+
+    /// Two plain questions, nothing pre-selected, no date of birth, no location beyond a yes or no. "Do you live in
+    /// Quebec?" comes first and is asked of everyone: "Yes" stops here at any age (no French versions yet), and the
+    /// age question isn't asked. Under 13 gets a clear "not available yet". Either way, deletion becomes the main
+    /// action and sign-out stays; nothing suggests changing the answer.
     private var ageRangeQuestion: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(LegalAgeRequirement.ageRange.confirmation)
+            Text("Do you live in Quebec?")
                 .mmFont(15, .semibold)
                 .foregroundStyle(MMInk.text)
-            ForEach(LegalAgeChoice.allCases, id: \.self) { choice in
-                radio(choice.label, isOn: ageChoice == choice, identifier: "legal.age.\(choice.rawValue)") {
-                    ageChoice = choice
-                    if choice != .thirteen { livesInQuebec = nil }
-                }
+            HStack(spacing: 20) {
+                radio("Yes", isOn: livesInQuebec == true, identifier: "legal.quebec.yes") { livesInQuebec = true }
+                radio("No", isOn: livesInQuebec == false, identifier: "legal.quebec.no") { livesInQuebec = false }
             }
-            if ageChoice == .thirteen {
-                Text("Do you live in Quebec?")
-                    .mmFont(15, .semibold)
-                    .foregroundStyle(MMInk.text)
-                    .padding(.top, 4)
-                HStack(spacing: 20) {
-                    radio("Yes", isOn: livesInQuebec == true, identifier: "legal.age.quebec.yes") { livesInQuebec = true }
-                    radio("No", isOn: livesInQuebec == false, identifier: "legal.age.quebec.no") { livesInQuebec = false }
-                }
-            }
-            if let ageChoice, ageChoice.isUnavailable(livesInQuebec: livesInQuebec) {
-                MMEvidenceNotice(message: "MoveMark isn’t available for you yet. We’re working on a way for a parent or guardian to set it up with you. You can sign out or delete this account below.")
+            if livesInQuebec == true {
+                MMEvidenceNotice(message: LegalUnavailable.quebec.message)
                     .environment(\.mmEvidenceOnLight, true)
-                    .accessibilityIdentifier("legal.age.unavailable")
-            } else if chosenBand == .teen {
-                Text("Because you’re under 18, photos you add are saved without their location or camera details. Your records are stored in the United States, nobody else sees them unless you share a report, and you can delete everything from Account at any time.")
-                    .mmFont(13)
-                    .foregroundStyle(MMInk.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("legal.age.teenNotice")
+                    .accessibilityIdentifier("legal.quebec.unavailable")
             } else {
-                Text(LegalAgeRequirement.ageRange.explanation)
-                    .mmFont(13)
-                    .foregroundStyle(MMInk.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                ageChoices
             }
+        }
+    }
+
+    @ViewBuilder
+    private var ageChoices: some View {
+        Text(LegalAgeRequirement.ageRange.confirmation)
+            .mmFont(15, .semibold)
+            .foregroundStyle(MMInk.text)
+            .padding(.top, 4)
+        ForEach(LegalAgeChoice.allCases, id: \.self) { choice in
+            radio(choice.label, isOn: ageChoice == choice, identifier: "legal.age.\(choice.rawValue)") {
+                ageChoice = choice
+            }
+        }
+        if unavailable == .age {
+            MMEvidenceNotice(message: LegalUnavailable.age.message)
+                .environment(\.mmEvidenceOnLight, true)
+                .accessibilityIdentifier("legal.age.unavailable")
+        } else if chosenBand == .teen {
+            Text("Because you’re under 18, photos you add are saved without their location or camera details. Your records are stored in the United States, nobody else sees them unless you share a report, and you can delete everything from Account at any time.")
+                .mmFont(13)
+                .foregroundStyle(MMInk.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("legal.age.teenNotice")
+        } else {
+            Text(LegalAgeRequirement.ageRange.explanation)
+                .mmFont(13)
+                .foregroundStyle(MMInk.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -253,11 +283,19 @@ struct LegalAcceptanceScreen: View {
 
     private var actions: some View {
         VStack(spacing: 4) {
-            MMPrimaryButton(title: "Continue to my Vault", isLoading: isSaving, isDisabled: !canContinue) { accept() }
-                .accessibilityIdentifier("legal.continue")
-            HStack(spacing: 20) {
+            if unavailable != nil {
+                // Not set up, so nothing to continue to. Deletion opens the usual confirmation; nothing is deleted
+                // without it, so a mis-tap costs nothing.
+                MMPrimaryButton(title: "Delete my account", isLoading: false, isDisabled: isSaving) { onDeleteAccount() }
+                    .accessibilityIdentifier("legal.unavailable.delete")
                 quiet("Sign out", action: onSignOut)
-                quiet("Delete account", action: onDeleteAccount)
+            } else {
+                MMPrimaryButton(title: "Continue to my Vault", isLoading: isSaving, isDisabled: !canContinue) { accept() }
+                    .accessibilityIdentifier("legal.continue")
+                HStack(spacing: 20) {
+                    quiet("Sign out", action: onSignOut)
+                    quiet("Delete account", action: onDeleteAccount)
+                }
             }
         }
         .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
