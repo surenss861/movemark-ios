@@ -45,7 +45,7 @@ struct DeleteAccountView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Your account, proof vaults, reports, photos, and stored evidence will be deleted. Encrypted backup copies last longer. Unused Report Pack credits are also removed.")
+            Text("Your account, proof vaults, reports, photos, and stored evidence will be deleted. Encrypted backup copies last longer.")
         }
     }
 
