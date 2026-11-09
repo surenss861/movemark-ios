@@ -16,10 +16,10 @@
 
 SELECT public.publish_legal_document(
   'terms', '2.0',
-  '2943de1f2c7829638ffb14e9926416e47774def64a428fce9c05eed277c1c3f7',
+  '2d7ff2eb3abbf82b4e300fff19f200fb2f88f78e49141bdf87717293a77aafd4',
   'https://movemark.ca/terms', true);
 
 SELECT public.publish_legal_document(
   'privacy_notice', '2.0',
-  '9a2f657d9ea27d6f9cd33d2ad5d665bd08b1201786ec24326ae8a1949f0aa4f3',
+  '44032be19933b32d266bdb7d7914e378f69d7649d236232079a23df4e7230c30',
   'https://movemark.ca/privacy', true);
