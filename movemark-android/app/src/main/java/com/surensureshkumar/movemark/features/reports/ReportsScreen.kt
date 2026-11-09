@@ -1,25 +1,41 @@
+/**
+ * @file Reports tab (iOS `ReportsHomeView`): a document control centre for one rental. The move-in report is the
+ *       artifact at the top — what it covers, whether it's ready, and the one thing to do with it; past reports
+ *       sit below in a quiet history; the other report types (move-out, dispute packet) follow. Lime marks only
+ *       the single most important action. All actions go through [ReportsViewModel] exactly as before.
+ * @domain reports
+ * @see [[ReportsHomeView.swift]] — iOS reference
+ */
 package com.surensureshkumar.movemark.features.reports
 
 import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.core.content.FileProvider
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.FindInPage
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,34 +47,39 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.surensureshkumar.movemark.core.design.MMColors
-import com.surensureshkumar.movemark.core.design.MMMotion
-import com.surensureshkumar.movemark.core.design.MMSpacing
-import com.surensureshkumar.movemark.core.design.components.MMProofSectionHeader
-import com.surensureshkumar.movemark.core.growth.MoveMarkGrowthCopy
+import com.surensureshkumar.movemark.core.design.MMGroup
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMMetrics
+import com.surensureshkumar.movemark.core.design.MMNotice
+import com.surensureshkumar.movemark.core.design.MMNoticeTone
+import com.surensureshkumar.movemark.core.design.MMPrimaryButton
+import com.surensureshkumar.movemark.core.design.MMRow
+import com.surensureshkumar.movemark.core.design.MMRowDivider
+import com.surensureshkumar.movemark.core.design.MMScreen
+import com.surensureshkumar.movemark.core.design.MMSecondaryButton
+import com.surensureshkumar.movemark.core.design.MMSectionTitle
+import com.surensureshkumar.movemark.core.design.MMTag
+import com.surensureshkumar.movemark.core.design.mmFont
+import com.surensureshkumar.movemark.core.design.mmIsLargeFont
 import com.surensureshkumar.movemark.data.export.DisputePacketReadiness
 import com.surensureshkumar.movemark.data.export.ExportRow
-import com.surensureshkumar.movemark.data.export.MoveOutReportReadiness
 import com.surensureshkumar.movemark.data.export.ExportVerificationStatus
+import com.surensureshkumar.movemark.data.export.MoveOutReportReadiness
 import com.surensureshkumar.movemark.data.export.ReportReadiness
-import com.surensureshkumar.movemark.features.reports.components.ExportHistoryEmptyState
+import com.surensureshkumar.movemark.data.export.ReportReadinessMapper
 import com.surensureshkumar.movemark.features.reports.components.ExportHistorySection
-import com.surensureshkumar.movemark.features.reports.components.MMReportExportSection
-import com.surensureshkumar.movemark.features.reports.components.MMReportNoVaultPlaceholder
-import com.surensureshkumar.movemark.features.reports.components.MMReportPreviewHero
-import com.surensureshkumar.movemark.features.reports.components.MMReportReadinessChecklist
+import com.surensureshkumar.movemark.features.reports.components.ReportPdfViewer
+import com.surensureshkumar.movemark.features.subscription.PaywallReason
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import com.surensureshkumar.movemark.features.reports.components.ReportPdfViewer
-import com.surensureshkumar.movemark.features.subscription.PaywallReason
 
 @Composable
 fun ReportsScreen(
@@ -69,17 +90,12 @@ fun ReportsScreen(
     modifier: Modifier = Modifier,
     /** The dispute packet opens its builder, as on iOS; null keeps the in-place action. */
     onOpenDisputePacket: (() -> Unit)? = null,
+    scrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
     viewModel: ReportsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
     val hasPro by viewModel.hasPro.collectAsState()
     val context = LocalContext.current
-    val reduceMotion = MMMotion.rememberReduceMotion()
-    var appeared by remember { mutableStateOf(reduceMotion) }
-
-    LaunchedEffect(reduceMotion) {
-        if (!reduceMotion) appeared = true
-    }
 
     var viewing by remember { mutableStateOf<ReportLocalPdf?>(null) }
     viewing?.let { payload ->
@@ -100,11 +116,7 @@ fun ReportsScreen(
 
     LaunchedEffect(Unit) {
         viewModel.reportPdf.collect { payload ->
-            val uri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                payload.file,
-            )
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", payload.file)
             when (payload.action) {
                 // Read it in the app (iOS QuickLook): no other PDF app needed.
                 ReportPdfAction.View -> viewing = payload
@@ -114,271 +126,287 @@ fun ReportsScreen(
     }
 
     val isLoading = state.propertyLoading || (state.exportsLoading && state.exports.isEmpty())
-    val (ctaTitle, ctaEnabled, ctaLoading) = state.primaryCta()
-    val (moveOutCtaTitle, moveOutCtaEnabled, moveOutCtaLoading) = state.moveOutCta(hasPro)
-    val (disputeCtaTitle, disputeCtaEnabled, disputeCtaLoading) = state.disputeCta(hasPro)
-        val showChecklist = !state.noVault && state.readiness != ReportReadiness.NoVault && !isLoading && state.exports.isEmpty()
-        val showStatusStrip = !state.noVault && !isLoading && state.exports.isNotEmpty()
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-            .padding(top = 12.dp, bottom = MMSpacing.ReportsTabScrollBottom.dp),
+    MMScreen(
+        title = "Your proof records",
+        eyebrow = "Reports",
+        tail = MMMetrics.RootTabTail,
+        scrollState = scrollState,
+        modifier = modifier,
     ) {
-        MMProofSectionHeader(
-            title = "Your reports",
-            subtitle = "Shareable records built from your saved proof.",
-        )
-        Spacer(Modifier.height(12.dp))
+        state.banner?.let { msg ->
+            MMNotice(msg, tone = if (state.bannerIsError) MMNoticeTone.Error else MMNoticeTone.Success)
+            Spacer(Modifier.height(14.dp))
+        }
 
-        when {
-            state.noVault && !state.propertyLoading -> {
-                MMReportNoVaultPlaceholder(onOpenVault = onOpenVault)
-            }
-            else -> {
-                if (showChecklist) {
-                    MMReportReadinessChecklist(
-                        items = state.checklistItems,
-                        appeared = appeared,
-                        reduceMotion = reduceMotion,
-                    )
-                    Spacer(Modifier.height(14.dp))
-                }
-                if (showStatusStrip) {
-                    ReportStatusStrip(
-                        moveIn = state.readiness,
-                        moveOut = state.moveOutReadiness,
-                        dispute = state.disputeReadiness,
-                    )
-                    Spacer(Modifier.height(14.dp))
-                }
-                Text(
-                    "CURRENT REPORTS",
-                    color = MMColors.TextMuted,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 1.05.sp,
-                )
-                Spacer(Modifier.height(8.dp))
-                MMReportPreviewHero(
-                    readiness = state.readiness,
-                    metricsLine = state.metricsLine(),
-                    headline = state.heroHeadline(),
-                    footnote = state.heroFootnote(),
-                    proofChips = state.proofChips,
-                    generatedLine = generatedLine(state.exports, "move_in_report"),
-                    recordId = archivalRecordId(state.exports, "move_in_report"),
-                    primaryTitle = ctaTitle,
-                    primaryEnabled = ctaEnabled,
-                    primaryLoading = ctaLoading,
-                    onPrimary = { viewModel.onPrimaryAction(onContinueRoomProof) },
-                    appeared = appeared,
-                    reduceMotion = reduceMotion,
-                    loading = isLoading,
-                )
-                Spacer(Modifier.height(24.dp))
-                MMReportExportSection(
-                    sectionTitle = "Move-out report",
-                    sectionSubtitle = "Re-capture rooms before you return the keys.",
-                    statusLine = moveOutStatusLabel(state.moveOutReadiness),
-                    statusColor = moveOutStatusColor(state.moveOutReadiness),
-                    metricsLine = moveOutMetricsLine(state),
-                    footnote = moveOutFootnote(state.moveOutReadiness),
-                    primaryTitle = moveOutCtaTitle,
-                    primaryEnabled = moveOutCtaEnabled,
-                    primaryLoading = moveOutCtaLoading,
-                    onPrimary = {
+        ReportArtifact(
+            state = state,
+            isLoading = isLoading,
+            onOpenVault = onOpenVault,
+            onPrimary = { viewModel.onPrimaryAction(onContinueRoomProof) },
+            onShare = { ReportReadinessMapper.firstReadyExport(state.exports)?.let(viewModel::shareExport) },
+        )
+
+        if (state.exports.isNotEmpty()) {
+            Spacer(Modifier.height(32.dp))
+            MMSectionTitle("Report history")
+            Spacer(Modifier.height(12.dp))
+            ExportHistorySection(
+                exports = state.exports,
+                onShare = { row -> viewModel.shareExport(row) },
+                onRetry = { row -> viewModel.retryExport(row) },
+            )
+        }
+
+        if (!state.noVault) {
+            Spacer(Modifier.height(32.dp))
+            MMSectionTitle("More reports")
+            Spacer(Modifier.height(12.dp))
+            MMGroup(
+                radius = MMMetrics.CardRadius,
+                footer = "MoveMark organizes your proof. It does not provide legal advice.",
+            ) {
+                MMRow(
+                    title = "Move-out report",
+                    subtitle = moveOutDetail(state, hasPro),
+                    titleSize = 14.5f,
+                    trailing = otherTrailing(
+                        processing = state.moveOutReadiness == MoveOutReportReadiness.Processing || state.moveOutActionInProgress,
+                        locked = !hasPro,
+                    ),
+                    onClick = {
                         viewModel.onMoveOutPrimaryAction(
                             hasPro = hasPro,
                             onOpenMoveOutProof = onOpenMoveOutProof,
                             onShowPaywall = onShowPaywall,
                         )
                     },
-                    appeared = appeared,
-                    reduceMotion = reduceMotion,
-                    isProcessing = state.moveOutReadiness == MoveOutReportReadiness.Processing,
-                    isProLocked = !hasPro,
-                    generatedLine = generatedLine(state.exports, "move_out_report"),
-                    recordId = archivalRecordId(state.exports, "move_out_report"),
                 )
-                Spacer(Modifier.height(20.dp))
-                MMReportExportSection(
-                    sectionTitle = "Dispute packet",
-                    sectionSubtitle = "Bundle your proof if your deposit is questioned.",
-                    statusLine = disputeStatusLabel(state.disputeReadiness),
-                    statusColor = disputeStatusColor(state.disputeReadiness),
-                    metricsLine = null,
-                    footnote = disputeFootnote(state.disputeReadiness),
-                    primaryTitle = disputeCtaTitle,
-                    primaryEnabled = disputeCtaEnabled,
-                    primaryLoading = disputeCtaLoading,
-                    onPrimary = onOpenDisputePacket ?: {
+                MMRowDivider()
+                MMRow(
+                    title = "Dispute packet",
+                    subtitle = disputeDetail(state, hasPro),
+                    titleSize = 14.5f,
+                    trailing = otherTrailing(
+                        processing = state.disputeReadiness == DisputePacketReadiness.Processing || state.disputeActionInProgress,
+                        locked = !hasPro,
+                    ),
+                    onClick = onOpenDisputePacket ?: {
                         viewModel.onDisputePrimaryAction(
                             hasPro = hasPro,
                             onContinueRoomProof = onContinueRoomProof,
                             onShowPaywall = onShowPaywall,
                         )
                     },
-                    appeared = appeared,
-                    reduceMotion = reduceMotion,
-                    isProcessing = state.disputeReadiness == DisputePacketReadiness.Processing,
-                    isProLocked = !hasPro,
-                    useQuietPrimaryWhenLocked = true,
-                    legalNote = "MoveMark organizes your proof. It does not provide legal advice.",
-                    generatedLine = generatedLine(state.exports, "dispute_packet", "dispute_summary"),
-                    recordId = archivalRecordId(state.exports, "dispute_packet", "dispute_summary"),
                 )
-                if (state.exports.isNotEmpty()) {
-                    Spacer(Modifier.height(24.dp))
-                    ExportHistorySection(
-                        exports = state.exports,
-                        onShare = { row -> viewModel.shareExport(row) },
-                        onRetry = { row -> viewModel.retryExport(row) },
-                    )
-                } else if (!state.exportsLoading && !state.noVault) {
-                    Spacer(Modifier.height(24.dp))
-                    ExportHistoryEmptyState()
+            }
+        }
+    }
+}
+
+private fun otherTrailing(processing: Boolean, locked: Boolean): (@Composable androidx.compose.foundation.layout.RowScope.() -> Unit)? = when {
+    processing -> ({ CircularProgressIndicator(color = MMInk.Secondary, strokeWidth = 2.dp, modifier = Modifier.size(16.dp)) })
+    locked -> ({ MMTag("Pro") })
+    else -> null
+}
+
+/** The move-in report: what it covers, its state in one line, and the one action. */
+@Composable
+private fun ReportArtifact(
+    state: ReportsUiState,
+    isLoading: Boolean,
+    onOpenVault: () -> Unit,
+    onPrimary: () -> Unit,
+    onShare: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(MMMetrics.CardRadius))
+            .background(MMInk.Card)
+            .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(MMMetrics.CardRadius))
+            .padding(18.dp),
+    ) {
+        if (state.noVault && !state.propertyLoading) {
+            Text("No rental yet", style = mmFont(20f, FontWeight.SemiBold), color = MMInk.Text)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Reports are built from a rental's saved proof. Add your rental in Proof to start.",
+                style = mmFont(14f),
+                color = MMInk.Secondary,
+            )
+            Spacer(Modifier.height(12.dp))
+            MMPrimaryButton(title = "Go to Proof", icon = Icons.Filled.Home, onClick = onOpenVault, height = 46.dp)
+            return@Column
+        }
+
+        // Identity: what the report is and what it covers.
+        Row(Modifier.semantics(mergeDescendants = true) {}) {
+            Column(Modifier.weight(1f)) {
+                Text("MOVE-IN REPORT", style = mmFont(11f, FontWeight.SemiBold, tracking = 0.6f), color = MMInk.Secondary)
+                Text(
+                    state.rentalName.ifBlank { "Your rental" },
+                    style = mmFont(22f, FontWeight.SemiBold),
+                    color = MMInk.Text,
+                    maxLines = 2,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+                roomsLine(state)?.let {
+                    Text(it, style = mmFont(14.5f), color = MMInk.Text, modifier = Modifier.padding(top = 6.dp))
+                }
+                countsLine(state)?.let {
+                    Text(it, style = mmFont(13f), color = MMInk.Secondary, modifier = Modifier.padding(top = 3.dp))
+                }
+            }
+            if (!mmIsLargeFont()) {
+                Spacer(Modifier.width(14.dp))
+                Box(
+                    Modifier
+                        .size(width = 44.dp, height = 56.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MMInk.Paper),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Outlined.Description, contentDescription = null, tint = MMInk.Text.copy(alpha = 0.55f), modifier = Modifier.size(22.dp))
                 }
             }
         }
 
-        state.banner?.let { msg ->
-            Spacer(Modifier.height(12.dp))
-            Text(
-                msg,
-                color = if (state.bannerIsError) MMColors.SemanticDanger else MMColors.Primary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-            )
+        // Status in one readable line, with one quiet line of support.
+        Spacer(Modifier.height(16.dp))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(MMInk.Separator))
+        val readiness = if (isLoading) null else state.readiness
+        Row(
+            Modifier
+                .padding(top = 14.dp)
+                .semantics(mergeDescendants = true) {},
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            StatusMark(readiness)
+            Spacer(Modifier.width(8.dp))
+            Text(statusTitle(readiness), style = mmFont(15f, FontWeight.SemiBold), color = MMInk.Text)
+        }
+        statusDetail(readiness, state)?.let {
+            Text(it, style = mmFont(13.5f), color = MMInk.Secondary, modifier = Modifier.padding(top = 4.dp))
+        }
+
+        val busy = state.moveInActionInProgress
+        when (readiness) {
+            ReportReadiness.NotReady, ReportReadiness.NoVault -> {
+                Spacer(Modifier.height(18.dp))
+                MMPrimaryButton(title = "Continue room proof", icon = Icons.Filled.CameraAlt, onClick = onPrimary, height = 46.dp)
+            }
+            ReportReadiness.ReadyToMake -> {
+                Spacer(Modifier.height(18.dp))
+                MMPrimaryButton(
+                    title = if (busy) "Generating report…" else "Generate report",
+                    icon = Icons.Filled.Description,
+                    isLoading = busy,
+                    onClick = onPrimary,
+                    height = 46.dp,
+                )
+            }
+            ReportReadiness.ReadyToShare -> {
+                Spacer(Modifier.height(18.dp))
+                MMPrimaryButton(
+                    title = if (busy) "Opening…" else "View report",
+                    icon = Icons.Filled.FindInPage,
+                    isLoading = busy,
+                    onClick = onPrimary,
+                    height = 46.dp,
+                )
+                Spacer(Modifier.height(4.dp))
+                MMSecondaryButton(title = "Share", icon = Icons.Filled.Share, onClick = onShare, enabled = !busy)
+            }
+            ReportReadiness.Failed -> {
+                Spacer(Modifier.height(18.dp))
+                MMPrimaryButton(
+                    title = if (busy) "Retrying…" else "Retry",
+                    icon = Icons.Filled.Refresh,
+                    isLoading = busy,
+                    onClick = onPrimary,
+                    height = 46.dp,
+                )
+            }
+            ReportReadiness.Processing, null -> Unit
         }
     }
 }
 
-private fun moveOutStatusLabel(readiness: MoveOutReportReadiness): String = when (readiness) {
-    MoveOutReportReadiness.NoProof -> "Needs proof"
-    MoveOutReportReadiness.ReadyToMake -> "Can be made"
-    MoveOutReportReadiness.Processing -> "Generating record"
-    MoveOutReportReadiness.ReadyToShare -> "Ready to share"
-    MoveOutReportReadiness.Failed -> "Failed"
-}
-
-private fun disputeStatusLabel(readiness: DisputePacketReadiness): String = when (readiness) {
-    DisputePacketReadiness.NoProof -> "Needs proof"
-    DisputePacketReadiness.ReadyToMake -> "Can be made"
-    DisputePacketReadiness.Processing -> "Generating record"
-    DisputePacketReadiness.ReadyToShare -> "Ready to share"
-    DisputePacketReadiness.Failed -> "Failed"
-}
-
-private fun moveOutStatusColor(readiness: MoveOutReportReadiness) = when (readiness) {
-    MoveOutReportReadiness.ReadyToShare -> MMColors.Primary
-    MoveOutReportReadiness.Failed -> MMColors.SemanticDanger
-    MoveOutReportReadiness.Processing -> MMColors.TextPrimary
-    MoveOutReportReadiness.ReadyToMake -> MMColors.SemanticInfo
-    MoveOutReportReadiness.NoProof -> MMColors.TextSecondary
-}
-
-private fun disputeStatusColor(readiness: DisputePacketReadiness) = when (readiness) {
-    DisputePacketReadiness.ReadyToShare -> MMColors.Primary
-    DisputePacketReadiness.Failed -> MMColors.SemanticDanger
-    DisputePacketReadiness.Processing -> MMColors.TextPrimary
-    DisputePacketReadiness.ReadyToMake -> MMColors.SemanticInfo
-    DisputePacketReadiness.NoProof -> MMColors.TextSecondary
-}
-
-private fun moveOutMetricsLine(state: ReportsUiState): String? {
-    if (state.moveOutPhotos <= 0) return null
-    return "${state.moveOutDocumentedRooms} of ${state.totalRooms} rooms · ${state.moveOutPhotos} move-out photos"
-}
-
-private fun moveOutFootnote(readiness: MoveOutReportReadiness): String? = when (readiness) {
-    MoveOutReportReadiness.NoProof -> "Capture move-out room photos first."
-    MoveOutReportReadiness.ReadyToMake -> "Add more move-out proof for a stronger report."
-    MoveOutReportReadiness.ReadyToShare ->
-        "${MoveMarkGrowthCopy.MOVE_OUT_RECORD_READY} ${MoveMarkGrowthCopy.MOVE_OUT_RECORD_READY_DETAIL}"
-    MoveOutReportReadiness.Failed -> "Something went wrong. Try again when you're ready."
-    MoveOutReportReadiness.Processing -> null
-}
-
-private fun disputeFootnote(readiness: DisputePacketReadiness): String? = when (readiness) {
-    DisputePacketReadiness.NoProof -> "Save move-in room proof before building a packet."
-    DisputePacketReadiness.ReadyToMake -> "Add more proof for a stronger packet."
-    DisputePacketReadiness.ReadyToShare ->
-        "${MoveMarkGrowthCopy.DISPUTE_PACKET_READY} ${MoveMarkGrowthCopy.DISPUTE_PACKET_READY_DETAIL}"
-    DisputePacketReadiness.Failed -> "Something went wrong. Try again when you're ready."
-    DisputePacketReadiness.Processing -> null
-}
-
-private enum class StripMark { Ready, Attention, Pending, NotStarted }
-
 @Composable
-private fun ReportStatusStrip(
-    moveIn: ReportReadiness,
-    moveOut: MoveOutReportReadiness,
-    dispute: DisputePacketReadiness,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MMColors.SurfaceRaised)
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        StripItem("Move-in", moveInMark(moveIn), Modifier.weight(1f))
-        Box(Modifier.width(1.dp).height(18.dp).background(MMColors.CardStroke))
-        StripItem("Move-out", moveOutMark(moveOut), Modifier.weight(1f))
-        Box(Modifier.width(1.dp).height(18.dp).background(MMColors.CardStroke))
-        StripItem("Dispute", disputeMark(dispute), Modifier.weight(1f))
+private fun StatusMark(readiness: ReportReadiness?) {
+    when (readiness) {
+        null, ReportReadiness.Processing ->
+            CircularProgressIndicator(color = MMInk.Secondary, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+        ReportReadiness.ReadyToShare ->
+            Box(Modifier.size(9.dp).clip(CircleShape).background(MMInk.LimeMark))
+        ReportReadiness.Failed ->
+            Icon(Icons.Filled.Error, contentDescription = null, tint = MMInk.Danger, modifier = Modifier.size(15.dp))
+        ReportReadiness.NotReady, ReportReadiness.ReadyToMake, ReportReadiness.NoVault ->
+            Box(Modifier.size(9.dp).border(1.5.dp, MMInk.Secondary, CircleShape))
     }
 }
 
-@Composable
-private fun StripItem(title: String, mark: StripMark, modifier: Modifier) {
-    val tint = when (mark) {
-        StripMark.Ready -> MMColors.Primary
-        StripMark.Attention -> MMColors.SemanticWarning
-        StripMark.Pending, StripMark.NotStarted -> MMColors.TextMuted
+private fun statusTitle(readiness: ReportReadiness?): String = when (readiness) {
+    null -> "Checking your records…"
+    ReportReadiness.NotReady, ReportReadiness.NoVault -> "Needs room proof"
+    ReportReadiness.ReadyToMake -> "Not generated yet"
+    ReportReadiness.Processing -> "Generating report…"
+    ReportReadiness.ReadyToShare -> "Ready"
+    ReportReadiness.Failed -> "Couldn't generate report"
+}
+
+private fun statusDetail(readiness: ReportReadiness?, state: ReportsUiState): String? = when (readiness) {
+    null -> null
+    ReportReadiness.NotReady, ReportReadiness.NoVault ->
+        "Document your rooms, then generate one dated PDF of your proof."
+    ReportReadiness.ReadyToMake ->
+        "One dated PDF with every room photo, record and issue, ready to send to your landlord."
+    ReportReadiness.Processing -> "We're assembling your evidence into a PDF."
+    ReportReadiness.ReadyToShare -> generatedLine(state.exports, ReportReadinessMapper.MOVE_IN_REPORT_TYPE)
+    ReportReadiness.Failed -> "Your evidence is safe. Try again in a moment."
+}
+
+private fun roomsLine(state: ReportsUiState): String? {
+    if (state.totalRooms <= 0) return null
+    if (state.documentedRooms >= state.totalRooms) {
+        return "${state.totalRooms} ${if (state.totalRooms == 1) "room" else "rooms"} documented"
     }
-    val icon: ImageVector = when (mark) {
-        StripMark.Ready -> Icons.Default.CheckCircle
-        StripMark.Attention -> Icons.Default.Error
-        StripMark.Pending, StripMark.NotStarted -> Icons.Default.RadioButtonUnchecked
-    }
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.height(16.dp))
-        Text(
-            title,
-            color = if (mark == StripMark.Ready) MMColors.TextPrimary else MMColors.TextSecondary,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(start = 6.dp),
-        )
+    return "${state.documentedRooms} of ${state.totalRooms} rooms documented"
+}
+
+private fun countsLine(state: ReportsUiState): String? {
+    if (state.totalRooms <= 0 && state.totalPhotos <= 0) return null
+    fun count(n: Int, noun: String) = "$n ${if (n == 1) noun else noun + "s"}"
+    return listOf(count(state.totalPhotos, "photo"), count(state.supportingRecords, "record"), count(state.issueTags, "issue"))
+        .joinToString(" · ")
+}
+
+/** iOS `ExportHistoryView.otherReports`: the pitch while locked, else the state in a few words. */
+private fun moveOutDetail(state: ReportsUiState, hasPro: Boolean): String {
+    if (!hasPro) return "Re-capture rooms before you return the keys."
+    return when (state.moveOutReadiness) {
+        MoveOutReportReadiness.NoProof -> "Not started"
+        MoveOutReportReadiness.ReadyToMake -> "Ready to generate"
+        MoveOutReportReadiness.Processing -> "Generating…"
+        MoveOutReportReadiness.Failed -> "Couldn't generate · Tap to retry"
+        MoveOutReportReadiness.ReadyToShare -> readyLine(state.exports, ReportReadinessMapper.MOVE_OUT_REPORT_TYPE)
     }
 }
 
-private fun moveInMark(readiness: ReportReadiness): StripMark = when (readiness) {
-    ReportReadiness.ReadyToShare -> StripMark.Ready
-    ReportReadiness.Failed, ReportReadiness.NotReady -> StripMark.Attention
-    ReportReadiness.Processing -> StripMark.Pending
-    ReportReadiness.ReadyToMake, ReportReadiness.NoVault -> StripMark.NotStarted
+private fun disputeDetail(state: ReportsUiState, hasPro: Boolean): String {
+    if (!hasPro) return "Bundle your proof if your deposit is questioned."
+    return when (state.disputeReadiness) {
+        DisputePacketReadiness.NoProof -> "Needs move-in proof"
+        DisputePacketReadiness.ReadyToMake -> "Ready to generate"
+        DisputePacketReadiness.Processing -> "Generating…"
+        DisputePacketReadiness.Failed -> "Couldn't generate · Tap to retry"
+        DisputePacketReadiness.ReadyToShare -> readyLine(state.exports, ReportReadinessMapper.DISPUTE_PACKET_TYPE, "dispute_summary")
+    }
 }
 
-private fun moveOutMark(readiness: MoveOutReportReadiness): StripMark = when (readiness) {
-    MoveOutReportReadiness.ReadyToShare -> StripMark.Ready
-    MoveOutReportReadiness.Failed -> StripMark.Attention
-    MoveOutReportReadiness.Processing -> StripMark.Pending
-    MoveOutReportReadiness.NoProof, MoveOutReportReadiness.ReadyToMake -> StripMark.NotStarted
-}
-
-private fun disputeMark(readiness: DisputePacketReadiness): StripMark = when (readiness) {
-    DisputePacketReadiness.ReadyToShare -> StripMark.Ready
-    DisputePacketReadiness.Failed -> StripMark.Attention
-    DisputePacketReadiness.Processing -> StripMark.Pending
-    DisputePacketReadiness.NoProof, DisputePacketReadiness.ReadyToMake -> StripMark.NotStarted
-}
+private fun readyLine(exports: List<ExportRow>, vararg types: String): String =
+    generatedLine(exports, *types)?.removePrefix("Generated ")?.let { "Ready · $it" } ?: "Ready"
 
 private fun generatedLine(exports: List<ExportRow>, vararg types: String): String? {
     val row = exports
@@ -387,14 +415,6 @@ private fun generatedLine(exports: List<ExportRow>, vararg types: String): Strin
         ?: return null
     val date = shortExportDate(row.requestedAt)
     return if (date.isBlank()) null else "Generated $date"
-}
-
-private fun archivalRecordId(exports: List<ExportRow>, vararg types: String): String? {
-    val row = exports
-        .filter { it.type in types }
-        .maxByOrNull { it.requestedAt.orEmpty() }
-        ?: return null
-    return "MM-RP-" + row.id.toString().take(4).uppercase()
 }
 
 private fun shortExportDate(raw: String?): String {

@@ -2,8 +2,6 @@ package com.surensureshkumar.movemark.features.main
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -14,8 +12,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.surensureshkumar.movemark.core.design.MMBackground
-import com.surensureshkumar.movemark.core.design.components.MMNativeTabBar
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.components.MMFloatingPillDock
+import kotlinx.coroutines.launch
 import com.surensureshkumar.movemark.core.navigation.MainTab
 import com.surensureshkumar.movemark.features.account.AccountScreen
 import com.surensureshkumar.movemark.features.paywall.ProPaywallScreen
@@ -47,44 +51,65 @@ fun MainShellScreen(
         if (pendingTab != null) viewModel.clearTabRequest()
     }
 
+    val vaultScroll = rememberScrollState()
+    val reportsScroll = rememberScrollState()
+    val accountScroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
+
+    // The rental's rooms open from Proof as a pushed page (iOS has three root tabs: Proof, Reports, Account).
+    // System back returns to Proof; the dock stays hidden there as on any pushed screen.
+    BackHandler(enabled = tab == MainTab.Rooms) { tab = MainTab.Vault }
+    // The paywall overlay closes on system back instead of leaving the app.
+    BackHandler(enabled = paywallReason != null) { paywallReason = null }
+
     Box(Modifier.fillMaxSize()) {
-        MMBackground {
-            Scaffold(
-                containerColor = androidx.compose.ui.graphics.Color.Transparent,
-                bottomBar = {
-                    MMNativeTabBar(selected = tab, onSelect = { tab = it })
-                },
-            ) { padding ->
-                when (tab) {
-                    MainTab.Vault -> VaultScreen(
-                        modifier = Modifier.padding(padding),
-                        onOpenRoom = onOpenRoom,
-                        onOpenRoomPhase = onOpenRoomPhase,
-                        onOpenMoveOutProof = onOpenMoveOutProof,
-                        onAddProperty = onAddProperty,
-                        onShowPaywall = { paywallReason = it },
-                        onOpenReports = { tab = MainTab.Reports },
-                        onOpenMaintenance = onOpenMaintenance,
-                        onOpenDocuments = onOpenDocuments,
-                    )
-                    MainTab.Rooms -> RoomsScreen(
-                        modifier = Modifier.padding(padding),
-                        onOpenRoom = onOpenRoom,
-                    )
-                    MainTab.Reports -> ReportsScreen(
-                        modifier = Modifier.padding(padding),
-                        onContinueRoomProof = { tab = MainTab.Rooms },
-                        onOpenMoveOutProof = onOpenMoveOutProof,
-                        onOpenVault = { tab = MainTab.Vault },
-                        onShowPaywall = { paywallReason = it },
-                        onOpenDisputePacket = onOpenDisputePacket,
-                    )
-                    MainTab.Account -> AccountScreen(
-                        modifier = Modifier.padding(padding),
-                        onSignOut = onSignOut,
-                        onShowPaywall = { paywallReason = it },
-                    )
-                }
+        Box(Modifier.fillMaxSize().background(MMInk.Sheet)) {
+            when (tab) {
+                MainTab.Vault -> VaultScreen(
+                    onOpenRoom = onOpenRoom,
+                    onOpenRoomPhase = onOpenRoomPhase,
+                    onOpenMoveOutProof = onOpenMoveOutProof,
+                    onAddProperty = onAddProperty,
+                    onShowPaywall = { paywallReason = it },
+                    onOpenReports = { tab = MainTab.Reports },
+                    onOpenMaintenance = onOpenMaintenance,
+                    onOpenDocuments = onOpenDocuments,
+                    onOpenRooms = { tab = MainTab.Rooms },
+                    scrollState = vaultScroll,
+                )
+                MainTab.Rooms -> RoomsScreen(
+                    onOpenRoom = onOpenRoom,
+                    onBack = { tab = MainTab.Vault },
+                    onOpenReports = { tab = MainTab.Reports },
+                )
+                MainTab.Reports -> ReportsScreen(
+                    onContinueRoomProof = { tab = MainTab.Rooms },
+                    onOpenMoveOutProof = onOpenMoveOutProof,
+                    onOpenVault = { tab = MainTab.Vault },
+                    onShowPaywall = { paywallReason = it },
+                    onOpenDisputePacket = onOpenDisputePacket,
+                    scrollState = reportsScroll,
+                )
+                MainTab.Account -> AccountScreen(
+                    onSignOut = onSignOut,
+                    onShowPaywall = { paywallReason = it },
+                    scrollState = accountScroll,
+                )
+            }
+            if (tab != MainTab.Rooms) {
+                MMFloatingPillDock(
+                    selected = tab,
+                    onSelect = { tab = it },
+                    onReselect = { reselected ->
+                        val state = when (reselected) {
+                            MainTab.Reports -> reportsScroll
+                            MainTab.Account -> accountScroll
+                            else -> vaultScroll
+                        }
+                        scope.launch { state.animateScrollTo(0) }
+                    },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
             }
         }
         paywallReason?.let { reason ->

@@ -126,8 +126,9 @@ class PropertyRepository @Inject constructor(
             title = input.titleValue,
             addressLine1 = input.addressLine1.trim().ifEmpty { "Address" },
             addressLine2 = input.unit.trim().takeIf { it.isNotEmpty() },
-            city = input.city.trim().ifEmpty { "Unknown" },
-            provinceState = input.region.trim().ifEmpty { "Unknown" },
+            // Blank stays blank (the columns are NOT NULL, not non-empty): no "Unknown" placeholder.
+            city = input.city.trim(),
+            provinceState = input.region.trim(),
             postalCode = input.postalCode.trim().ifEmpty { "00000" },
             country = input.country.trim().ifEmpty { "CA" },
             landlordName = input.landlordName.trim().takeIf { it.isNotEmpty() },

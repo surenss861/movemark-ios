@@ -7,6 +7,17 @@
  */
 package com.surensureshkumar.movemark.features.proof
 
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.text.font.FontStyle
+import com.surensureshkumar.movemark.core.design.MMEyebrowStyle
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMMetrics
+import com.surensureshkumar.movemark.core.design.MMPrimaryButton
+import com.surensureshkumar.movemark.core.design.MMSecondaryButton
+import com.surensureshkumar.movemark.core.design.mmFont
+import com.surensureshkumar.movemark.core.design.mmPullUp
 import com.surensureshkumar.movemark.core.design.mmLines
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
@@ -344,7 +355,7 @@ private fun HeroTitle(
     }
 }
 
-/** A documented room's next action isn't urgent: a white pill, not green (green is for saving). */
+/** A documented room's next action: the lime pill, as on iOS RC5 (lime is the screen's one action). */
 @Composable
 private fun AddEvidencePill(isBusy: Boolean, onTakePhotos: () -> Unit, onChooseGallery: () -> Unit, modifier: Modifier = Modifier) {
     var open by remember { mutableStateOf(false) }
@@ -354,14 +365,14 @@ private fun AddEvidencePill(isBusy: Boolean, onTakePhotos: () -> Unit, onChooseG
                 .fillMaxWidth()
                 .heightIn(min = 50.dp)
                 .clip(RoundedCornerShape(50))
-                .background(Color.White.copy(alpha = if (isBusy) 0.5f else 1f))
+                .background(MMInk.Lime.copy(alpha = if (isBusy) 0.5f else 1f))
                 .clickable(enabled = !isBusy, role = Role.Button) { open = true },
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Filled.PhotoCamera, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+            Icon(Icons.Filled.PhotoCamera, contentDescription = null, tint = MMInk.OnLime, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Add evidence", color = Color.Black, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text("Add evidence", color = MMInk.OnLime, fontSize = 15.5.sp, fontWeight = FontWeight.SemiBold)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(
@@ -450,6 +461,10 @@ private fun FilmstripThumb(
     }
 }
 
+/**
+ * A room with no proof yet (iOS RC5 room screen): the quiet dark header (stage, room, "No proof yet"), then the
+ * light working sheet — a dark viewfinder field, what to capture, and the one lime action.
+ */
 @Composable
 private fun EmptyField(
     roomName: String,
@@ -461,66 +476,114 @@ private fun EmptyField(
     modifier: Modifier = Modifier,
 ) {
     val moveOut = proofPhase == ProofPhase.MoveOut
-    Box(modifier.fillMaxWidth()) {
-        Box(
+    Column(modifier.fillMaxWidth()) {
+        Column(
             Modifier
                 .fillMaxWidth()
-                .height(420.dp)
-                .background(Brush.verticalGradient(listOf(MMColors.CardRaised.copy(alpha = 0.85f), MMColors.AppBackground))),
-        )
-        Column(Modifier.fillMaxWidth()) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-                    // Clears the pinned RoomTopBar.
-                    .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 84.dp, bottom = 8.dp),
-            ) {
-                Kicker(if (moveOut) "MOVE-OUT EVIDENCE" else "MOVE-IN EVIDENCE", MMColors.TextMuted)
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    roomName,
-                    color = MMColors.TextPrimary,
-                    fontSize = 34.sp,
-                    lineHeight = 38.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.semantics { heading() },
-                )
-                Spacer(Modifier.height(10.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(7.dp).clip(CircleShape).background(MMColors.SemanticWarning))
-                    Spacer(Modifier.padding(start = 8.dp))
-                    Text("Still needs proof", color = MMColors.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                }
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    if (moveOut) "Photograph each surface before you return the keys." else "Photograph it before boxes cover anything.",
-                    color = MMColors.TextSecondary,
-                    fontSize = 15.sp,
-                )
-                Spacer(Modifier.height(30.dp))
-                Kicker("WHAT TO CAPTURE", MMColors.TextMuted)
-                Spacer(Modifier.height(12.dp))
-                RoomCapturePrompts.forEach { prompt ->
-                    Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.CenterFocusWeak, contentDescription = null, tint = MMColors.TextMuted, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.padding(start = 12.dp))
-                        Text(prompt, color = MMColors.TextPrimary.copy(alpha = 0.92f), fontSize = 17.sp)
-                    }
-                }
-                Spacer(Modifier.height(30.dp))
-                // Green only while it's the screen's one action; once photos are picked the save
-                // bar takes the green.
-                MMButton(
-                    text = "Take photos",
-                    onClick = onTakePhotos,
-                    style = if (hasPendingPhotos) MMButtonStyle.Secondary else MMButtonStyle.Primary,
-                    enabled = !isBusy,
-                )
-                Spacer(Modifier.height(10.dp))
-                MMButton(text = "Choose from gallery", onClick = onChooseGallery, style = MMButtonStyle.Secondary, enabled = !isBusy)
-            }
+                .background(MMInk.Hero)
+                .padding(horizontal = MMMetrics.Inset)
+                // Clears the pinned RoomTopBar.
+                .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 64.dp)
+                .padding(bottom = 26.dp + MMMetrics.SheetRadius),
+        ) {
+            Text(if (moveOut) "MOVE-OUT EVIDENCE" else "MOVE-IN EVIDENCE", style = MMEyebrowStyle, color = MMInk.HeroSecondary)
+            Text(
+                roomName,
+                style = mmFont(34f, FontWeight.Bold),
+                color = Color.White,
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .semantics { heading() },
+            )
+            Text("No proof yet", style = mmFont(17f), color = MMInk.HeroSecondary, modifier = Modifier.padding(top = 4.dp))
         }
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .mmPullUp(MMMetrics.SheetRadius)
+                .clip(RoundedCornerShape(topStart = MMMetrics.SheetRadius, topEnd = MMMetrics.SheetRadius))
+                .background(MMInk.Sheet)
+                .padding(horizontal = MMMetrics.Inset)
+                .padding(top = 20.dp, bottom = 24.dp),
+        ) {
+            ViewfinderField(
+                if (moveOut) "This room\u2019s move-out record starts with your first photo."
+                else "This room\u2019s record starts with your first photo.",
+            )
+            Text(
+                if (moveOut) "Capture these before you return the keys" else "Capture these before you unpack",
+                style = mmFont(14.5f),
+                color = MMInk.Secondary,
+                modifier = Modifier.padding(top = 22.dp, bottom = 8.dp),
+            )
+            RoomCapturePrompts.forEachIndexed { index, prompt ->
+                Box(Modifier.fillMaxWidth().height(0.75.dp).background(MMInk.Separator))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "%02d".format(index + 1),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 13.sp,
+                        color = MMInk.Secondary,
+                        modifier = Modifier.width(36.dp),
+                    )
+                    Text(prompt, style = mmFont(16.5f), color = MMInk.Text)
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+            // Lime only while it's the screen's one action; once photos are picked the save bar takes it.
+            if (hasPendingPhotos) {
+                MMSecondaryButton(title = "Take photos", icon = Icons.Filled.PhotoCamera, onClick = onTakePhotos, enabled = !isBusy)
+            } else {
+                MMPrimaryButton(title = "Take photos", icon = Icons.Filled.PhotoCamera, onClick = onTakePhotos, enabled = !isBusy)
+            }
+            Spacer(Modifier.height(6.dp))
+            MMSecondaryButton(title = "Choose from gallery", onClick = onChooseGallery, enabled = !isBusy)
+        }
+    }
+}
+
+/** A dark field with viewfinder corners and one quiet line: the room's record hasn't started yet. */
+@Composable
+private fun ViewfinderField(line: String) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(1.8f)
+            .clip(RoundedCornerShape(MMMetrics.CardRadius))
+            .background(MMInk.Hero)
+            .drawBehind {
+                val inset = 14.dp.toPx()
+                val len = 18.dp.toPx()
+                val stroke = 1.5.dp.toPx()
+                val c = Color.White.copy(alpha = 0.7f)
+                val w = size.width
+                val h = size.height
+                listOf(
+                    Triple(inset, inset, 1f to 1f),
+                    Triple(w - inset, inset, -1f to 1f),
+                    Triple(inset, h - inset, 1f to -1f),
+                    Triple(w - inset, h - inset, -1f to -1f),
+                ).forEach { (x, y, dir) ->
+                    drawLine(c, Offset(x, y), Offset(x + len * dir.first, y), stroke)
+                    drawLine(c, Offset(x, y), Offset(x, y + len * dir.second), stroke)
+                }
+            },
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        Text(
+            line,
+            fontFamily = FontFamily.Serif,
+            fontStyle = FontStyle.Italic,
+            fontSize = 17.sp,
+            color = Color.White.copy(alpha = 0.88f),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 36.dp),
+        )
     }
 }
 

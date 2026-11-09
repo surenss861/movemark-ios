@@ -76,9 +76,9 @@ data class RentalEditForm(
             title = name.trim().ifEmpty { street },
             addressLine1 = street,
             addressLine2 = unit.trim().ifEmpty { null },
-            // NOT NULL columns: blank goes back to the placeholder setup writes.
-            city = city.trim().ifEmpty { "Unknown" },
-            provinceState = region.trim().ifEmpty { "Unknown" },
+            // NOT NULL columns, not non-empty: blank stays blank, never an "Unknown" placeholder (iOS RC5).
+            city = city.trim(),
+            provinceState = region.trim(),
             postalCode = postalCode.trim().ifEmpty { "00000" },
             country = country.trim().ifEmpty { "CA" },
             landlordName = landlordName.trim().ifEmpty { null },
@@ -121,8 +121,9 @@ data class RentalEditForm(
             )
         }
 
-        /** Setup's placeholders ("Unknown", "00000") read as blank (iOS `RentalLocation.meaningful`). */
-        fun meaningful(raw: String): String = raw.trim().takeUnless { it.equals("Unknown", true) || it == "00000" || it == "Address" }.orEmpty()
+        /** Setup's placeholders ("Unknown", "00000", "Address") read as blank (iOS `RentalLocation.meaningful`). */
+        fun meaningful(raw: String): String =
+            raw.trim().takeUnless { it == "Address" }?.let { RentalLocation.meaningful(it) }.orEmpty()
 
         fun emailIssue(raw: String): String? {
             val email = raw.trim()

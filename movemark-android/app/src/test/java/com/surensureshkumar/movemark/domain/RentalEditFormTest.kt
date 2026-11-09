@@ -49,11 +49,14 @@ class RentalEditFormTest {
         assertEquals(1750.0, patch.depositAmount!!, 0.0)
         assertNull(patch.rentAmount)
         assertEquals("CA", RentalEditForm(addressLine1 = "x", country = "").toPatch().country)
-        // Setup's placeholders read as blank and go back as placeholders.
-        val placeholder = RentalEditForm.from(row.copy(city = "Unknown", postalCode = "00000"))
+        // Setup's placeholders read as blank; a blank city or province goes back blank (no "Unknown"), the postal
+        // code keeps its "00000" placeholder.
+        val placeholder = RentalEditForm.from(row.copy(city = "Unknown", provinceState = "Unknown", postalCode = "00000"))
         assertEquals("", placeholder.city)
+        assertEquals("", placeholder.region)
         assertEquals("", placeholder.postalCode)
-        assertEquals("Unknown", placeholder.toPatch().city)
+        assertEquals("", placeholder.toPatch().city)
+        assertEquals("", placeholder.toPatch().provinceState)
         assertEquals("00000", placeholder.toPatch().postalCode)
     }
 }

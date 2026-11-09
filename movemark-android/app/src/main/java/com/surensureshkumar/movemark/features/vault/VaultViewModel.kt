@@ -79,6 +79,10 @@ class VaultViewModel @Inject constructor(
     private val _previewImagePath = MutableStateFlow<String?>(null)
     val previewImagePath: StateFlow<String?> = _previewImagePath.asStateFlow()
 
+    /** Newest saved move-in photo per room, newest room first (iOS Proof "Recent evidence"), with signed URLs. */
+    private val _recent = MutableStateFlow<List<RecentEvidence>>(emptyList())
+    val recent: StateFlow<List<RecentEvidence>> = _recent.asStateFlow()
+
     /** Per-rental rooms / documented rooms / newest evidence, from one `get_vault_summaries` call. */
     private val _summaries = MutableStateFlow<Map<String, VaultSummary>>(emptyMap())
     val summaries: StateFlow<Map<String, VaultSummary>> = _summaries.asStateFlow()
@@ -88,6 +92,7 @@ class VaultViewModel @Inject constructor(
             property.collect { record ->
                 _summaries.value = propertyStore.vaultSummaries()
                 refreshPreviewUrl(record)
+                refreshRecent(record)
             }
         }
     }
@@ -96,6 +101,17 @@ class VaultViewModel @Inject constructor(
         val userId = sessionManager.userId.value ?: return
         viewModelScope.launch {
             propertyStore.activateProperty(propertyId, userId)
+        }
+    }
+
+    private suspend fun refreshRecent(property: PropertyRecord?) {
+        val items = property?.let { recentEvidence(it) }.orEmpty()
+        // Keep already-signed URLs for the same paths so a refresh doesn't blank the strip.
+        val known = _recent.value.associate { it.path to it.url }
+        _recent.value = items.map { it.copy(url = known[it.path]) }
+        if (items.isEmpty()) return
+        _recent.value = items.map { item ->
+            item.copy(url = known[item.path] ?: runCatching { inspectionRepository.signedUrl(item.path) }.getOrNull())
         }
     }
 
@@ -117,3 +133,25 @@ class VaultViewModel @Inject constructor(
         }
     }
 }
+
+/** One room's newest saved move-in photo, for the Proof home's evidence strip. */
+data class RecentEvidence(
+    val roomId: UUID,
+    val roomName: String,
+    val photoCount: Int,
+    val path: String,
+    val capturedAt: String?,
+    val url: String? = null,
+)
+
+/** Newest saved photo per room, newest room first, at most [limit] (iOS `VaultRootView.proofHomeModel.recent`). */
+internal fun recentEvidence(property: PropertyRecord, limit: Int = 8): List<RecentEvidence> =
+    property.rooms.mapNotNull { room ->
+        val latest = room.moveInEvidence.filter { it.photos.isNotEmpty() }.maxByOrNull { it.createdAt.orEmpty() }
+            ?: return@mapNotNull null
+        val photo = latest.photos.first()
+        val path = (photo.thumbnailPath ?: photo.filePath).trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+        RecentEvidence(room.id, room.name, RoomProofMetrics.moveInPhotoCount(room), path, latest.createdAt)
+    }
+        .sortedByDescending { it.capturedAt.orEmpty() }
+        .take(limit)

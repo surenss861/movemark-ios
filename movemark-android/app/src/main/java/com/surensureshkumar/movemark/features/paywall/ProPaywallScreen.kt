@@ -153,7 +153,7 @@ fun ProPaywallScreen(
                         Icon(
                             Icons.Filled.CheckCircle,
                             contentDescription = null,
-                            tint = MMColors.Primary,
+                            tint = com.surensureshkumar.movemark.core.design.MMInk.LimeMark,
                             modifier = Modifier.padding(end = 8.dp),
                         )
                         Column {
@@ -176,7 +176,7 @@ fun ProPaywallScreen(
                         Spacer(Modifier.height(8.dp))
                         Text(error ?: "Try again.", color = MMColors.TextSecondary)
                         Spacer(Modifier.height(12.dp))
-                        MMButton(text = "Try again", onClick = viewModel::loadPlans)
+                        MMButton(text = "Try again", onClick = viewModel::loadPlans, style = MMButtonStyle.Action)
                         Spacer(Modifier.height(8.dp))
                         MMButton(text = "Continue on Free", onClick = onClose, style = MMButtonStyle.Secondary)
                     }
@@ -212,6 +212,7 @@ fun ProPaywallScreen(
                         },
                         enabled = selected != null && activity != null && !busy,
                         loading = purchasing,
+                        style = MMButtonStyle.Action,
                     )
                     Spacer(Modifier.height(10.dp))
                     MMButton(

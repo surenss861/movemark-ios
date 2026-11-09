@@ -3,12 +3,35 @@ package com.surensureshkumar.movemark.features.account
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import com.surensureshkumar.movemark.core.design.MMGroup
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMMetrics
+import com.surensureshkumar.movemark.core.design.MMNotice
+import com.surensureshkumar.movemark.core.design.MMNoticeTone
+import com.surensureshkumar.movemark.core.design.MMRow
+import com.surensureshkumar.movemark.core.design.MMRowAccessory
+import com.surensureshkumar.movemark.core.design.MMRowDivider
+import com.surensureshkumar.movemark.core.design.MMScreen
+import com.surensureshkumar.movemark.core.design.mmFont
+import com.surensureshkumar.movemark.core.design.mmLines
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -24,19 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.surensureshkumar.movemark.core.design.MMColors
-import com.surensureshkumar.movemark.core.design.MMMotion
-import com.surensureshkumar.movemark.core.design.MMSpacing
-import com.surensureshkumar.movemark.core.design.mmAppearRise
-import com.surensureshkumar.movemark.core.design.components.MMProofSectionHeader
-import com.surensureshkumar.movemark.core.design.components.MMSettingsAccessory
-import com.surensureshkumar.movemark.core.design.components.MMSettingsDivider
-import com.surensureshkumar.movemark.core.design.components.MMSettingsGroup
-import com.surensureshkumar.movemark.core.design.components.MMSettingsRow
-import com.surensureshkumar.movemark.core.design.components.MMSettingsSectionHeader
-import com.surensureshkumar.movemark.core.growth.MoveMarkGrowthCopy
 import com.surensureshkumar.movemark.core.util.PlaySubscriptionIntents
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
 
@@ -45,6 +56,7 @@ fun AccountScreen(
     onSignOut: () -> Unit,
     onShowPaywall: (PaywallReason) -> Unit,
     modifier: Modifier = Modifier,
+    scrollState: androidx.compose.foundation.ScrollState = androidx.compose.foundation.rememberScrollState(),
     viewModel: AccountViewModel = hiltViewModel(),
 ) {
     val email by viewModel.email.collectAsState()
@@ -59,25 +71,17 @@ fun AccountScreen(
     var confirmDelete by remember { mutableStateOf(false) }
     val isMockMode = viewModel.isMockMode
     val context = LocalContext.current
-    val reduceMotion = MMMotion.rememberReduceMotion()
-    var appeared by remember { mutableStateOf(reduceMotion) }
     var showEditName by remember { mutableStateOf(false) }
     var unsavedOnSignOut by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(reduceMotion) {
-        if (!reduceMotion) appeared = true
-    }
     LaunchedEffect(Unit) { viewModel.refresh() }
 
-    val displayName = fullName?.takeIf { it.isNotBlank() } ?: "Add your name"
-    val displayEmail = email?.takeIf { it.isNotBlank() } ?: "—"
-    val planFooter = when {
-        hasPro && isMockMode ->
-            "Test mode · ${MoveMarkGrowthCopy.PRO_ACTIVE_SUMMARY}"
-        hasPro -> MoveMarkGrowthCopy.PRO_ACTIVE_SUMMARY
-        isMockMode -> "Test mode · 1 proof vault · 1 move-in report"
-        else -> "1 proof vault · 1 move-in report"
+    val planLine = when {
+        hasPro && isMockMode -> "MoveMark Pro · Test mode"
+        hasPro -> "MoveMark Pro"
+        isMockMode -> "Free plan · Test mode"
+        else -> "Free plan"
     }
 
     if (showEditName) {
@@ -92,171 +96,121 @@ fun AccountScreen(
         )
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-            .padding(top = 12.dp, bottom = MMSpacing.TabScrollBottom.dp),
+    MMScreen(
+        title = "Your account",
+        eyebrow = "Account",
+        tail = MMMetrics.RootTabTail,
+        scrollState = scrollState,
+        modifier = modifier,
     ) {
-        MMProofSectionHeader(
-            title = "Account",
-            subtitle = "Manage your profile, plan, and proof vaults.",
-            modifier = Modifier.mmAppearRise(appeared, reduceMotion, label = "accountHeader"),
-        )
-        Spacer(Modifier.height(22.dp))
-
-        AccountNoticeBanner(notice)
-        restoreMessage?.let {
-            Spacer(Modifier.height(8.dp))
-            AccountInlineMessage(it, isError = false)
-        }
-
-        Column(Modifier.mmAppearRise(appeared, reduceMotion, label = "profile")) {
-            MMSettingsSectionHeader(title = "Profile")
-            MMSettingsGroup {
-                MMSettingsRow(
-                    title = "Name",
-                    value = displayName,
-                    accessory = MMSettingsAccessory.None,
-                    onClick = null,
-                )
-                MMSettingsDivider()
-                MMSettingsRow(
-                    title = "Email",
-                    value = displayEmail,
-                    accessory = MMSettingsAccessory.None,
-                    onClick = null,
-                )
-                MMSettingsDivider()
-                MMSettingsRow(
-                    title = "Edit name",
-                    subtitle = "Update how your name appears",
-                    onClick = { showEditName = true },
-                )
-            }
-        }
-
-        Spacer(Modifier.height(22.dp))
-        Column(Modifier.mmAppearRise(appeared, reduceMotion, label = "plan")) {
-            MMSettingsSectionHeader(title = "Plan", footer = planFooter)
-            MMSettingsGroup {
-                MMSettingsRow(
-                    title = if (hasPro) "MoveMark Pro" else "MoveMark Free",
-                    pillText = if (hasPro) "Active" else "Current",
-                    pillIsActive = hasPro,
-                    onClick = null,
-                )
-                if (!hasPro) {
-                    MMSettingsDivider()
-                    MMSettingsRow(
-                        title = "Upgrade to Pro",
-                        subtitle = MoveMarkGrowthCopy.PRO_OUTCOME_LINE,
-                        onClick = {
-                            viewModel.dismissNotice()
-                            onShowPaywall(PaywallReason.ExtraProperty)
-                        },
-                    )
-                }
-                if (hasPro && !isMockMode) {
-                    MMSettingsDivider()
-                    MMSettingsRow(
-                        title = "Manage subscription",
-                        subtitle = "Google Play subscriptions",
-                        accessory = MMSettingsAccessory.External,
-                        onClick = { PlaySubscriptionIntents.openManageSubscriptions(context) },
-                    )
-                }
-                if (isMockMode && hasPro) {
-                    MMSettingsDivider()
-                    MMSettingsRow(
-                        title = "Reset test subscription",
-                        subtitle = "Clear mock Pro for local QA",
-                        onClick = viewModel::resetTestSubscription,
-                    )
-                }
-                if (isMockMode && !hasPro) {
-                    MMSettingsDivider()
-                    MMSettingsRow(
-                        title = "Test mode",
-                        subtitle = "Mock billing is active in this build",
-                        accessory = MMSettingsAccessory.None,
-                        onClick = null,
-                    )
-                }
-                MMSettingsDivider()
-                MMSettingsRow(
-                    title = if (purchasing) "Restoring purchases…" else "Restore purchases",
-                    subtitle = "Sync MoveMark Pro with this account",
-                    enabled = !purchasing,
-                    onClick = viewModel::restorePurchases,
-                )
-            }
-        }
-
-        Spacer(Modifier.height(22.dp))
-        Column(Modifier.mmAppearRise(appeared, reduceMotion, label = "privacy")) {
-            MMSettingsSectionHeader(title = "Privacy & support")
-            MMSettingsGroup {
-                LegalLinkRow("Privacy Policy", "How we handle your data") {
-                    openUrl(context, AccountViewModel.PRIVACY_URL)
-                }
-                MMSettingsDivider()
-                LegalLinkRow("Terms of Use", "Subscription and service terms") {
-                    openUrl(context, AccountViewModel.TERMS_URL)
-                }
-                MMSettingsDivider()
-                LegalLinkRow("Contact Support", "Get help with your account") {
-                    openUrl(context, AccountViewModel.SUPPORT_URL)
-                }
-                MMSettingsDivider()
-                LegalLinkRow("Account & Data Deletion", "Request account removal") {
-                    openUrl(context, AccountViewModel.ACCOUNT_DELETION_URL)
-                }
-            }
-        }
-
-        Spacer(Modifier.height(22.dp))
-        Column(Modifier.mmAppearRise(appeared, reduceMotion, label = "security")) {
-            MMSettingsSectionHeader(title = "Security")
-            MMSettingsGroup {
-                MMSettingsRow(
-                    title = "Reset password",
-                    subtitle = "Send a link to your email",
-                    value = if (resetInProgress) "Sending…" else null,
-                    enabled = !resetInProgress,
-                    onClick = viewModel::sendPasswordReset,
-                )
-            }
-        }
-
-        Spacer(Modifier.height(22.dp))
-        Column(Modifier.mmAppearRise(appeared, reduceMotion, label = "about")) {
-            MMSettingsSectionHeader(title = "About")
-            MMSettingsGroup {
-                MMSettingsRow(
-                    title = "App version",
-                    value = viewModel.appVersion,
-                    accessory = MMSettingsAccessory.None,
-                    onClick = null,
-                )
-            }
-            Spacer(Modifier.height(8.dp))
+        // Who is signed in, and on which plan. Plain text on the sheet: not a card.
+        Column(
+            Modifier
+                .padding(horizontal = 4.dp)
+                .semantics(mergeDescendants = true) {},
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
             Text(
-                "MoveMark helps renters document proof and records. It does not provide legal advice.",
-                fontSize = 13.sp,
-                color = MMColors.TextMuted,
-                modifier = Modifier.padding(horizontal = 4.dp),
+                email?.takeIf { it.isNotBlank() } ?: "Signed in",
+                style = mmFont(19f, FontWeight.SemiBold),
+                color = MMInk.Text,
+                maxLines = mmLines(1),
+                overflow = TextOverflow.Ellipsis,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (hasPro) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(MMInk.LimeMark))
+                    Spacer(Modifier.width(7.dp))
+                }
+                Text(
+                    planLine,
+                    style = mmFont(14.5f, if (hasPro) FontWeight.Medium else FontWeight.Normal),
+                    color = if (hasPro) MMInk.Text else MMInk.Secondary,
+                )
+            }
+        }
+
+        notice?.let {
+            Spacer(Modifier.height(16.dp))
+            MMNotice(it.message, tone = if (it.isError) MMNoticeTone.Error else MMNoticeTone.Info)
+        }
+
+        Spacer(Modifier.height(26.dp))
+        MMGroup(
+            title = "MoveMark",
+            footer = restoreMessage,
+        ) {
+            MMRow(
+                title = "Name",
+                value = fullName?.takeIf { it.isNotBlank() } ?: "Add",
+                onClick = { showEditName = true },
+            )
+            MMRowDivider()
+            MMRow(
+                title = "Subscription",
+                value = if (hasPro) "Pro" else "Free",
+                accessory = if (hasPro && !isMockMode) MMRowAccessory.External else MMRowAccessory.Chevron,
+                onClick = {
+                    if (hasPro) {
+                        if (!isMockMode) PlaySubscriptionIntents.openManageSubscriptions(context)
+                    } else {
+                        viewModel.dismissNotice()
+                        onShowPaywall(PaywallReason.ExtraProperty)
+                    }
+                },
+            )
+            if (isMockMode && hasPro) {
+                MMRowDivider()
+                MMRow(title = "Reset test subscription", subtitle = "Clear mock Pro for local QA", onClick = viewModel::resetTestSubscription)
+            }
+            if (isMockMode && !hasPro) {
+                MMRowDivider()
+                MMRow(title = "Test mode", subtitle = "Mock billing is active in this build", accessory = MMRowAccessory.None)
+            }
+            MMRowDivider()
+            MMRow(
+                title = if (purchasing) "Restoring purchases…" else "Restore purchases",
+                enabled = !purchasing,
+                accessory = MMRowAccessory.None,
+                trailing = if (purchasing) ({ CircularProgressIndicator(color = MMInk.Secondary, strokeWidth = 2.dp, modifier = Modifier.size(16.dp)) }) else null,
+                onClick = viewModel::restorePurchases,
             )
         }
 
-        Spacer(Modifier.height(28.dp))
-        MMSettingsGroup(
-            modifier = Modifier.mmAppearRise(appeared, reduceMotion, label = "signOut"),
-        ) {
-            MMSettingsRow(
+        Spacer(Modifier.height(26.dp))
+        MMGroup(title = "Support") {
+            MMRow(title = "Contact support", accessory = MMRowAccessory.External, onClick = { openUrl(context, AccountViewModel.SUPPORT_URL) })
+        }
+
+        Spacer(Modifier.height(26.dp))
+        MMGroup(title = "Legal") {
+            MMRow(title = "Privacy Policy", accessory = MMRowAccessory.External, onClick = { openUrl(context, AccountViewModel.PRIVACY_URL) })
+            MMRowDivider()
+            MMRow(title = "Terms of Use", accessory = MMRowAccessory.External, onClick = { openUrl(context, AccountViewModel.TERMS_URL) })
+            MMRowDivider()
+            MMRow(
+                title = "Account & data deletion",
+                accessory = MMRowAccessory.External,
+                onClick = { openUrl(context, AccountViewModel.ACCOUNT_DELETION_URL) },
+            )
+        }
+
+        Spacer(Modifier.height(26.dp))
+        MMGroup(title = "Security") {
+            MMRow(
+                title = "Reset password",
+                subtitle = "Send a link to your email",
+                value = if (resetInProgress) "Sending…" else null,
+                enabled = !resetInProgress,
+                onClick = viewModel::sendPasswordReset,
+            )
+        }
+
+        Spacer(Modifier.height(34.dp))
+        MMGroup {
+            MMRow(
                 title = "Sign out",
-                subtitle = "Clear this device and return to Welcome",
+                accessory = MMRowAccessory.None,
                 onClick = {
                     scope.launch {
                         val unsaved = viewModel.unsavedPhotoCount()
@@ -264,12 +218,33 @@ fun AccountScreen(
                     }
                 },
             )
-            MMSettingsDivider()
-            MMSettingsRow(
+        }
+
+        Spacer(Modifier.height(34.dp))
+        MMGroup(footer = "Deletes your account, proof, reports and stored evidence.") {
+            MMRow(
                 title = if (deleting) "Deleting account…" else "Delete account",
-                subtitle = "Delete your account and all proof",
+                tint = MMInk.Danger,
+                accessory = MMRowAccessory.None,
                 enabled = !deleting,
                 onClick = { confirmDelete = true },
+            )
+        }
+
+        Spacer(Modifier.height(30.dp))
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text("MoveMark ${viewModel.appVersion}", style = mmFont(12f), color = MMInk.Secondary, textAlign = TextAlign.Center)
+            Text(
+                "MoveMark organizes rental evidence. It does not provide legal advice.",
+                style = mmFont(12f),
+                color = MMInk.Secondary,
+                textAlign = TextAlign.Center,
             )
         }
     }
@@ -288,10 +263,10 @@ fun AccountScreen(
                 TextButton(onClick = {
                     unsavedOnSignOut = 0
                     viewModel.signOut(onSignOut)
-                }) { Text("Sign out", color = MMColors.SemanticDanger) }
+                }) { Text("Sign out", color = MMInk.Danger) }
             },
             dismissButton = {
-                TextButton(onClick = { unsavedOnSignOut = 0 }) { Text("Cancel", color = MMColors.TextSecondary) }
+                TextButton(onClick = { unsavedOnSignOut = 0 }) { Text("Cancel", color = MMInk.Secondary) }
             },
         )
     }
@@ -309,44 +284,13 @@ fun AccountScreen(
                 TextButton(onClick = {
                     confirmDelete = false
                     viewModel.deleteAccount(onSignOut)
-                }) { Text("Delete", color = MMColors.SemanticDanger) }
+                }) { Text("Delete", color = MMInk.Danger) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("Cancel", color = MMColors.TextSecondary) }
+                TextButton(onClick = { confirmDelete = false }) { Text("Cancel", color = MMInk.Secondary) }
             },
         )
     }
-}
-
-@Composable
-private fun LegalLinkRow(
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit,
-) {
-    MMSettingsRow(
-        title = title,
-        subtitle = subtitle,
-        accessory = MMSettingsAccessory.External,
-        onClick = onClick,
-    )
-}
-
-@Composable
-private fun AccountNoticeBanner(notice: AccountNotice?) {
-    notice ?: return
-    Spacer(Modifier.height(4.dp))
-    AccountInlineMessage(notice.message, isError = notice.isError)
-}
-
-@Composable
-private fun AccountInlineMessage(message: String, isError: Boolean) {
-    Text(
-        message,
-        color = if (isError) MMColors.SemanticDanger else MMColors.TextSecondary,
-        fontSize = 13.sp,
-        modifier = Modifier.padding(horizontal = 4.dp),
-    )
 }
 
 private fun openUrl(context: android.content.Context, url: String) {

@@ -66,6 +66,10 @@ data class ReportsUiState(
     val moveOutReportStatus: String = "Capture move-out proof first.",
     val disputeReadiness: DisputePacketReadiness = DisputePacketReadiness.NoProof,
     val disputePacketStatus: String = "Add room proof first.",
+    /** Display only: the rental the report covers, and its supporting-record and issue-tag counts. */
+    val rentalName: String = "",
+    val supportingRecords: Int = 0,
+    val issueTags: Int = 0,
 )
 
 /** Lease, deposit receipt and listing proof — iOS `moveInRequiredDocumentTypes`. */
@@ -462,6 +466,9 @@ class ReportsViewModel @Inject constructor(
             moveOutReportStatus = moveOutStatusLine(moveOutReadiness),
             disputeReadiness = disputeReadiness,
             disputePacketStatus = disputeStatusLine(disputeReadiness),
+            rentalName = property.title,
+            supportingRecords = property.supportingRecordCount,
+            issueTags = property.rooms.sumOf { RoomProofMetrics.issueTagCount(it) },
         )
     }
 
