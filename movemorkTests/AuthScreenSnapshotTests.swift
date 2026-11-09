@@ -157,6 +157,27 @@ final class AuthScreenSnapshotTests: XCTestCase {
         assertScreen(screen, devices: ScreenSnapshot.allDevices, inNavigation: false)
     }
 
+    /// A Pro-width phone tall enough to show the whole agreement sheet, so the age notices are checked in full.
+    private static let tallPro = ViewImageConfig(safeArea: ScreenSnapshot.pro.safeArea,
+                                                 size: CGSize(width: 402, height: 1500), traits: ScreenSnapshot.pro.traits)
+    private static var ageNoticeDevices: [(String, ViewImageConfig)] { ScreenSnapshot.allDevices + [("tall", tallPro)] }
+
+    /// 18 or older chosen: the adult notice under the question.
+    func testLegalGateAgeRangeAdult() {
+        let screen = LegalAcceptanceScreen(termsURL: URL(string: "https://movemark.ca/terms"),
+                                           privacyURL: URL(string: "https://movemark.ca/privacy"), age: .ageRange,
+                                           ageChoice: .adult)
+        assertScreen(screen, devices: Self.ageNoticeDevices, inNavigation: false)
+    }
+
+    /// 14 to 17 chosen: the teen notice and the children's privacy link.
+    func testLegalGateAgeRangeTeen() {
+        let screen = LegalAcceptanceScreen(termsURL: URL(string: "https://movemark.ca/terms"),
+                                           privacyURL: URL(string: "https://movemark.ca/privacy"), age: .ageRange,
+                                           ageChoice: .fourteenToSeventeen)
+        assertScreen(screen, devices: Self.ageNoticeDevices, inNavigation: false)
+    }
+
     func testLegalGate() {
         let screen = LegalAcceptanceScreen(termsURL: URL(string: "https://movemark.ca/terms"),
                                            privacyURL: URL(string: "https://movemark.ca/privacy"))

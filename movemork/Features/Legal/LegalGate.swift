@@ -81,9 +81,9 @@ nonisolated enum LegalAgeRequirement: String, Sendable, CaseIterable {
         case .ageRange:
             "MoveMark asks for your age range only, never your date of birth."
         case .thirteenQuebecFourteen:
-            "MoveMark isn’t for children under 13 (under 14 in Quebec). If you’re under 18: your photos, documents and rental details are stored in the United States, nobody else sees them unless you share a report, and you can delete everything from Account at any time."
+            "MoveMark isn’t for children under 13 (under 14 in Quebec). If you’re under 18: your photos, documents and rental details are stored in the United States. Only you can see them in the app; MoveMark staff access them only to run the service, give support or meet legal duties. You can delete everything from Account at any time."
         case .eighteen:
-            "MoveMark is for adults. Your photos, documents and rental details are stored in the United States, nobody else sees them unless you share a report, and you can delete everything from Account at any time."
+            "MoveMark is for adults. Your photos, documents and rental details are stored in the United States. Only you can see them in the app; MoveMark staff access them only to run the service, give support or meet legal duties. You can delete everything from Account at any time."
         }
     }
 }

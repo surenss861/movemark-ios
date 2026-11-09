@@ -24,7 +24,8 @@ struct LegalAcceptanceScreen: View {
 
     @State private var agreed = false
     @State private var ageConfirmed = false
-    @State private var ageChoice: LegalAgeChoice?
+    /// Internal only so snapshots can start with an answer; the app always starts with none.
+    @State var ageChoice: LegalAgeChoice?
     @State private var livesInQuebec: Bool?
     @State private var isSaving = false
     @State private var errorMessage: String?
@@ -127,7 +128,8 @@ struct LegalAcceptanceScreen: View {
     }
 
     private var agreement: some View {
-        checkbox("I agree to the Terms of Service and acknowledge the Privacy Policy.", isOn: agreed, identifier: "legal.agree") {
+        checkbox("I agree to the Terms of Service and consent to MoveMark handling my information as the Privacy Policy describes.",
+                 isOn: agreed, identifier: "legal.agree") {
             agreed.toggle()
         }
     }
@@ -216,11 +218,34 @@ struct LegalAcceptanceScreen: View {
                     .environment(\.mmEvidenceOnLight, true)
                     .accessibilityIdentifier("legal.age.unavailable")
             } else if chosenBand == .teen {
-                Text("Because you’re under 18, photos you add are saved without their location or camera details. Your records are stored in the United States, nobody else sees them unless you share a report, and you can delete everything from Account at any time.")
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(Self.teenNotice)
+                        .mmFont(13)
+                        .foregroundStyle(MMInk.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("legal.age.teenNotice")
+                    if let childrensPrivacy = URL(string: "https://movemark.ca/privacy#childrens-privacy") {
+                        Link(destination: childrensPrivacy) {
+                            HStack(spacing: 4) {
+                                Text("Children’s privacy").mmFont(13, .medium).foregroundStyle(MMInk.text)
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(MMInk.secondary)
+                                    .accessibilityHidden(true)
+                            }
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                        }
+                        .accessibilityHint("Opens in your browser")
+                        .accessibilityIdentifier("legal.age.childrensPrivacy")
+                    }
+                }
+            } else if chosenBand == .adult {
+                Text(Self.adultNotice)
                     .mmFont(13)
                     .foregroundStyle(MMInk.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("legal.age.teenNotice")
+                    .accessibilityIdentifier("legal.age.adultNotice")
             } else {
                 Text(LegalAgeRequirement.ageRange.explanation)
                     .mmFont(13)
@@ -229,6 +254,12 @@ struct LegalAcceptanceScreen: View {
             }
         }
     }
+
+    /// What MoveMark keeps, shown once an adult range is chosen (owner-approved wording).
+    static let adultNotice = "MoveMark keeps what you add: photos of the rental, its address, notes and documents. It’s stored with our service providers in the United States and is never sold or used for ads. Original photos keep any location your phone saved in them. Only you can see your vault in the app; MoveMark staff access it only to run the service, give support or meet legal duties. Delete everything anytime in Account; backups take longer to clear."
+
+    /// The same for 13–17 (owner-approved wording), with the children's privacy section linked below it.
+    static let teenNotice = "Because you’re under 18, photos you add are saved without where they were taken or which phone took them. MoveMark keeps your photos, rental address, notes and documents with service providers in the United States. Only you can see them in the app; MoveMark staff access them only to run the service, give support or meet legal duties. Delete everything in Account; backups take longer to clear. Questions? Ask a parent or email connect@movemark.ca."
 
     private func radio(_ text: String, isOn: Bool, identifier: String, select: @escaping () -> Void) -> some View {
         Button {
