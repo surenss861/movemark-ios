@@ -251,11 +251,16 @@ final class SessionManager {
         var attempt = 0
         while true {
             do {
-                let status: LegalStatus = try await dataAPI.rpc("get_legal_status", params: [String: String]()).execute().value
+                let status: LegalStatus = try await LegalTransientAuthRetry.run {
+                    try await dataAPI.rpc("get_legal_status", params: [String: String]()).execute().value
+                }
                 return .success(status)
             } catch {
                 let failure = LegalStatusFailure.classify(error)
-                guard failure == .unavailable, attempt < retries else { return .failure(failure) }
+                // A LEGAL_NOT_AUTHENTICATED that survived its one retry isn't retried again here.
+                guard failure == .unavailable, attempt < retries, !LegalTransientAuthRetry.isTransient(error) else {
+                    return .failure(failure)
+                }
                 attempt += 1
                 try? await Task.sleep(for: .seconds(1))
             }
@@ -295,13 +300,21 @@ final class SessionManager {
             let status: LegalStatus
             switch call {
             case .withoutAge(let params):
-                status = try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+                status = try await LegalTransientAuthRetry.run {
+                    try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+                }
             case .withAge(let params):
-                status = try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+                status = try await LegalTransientAuthRetry.run {
+                    try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+                }
             case .withAgeBand(let params):
-                status = try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+                status = try await LegalTransientAuthRetry.run {
+                    try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+                }
             case .withResidence(let params):
-                status = try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+                status = try await LegalTransientAuthRetry.run {
+                    try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+                }
             case .updateRequired:
                 return "Update MoveMark from the App Store to continue."
             }

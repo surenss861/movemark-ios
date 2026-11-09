@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import PostgREST
 import Testing
 @testable import MoveMark
 
@@ -110,5 +111,63 @@ extension LegalGateTests {
         #expect(!LegalAcceptanceRequiredSignal.matches(data: body, response: response("elsewhere.test", 403), apiHost: "api.test"))
         #expect(!LegalAcceptanceRequiredSignal.matches(data: body, response: response("api.test", 402), apiHost: "api.test"))
         #expect(!LegalAcceptanceRequiredSignal.matches(data: Data(#"{"code":"FORBIDDEN"}"#.utf8), response: response("api.test", 403), apiHost: "api.test"))
+    }
+
+    // MARK: - One retry for a transient LEGAL_NOT_AUTHENTICATED (dev rehearsal, 2026-11-09)
+
+    /// Counts calls through a fake Data API transport.
+    private actor CallCounter {
+        private(set) var count = 0
+        func next() -> Int { count += 1; return count }
+    }
+
+    /// A PostgREST client whose transport answers 403 LEGAL_NOT_AUTHENTICATED for the first `failures` calls and
+    /// a legal status after that.
+    private func client(failures: Int, counter: CallCounter) -> PostgrestClient {
+        PostgrestClient(url: URL(string: "https://data.movemark.test/rest/v1")!, fetch: { request in
+            let call = await counter.next()
+            let failing = call <= failures
+            let body = failing
+                ? #"{"code":"42501","details":null,"hint":null,"message":"LEGAL_NOT_AUTHENTICATED"}"#
+                : #"{"enforced":false,"acceptance_required":false,"blocked":false,"documents":null}"#
+            let response = HTTPURLResponse(url: request.url!, statusCode: failing ? 403 : 200, httpVersion: nil,
+                                           headerFields: ["Content-Type": "application/json"])!
+            return (Data(body.utf8), response)
+        })
+    }
+
+    private func legalStatus(through client: PostgrestClient, sleeps: CallCounter) async throws -> LegalStatus {
+        try await LegalTransientAuthRetry.run(sleep: { _ in _ = await sleeps.next() }) {
+            try await client.rpc("get_legal_status", params: [String: String]()).execute().value
+        }
+    }
+
+    @Test func aTransientLegalNotAuthenticatedIsRetriedOnceAndSucceeds() async throws {
+        let calls = CallCounter(), sleeps = CallCounter()
+        let status = try await legalStatus(through: client(failures: 1, counter: calls), sleeps: sleeps)
+        #expect(!status.needsAcceptance)
+        #expect(await calls.count == 2)
+        #expect(await sleeps.count == 1)
+    }
+
+    @Test func aSecondLegalNotAuthenticatedIsSurfacedAfterTwoCalls() async throws {
+        let calls = CallCounter(), sleeps = CallCounter()
+        await #expect(throws: (any Error).self) {
+            _ = try await legalStatus(through: client(failures: 2, counter: calls), sleeps: sleeps)
+        }
+        #expect(await calls.count == 2)
+        #expect(await sleeps.count == 1)
+    }
+
+    @Test func otherErrorsAreNotRetried() async throws {
+        let calls = CallCounter()
+        await #expect(throws: (any Error).self) {
+            _ = try await LegalTransientAuthRetry.run(sleep: { _ in }) { () async throws -> Int in
+                _ = await calls.next()
+                throw URLError(.notConnectedToInternet)
+            }
+        }
+        #expect(await calls.count == 1)
+        #expect(!LegalTransientAuthRetry.isTransient(URLError(.notConnectedToInternet)))
     }
 }

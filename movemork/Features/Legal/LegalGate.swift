@@ -228,6 +228,28 @@ nonisolated struct LegalAcceptanceWithResidenceParams: Encodable, Equatable, Sen
     let p_lives_in_quebec: Bool
 }
 
+/// The dev rehearsal (2026-11-09) saw the first Data API call right after a migration answer 403
+/// `LEGAL_NOT_AUTHENTICATED` on a valid token, once; the same call then succeeded. The legal gate's status and accept
+/// calls retry that one error exactly once, after a short pause, before surfacing it. Nothing else is retried here,
+/// and there is no loop: a second `LEGAL_NOT_AUTHENTICATED` is a real one ("Sign in again" in the rollout plan).
+nonisolated enum LegalTransientAuthRetry {
+    static let code = "LEGAL_NOT_AUTHENTICATED"
+    static let delay: Duration = .milliseconds(750)
+
+    static func isTransient(_ error: Error) -> Bool { String(describing: error).contains(code) }
+
+    static func run<T>(isolation: isolated (any Actor)? = #isolation,
+                       sleep: (Duration) async -> Void = { try? await Task.sleep(for: $0) },
+                       _ operation: () async throws -> T) async throws -> T {
+        do {
+            return try await operation()
+        } catch let error where isTransient(error) {
+            await sleep(delay)
+            return try await operation()
+        }
+    }
+}
+
 /// Why `get_legal_status` gave no answer, which decides where the renter lands.
 nonisolated enum LegalStatusFailure: Error, Equatable, Sendable {
     /// The server has no legal gate (PGRST202 before migration 1030): nothing to offer, nothing enforced.
