@@ -665,6 +665,7 @@ PRIVILEGED_FUNCTIONS = {  # 0980: each SECURITY DEFINER function, executable by 
     "public.accept_legal_documents(text, text, text)": {"authenticated"},
     "public.accept_legal_documents(text, text, text, text)": {"authenticated"},  # 1055: with the age attestation
     "public.accept_legal_documents(text, text, text, text, text)": {"authenticated"},  # 1055: with the age range
+    "public.accept_legal_documents(text, text, text, text, text, boolean)": {"authenticated"},  # 1057: with the Quebec answer
     # ...and these take any user's id, so they may not.
     "public.legal_user_has_current_acceptance(uuid)": set(),
     "public.legal_gate_open_for_user(uuid)": {"movemark_api"},

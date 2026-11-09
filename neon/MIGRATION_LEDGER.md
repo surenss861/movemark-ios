@@ -119,6 +119,7 @@ Every Supabase dependency found in the iOS app, the Android app, the FastAPI API
 | Records, helpers, client RPCs | `1030` | ✅ local · see `docs/legal-gate/` for branches |
 | Restrictive Data API policies, both waves | `1040`, `1050` | ✅ local · inert until enforced |
 | Age-eligibility attestation (D1) | `1055` | ✅ local · counts only once enforced; 3-arg kept for 20261107.1 |
+| Quebec residence, Quebec not served yet (temporary) | `1057` | ✅ local · `bands_v2` default; "Yes" refused (`LEGAL_REGION_NOT_AVAILABLE`), only "No" stored; 3-arg refused under `bands_v2` even unenforced; rollback `rollback/1057_quebec_residence.down.sql` |
 | Production publish, enforcement | Not written: `docs/legal-gate/rollout-plan.md` | ⛔ needs owner approval |
 
 ## 7. Lost with the Supabase project (no replacement possible)
