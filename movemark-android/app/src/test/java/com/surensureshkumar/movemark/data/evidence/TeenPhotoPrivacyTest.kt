@@ -160,7 +160,9 @@ class TeenPhotoPrivacyTest {
 
     @Test fun derivativeAndThumbnailComeFromTheStrippedSource() {
         val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
-        val teen = EvidenceImport.source(fixture("gps.jpg"), EvidenceCaptureSource.Library, PhotoPrivacy.Teen)
+        // 400x300: the derivative pipeline needs a long side of at least 256 px.
+        val teen = EvidenceImport.source(fixture("gps-400.jpg"), EvidenceCaptureSource.Library, PhotoPrivacy.Teen)
+        assertNoPlantedBytes(teen.data)
         val prepared = checkNotNull(EvidenceImport.prepare(context, teen, PhotoPrivacy.Teen))
         keep("teen-derivative.jpg", prepared.derivative)
         assertNoPlantedBytes(prepared.derivative)

@@ -125,7 +125,7 @@ fun LegalAcceptanceScreen(
                     )
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        "I agree to the Terms of Service and acknowledge the Privacy Policy.",
+                        LEGAL_CONSENT_TEXT,
                         color = Ink,
                         fontSize = 15.sp,
                     )
@@ -181,6 +181,14 @@ fun LegalAcceptanceScreen(
     }
 }
 
+/** The consent line and the age notices, word for word as iOS 1.4. */
+internal const val LEGAL_CONSENT_TEXT =
+    "I agree to the Terms of Service and consent to MoveMark handling my information as the Privacy Policy describes."
+internal const val LEGAL_ADULT_NOTICE =
+    "MoveMark keeps what you add: photos of the rental, its address, notes and documents. It’s stored with our service providers in the United States and is never sold or used for ads. Original photos keep any location your phone saved in them. Only you can see your vault in the app; MoveMark staff access it only to run the service, give support or meet legal duties. Delete everything anytime in Account; backups take longer to clear."
+internal const val LEGAL_TEEN_NOTICE =
+    "Because you’re under 18, photos you add are saved without where they were taken or which phone took them. MoveMark keeps your photos, rental address, notes and documents with service providers in the United States. Only you can see them in the app; MoveMark staff access them only to run the service, give support or meet legal duties. Delete everything in Account; backups take longer to clear. Questions? Ask a parent or email connect@movemark.ca."
+
 /** Both answers given, an age statement this build knows, and nothing in flight. */
 internal fun legalCanContinue(agreed: Boolean, state: LegalGateState, band: LegalAgeBand?): Boolean = when {
     !agreed || state.isSaving || state.requiresAppUpdate -> false
@@ -224,10 +232,16 @@ private fun AgeRangeQuestion(
                 tag = "legal.age.unavailable",
             )
             band == LegalAgeBand.Teen -> Text(
-                "Because you’re under 18, photos you add are saved without their location or camera details. Your records are stored in the United States, nobody else sees them unless you share a report, and you can delete everything from Account at any time.",
+                LEGAL_TEEN_NOTICE,
                 color = Quiet,
                 fontSize = 13.sp,
                 modifier = Modifier.testTag("legal.age.teenNotice"),
+            )
+            band == LegalAgeBand.Adult -> Text(
+                LEGAL_ADULT_NOTICE,
+                color = Quiet,
+                fontSize = 13.sp,
+                modifier = Modifier.testTag("legal.age.adultNotice"),
             )
             else -> Text("MoveMark asks for your age range only, never your date of birth.", color = Quiet, fontSize = 13.sp)
         }
