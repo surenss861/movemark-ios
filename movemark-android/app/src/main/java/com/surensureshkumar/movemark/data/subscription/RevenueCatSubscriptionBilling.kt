@@ -186,7 +186,12 @@ class RevenueCatSubscriptionBilling @Inject constructor() : SubscriptionBilling,
                     RestoreOutcome.Restored
                 }
                 else -> {
-                    _restoreMessage.value = "No active subscription or Report Pack was found for this Google account."
+                    // Name the Report Pack only when the offering sells one.
+                    _restoreMessage.value = if (_packages.value.any { it.isReportPack }) {
+                        "No active subscription or Report Pack was found for this Google account."
+                    } else {
+                        "No active MoveMark subscription was found for this Google account."
+                    }
                     RestoreOutcome.NoneFound
                 }
             }

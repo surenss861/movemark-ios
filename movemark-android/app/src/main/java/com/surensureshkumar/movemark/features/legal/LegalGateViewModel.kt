@@ -15,7 +15,7 @@ import com.surensureshkumar.movemark.data.backend.PostgrestException
 import com.surensureshkumar.movemark.data.evidence.PhotoPrivacyStore
 import com.surensureshkumar.movemark.data.legal.LegalAcceptanceCall
 import com.surensureshkumar.movemark.data.legal.LegalAgeBand
-import com.surensureshkumar.movemark.data.legal.LegalAgeChoice
+import com.surensureshkumar.movemark.data.legal.LegalAgeRequirement
 import com.surensureshkumar.movemark.data.legal.LegalDocuments
 import com.surensureshkumar.movemark.data.legal.LegalRepository
 import com.surensureshkumar.movemark.data.legal.LegalStatus
@@ -35,12 +35,20 @@ data class LegalGateState(
     val ageRequirement: String? = null,
     val isSaving: Boolean = false,
     val error: String? = null,
+    /** The server refused with LEGAL_REGION_NOT_AVAILABLE: show the Quebec stop (the app itself never sends "Yes"). */
+    val regionRefused: Boolean = false,
 ) {
-    /** The server asks for the age-range question this build knows. */
-    val asksAgeRange: Boolean get() = ageRequirement == LegalAgeChoice.BANDS_V1
+    /** The statement this build understands; null with no age code, or with one this build doesn't know. */
+    val age: LegalAgeRequirement? get() = ageRequirement?.let(LegalAgeRequirement::fromCode)
+
+    /** The Quebec and age-range questions (bands_v2, bands_v1). */
+    val asksAgeRange: Boolean get() = age?.isRangeQuestion == true
+
+    /** A single-box statement (age_13_qc_14, age_18). */
+    val asksSingleBox: Boolean get() = age != null && !asksAgeRange
 
     /** The server asks for an age statement this build doesn't know: Continue can't work, the app must update. */
-    val requiresAppUpdate: Boolean get() = ageRequirement != null && !asksAgeRange
+    val requiresAppUpdate: Boolean get() = ageRequirement != null && age == null
 
     companion object {
         fun from(status: LegalStatus?, error: String? = null) = LegalGateState(
@@ -117,7 +125,7 @@ class LegalGateViewModel @Inject constructor(
         }
         _state.value = _state.value.copy(isSaving = true, error = null)
         viewModelScope.launch {
-            runCatching { repository.accept(params) }
+            runCatching { acceptRetryingAuthOnce(params) }
                 .onSuccess { accepted ->
                     if (!accepted.needsAcceptance) learnPhotoRule(accepted)
                     lastStatus = accepted
@@ -125,27 +133,56 @@ class LegalGateViewModel @Inject constructor(
                 }
                 .onFailure { failure ->
                     val text = serverText(failure)
-                    val ageChanged = text.contains("LEGAL_AGE_ATTESTATION") || text.contains("LEGAL_AGE_BAND")
-                    val current = if (ageChanged || text.contains("LEGAL_VERSION_NOT_ACTIVE")) repository.status() else null
-                    if (current != null) {
-                        lastStatus = current
-                        _state.value = LegalGateState.from(current, error = if (ageChanged) AGE_CHANGED else UPDATED)
-                    } else {
-                        _state.value = _state.value.copy(isSaving = false, error = NOT_SAVED)
+                    when (val next = classify(text)) {
+                        AcceptFailure.RegionNotAvailable ->
+                            _state.value = _state.value.copy(isSaving = false, regionRefused = true, error = null)
+                        AcceptFailure.AgeChanged, AcceptFailure.DocumentsChanged -> {
+                            val current = repository.status()
+                            if (current != null) {
+                                lastStatus = current
+                                _state.value = LegalGateState.from(
+                                    current,
+                                    error = if (next == AcceptFailure.AgeChanged) AGE_CHANGED else UPDATED,
+                                )
+                            } else {
+                                _state.value = _state.value.copy(isSaving = false, error = NOT_SAVED)
+                            }
+                        }
+                        AcceptFailure.Other -> _state.value = _state.value.copy(isSaving = false, error = NOT_SAVED)
                     }
                 }
         }
     }
+
+    /** A one-off LEGAL_NOT_AUTHENTICATED (a token that lapsed in flight) is retried once; a second one is an error. */
+    private suspend fun acceptRetryingAuthOnce(params: kotlinx.serialization.json.JsonObject): LegalStatus =
+        try {
+            repository.accept(params)
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException || !serverText(e).contains("LEGAL_NOT_AUTHENTICATED")) throw e
+            repository.accept(params)
+        }
 
     private suspend fun learnPhotoRule(status: LegalStatus?) {
         val userId = sessionManager.userId.value ?: return
         if (status != null) photoPrivacy.apply(status.ageCategory, userId.toString())
     }
 
+    enum class AcceptFailure { RegionNotAvailable, AgeChanged, DocumentsChanged, Other }
+
     companion object {
+        /** What a refused acceptance means for the screen (the `RAISE` text from migrations 1030/1055/1057). */
+        fun classify(text: String): AcceptFailure = when {
+            text.contains("LEGAL_REGION_NOT_AVAILABLE") -> AcceptFailure.RegionNotAvailable
+            text.contains("LEGAL_REGION_REQUIRED") || text.contains("LEGAL_AGE_ATTESTATION") ||
+                text.contains("LEGAL_AGE_BAND") -> AcceptFailure.AgeChanged
+            text.contains("LEGAL_VERSION_NOT_ACTIVE") -> AcceptFailure.DocumentsChanged
+            else -> AcceptFailure.Other
+        }
+
         const val UPDATED = "These documents were just updated. Please review them and agree again."
         const val AGE_CHANGED = "The age requirement just changed. Please review it and confirm again."
-        const val UPDATE_APP = "Update MoveMark from Google Play to continue."
+        const val UPDATE_APP = "Update MoveMark from the Play Store to continue."
         const val NOT_SAVED = "Couldn’t save your agreement. Check your connection and try again."
 
         /** The Data API puts the function's `RAISE` text in `message`; match on it, not on the exception's own text. */

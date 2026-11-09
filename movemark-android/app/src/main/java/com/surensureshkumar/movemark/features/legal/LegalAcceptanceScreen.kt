@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import com.surensureshkumar.movemark.core.ui.openInAppBrowser
 import com.surensureshkumar.movemark.data.legal.LegalAgeBand
 import com.surensureshkumar.movemark.data.legal.LegalAgeChoice
+import com.surensureshkumar.movemark.data.legal.LegalUnavailable
 
 private val Hero = Color(0xFF161817)
 private val Sheet = Color(0xFFF8F8F8)
@@ -71,10 +72,13 @@ fun LegalAcceptanceScreen(
     onDeleteAccount: () -> Unit,
 ) {
     var agreed by remember { mutableStateOf(false) }
-    // A changed age statement needs a fresh answer. Nothing is pre-selected.
+    // A changed age statement needs fresh answers. Nothing is pre-selected. The Quebec answer lives only here, in screen
+    // state: it is never stored, logged or sent (the server only ever receives "No", inside the acceptance call).
     var ageChoice by remember(state.ageRequirement) { mutableStateOf<LegalAgeChoice?>(null) }
     var livesInQuebec by remember(state.ageRequirement) { mutableStateOf<Boolean?>(null) }
+    var ageConfirmed by remember(state.ageRequirement) { mutableStateOf(false) }
     val chosenBand = ageChoice?.band(livesInQuebec)
+    val stop = legalStop(state, ageChoice, livesInQuebec)
     var confirmDelete by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val terms = state.documents?.terms?.url ?: "https://movemark.ca/terms"
@@ -133,14 +137,29 @@ fun LegalAcceptanceScreen(
                 when {
                     state.asksAgeRange -> AgeRangeQuestion(
                         choice = ageChoice,
-                        livesInQuebec = livesInQuebec,
-                        onChoice = { choice ->
-                            ageChoice = choice
-                            if (choice != LegalAgeChoice.Thirteen) livesInQuebec = null
-                        },
-                        onQuebec = { livesInQuebec = it },
+                        livesInQuebec = if (state.regionRefused) true else livesInQuebec,
+                        onChoice = { ageChoice = it },
+                        onQuebec = { livesInQuebec = it; if (it) ageChoice = null },
                     )
-                    state.requiresAppUpdate -> Notice(LegalGateViewModel.UPDATE_APP)
+                    state.asksSingleBox -> state.age?.let { age ->
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("legal.age")
+                                    .toggleable(value = ageConfirmed, role = Role.Checkbox, onValueChange = { ageConfirmed = it }),
+                                verticalAlignment = Alignment.Top,
+                            ) {
+                                Checkbox(
+                                    checked = ageConfirmed,
+                                    onCheckedChange = null,
+                                    colors = CheckboxDefaults.colors(checkedColor = Ink, uncheckedColor = Ink),
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(age.confirmation, color = Ink, fontSize = 15.sp)
+                            }
+                            Text(age.explanation, color = Quiet, fontSize = 13.sp)
+                        }
+                    }
+                    state.requiresAppUpdate -> Notice(LegalGateViewModel.UPDATE_APP, tag = "legal.update")
                 }
                 state.error?.let { Text(it, color = Color(0xFFBD3228), fontSize = 14.sp) }
             }
@@ -150,18 +169,19 @@ fun LegalAcceptanceScreen(
                 .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            val enabled = legalCanContinue(agreed, state, chosenBand)
-            Box(
-                Modifier.fillMaxWidth().heightIn(min = 52.dp)
-                    .background(if (enabled) Lime else Lime.copy(alpha = 0.45f), RoundedCornerShape(26.dp))
-                    .clickable(enabled = enabled, role = Role.Button, onClick = { onAccept(chosenBand) }),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(if (state.isSaving) "Saving…" else "Continue to my Vault", color = OnLime, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (stop != null) {
+                // Not available (Quebec, or under 13): nothing is sent, and deletion is offered, never automatic.
+                PrimaryButton("Delete my account", enabled = !state.isSaving, tag = "legal.delete") { confirmDelete = true }
                 TextButton(onClick = onSignOut, enabled = !state.isSaving) { Text("Sign out", color = Quiet) }
-                TextButton(onClick = { confirmDelete = true }, enabled = !state.isSaving) { Text("Delete account", color = Quiet) }
+            } else {
+                val enabled = legalCanContinue(agreed, state, chosenBand, ageConfirmed)
+                PrimaryButton(if (state.isSaving) "Saving…" else "Continue to my Vault", enabled = enabled, tag = "legal.continue") {
+                    onAccept(chosenBand)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TextButton(onClick = onSignOut, enabled = !state.isSaving) { Text("Sign out", color = Quiet) }
+                    TextButton(onClick = { confirmDelete = true }, enabled = !state.isSaving) { Text("Delete account", color = Quiet) }
+                }
             }
         }
     }
@@ -189,16 +209,43 @@ internal const val LEGAL_ADULT_NOTICE =
 internal const val LEGAL_TEEN_NOTICE =
     "Because you’re under 18, photos you add are saved without where they were taken or which phone took them. MoveMark keeps your photos, rental address, notes and documents with service providers in the United States. Only you can see them in the app; MoveMark staff access them only to run the service, give support or meet legal duties. Delete everything in Account; backups take longer to clear. Questions? Ask a parent or email connect@movemark.ca."
 
-/** Both answers given, an age statement this build knows, and nothing in flight. */
-internal fun legalCanContinue(agreed: Boolean, state: LegalGateState, band: LegalAgeBand?): Boolean = when {
-    !agreed || state.isSaving || state.requiresAppUpdate -> false
+/** The terms, an eligible answer to a statement this build knows, and nothing in flight. */
+internal fun legalCanContinue(
+    agreed: Boolean,
+    state: LegalGateState,
+    band: LegalAgeBand?,
+    ageConfirmed: Boolean = false,
+): Boolean = when {
+    !agreed || state.isSaving || state.requiresAppUpdate || state.regionRefused -> false
     state.asksAgeRange -> band != null
+    state.asksSingleBox -> ageConfirmed
     else -> true
 }
 
+/** Why the screen stops here, if it does (range questions only). */
+internal fun legalStop(state: LegalGateState, choice: LegalAgeChoice?, livesInQuebec: Boolean?): LegalUnavailable? = when {
+    !state.asksAgeRange -> null
+    state.regionRefused -> LegalUnavailable.Quebec
+    else -> LegalUnavailable.reason(choice, livesInQuebec)
+}
+
+@Composable
+private fun PrimaryButton(label: String, enabled: Boolean, tag: String, onClick: () -> Unit) {
+    Box(
+        Modifier.fillMaxWidth().heightIn(min = 52.dp)
+            .background(if (enabled) Lime else Lime.copy(alpha = 0.45f), RoundedCornerShape(26.dp))
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = OnLime, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
 /**
- * One question, four plain answers, nothing pre-selected, no date of birth. Under 13, and 13 in Quebec, get a clear
- * "not available yet" with sign-out and deletion below; nothing suggests changing the answer.
+ * "Do you live in Quebec?" first, for every age. "Yes" hides the age question and shows the Quebec stop. "No" asks the
+ * age range: four plain answers, nothing pre-selected, no date of birth. Under 13 stops too. Nothing suggests changing
+ * an answer.
  */
 @Composable
 private fun AgeRangeQuestion(
@@ -207,43 +254,38 @@ private fun AgeRangeQuestion(
     onChoice: (LegalAgeChoice) -> Unit,
     onQuebec: (Boolean) -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("How old are you?", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        LegalAgeChoice.entries.forEach { option ->
-            RadioRow(option.label, selected = choice == option, tag = "legal.age.${option.name}") { onChoice(option) }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Do you live in Quebec?", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            RadioRow("Yes", selected = livesInQuebec == true, tag = "legal.quebec.yes", fill = false) { onQuebec(true) }
+            RadioRow("No", selected = livesInQuebec == false, tag = "legal.quebec.no", fill = false) { onQuebec(false) }
         }
-        if (choice == LegalAgeChoice.Thirteen) {
-            Text(
-                "Do you live in Quebec?",
-                color = Ink,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-            Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                RadioRow("Yes", selected = livesInQuebec == true, tag = "legal.age.quebec.yes", fill = false) { onQuebec(true) }
-                RadioRow("No", selected = livesInQuebec == false, tag = "legal.age.quebec.no", fill = false) { onQuebec(false) }
+        if (livesInQuebec == true) {
+            Column(
+                Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(12.dp)).padding(14.dp)
+                    .testTag("legal.quebec.unavailable"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(LegalUnavailable.QUEBEC_MESSAGE, color = Ink, fontSize = 14.sp)
+                Text(LegalUnavailable.QUEBEC_SUBSCRIPTION_NOTE, color = Quiet, fontSize = 13.sp)
+            }
+            return@Column
+        }
+        if (livesInQuebec != false) return@Column
+        Column(Modifier.fillMaxWidth().selectableGroup().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("How old are you?", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            LegalAgeChoice.entries.forEach { option ->
+                RadioRow(option.label, selected = choice == option, tag = "legal.age.${option.name}") { onChoice(option) }
             }
         }
-        val band = choice?.band(livesInQuebec)
-        when {
-            choice != null && choice.isUnavailable(livesInQuebec) -> Notice(
-                "MoveMark isn’t available for you yet. We’re working on a way for a parent or guardian to set it up with you. You can sign out or delete this account below.",
-                tag = "legal.age.unavailable",
-            )
-            band == LegalAgeBand.Teen -> Text(
-                LEGAL_TEEN_NOTICE,
-                color = Quiet,
-                fontSize = 13.sp,
-                modifier = Modifier.testTag("legal.age.teenNotice"),
-            )
-            band == LegalAgeBand.Adult -> Text(
-                LEGAL_ADULT_NOTICE,
-                color = Quiet,
-                fontSize = 13.sp,
-                modifier = Modifier.testTag("legal.age.adultNotice"),
-            )
-            else -> Text("MoveMark asks for your age range only, never your date of birth.", color = Quiet, fontSize = 13.sp)
+        when (choice?.band(livesInQuebec)) {
+            LegalAgeBand.Teen -> Text(LEGAL_TEEN_NOTICE, color = Quiet, fontSize = 13.sp, modifier = Modifier.testTag("legal.age.teenNotice"))
+            LegalAgeBand.Adult -> Text(LEGAL_ADULT_NOTICE, color = Quiet, fontSize = 13.sp, modifier = Modifier.testTag("legal.age.adultNotice"))
+            null -> if (choice == LegalAgeChoice.Under13) {
+                Notice(LegalUnavailable.AGE_MESSAGE, tag = "legal.age.unavailable")
+            } else {
+                Text("MoveMark asks for your age range only, never your date of birth.", color = Quiet, fontSize = 13.sp)
+            }
         }
     }
 }

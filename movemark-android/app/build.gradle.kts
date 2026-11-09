@@ -124,6 +124,8 @@ android {
             it.maxHeapSize = "2g"
             // -PmovemarkTeenPrivacyOut=<dir> keeps TeenPhotoPrivacyTest's outputs for the API's metadata check.
             (project.findProperty("movemarkTeenPrivacyOut") as String?)?.let { dir -> it.systemProperty("movemark.teenPrivacyOut", dir) }
+            // -PmovemarkLegalContractOut=<dir> keeps LegalAgeRangeTest's request bodies for the Postgres contract check.
+            (project.findProperty("movemarkLegalContractOut") as String?)?.let { dir -> it.systemProperty("movemark.legalContractOut", dir) }
         }
     }
 

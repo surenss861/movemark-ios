@@ -134,7 +134,7 @@ fun ProPaywallScreen(
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 )
             }
-            if (offersReportPack && !(loading && packages.isEmpty())) {
+            if (reportPack != null && showsReportPackSection(offersReportPack, reportPack)) {
                 Spacer(Modifier.height(20.dp))
                 ReportPackSection(
                     pack = reportPack,
@@ -236,6 +236,13 @@ fun ProPaywallScreen(
         }
     }
 }
+
+/**
+ * The Report Pack section appears only when the offering actually sells one (iOS 4c7eedd): no "One report only" label
+ * and no "isn't available" line for a product that doesn't exist.
+ */
+internal fun showsReportPackSection(offersReportPack: Boolean, reportPack: PlanPackageUi?): Boolean =
+    offersReportPack && reportPack != null
 
 /** One report, no subscription — offered first when the renter only needs a single move-in report. */
 @Composable
