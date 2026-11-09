@@ -75,7 +75,13 @@ sealed class MoveMarkStorageException(message: String) : Exception(message) {
     class InvalidResponse : MoveMarkStorageException("Couldn’t reach MoveMark. Try again.")
 
     companion object {
+        /** Finalize refused a teen account's file because it still carries location or camera details (migration 1056). */
+        const val TEEN_METADATA_CODE = "teen_metadata_present"
+        const val TEEN_METADATA_MESSAGE =
+            "For privacy, this file can’t be added: it contains photo location or camera details. Add the photo itself, or a PDF without that information."
+
         fun userMessage(status: Int, code: String?, message: String): String = when {
+            code == TEEN_METADATA_CODE -> TEEN_METADATA_MESSAGE
             status == 413 || code == "too_large" -> "This file is too large to upload."
             status == 429 -> "That’s a lot at once. Wait a minute, then try again."
             code == "unsupported_type" -> "This file type isn’t supported."
@@ -175,6 +181,16 @@ class MoveMarkStorageService(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "thumbnail PUT failed: ${e.message}")
+            }
+        }
+        // Teen accounts' documents must be finalized: the API inspects the stored file before a row may name it.
+        if (ticket.finalizeRequired == true) {
+            try {
+                json.decodeOrInvalid(Finalized.serializer(), api("POST", "api/storage/uploads/${ticket.uploadTicketId}/finalize", null))
+            } catch (e: Throwable) {
+                if (e is CancellationException) throw e
+                abandon(MoveMarkUpload(ticket.uploadTicketId, ticket.bucket, ticket.path, null))
+                throw e
             }
         }
         return MoveMarkUpload(ticket.uploadTicketId, ticket.bucket, ticket.path, thumbnailPath)

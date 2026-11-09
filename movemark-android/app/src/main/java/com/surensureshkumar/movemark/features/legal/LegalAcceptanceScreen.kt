@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -29,6 +31,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -47,6 +52,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.surensureshkumar.movemark.core.ui.openInAppBrowser
+import com.surensureshkumar.movemark.data.legal.LegalAgeBand
+import com.surensureshkumar.movemark.data.legal.LegalAgeChoice
 
 private val Hero = Color(0xFF161817)
 private val Sheet = Color(0xFFF8F8F8)
@@ -59,11 +66,15 @@ private val OnLime = Color(0xFF111608)
 @Composable
 fun LegalAcceptanceScreen(
     state: LegalGateState,
-    onAccept: () -> Unit,
+    onAccept: (LegalAgeBand?) -> Unit,
     onSignOut: () -> Unit,
     onDeleteAccount: () -> Unit,
 ) {
     var agreed by remember { mutableStateOf(false) }
+    // A changed age statement needs a fresh answer. Nothing is pre-selected.
+    var ageChoice by remember(state.ageRequirement) { mutableStateOf<LegalAgeChoice?>(null) }
+    var livesInQuebec by remember(state.ageRequirement) { mutableStateOf<Boolean?>(null) }
+    val chosenBand = ageChoice?.band(livesInQuebec)
     var confirmDelete by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val terms = state.documents?.terms?.url ?: "https://movemark.ca/terms"
@@ -119,6 +130,18 @@ fun LegalAcceptanceScreen(
                         fontSize = 15.sp,
                     )
                 }
+                when {
+                    state.asksAgeRange -> AgeRangeQuestion(
+                        choice = ageChoice,
+                        livesInQuebec = livesInQuebec,
+                        onChoice = { choice ->
+                            ageChoice = choice
+                            if (choice != LegalAgeChoice.Thirteen) livesInQuebec = null
+                        },
+                        onQuebec = { livesInQuebec = it },
+                    )
+                    state.requiresAppUpdate -> Notice(LegalGateViewModel.UPDATE_APP)
+                }
                 state.error?.let { Text(it, color = Color(0xFFBD3228), fontSize = 14.sp) }
             }
         }
@@ -127,11 +150,11 @@ fun LegalAcceptanceScreen(
                 .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            val enabled = agreed && !state.isSaving
+            val enabled = legalCanContinue(agreed, state, chosenBand)
             Box(
                 Modifier.fillMaxWidth().heightIn(min = 52.dp)
                     .background(if (enabled) Lime else Lime.copy(alpha = 0.45f), RoundedCornerShape(26.dp))
-                    .clickable(enabled = enabled, role = Role.Button, onClick = onAccept),
+                    .clickable(enabled = enabled, role = Role.Button, onClick = { onAccept(chosenBand) }),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(if (state.isSaving) "Saving…" else "Continue to my Vault", color = OnLime, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
@@ -156,6 +179,84 @@ fun LegalAcceptanceScreen(
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Keep account") } },
         )
     }
+}
+
+/** Both answers given, an age statement this build knows, and nothing in flight. */
+internal fun legalCanContinue(agreed: Boolean, state: LegalGateState, band: LegalAgeBand?): Boolean = when {
+    !agreed || state.isSaving || state.requiresAppUpdate -> false
+    state.asksAgeRange -> band != null
+    else -> true
+}
+
+/**
+ * One question, four plain answers, nothing pre-selected, no date of birth. Under 13, and 13 in Quebec, get a clear
+ * "not available yet" with sign-out and deletion below; nothing suggests changing the answer.
+ */
+@Composable
+private fun AgeRangeQuestion(
+    choice: LegalAgeChoice?,
+    livesInQuebec: Boolean?,
+    onChoice: (LegalAgeChoice) -> Unit,
+    onQuebec: (Boolean) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("How old are you?", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        LegalAgeChoice.entries.forEach { option ->
+            RadioRow(option.label, selected = choice == option, tag = "legal.age.${option.name}") { onChoice(option) }
+        }
+        if (choice == LegalAgeChoice.Thirteen) {
+            Text(
+                "Do you live in Quebec?",
+                color = Ink,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                RadioRow("Yes", selected = livesInQuebec == true, tag = "legal.age.quebec.yes", fill = false) { onQuebec(true) }
+                RadioRow("No", selected = livesInQuebec == false, tag = "legal.age.quebec.no", fill = false) { onQuebec(false) }
+            }
+        }
+        val band = choice?.band(livesInQuebec)
+        when {
+            choice != null && choice.isUnavailable(livesInQuebec) -> Notice(
+                "MoveMark isn’t available for you yet. We’re working on a way for a parent or guardian to set it up with you. You can sign out or delete this account below.",
+                tag = "legal.age.unavailable",
+            )
+            band == LegalAgeBand.Teen -> Text(
+                "Because you’re under 18, photos you add are saved without their location or camera details. Your records are stored in the United States, nobody else sees them unless you share a report, and you can delete everything from Account at any time.",
+                color = Quiet,
+                fontSize = 13.sp,
+                modifier = Modifier.testTag("legal.age.teenNotice"),
+            )
+            else -> Text("MoveMark asks for your age range only, never your date of birth.", color = Quiet, fontSize = 13.sp)
+        }
+    }
+}
+
+@Composable
+private fun RadioRow(label: String, selected: Boolean, tag: String, fill: Boolean = true, onClick: () -> Unit) {
+    Row(
+        (if (fill) Modifier.fillMaxWidth() else Modifier).heightIn(min = 48.dp)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .testTag(tag),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = null, colors = RadioButtonDefaults.colors(selectedColor = Ink, unselectedColor = Ink))
+        Spacer(Modifier.width(12.dp))
+        Text(label, color = Ink, fontSize = 15.sp)
+    }
+}
+
+@Composable
+private fun Notice(message: String, tag: String? = null) {
+    Text(
+        message,
+        color = Ink,
+        fontSize = 14.sp,
+        modifier = Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(12.dp)).padding(14.dp)
+            .then(if (tag != null) Modifier.testTag(tag) else Modifier),
+    )
 }
 
 @Composable

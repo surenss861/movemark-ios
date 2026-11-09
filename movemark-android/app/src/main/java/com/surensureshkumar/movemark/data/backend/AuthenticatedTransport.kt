@@ -4,6 +4,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
@@ -40,10 +43,17 @@ class AuthenticatedTransport(
 
     suspend fun execute(request: Request): HttpResult {
         val token = tokens.validAccessToken(forceRefresh = false)
-        val response = send(request, token)
-        if (!isAuthRejection(response.code, response.url.host, response.body, origins)) return response
-        val fresh = tokens.refreshedAccessToken(replacing = token)
-        return send(request, fresh)
+        val first = send(request, token)
+        val response = if (!isAuthRejection(first.code, first.url.host, first.body, origins)) {
+            first
+        } else {
+            send(request, tokens.refreshedAccessToken(replacing = token))
+        }
+        // The API refused because the current legal documents aren't accepted: the app re-reads the status.
+        if (isLegalAcceptanceRequired(response.code, response.url.host, response.body, origins)) {
+            LegalAcceptanceRequiredSignal.raise()
+        }
+        return response
     }
 
     private suspend fun send(request: Request, token: String): HttpResult =
@@ -63,6 +73,15 @@ class AuthenticatedTransport(
 
         private val json = Json { ignoreUnknownKeys = true }
 
+        /** The MoveMark API's 403 `LEGAL_ACCEPTANCE_REQUIRED` (`require_legal_acceptance`), only from its own origin. */
+        fun isLegalAcceptanceRequired(code: Int, host: String, body: ByteArray, origins: AuthOrigins): Boolean {
+            if (code != 403 || host.lowercase() != origins.apiHost) return false
+            val obj = runCatching { json.parseToJsonElement(body.toString(Charsets.UTF_8)).jsonObject }.getOrNull()
+                ?: return false
+            val value = obj["code"] as? kotlinx.serialization.json.JsonPrimitive ?: return false
+            return value.isString && value.content == LegalAcceptanceRequiredSignal.CODE
+        }
+
         /**
          * The MoveMark API's HTTP 401, or the Neon Data API's HTTP 400 whose body is one of the token-rejection
          * messages above — each only from its own origin. Everything else is not an auth rejection.
@@ -80,5 +99,16 @@ class AuthenticatedTransport(
                 ?.takeIf { it.isString }?.jsonPrimitive?.content ?: return false
             return DATA_API_TOKEN_REJECTION_PREFIXES.any { message.startsWith(it) }
         }
+    }
+}
+
+/** Raised when the API answers `LEGAL_ACCEPTANCE_REQUIRED`; the navigation host re-checks the legal status. */
+object LegalAcceptanceRequiredSignal {
+    const val CODE = "LEGAL_ACCEPTANCE_REQUIRED"
+    private val events = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val signals: SharedFlow<Unit> = events.asSharedFlow()
+
+    fun raise() {
+        events.tryEmit(Unit)
     }
 }

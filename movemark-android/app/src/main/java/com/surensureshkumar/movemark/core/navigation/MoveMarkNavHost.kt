@@ -4,12 +4,17 @@ import com.surensureshkumar.movemark.features.account.AccountViewModel
 import com.surensureshkumar.movemark.features.legal.LegalAcceptanceScreen
 import com.surensureshkumar.movemark.features.legal.LegalGateViewModel
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.surensureshkumar.movemark.data.backend.LegalAcceptanceRequiredSignal
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -74,6 +79,19 @@ fun MoveMarkNavHost() {
     LaunchedEffect(authState) {
         if (authState == AuthState.SignedIn) legalVm.refresh() else legalVm.reset()
     }
+    // A document published (or enforcement switched on) while the app is open: re-check on return to the foreground
+    // and when the API refuses with LEGAL_ACCEPTANCE_REQUIRED.
+    LaunchedEffect(authState) {
+        if (authState == AuthState.SignedIn) LegalAcceptanceRequiredSignal.signals.collect { legalVm.recheck() }
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, authState) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START && authState == AuthState.SignedIn) legalVm.recheck()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     LaunchedEffect(authState, hasProperty, firstRunComplete, needsOnboarding, legal.required) {
         when (authState) {
@@ -130,7 +148,7 @@ fun MoveMarkNavHost() {
             val accountVm: AccountViewModel = hiltViewModel()
             LegalAcceptanceScreen(
                 state = legal,
-                onAccept = { legalVm.accept() },
+                onAccept = { band -> legalVm.accept(band) },
                 onSignOut = { accountVm.signOut {} },
                 onDeleteAccount = { accountVm.deleteAccount {} },
             )

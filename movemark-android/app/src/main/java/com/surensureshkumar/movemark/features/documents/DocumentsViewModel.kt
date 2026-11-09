@@ -1,5 +1,6 @@
 package com.surensureshkumar.movemark.features.documents
 
+import com.surensureshkumar.movemark.data.backend.MoveMarkStorageException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.surensureshkumar.movemark.data.auth.SessionManager
@@ -79,7 +80,12 @@ class DocumentsViewModel @Inject constructor(
                 )
             }
             if (saved.isFailure) {
-                _error.value = "Couldn't upload that file. Try again."
+                val failure = saved.exceptionOrNull()
+                _error.value = if ((failure as? MoveMarkStorageException.Rejected)?.code == MoveMarkStorageException.TEEN_METADATA_CODE) {
+                    MoveMarkStorageException.TEEN_METADATA_MESSAGE
+                } else {
+                    "Couldn't upload that file. Try again."
+                }
                 _uploading.value = null
                 return@launch
             }

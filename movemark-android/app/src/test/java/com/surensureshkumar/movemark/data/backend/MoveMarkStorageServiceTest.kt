@@ -213,4 +213,42 @@ class MoveMarkStorageServiceTest {
         service.deleteEvidence(listOf("a", "b"))
         assertEquals(3, calls)
     }
+
+    private fun documentTicket(finalizeRequired: Boolean) = """
+        {"uploadTicketId":"t-1","bucket":"property-documents","path":"u/p/lease/x.jpg",
+         "url":"${server.url("/put/document")}","method":"PUT","headers":{"Content-Type":"image/jpeg"},
+         "finalizeRequired":$finalizeRequired,"expiresInSeconds":600}
+    """.trimIndent()
+
+    @Test
+    fun adultDocumentsSkipFinalizeAsBefore() = runTest {
+        routes["POST /api/storage/uploads"] = ok(documentTicket(finalizeRequired = false))
+        routes["PUT /put/document"] = ok()
+        service.uploadDocument(byteArrayOf(1), "image/jpeg", null, "p", "lease")
+        assertTrue(requests.none { it.requestUrl!!.encodedPath.endsWith("/finalize") })
+    }
+
+    @Test
+    fun teenDocumentsAreFinalizedAndARefusalReleasesTheTicket() = runTest {
+        routes["POST /api/storage/uploads"] = ok(documentTicket(finalizeRequired = true))
+        routes["PUT /put/document"] = ok()
+        routes["POST /api/storage/uploads/t-1/finalize"] = ok("""{"status":"finalized"}""")
+        assertEquals("u/p/lease/x.jpg", service.uploadDocument(byteArrayOf(1), "image/jpeg", null, "p", "lease").path)
+        recorded("POST /api/storage/uploads/t-1/finalize")
+
+        requests.clear()
+        routes["POST /api/storage/uploads/t-1/finalize"] = {
+            MockResponse().setResponseCode(409)
+                .setBody("""{"error":"This file contains photo location or camera details.","code":"teen_metadata_present"}""")
+        }
+        routes["POST /api/storage/uploads/t-1/abandon"] = ok("""{"status":"deleted"}""")
+        try {
+            service.uploadDocument(byteArrayOf(1), "image/jpeg", null, "p", "lease")
+            fail("expected rejection")
+        } catch (e: MoveMarkStorageException.Rejected) {
+            assertEquals(MoveMarkStorageException.TEEN_METADATA_CODE, e.code)
+            assertTrue(e.message!!.startsWith("For privacy, this file can’t be added"))
+        }
+        recorded("POST /api/storage/uploads/t-1/abandon")
+    }
 }

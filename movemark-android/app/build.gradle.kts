@@ -122,6 +122,8 @@ android {
         unitTests.all {
             it.systemProperty("maven.repo.local", "${gradle.gradleUserHomeDir}/robolectric-m2")
             it.maxHeapSize = "2g"
+            // -PmovemarkTeenPrivacyOut=<dir> keeps TeenPhotoPrivacyTest's outputs for the API's metadata check.
+            (project.findProperty("movemarkTeenPrivacyOut") as String?)?.let { dir -> it.systemProperty("movemark.teenPrivacyOut", dir) }
         }
     }
 

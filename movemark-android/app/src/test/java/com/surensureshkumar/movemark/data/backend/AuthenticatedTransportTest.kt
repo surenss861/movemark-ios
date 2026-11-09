@@ -85,3 +85,19 @@ class AuthenticatedTransportTest {
         assertFalse(AuthenticatedTransport.isAuthRejection(400, "data.example", missing, origins))
     }
 }
+
+class LegalAcceptanceRequiredSignalTest {
+    private val origins = AuthenticatedTransport.AuthOrigins(dataApiHost = "data.example", apiHost = "api.example")
+    private val body = """{"error":"Accept the current Terms and Privacy Notice to continue.","code":"LEGAL_ACCEPTANCE_REQUIRED"}""".toByteArray()
+
+    @Test fun theApisRefusalIsRecognised() {
+        assertTrue(AuthenticatedTransport.isLegalAcceptanceRequired(403, "API.example", body, origins))
+    }
+
+    @Test fun onlyFromTheApiAndOnlyThatCode() {
+        assertFalse(AuthenticatedTransport.isLegalAcceptanceRequired(403, "data.example", body, origins))
+        assertFalse(AuthenticatedTransport.isLegalAcceptanceRequired(401, "api.example", body, origins))
+        assertFalse(AuthenticatedTransport.isLegalAcceptanceRequired(403, "api.example", """{"code":"forbidden"}""".toByteArray(), origins))
+        assertFalse(AuthenticatedTransport.isLegalAcceptanceRequired(403, "api.example", "not json".toByteArray(), origins))
+    }
+}

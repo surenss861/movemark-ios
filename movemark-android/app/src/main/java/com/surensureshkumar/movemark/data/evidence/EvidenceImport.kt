@@ -36,19 +36,36 @@ object EvidenceImport {
     private const val THUMBNAIL_MAX_PIXELS = 320
     private const val THUMBNAIL_QUALITY = 70
 
-    /** Reads [uri]'s bytes untouched and wraps them as source evidence. */
-    fun source(context: Context, uri: Uri, captureSource: EvidenceCaptureSource): EvidenceSource {
+    /** Reads [uri]'s bytes and wraps them as source evidence (stripped first for a teen account). */
+    fun source(
+        context: Context,
+        uri: Uri,
+        captureSource: EvidenceCaptureSource,
+        privacy: PhotoPrivacy = PhotoPrivacyPolicy.current,
+    ): EvidenceSource {
         val data = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             ?: throw EvidenceImportException.Unreadable()
-        return source(data, captureSource)
+        return source(data, captureSource, privacy)
     }
 
-    /** Wraps the platform's file bytes as source evidence. Reads metadata only; the bytes are untouched. */
-    fun source(data: ByteArray, captureSource: EvidenceCaptureSource): EvidenceSource {
+    /**
+     * Wraps the platform's file bytes as source evidence. Adults: reads metadata only; the bytes are untouched.
+     * Teen accounts ([PhotoPrivacy.Teen]): the bytes are first stripped by [TeenPhotoPrivacy], so the pending queue,
+     * the SHA-256, the upload, the derivative and the thumbnail all come from the stripped file.
+     */
+    fun source(
+        data: ByteArray,
+        captureSource: EvidenceCaptureSource,
+        privacy: PhotoPrivacy = PhotoPrivacyPolicy.current,
+    ): EvidenceSource {
         if (data.isEmpty()) throw EvidenceImportException.Unreadable()
-        val format = EvidenceFormats.detect(data)
-            ?: throw EvidenceImportException.UnsupportedFormat(EvidenceFormats.describe(data))
+        EvidenceFormats.detect(data) ?: throw EvidenceImportException.UnsupportedFormat(EvidenceFormats.describe(data))
         if (data.size > EvidenceFormats.MAX_SOURCE_BYTES) throw EvidenceImportException.TooLarge()
+        return wrap(if (privacy == PhotoPrivacy.Teen) TeenPhotoPrivacy.strip(data) else data, captureSource)
+    }
+
+    private fun wrap(data: ByteArray, captureSource: EvidenceCaptureSource): EvidenceSource {
+        val format = EvidenceFormats.detect(data) ?: throw EvidenceImportException.Unreadable()
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw EvidenceImportException.Unreadable()
@@ -80,10 +97,20 @@ object EvidenceImport {
         return (withOffset?.toInstant() ?: local.atZone(ZoneId.systemDefault()).toInstant()).toString()
     }
 
-    /** Everything an upload sends, or null when the source can't be rendered into a derivative. */
-    fun prepare(context: Context, source: EvidenceSource): PreparedEvidence? {
-        val derivative = derivative(context, source) ?: return null
-        return PreparedEvidence(source, derivative, thumbnail(source))
+    /**
+     * Everything an upload sends, or null when the source can't be rendered into a derivative. For a teen account a
+     * source queued before the rule was known is stripped here (a no-op for one that already is).
+     */
+    fun prepare(context: Context, source: EvidenceSource, privacy: PhotoPrivacy = PhotoPrivacyPolicy.current): PreparedEvidence? {
+        val safe = if (privacy == PhotoPrivacy.Teen) teenSafe(source) else source
+        val derivative = derivative(context, safe) ?: return null
+        return PreparedEvidence(safe, derivative, thumbnail(safe))
+    }
+
+    /** [source] as a teen source: unchanged when it is already stripped, else re-wrapped from the stripped bytes. */
+    fun teenSafe(source: EvidenceSource): EvidenceSource {
+        val stripped = TeenPhotoPrivacy.strip(source.data)
+        return if (stripped.contentEquals(source.data)) source else wrap(stripped, source.captureSource)
     }
 
     /**
@@ -96,7 +123,7 @@ object EvidenceImport {
         var maxPixels = minOf(DERIVATIVE_MAX_PIXELS, longSide)
         val qualities = listOf(DERIVATIVE_QUALITY, 85, 80, 75, 70)
         while (maxPixels >= 256) {
-            val bitmap = render(source.data, maxPixels) ?: return null
+            val bitmap = renderUpright(source.data, maxPixels) ?: return null
             try {
                 for (quality in qualities) {
                     val jpeg = bitmap.toJpeg(quality)
@@ -112,7 +139,7 @@ object EvidenceImport {
 
     /** Thumbnail: JPEG, orientation applied, long side ≤ 320 (never above the source's), no metadata. */
     fun thumbnail(source: EvidenceSource): ByteArray? {
-        val bitmap = render(source.data, minOf(THUMBNAIL_MAX_PIXELS, maxOf(source.pixelWidth, source.pixelHeight)))
+        val bitmap = renderUpright(source.data, minOf(THUMBNAIL_MAX_PIXELS, maxOf(source.pixelWidth, source.pixelHeight)))
             ?: return null
         return try {
             bitmap.toJpeg(THUMBNAIL_QUALITY)
@@ -122,7 +149,7 @@ object EvidenceImport {
     }
 
     /** Decodes [data] upright with its long side exactly [maxPixels] (or less, never upscaled). */
-    private fun render(data: ByteArray, maxPixels: Int): Bitmap? = runCatching {
+    internal fun renderUpright(data: ByteArray, maxPixels: Int): Bitmap? = runCatching {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
         val longSide = maxOf(bounds.outWidth, bounds.outHeight)

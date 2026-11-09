@@ -4,6 +4,9 @@ import com.surensureshkumar.movemark.data.backend.MoveMarkStorageService
 import com.surensureshkumar.movemark.data.backend.PostgrestClient
 import com.surensureshkumar.movemark.data.backend.StoredFileUrls
 import com.surensureshkumar.movemark.data.evidence.EvidenceFormats
+import com.surensureshkumar.movemark.data.evidence.PhotoPrivacy
+import com.surensureshkumar.movemark.data.evidence.PhotoPrivacyPolicy
+import com.surensureshkumar.movemark.data.evidence.TeenPhotoPrivacy
 import com.surensureshkumar.movemark.data.models.PropertyDocumentRow
 import com.surensureshkumar.movemark.domain.VaultDocumentKind
 import kotlinx.coroutines.NonCancellable
@@ -47,9 +50,10 @@ class DocumentRepository(
     ) {
         val previous = existingDocuments(propertyId, kind)
         val safeName = fileName.substringAfterLast('/').ifBlank { "document" }
+        val stored = documentBytes(bytes)
         val upload = storage.uploadDocument(
-            data = bytes,
-            contentType = contentType(safeName, bytes),
+            data = stored,
+            contentType = contentType(safeName, stored),
             thumbnail = null,
             propertyId = propertyId.toString(),
             documentType = kind.raw,
@@ -96,6 +100,16 @@ class DocumentRepository(
 
     private suspend fun existingDocuments(propertyId: UUID, kind: VaultDocumentKind): List<PropertyDocumentRow> =
         fetchDocuments(propertyId).filter { row -> kind.queryKeys().contains(row.documentType) }
+
+    /**
+     * For a teen account a JPEG or PNG document is stripped of location and camera details first (iOS `documentFile`).
+     * PDFs aren't rewritten: the server checks a teen's PDF at finalize and refuses one carrying photo location.
+     */
+    private fun documentBytes(bytes: ByteArray, privacy: PhotoPrivacy = PhotoPrivacyPolicy.current): ByteArray {
+        if (privacy != PhotoPrivacy.Teen) return bytes
+        val type = EvidenceFormats.detect(bytes)?.mimeType
+        return if (type == "image/jpeg" || type == "image/png") TeenPhotoPrivacy.strip(bytes) else bytes
+    }
 
     /** The API accepts PDF, JPEG and PNG documents; a name without a known extension is typed by its bytes. */
     private fun contentType(fileName: String, bytes: ByteArray): String {
