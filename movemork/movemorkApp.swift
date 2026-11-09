@@ -23,6 +23,9 @@ struct movemorkApp: App {
             // Crash and App Hang reports stay on (Sentry defaults). Failed-request events are off: they carried
             // request URLs (ids, presigned query strings) and only duplicated what the app already shows.
             options.enableCaptureFailedRequests = false
+            // Network breadcrumbs record full request URLs, query strings included (presigned signatures, Data
+            // API filters), and ride along in crash and hang reports. Off.
+            options.enableNetworkBreadcrumbs = false
             options.environment = "production"  // only Release builds outside tests start Sentry
             if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
                let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
