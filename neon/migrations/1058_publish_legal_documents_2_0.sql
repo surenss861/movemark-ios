@@ -21,5 +21,5 @@ SELECT public.publish_legal_document(
 
 SELECT public.publish_legal_document(
   'privacy_notice', '2.0',
-  'c083486559750e95711c6333954f21d10d10447d1d9bf8a856cc124cdba42468',
+  '6d3aac54144814e4ebc26f536ec0e1d7ffdf5b4c712a37a17de48b869bcb15e8',
   'https://movemark.ca/privacy', true);
