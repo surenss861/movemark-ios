@@ -62,15 +62,22 @@ nonisolated struct LegalStatus: Decodable, Equatable, Sendable {
 /// The statements the server may require (`legal_gate_settings.age_requirement`). The renter confirms one; no date of
 /// birth is asked or kept.
 nonisolated enum LegalAgeRequirement: String, Sendable, CaseIterable {
-    /// The age-range question (migration 1055's default): 13 to 17, or 18 or older; under 13, and 13 in Quebec, are
-    /// "not available yet" (Phase 2 needs parental consent).
+    /// The Quebec question plus the age-range question (migration 1057's default). Quebec isn't served yet (no French
+    /// versions), so "Yes" stops here for every age; outside Quebec, 13 to 17 or 18 or older, and under 13 is "not
+    /// available yet" (Phase 2 needs parental consent). Temporary: French support replaces this code.
+    case ageRangeQuebec = "bands_v2"
+    /// The age-range question alone (migration 1055). This build asks the Quebec question here too and stops a "Yes"
+    /// on the device; only 'bands_v2' has the server refuse it.
     case ageRange = "bands_v1"
     case thirteenQuebecFourteen = "age_13_qc_14"
     case eighteen = "age_18"
 
+    /// The range question (with the Quebec question), rather than a single box.
+    var isRangeQuestion: Bool { self == .ageRangeQuebec || self == .ageRange }
+
     var confirmation: String {
         switch self {
-        case .ageRange: "How old are you?"
+        case .ageRangeQuebec, .ageRange: "How old are you?"
         case .thirteenQuebecFourteen: "I’m 13 or older (14 or older if I live in Quebec)."
         case .eighteen: "I’m 18 or older."
         }
@@ -78,7 +85,7 @@ nonisolated enum LegalAgeRequirement: String, Sendable, CaseIterable {
 
     var explanation: String {
         switch self {
-        case .ageRange:
+        case .ageRangeQuebec, .ageRange:
             "MoveMark asks for your age range only, never your date of birth."
         case .thirteenQuebecFourteen:
             "MoveMark isn’t for children under 13 (under 14 in Quebec). If you’re under 18: your photos, documents and rental details are stored in the United States. Only you can see them in the app; MoveMark staff access them only to run the service, give support or meet legal duties. You can delete everything from Account at any time."
@@ -112,6 +119,8 @@ nonisolated enum LegalAcceptanceCall: Equatable, Sendable {
     case withoutAge(LegalAcceptanceParams)
     case withAge(LegalAcceptanceWithAgeParams)
     case withAgeBand(LegalAcceptanceWithBandParams)
+    /// 'bands_v2': the range and the renter's "No" to "Do you live in Quebec?". A "Yes" is never sent.
+    case withResidence(LegalAcceptanceWithResidenceParams)
     /// The server requires an age statement this build doesn't know.
     case updateRequired
 
@@ -122,6 +131,13 @@ nonisolated enum LegalAcceptanceCall: Equatable, Sendable {
                                                      p_privacy_notice_version: documents.privacyNotice.version))
         }
         guard let age = status.age else { return .updateRequired }
+        if age == .ageRangeQuebec {
+            guard let band else { return nil }  // a band exists only after "No" to Quebec and an eligible age
+            return .withResidence(LegalAcceptanceWithResidenceParams(
+                p_method: method.rawValue, p_terms_version: documents.terms.version,
+                p_privacy_notice_version: documents.privacyNotice.version,
+                p_age_attestation: age.rawValue, p_age_band: band.rawValue, p_lives_in_quebec: false))
+        }
         if age == .ageRange {
             guard let band else { return nil }  // no eligible range chosen: nothing to send
             return .withAgeBand(LegalAcceptanceWithBandParams(p_method: method.rawValue, p_terms_version: documents.terms.version,
@@ -147,20 +163,43 @@ nonisolated enum LegalAgeChoice: String, Sendable, CaseIterable {
         }
     }
 
-    /// The range the server records, or nil when MoveMark isn't available yet (under 13; 13 in Quebec). A 13-year-old
-    /// must answer the Quebec question first (`livesInQuebec` nil means "not answered").
+    /// The range the server records, or nil when there's nothing to record: the Quebec question unanswered
+    /// (`livesInQuebec` nil) or answered "Yes" (Quebec isn't served yet, whatever the age), or under 13.
     func band(livesInQuebec: Bool?) -> LegalAgeBand? {
+        guard livesInQuebec == false else { return nil }
         switch self {
-        case .under13: nil
-        case .thirteen: livesInQuebec == false ? .teen : nil
-        case .fourteenToSeventeen: .teen
-        case .adult: .adult
+        case .under13: return nil
+        case .thirteen, .fourteenToSeventeen: return .teen
+        case .adult: return .adult
         }
     }
 
-    /// Phase 1 can't serve this answer (parental consent is Phase 2).
+    /// Phase 1 can't serve this answer: under 13 (parental consent is Phase 2). Quebec is ``LegalUnavailable/quebec``.
     func isUnavailable(livesInQuebec: Bool?) -> Bool {
-        self == .under13 || (self == .thirteen && livesInQuebec == true)
+        LegalUnavailable.reason(choice: self, livesInQuebec: livesInQuebec) != nil
+    }
+}
+
+/// Why the agreement screen stops, with the words it shows. Nothing is sent to the server for either.
+nonisolated enum LegalUnavailable: Equatable, Sendable {
+    /// "Yes" to "Do you live in Quebec?", at any age. Temporary, until French versions exist.
+    case quebec
+    /// Under 13, outside Quebec.
+    case age
+
+    static func reason(choice: LegalAgeChoice?, livesInQuebec: Bool?) -> LegalUnavailable? {
+        if livesInQuebec == true { return .quebec }
+        if choice == .under13 { return .age }
+        return nil
+    }
+
+    var message: String {
+        switch self {
+        case .quebec:
+            "MoveMark isn’t available in Quebec yet. We’re preparing French-language support. Your account hasn’t been set up. You can delete it below."
+        case .age:
+            "MoveMark isn’t available for you yet. We’re working on a way for a parent or guardian to set it up with you. You can sign out or delete this account below."
+        }
     }
 }
 
@@ -176,6 +215,17 @@ nonisolated struct LegalAcceptanceWithBandParams: Encodable, Equatable, Sendable
     let p_privacy_notice_version: String
     let p_age_attestation: String
     let p_age_band: String
+}
+
+/// The six-argument overload (migration 1057, 'bands_v2'). `p_lives_in_quebec` is always false: the server
+/// refuses true (`LEGAL_REGION_NOT_AVAILABLE`) and the app never sends it.
+nonisolated struct LegalAcceptanceWithResidenceParams: Encodable, Equatable, Sendable {
+    let p_method: String
+    let p_terms_version: String
+    let p_privacy_notice_version: String
+    let p_age_attestation: String
+    let p_age_band: String
+    let p_lives_in_quebec: Bool
 }
 
 /// Why `get_legal_status` gave no answer, which decides where the renter lands.

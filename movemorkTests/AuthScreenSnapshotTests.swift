@@ -150,10 +150,18 @@ final class AuthScreenSnapshotTests: XCTestCase {
                      inNavigation: false)
     }
 
-    /// The age-range question (migration 1055's 'bands_v1'), nothing selected.
+    /// The Quebec question and the age-range question (migration 1057's 'bands_v2'), nothing selected.
     func testLegalGateAgeRange() {
         let screen = LegalAcceptanceScreen(termsURL: URL(string: "https://movemark.ca/terms"),
-                                           privacyURL: URL(string: "https://movemark.ca/privacy"), age: .ageRange)
+                                           privacyURL: URL(string: "https://movemark.ca/privacy"), age: .ageRangeQuebec)
+        assertScreen(screen, devices: ScreenSnapshot.allDevices, inNavigation: false)
+    }
+
+    /// "Yes" to "Do you live in Quebec?": not available yet, no age question, deletion as the main action.
+    func testLegalGateQuebecUnavailable() {
+        let screen = LegalAcceptanceScreen(termsURL: URL(string: "https://movemark.ca/terms"),
+                                           privacyURL: URL(string: "https://movemark.ca/privacy"), age: .ageRangeQuebec,
+                                           livesInQuebec: true)
         assertScreen(screen, devices: ScreenSnapshot.allDevices, inNavigation: false)
     }
 
@@ -162,19 +170,19 @@ final class AuthScreenSnapshotTests: XCTestCase {
                                                  size: CGSize(width: 402, height: 1500), traits: ScreenSnapshot.pro.traits)
     private static var ageNoticeDevices: [(String, ViewImageConfig)] { ScreenSnapshot.allDevices + [("tall", tallPro)] }
 
-    /// 18 or older chosen: the adult notice under the question.
+    /// "No" to Quebec, then 18 or older: the adult notice under the age question.
     func testLegalGateAgeRangeAdult() {
         let screen = LegalAcceptanceScreen(termsURL: URL(string: "https://movemark.ca/terms"),
-                                           privacyURL: URL(string: "https://movemark.ca/privacy"), age: .ageRange,
-                                           ageChoice: .adult)
+                                           privacyURL: URL(string: "https://movemark.ca/privacy"), age: .ageRangeQuebec,
+                                           livesInQuebec: false, ageChoice: .adult)
         assertScreen(screen, devices: Self.ageNoticeDevices, inNavigation: false)
     }
 
-    /// 14 to 17 chosen: the teen notice and the children's privacy link.
+    /// "No" to Quebec, then 14 to 17: the teen notice and the children's privacy link.
     func testLegalGateAgeRangeTeen() {
         let screen = LegalAcceptanceScreen(termsURL: URL(string: "https://movemark.ca/terms"),
-                                           privacyURL: URL(string: "https://movemark.ca/privacy"), age: .ageRange,
-                                           ageChoice: .fourteenToSeventeen)
+                                           privacyURL: URL(string: "https://movemark.ca/privacy"), age: .ageRangeQuebec,
+                                           livesInQuebec: false, ageChoice: .fourteenToSeventeen)
         assertScreen(screen, devices: Self.ageNoticeDevices, inNavigation: false)
     }
 
