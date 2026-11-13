@@ -105,6 +105,9 @@ class LegalGateViewModel @Inject constructor(
     private suspend fun enter() {
         val result = repository.statusResult(retries = 1)
         val status = (result as? LegalStatusResult.Success)?.status
+        if (com.surensureshkumar.movemark.BuildConfig.DEBUG) {
+            android.util.Log.i("LegalGate", "enter: ${if (status != null) "required=${status.acceptanceRequired} docs=${status.documents != null} age=${status.ageRequirement}" else result}")
+        }
         learnPhotoRule(status)
         lastStatus = status
         _state.value = LegalGateState.from(result)
@@ -122,6 +125,7 @@ class LegalGateViewModel @Inject constructor(
             try {
                 val status = repository.status() ?: return@launch
                 learnPhotoRule(status)
+                if (com.surensureshkumar.movemark.BuildConfig.DEBUG) android.util.Log.i("LegalGate", "recheck: required=${status.acceptanceRequired}")
                 if (status.needsAcceptance && _state.value.required == false) {
                     lastStatus = status
                     _state.value = LegalGateState.from(status)

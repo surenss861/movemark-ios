@@ -96,13 +96,22 @@ fun CameraCaptureScreen(
             it.surfaceProvider = previewView.surfaceProvider
         }
         provider.unbindAll()
-        provider.bindToLifecycle(
-            lifecycleOwner,
-            CameraSelector.DEFAULT_BACK_CAMERA,
-            preview,
-            imageCapture,
-        )
-        cameraBound = true
+        // A camera HAL CameraX can't configure (seen: Android 17's new dynamic range profile with CameraX 1.4)
+        // must not take the app down: say so and keep the photo library.
+        try {
+            provider.bindToLifecycle(
+                lifecycleOwner,
+                CameraSelector.DEFAULT_BACK_CAMERA,
+                preview,
+                imageCapture,
+            )
+            cameraBound = true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            android.util.Log.e("CameraCapture", "camera bind failed", e)
+            runCatching { provider.unbindAll() }
+            viewModel.cameraUnavailable()
+        }
     }
 
     DisposableEffect(Unit) {

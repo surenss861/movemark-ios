@@ -141,6 +141,11 @@ class CameraCaptureViewModel @Inject constructor(
         }
     }
 
+    /** The camera couldn't start on this device: say so; the photo library stays available. */
+    fun cameraUnavailable() {
+        _errorMessage.value = CAMERA_UNAVAILABLE
+    }
+
     fun addGalleryUris(uris: List<Uri>) {
         if (uris.isEmpty()) return
         val existing = _capturedUris.value.map { it.toString() }.toSet()
@@ -177,6 +182,7 @@ class CameraCaptureViewModel @Inject constructor(
     fun hasCaptures(): Boolean = _capturedUris.value.isNotEmpty()
 
     private companion object {
+        const val CAMERA_UNAVAILABLE = "The camera couldn’t start on this phone. Add photos from your library instead."
         const val CAPTURED_URIS_KEY = "captured_uris"
         const val ADMITTED_IDS_KEY = "admitted_ids"
         const val ADMITTED_URIS_KEY = "admitted_uris"
