@@ -19,6 +19,8 @@ import com.surensureshkumar.movemark.data.legal.LegalAgeRequirement
 import com.surensureshkumar.movemark.data.legal.LegalDocuments
 import com.surensureshkumar.movemark.data.legal.LegalRepository
 import com.surensureshkumar.movemark.data.legal.LegalStatus
+import com.surensureshkumar.movemark.data.legal.LegalStatusFailure
+import com.surensureshkumar.movemark.data.legal.LegalStatusResult
 import com.surensureshkumar.movemark.features.auth.social.SocialBrowserSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -37,6 +39,9 @@ data class LegalGateState(
     val error: String? = null,
     /** The server refused with LEGAL_REGION_NOT_AVAILABLE: show the Quebec stop (the app itself never sends "Yes"). */
     val regionRefused: Boolean = false,
+    /** The server answered the status with an error: "Can't open your Vault yet" with a retry, never the Vault. */
+    val statusUnavailable: Boolean = false,
+    val isRetrying: Boolean = false,
 ) {
     /** The statement this build understands; null with no age code, or with one this build doesn't know. */
     val age: LegalAgeRequirement? get() = ageRequirement?.let(LegalAgeRequirement::fromCode)
@@ -58,6 +63,16 @@ data class LegalGateState(
             ageRequirement = status?.ageRequirement,
             error = error,
         )
+
+        /** Where a failed status read lands (iOS `SessionManager.enter`). */
+        fun from(result: LegalStatusResult): LegalGateState = when (result) {
+            is LegalStatusResult.Success -> from(result.status)
+            is LegalStatusResult.Failure -> when (result.reason) {
+                // No gate on the server, or offline: open on the cache; the server enforces, not this.
+                LegalStatusFailure.ServerWithoutGate, LegalStatusFailure.Offline -> from(null)
+                LegalStatusFailure.Unavailable -> LegalGateState(required = null, statusUnavailable = true)
+            }
+        }
     }
 }
 
@@ -76,11 +91,23 @@ class LegalGateViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             sessionManager.userId.value?.let { photoPrivacy.restore(it.toString()) }
-            val status = repository.status()
-            learnPhotoRule(status)
-            lastStatus = status
-            _state.value = LegalGateState.from(status)
+            enter()
         }
+    }
+
+    /** "Try again" on the status-unavailable screen. */
+    fun retryStatus() {
+        if (!_state.value.statusUnavailable || _state.value.isRetrying) return
+        _state.value = _state.value.copy(isRetrying = true)
+        viewModelScope.launch { enter() }
+    }
+
+    private suspend fun enter() {
+        val result = repository.statusResult(retries = 1)
+        val status = (result as? LegalStatusResult.Success)?.status
+        learnPhotoRule(status)
+        lastStatus = status
+        _state.value = LegalGateState.from(result)
     }
 
     /**

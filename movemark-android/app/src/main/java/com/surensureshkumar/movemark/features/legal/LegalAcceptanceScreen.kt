@@ -70,6 +70,8 @@ fun LegalAcceptanceScreen(
     onAccept: (LegalAgeBand?) -> Unit,
     onSignOut: () -> Unit,
     onDeleteAccount: () -> Unit,
+    deleting: Boolean = false,
+    deleteError: String? = null,
 ) {
     var agreed by remember { mutableStateOf(false) }
     // A changed age statement needs fresh answers. Nothing is pre-selected. The Quebec answer lives only here, in screen
@@ -161,7 +163,7 @@ fun LegalAcceptanceScreen(
                     }
                     state.requiresAppUpdate -> Notice(LegalGateViewModel.UPDATE_APP, tag = "legal.update")
                 }
-                state.error?.let { Text(it, color = Color(0xFFBD3228), fontSize = 14.sp) }
+                (deleteError ?: state.error)?.let { Text(it, color = Color(0xFFBD3228), fontSize = 14.sp, modifier = Modifier.testTag("legal.error")) }
             }
         }
         Column(
@@ -171,16 +173,18 @@ fun LegalAcceptanceScreen(
         ) {
             if (stop != null) {
                 // Not available (Quebec, or under 13): nothing is sent, and deletion is offered, never automatic.
-                PrimaryButton("Delete my account", enabled = !state.isSaving, tag = "legal.delete") { confirmDelete = true }
-                TextButton(onClick = onSignOut, enabled = !state.isSaving) { Text("Sign out", color = Quiet) }
+                PrimaryButton(if (deleting) "Deleting…" else "Delete my account", enabled = !state.isSaving && !deleting, tag = "legal.delete") { confirmDelete = true }
+                TextButton(onClick = onSignOut, enabled = !state.isSaving && !deleting) { Text("Sign out", color = Quiet) }
             } else {
                 val enabled = legalCanContinue(agreed, state, chosenBand, ageConfirmed)
-                PrimaryButton(if (state.isSaving) "Saving…" else "Continue to my Vault", enabled = enabled, tag = "legal.continue") {
+                PrimaryButton(if (state.isSaving) "Saving…" else "Continue to my Vault", enabled = enabled && !deleting, tag = "legal.continue") {
                     onAccept(chosenBand)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    TextButton(onClick = onSignOut, enabled = !state.isSaving) { Text("Sign out", color = Quiet) }
-                    TextButton(onClick = { confirmDelete = true }, enabled = !state.isSaving) { Text("Delete account", color = Quiet) }
+                    TextButton(onClick = onSignOut, enabled = !state.isSaving && !deleting) { Text("Sign out", color = Quiet) }
+                    TextButton(onClick = { confirmDelete = true }, enabled = !state.isSaving && !deleting) {
+                        Text(if (deleting) "Deleting…" else "Delete account", color = Quiet)
+                    }
                 }
             }
         }
@@ -200,6 +204,8 @@ fun LegalAcceptanceScreen(
         )
     }
 }
+
+internal const val CHILDRENS_PRIVACY_URL = "https://movemark.ca/privacy#childrens-privacy"
 
 /** The consent line and the age notices, word for word as iOS 1.4. */
 internal const val LEGAL_CONSENT_TEXT =
@@ -279,7 +285,20 @@ private fun AgeRangeQuestion(
             }
         }
         when (choice?.band(livesInQuebec)) {
-            LegalAgeBand.Teen -> Text(LEGAL_TEEN_NOTICE, color = Quiet, fontSize = 13.sp, modifier = Modifier.testTag("legal.age.teenNotice"))
+            LegalAgeBand.Teen -> Column {
+                Text(LEGAL_TEEN_NOTICE, color = Quiet, fontSize = 13.sp, modifier = Modifier.testTag("legal.age.teenNotice"))
+                val context = LocalContext.current
+                Row(
+                    Modifier.heightIn(min = 48.dp)
+                        .clickable(role = Role.Button) { openInAppBrowser(context, CHILDRENS_PRIVACY_URL) }
+                        .testTag("legal.age.childrensPrivacy"),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Children’s privacy", color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.width(4.dp))
+                    Text("↗", color = Quiet, fontSize = 13.sp)
+                }
+            }
             LegalAgeBand.Adult -> Text(LEGAL_ADULT_NOTICE, color = Quiet, fontSize = 13.sp, modifier = Modifier.testTag("legal.age.adultNotice"))
             null -> if (choice == LegalAgeChoice.Under13) {
                 Notice(LegalUnavailable.AGE_MESSAGE, tag = "legal.age.unavailable")
@@ -325,5 +344,41 @@ private fun DocumentRow(title: String, onClick: () -> Unit) {
     ) {
         Text(title, color = Ink, fontSize = 16.sp, fontWeight = FontWeight.Medium)
         Text("↗", color = Quiet, fontSize = 16.sp)
+    }
+}
+
+/** The server answered the legal status with an error (iOS `LegalStatusUnavailableView`): a retry and a way out. */
+@Composable
+fun LegalStatusUnavailableScreen(isRetrying: Boolean, onRetry: () -> Unit, onSignOut: () -> Unit) {
+    Column(Modifier.fillMaxSize().background(Sheet)) {
+        Column(
+            Modifier.fillMaxWidth().background(Hero).statusBarsPadding()
+                .padding(start = 20.dp, end = 20.dp, top = 32.dp, bottom = 40.dp),
+        ) {
+            Text("MoveMark", color = Color.White.copy(alpha = 0.62f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.padding(top = 8.dp))
+            Text(
+                "Can’t open your Vault yet",
+                color = Color.White,
+                fontSize = 30.sp,
+                lineHeight = 36.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.semantics { heading() },
+            )
+        }
+        Text(
+            "MoveMark couldn’t check your account just now. Your records are safe. Try again in a moment.",
+            color = Ink,
+            fontSize = 16.sp,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp).weight(1f),
+        )
+        Column(
+            Modifier.fillMaxWidth().background(Color.White).navigationBarsPadding()
+                .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            PrimaryButton(if (isRetrying) "Trying…" else "Try again", enabled = !isRetrying, tag = "legal.status.retry", onClick = onRetry)
+            TextButton(onClick = onSignOut, enabled = !isRetrying) { Text("Sign out", color = Quiet) }
+        }
     }
 }

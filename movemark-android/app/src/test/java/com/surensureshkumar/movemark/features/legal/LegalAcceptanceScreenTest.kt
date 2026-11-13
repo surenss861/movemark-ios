@@ -146,4 +146,40 @@ class LegalAcceptanceScreenTest {
         compose.onNodeWithText("Sign out").assertExists()
         compose.onNodeWithText("Delete account").assertExists()
     }
+
+    @Test fun teensGetTheChildrensPrivacyLink() {
+        show()
+        agree()
+        tap("legal.quebec.no")
+        tap("legal.age.Thirteen")
+        compose.onNodeWithTag("legal.age.childrensPrivacy").performScrollTo().assertExists()
+        tap("legal.age.Adult")
+        compose.onNodeWithTag("legal.age.childrensPrivacy").assertDoesNotExist()
+    }
+
+    @Test fun aFailedDeletionIsShownAndDeletingDisablesTheActions() {
+        compose.setContent {
+            LegalAcceptanceScreen(
+                state = LegalGateState(required = true),
+                onAccept = { accepted += it },
+                onSignOut = { signOuts++ },
+                onDeleteAccount = { deletes++ },
+                deleting = true,
+                deleteError = "Couldn’t delete your account. Try again.",
+            )
+        }
+        compose.onNodeWithTag("legal.error").assertExists()
+        compose.onNodeWithText("Deleting…").assertIsNotEnabled()
+        compose.onNodeWithText("Sign out").assertIsNotEnabled()
+    }
+
+    @Test fun statusUnavailableOffersRetryAndSignOutOnly() {
+        var retries = 0
+        compose.setContent { LegalStatusUnavailableScreen(isRetrying = false, onRetry = { retries++ }, onSignOut = { signOuts++ }) }
+        compose.onNodeWithText("Can’t open your Vault yet").assertExists()
+        compose.onNodeWithTag("legal.status.retry").performClick()
+        compose.onNodeWithText("Sign out").performClick()
+        assertEquals(1, retries)
+        assertEquals(1, signOuts)
+    }
 }

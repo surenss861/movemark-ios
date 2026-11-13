@@ -3,6 +3,7 @@ package com.surensureshkumar.movemark.core.navigation
 import com.surensureshkumar.movemark.features.account.AccountViewModel
 import com.surensureshkumar.movemark.features.legal.LegalAcceptanceScreen
 import com.surensureshkumar.movemark.features.legal.LegalGateViewModel
+import com.surensureshkumar.movemark.features.legal.LegalStatusUnavailableScreen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -93,7 +94,7 @@ fun MoveMarkNavHost() {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(authState, hasProperty, firstRunComplete, needsOnboarding, legal.required) {
+    LaunchedEffect(authState, hasProperty, firstRunComplete, needsOnboarding, legal.required, legal.statusUnavailable) {
         when (authState) {
             AuthState.Loading -> Unit
             AuthState.SignedOut -> {
@@ -105,6 +106,7 @@ fun MoveMarkNavHost() {
             }
             AuthState.SignedIn -> {
                 val dest = when {
+                    legal.statusUnavailable -> Routes.LegalStatusUnavailable
                     legal.required == null -> return@LaunchedEffect
                     legal.required == true -> Routes.LegalAcceptance
                     needsOnboarding == null -> return@LaunchedEffect
@@ -146,11 +148,23 @@ fun MoveMarkNavHost() {
         }
         composable(Routes.LegalAcceptance) {
             val accountVm: AccountViewModel = hiltViewModel()
+            val deleting by accountVm.deleting.collectAsState()
+            val accountNotice by accountVm.notice.collectAsState()
             LegalAcceptanceScreen(
                 state = legal,
                 onAccept = { band -> legalVm.accept(band) },
                 onSignOut = { accountVm.signOut {} },
                 onDeleteAccount = { accountVm.deleteAccount {} },
+                deleting = deleting,
+                deleteError = accountNotice?.takeIf { it.isError }?.message,
+            )
+        }
+        composable(Routes.LegalStatusUnavailable) {
+            val accountVm: AccountViewModel = hiltViewModel()
+            LegalStatusUnavailableScreen(
+                isRetrying = legal.isRetrying,
+                onRetry = { legalVm.retryStatus() },
+                onSignOut = { accountVm.signOut {} },
             )
         }
         composable(Routes.Onboarding) {

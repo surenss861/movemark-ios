@@ -276,9 +276,15 @@ fun AccountScreen(
             onDismissRequest = { confirmDelete = false },
             title = { Text("Delete your account?") },
             text = {
-                Text(
-                    "This deletes your account, rentals, photos, records and reports. Encrypted backup copies last longer. An active subscription keeps billing until you cancel it in Google Play. It can’t be undone.",
-                )
+                Column {
+                    Text(
+                        "This deletes your account, rentals, photos, records and reports. Encrypted backup copies last longer. An active subscription keeps billing until you cancel it in Google Play. It can’t be undone.",
+                    )
+                    // As iOS's delete screen: a way to cancel the store subscription before the account goes.
+                    TextButton(onClick = { PlaySubscriptionIntents.openManageSubscriptions(context) }) {
+                        Text("Manage Google Play subscription", color = MMInk.Secondary)
+                    }
+                }
             },
             confirmButton = {
                 TextButton(onClick = {

@@ -8,6 +8,8 @@ import com.surensureshkumar.movemark.core.util.MMUserMessages
 import com.surensureshkumar.movemark.data.auth.AuthException
 import com.surensureshkumar.movemark.data.auth.SessionManager
 import com.surensureshkumar.movemark.data.property.PropertyStore
+import com.surensureshkumar.movemark.data.subscription.ReportCreditsManager
+import com.surensureshkumar.movemark.data.subscription.RestoreOutcome
 import com.surensureshkumar.movemark.data.subscription.SubscriptionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +28,7 @@ class AccountViewModel @Inject constructor(
     private val sessionManager: SessionManager,
     private val propertyStore: PropertyStore,
     private val subscriptionRepository: SubscriptionRepository,
+    private val reportCredits: ReportCreditsManager,
 ) : ViewModel() {
     companion object {
         const val PRIVACY_URL =
@@ -70,7 +73,14 @@ class AccountViewModel @Inject constructor(
     fun restorePurchases() {
         viewModelScope.launch {
             _notice.value = null
-            subscriptionRepository.restorePurchases()
+            if (subscriptionRepository.restorePurchases() == RestoreOutcome.Restored && !subscriptionRepository.hasPro.value) {
+                // Only a past Report Pack came back: it counts only while a credit is unspent (server balance).
+                val userId = sessionManager.userId.value
+                reportCredits.restored(userId)
+                _notice.value = AccountNotice(
+                    if (reportCredits.hasUsablePackCredit(userId)) "Report Pack restored." else subscriptionRepository.restoreFoundNothingMessage,
+                )
+            }
         }
     }
 

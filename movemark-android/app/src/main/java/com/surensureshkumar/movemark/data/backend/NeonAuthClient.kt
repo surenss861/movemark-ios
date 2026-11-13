@@ -309,6 +309,33 @@ class NeonAuthClient(
         if (notify) _sessionExpired.tryEmit(Unit)
     }
 
+    /**
+     * Ends every other session of the signed-in account (Better Auth `POST /revoke-other-sessions`), keeping this one.
+     * Managed Neon Auth can't revoke sessions on a password reset, so the app does it with the first session after
+     * one (iOS `revokeOtherSessions`).
+     */
+    suspend fun revokeOtherSessions() {
+        val session = lock.withLock {
+            loadIfNeeded()
+            stored
+        } ?: throw NeonAuthException.SessionExpired()
+        val base = baseUrl ?: throw NeonAuthException.NotConfigured()
+        val request = Request.Builder()
+            .url(base.resolvePath("revoke-other-sessions"))
+            .header("Cookie", session.cookieHeader)
+            .header("Origin", base.origin())
+            .post("{}".toRequestBody(JSON_MEDIA))
+            .build()
+        val response = http.send(request)
+        if (response.code == 401 || response.code == 403) throw NeonAuthException.SessionExpired()
+        if (!response.isSuccessful) {
+            val err = runCatching { json.parseToJsonElement(response.bodyString()).jsonObject }.getOrNull()
+            val code = err?.get("code")?.jsonPrimitive?.contentOrNull
+            Log.i(TAG, "revoke-other-sessions failed HTTP ${response.code} code=${code ?: "-"}")
+            throw NeonAuthException.Rejected(if (response.code == 429) "RATE_LIMITED" else code, "")
+        }
+    }
+
     // ---- Password reset ----
 
     /** Emails a reset link. Answers the same whether or not the address has an account. */
@@ -316,7 +343,7 @@ class NeonAuthClient(
         post("request-password-reset", mapOf("email" to email), storeSession = false)
     }
 
-    /** Sets a new password from the token in a reset link. Neon Auth revokes the account's other sessions. */
+    /** Sets a new password from the token in a reset link. Managed Neon Auth does not revoke other sessions. */
     suspend fun resetPassword(token: String, newPassword: String) {
         post("reset-password", mapOf("token" to token, "newPassword" to newPassword), storeSession = false)
     }

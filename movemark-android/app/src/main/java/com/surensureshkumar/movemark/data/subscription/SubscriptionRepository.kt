@@ -56,6 +56,14 @@ class SubscriptionRepository @Inject constructor(
 
     fun clearRestoreMessage() = impl.clearRestoreMessage()
 
+    /** Restore found nothing to restore. Names the Report Pack only when the store sells one (iOS 1.4). */
+    val restoreFoundNothingMessage: String
+        get() = if (packages.value.any { it.isReportPack }) {
+            "No active subscription or Report Pack was found for this Google account."
+        } else {
+            "No active MoveMark subscription was found for this Google account."
+        }
+
     fun clearError() = impl.clearError()
 
     suspend fun resetMockSubscription() = impl.resetMockSubscription()

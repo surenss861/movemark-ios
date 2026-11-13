@@ -100,7 +100,7 @@ class SubscriptionViewModel @Inject constructor(
                             _restoreNote.value = "Report Pack restored."
                             onRestored()
                         }
-                        else -> _restoreNote.value = "No active subscription or unused Report Pack was found for this Google account."
+                        else -> _restoreNote.value = repository.restoreFoundNothingMessage
                     }
                 }
                 RestoreOutcome.NoneFound, is RestoreOutcome.Failed -> Unit

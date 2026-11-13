@@ -14,6 +14,7 @@ import dagger.hilt.android.HiltAndroidApp
 class MoveMarkApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        com.surensureshkumar.movemark.features.auth.social.LegalAcceptanceMethod.attach(this)
         CrashReporting.start(
             this,
             CrashReporting.settings(BuildConfig.SENTRY_DSN, BuildConfig.DEBUG, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),

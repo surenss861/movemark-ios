@@ -1,5 +1,6 @@
 package com.surensureshkumar.movemark.data.auth
 
+import com.surensureshkumar.movemark.features.auth.social.LegalAcceptanceMethod
 import com.surensureshkumar.movemark.features.auth.social.SocialBrowserReturn
 import android.util.Log
 import com.surensureshkumar.movemark.data.backend.BackendConfig
@@ -46,6 +47,7 @@ class SessionManager @Inject constructor(
     private val pendingEvidence: Lazy<PendingEvidenceCenter>,
     private val localFiles: LocalUserFiles,
     private val reportCredits: Lazy<ReportCreditsManager>,
+    private val pendingRevocation: PendingSessionRevocation,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -69,6 +71,8 @@ class SessionManager @Inject constructor(
             // Identity comes from the session persisted on this device; no network needed to restore it.
             val user = withContext(Dispatchers.IO) { runCatching { auth.currentUser() }.getOrNull() }
             if (user != null) applyUser(user) else clearUser()
+            // A post-reset revocation that couldn't reach Neon Auth at sign-in gets another try.
+            if (user != null) pendingRevocation.performIfPending { auth.revokeOtherSessions() }
         }
         scope.launch {
             // Neon Auth rejected the stored session (expired, revoked, password reset elsewhere).
@@ -85,6 +89,7 @@ class SessionManager @Inject constructor(
         val user = auth.signUp(trimmed, password)
             ?: throw AuthException("Account created. Confirm your email, then sign in.")
         profileRepository.ensureProfileExists(UUID.fromString(user.id), user.email.ifBlank { trimmed })
+        LegalAcceptanceMethod.last = "email"
         applyUser(user)
     }
 
@@ -94,7 +99,10 @@ class SessionManager @Inject constructor(
         if (trimmed.isEmpty()) throw AuthException("Enter your email.")
         if (password.isEmpty()) throw AuthException("Enter your password.")
         val user = auth.signIn(trimmed, password)
+        // First session after a password reset: sign every other device out (see PendingSessionRevocation).
+        pendingRevocation.performIfPending { auth.revokeOtherSessions() }
         profileRepository.ensureProfileExists(UUID.fromString(user.id), user.email.ifBlank { trimmed })
+        LegalAcceptanceMethod.last = "email"
         applyUser(user)
     }
 
@@ -109,14 +117,15 @@ class SessionManager @Inject constructor(
     }
 
     /**
-     * Sets a new password from a `movemark://reset-password` link (iOS `completePasswordReset`). Neon Auth revokes
-     * the account's sessions, so a signed-in device signs out afterwards.
+     * Sets a new password from a `movemark://reset-password` link (iOS `completePasswordReset`). Managed Neon Auth
+     * keeps other sessions, so this device signs out and the next sign-in here revokes every other session.
      */
     suspend fun completePasswordReset(token: String, newPassword: String, confirmPassword: String) {
         requireConfigured()
         if (newPassword.length < 8) throw AuthException("Password must be at least 8 characters.")
         if (newPassword != confirmPassword) throw AuthException("Passwords do not match.")
         auth.resetPassword(token, newPassword)
+        pendingRevocation.markPasswordReset()
         if (_authState.value == AuthState.SignedIn) {
             auth.endSessionLocally(notify = false)
             endLocalSession()

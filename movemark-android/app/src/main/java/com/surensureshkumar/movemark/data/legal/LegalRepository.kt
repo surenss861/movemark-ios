@@ -8,6 +8,7 @@
 package com.surensureshkumar.movemark.data.legal
 
 import com.surensureshkumar.movemark.data.backend.PostgrestClient
+import com.surensureshkumar.movemark.data.backend.PostgrestException
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.serialization.SerialName
@@ -184,11 +185,67 @@ sealed interface LegalAcceptanceCall {
     }
 }
 
+/** Why `get_legal_status` gave no answer, which decides where the renter lands (iOS `LegalStatusFailure`). */
+enum class LegalStatusFailure {
+    /** The server has no legal gate (PGRST202 before migration 1030): nothing to offer, nothing enforced. */
+    ServerWithoutGate,
+    /** The request never reached the server: the app opens on its cache, and data reads fail the same way. */
+    Offline,
+    /** The server answered, but not with a status. With enforcement possibly on, the Vault must not open on a guess. */
+    Unavailable;
+
+    companion object {
+        fun classify(error: Throwable): LegalStatusFailure = when {
+            generateSequence(error) { it.cause }.any { it is java.io.IOException } -> Offline
+            (error as? PostgrestException)?.code == "PGRST202" ||
+                (error as? PostgrestException)?.serverMessage?.contains("PGRST202") == true -> ServerWithoutGate
+            else -> Unavailable
+        }
+    }
+}
+
+sealed interface LegalStatusResult {
+    data class Success(val status: LegalStatus) : LegalStatusResult
+    data class Failure(val reason: LegalStatusFailure) : LegalStatusResult
+}
+
 @Singleton
 class LegalRepository @Inject constructor(private val postgrest: PostgrestClient) {
-    /** Null when the server has no gate or can't be reached: this only offers the step, the server enforces it. */
-    suspend fun status(): LegalStatus? =
-        runCatching { postgrest.rpc("get_legal_status", LegalStatus.serializer()) }.getOrNull()
+    /** Null on any failure: for the foreground recheck, where a failure leaves the renter where they are. */
+    suspend fun status(): LegalStatus? = (statusResult(retries = 0) as? LegalStatusResult.Success)?.status
+
+    /**
+     * The status with the failure classified, as iOS `fetchLegalStatus`: a one-off `LEGAL_NOT_AUTHENTICATED` is retried
+     * once after a short pause, and an "unavailable" answer is retried [retries] times, a second apart.
+     */
+    suspend fun statusResult(retries: Int = 1): LegalStatusResult {
+        var attempt = 0
+        while (true) {
+            try {
+                return LegalStatusResult.Success(retryingTransientAuth { postgrest.rpc("get_legal_status", LegalStatus.serializer()) })
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                val failure = LegalStatusFailure.classify(e)
+                if (failure != LegalStatusFailure.Unavailable || attempt >= retries || isTransientAuth(e)) {
+                    return LegalStatusResult.Failure(failure)
+                }
+                attempt += 1
+                kotlinx.coroutines.delay(1_000)
+            }
+        }
+    }
+
+    private suspend fun <T> retryingTransientAuth(block: suspend () -> T): T =
+        try {
+            block()
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException || !isTransientAuth(e)) throw e
+            kotlinx.coroutines.delay(750)
+            block()
+        }
+
+    private fun isTransientAuth(e: Throwable): Boolean =
+        listOfNotNull((e as? PostgrestException)?.serverMessage, e.message).any { it.contains("LEGAL_NOT_AUTHENTICATED") }
 
     suspend fun accept(params: JsonObject): LegalStatus =
         postgrest.rpc("accept_legal_documents", LegalStatus.serializer(), params)

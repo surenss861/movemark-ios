@@ -19,8 +19,11 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // A reset link that launched the app (not again after a configuration change).
-        if (savedInstanceState == null && !SocialBrowserSession.offer(intent?.data)) PasswordResetLink.offer(intent?.dataString)
+        // A social return is offered even on a recreated Activity (the attempt may still be waiting in its
+        // ViewModel; a repeat of the same link is ignored). A reset link only when it launched the app, not again
+        // after a configuration change.
+        val wasSocialReturn = SocialBrowserSession.offer(intent?.data)
+        if (savedInstanceState == null && !wasSocialReturn) PasswordResetLink.offer(intent?.dataString)
         // System bars follow the app's surfaces, not the phone's theme: MoveMark has one dark theme, and everything
         // under the bars is dark, so the icons are light even on a light-mode phone. A future light screen must set
         // its own appearance (WindowCompat.getInsetsController) and restore it on leaving.

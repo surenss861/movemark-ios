@@ -60,31 +60,77 @@ object SocialBrowserReturn {
     }
 }
 
+/**
+ * How the renter last signed in, for the acceptance record (iOS `LegalAcceptanceMethod`). Kept on disk so a Google
+ * renter who meets the legal step after process death isn't recorded as "email". Not an authority on anything.
+ */
+object LegalAcceptanceMethod {
+    private const val PREFS = "movemark_auth"
+    private const val KEY = "last_auth_method"
+    private val known = setOf("email", "google", "apple")
+    @Volatile private var prefs: android.content.SharedPreferences? = null
+    @Volatile private var memory: String = "email"
+
+    fun attach(context: Context) {
+        prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    }
+
+    var last: String
+        get() = (prefs?.getString(KEY, null) ?: memory).takeIf { it in known } ?: "email"
+        set(value) {
+            val method = value.takeIf { it in known } ?: "email"
+            memory = method
+            prefs?.edit()?.putString(KEY, method)?.apply()
+        }
+}
+
 /** One browser attempt at a time. The Activity reports the return link, and when it comes back without one. */
 object SocialBrowserSession {
     private var pending: CompletableDeferred<Uri>? = null
     private var launched = false
+    private var lastOffered: String? = null
 
-    /** How the renter last signed in, for the acceptance record. Not an authority on anything. */
-    var lastMethod: String = "email"
+    /**
+     * A return link arrived with no attempt waiting for it: the process (and with it the attempt's challenge) was
+     * gone by the time the browser came back. The challenge can't be recovered, so Welcome says to try again
+     * instead of doing nothing.
+     */
+    private val _orphanedReturn = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val orphanedReturn: kotlinx.coroutines.flow.StateFlow<Boolean> = _orphanedReturn
+
+    fun clearOrphanedReturn() { _orphanedReturn.value = false }
+
+    /** How the renter last signed in, for the acceptance record. */
+    var lastMethod: String
+        get() = LegalAcceptanceMethod.last
+        set(value) { LegalAcceptanceMethod.last = value }
 
     suspend fun open(context: Context, url: String): Uri {
         val attempt = CompletableDeferred<Uri>()
         pending = attempt
         launched = false
+        _orphanedReturn.value = false
         CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(context, Uri.parse(url))
         launched = true
         return try {
             attempt.await()
         } finally {
-            pending = null
+            if (pending === attempt) pending = null
+            launched = false
         }
     }
 
-    /** From `onCreate` and `onNewIntent`. Returns true when the link was this flow's return. */
+    /**
+     * From `onCreate` and `onNewIntent`. Returns true when the link was this flow's return. The same link offered
+     * twice (a recreated Activity re-reading its intent) is ignored the second time.
+     */
     fun offer(uri: Uri?): Boolean {
         if (uri == null || !SocialBrowserReturn.isReturn(uri.scheme, uri.host, uri.path)) return false
-        pending?.complete(uri)
+        val link = uri.toString()
+        if (link == lastOffered) return true
+        lastOffered = link
+        val attempt = pending
+        if (attempt != null) attempt.complete(uri) else _orphanedReturn.value = true
         return true
     }
 
