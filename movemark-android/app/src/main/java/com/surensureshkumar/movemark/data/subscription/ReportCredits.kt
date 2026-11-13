@@ -44,6 +44,9 @@ object ReportCreditPolicy {
     /** How long after a purchase a refusal reads "still syncing" rather than "buy again". Copy only. */
     const val PURCHASE_SYNC_WINDOW_MS = 10 * 60 * 1000L
 
+    /** 1.4 removed the Report Pack (as iOS 1.4): no screen offers or names one. Credits already bought still count. */
+    const val SELLS_REPORT_PACK = false
+
     const val PURCHASE_STILL_SYNCING = "Your purchase is still syncing. Try again in a minute."
 
     /**

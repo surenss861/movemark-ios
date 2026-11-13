@@ -139,6 +139,7 @@ class MockSubscriptionBilling @Inject constructor(
         _hasPro.value = active
     }
 
+    /** 1.4 sells no Report Pack, so test mode doesn't offer one either. */
     private fun mockPackages(): List<PlanPackageUi> = listOf(
         PlanPackageUi(
             id = MOCK_MONTHLY_ID,
@@ -153,14 +154,6 @@ class MockSubscriptionBilling @Inject constructor(
             periodLabel = "Billed yearly",
             price = "$79.99 / year",
             isYearly = true,
-        ),
-        PlanPackageUi(
-            id = "mock_report_pack",
-            title = "Report Pack",
-            periodLabel = "One move-in report · no subscription",
-            price = "$4.99",
-            isYearly = false,
-            isReportPack = true,
         ),
     )
 }

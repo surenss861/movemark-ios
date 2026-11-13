@@ -22,6 +22,9 @@ class SubscriptionViewModel @Inject constructor(
     private val credits: ReportCreditsManager,
     private val sessionManager: SessionManager,
 ) : ViewModel() {
+    /** This build can't sell yet (no Google Play key): the paywall says so instead of offering a retry. */
+    val subscriptionsComingSoon: Boolean get() = repository.subscriptionsComingSoon
+
     /** A restore outcome decided here (Report Pack credits need the server balance), shown over the store's. */
     private val _restoreNote = MutableStateFlow<String?>(null)
     val restoreNote: StateFlow<String?> = _restoreNote.asStateFlow()
@@ -97,7 +100,7 @@ class SubscriptionViewModel @Inject constructor(
                     when {
                         repository.hasPro.value -> onRestored()
                         credits.hasUsablePackCredit(userId) -> {
-                            _restoreNote.value = "Report Pack restored."
+                            _restoreNote.value = "Purchases restored."
                             onRestored()
                         }
                         else -> _restoreNote.value = repository.restoreFoundNothingMessage

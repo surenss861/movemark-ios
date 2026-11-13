@@ -35,6 +35,15 @@ object BillingConfig {
     /** RevenueCat is configured only with a usable Google Play key; otherwise the paywall reports plans unavailable. */
     fun shouldConfigureRevenueCat(key: String): Boolean = isRevenueCatMode && keyProblem(key) == null
 
+    /**
+     * Play billing mode, but this build has no usable Google Play key: an internal-testing build made with
+     * -PmovemarkAllowNoBilling=true before RevenueCat Android exists. The paywall says subscriptions are coming soon.
+     */
+    val subscriptionsComingSoon: Boolean
+        get() = isRevenueCatMode && keyProblem(BuildConfig.REVENUECAT_PUBLIC_KEY) != null
+
+    const val COMING_SOON = "Subscriptions are coming soon. Everything free in MoveMark works today."
+
     fun logStartup() {
         if (BuildConfig.DEBUG) {
             Log.d(TAG, "Billing mode: $billingMode")

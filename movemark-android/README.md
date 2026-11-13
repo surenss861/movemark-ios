@@ -66,7 +66,10 @@ Prerequisites, in `movemark-android/local.properties` (gitignored, never committ
   `MOVEMARK_UPLOAD_KEY_PASSWORD`: the Play upload key (keystore in `~/.movemark-android/`).
 - `REVENUECAT_PUBLIC_KEY=goog_…`: the RevenueCat **Google Play** public SDK key. Optional for the very first
   upload (see below).
-- `SENTRY_DSN=…`: the Android Sentry project's DSN. Empty means crash reporting is off.
+- `SENTRY_DSN=…`: the Android Sentry project's DSN. Empty means crash reporting is off. It is read only from
+  `local.properties` (never committed); check the build log or `BuildConfig.SENTRY_DSN` to know whether an RC has it.
+- Google sign-in stays **off** in release builds (as on the iOS App Store build) unless the build is run with
+  `-PmovemarkInternalSocial=true`. Don't pass it for a Play release candidate.
 
 Steps:
 1. Bump `movemarkVersionCode` in `gradle.properties` (YYYYMMDDNN, see "Versioning").
@@ -74,7 +77,8 @@ Steps:
    ```
    cd movemark-android
    export GRADLE_USER_HOME=/Volumes/sss/movemark/.gradle-home
-   export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+   # A JDK 17-21 (Gradle 8.13 can't run on the Java 25 that newer Android Studio bundles), e.g. JetBrains Runtime 21:
+   export JAVA_HOME="$HOME/Library/Java/JavaVirtualMachines/jbr-21.0.11/Contents/Home"
    ./gradlew testDebugUnitTest lintDebug bundleRelease
    ```
    The release build refuses to run without the upload key, and refuses a missing, `appl_`, `sk_` or other
@@ -83,12 +87,14 @@ Steps:
    and the signer is "CN=MoveMark Upload, O=MoveMark".
 4. Upload it by hand in Play Console → Testing → Internal testing. No Gradle task uploads anything.
 
-First upload before billing exists: Play Console only lets you create in-app products once the app has an uploaded
+First upload before billing exists: Play Console only lets you create subscriptions once the app has an uploaded
 build that includes the Billing library (this one does). If the `goog_` key isn't available yet, build the first
-internal release with
+internal-testing release with
 `./gradlew bundleRelease -PmovemarkAllowNoBilling=true`
-(the paywall then says plans are unavailable), upload it, then:
-- create the one-time product **`report_pack`** (consumable) and the Pro subscriptions in Play Console;
-- attach them in RevenueCat (entitlement `movemark_pro1` for Pro; `report_pack` grants credits through the API
-  webhook);
+This is for internal testing only. The production guard is unchanged: without the property, a release build still
+refuses a missing or non-`goog_` key. In such a build the paywall shows "Subscriptions coming soon" with
+"Continue on Free" (no purchase or retry buttons), and restore says the same; nothing crashes. Then:
+- create the Pro subscriptions (monthly and yearly) in Play Console. 1.4 sells no Report Pack, so don't create
+  `report_pack`;
+- attach them in RevenueCat (entitlement `movemark_pro1`);
 - put the `goog_` key in `local.properties`, bump `movemarkVersionCode`, and build and upload a newer AAB.

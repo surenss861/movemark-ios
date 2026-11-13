@@ -115,7 +115,7 @@ class RevenueCatSubscriptionBilling @Inject constructor() : SubscriptionBilling,
 
     override suspend fun fetchOfferings() {
         if (!isConfigured) {
-            _errorMessage.value = "Plans didn't load. Try again."
+            _errorMessage.value = if (BillingConfig.subscriptionsComingSoon) BillingConfig.COMING_SOON else "Plans didn't load. Try again."
             return
         }
         _loading.value = true
@@ -169,7 +169,13 @@ class RevenueCatSubscriptionBilling @Inject constructor() : SubscriptionBilling,
     }
 
     override suspend fun restorePurchases(): RestoreOutcome {
-        if (!isConfigured) return RestoreOutcome.Failed("Purchases couldn't be restored. Try again.")
+        if (!isConfigured) {
+            if (BillingConfig.subscriptionsComingSoon) {
+                _restoreMessage.value = BillingConfig.COMING_SOON
+                return RestoreOutcome.NoneFound
+            }
+            return RestoreOutcome.Failed("Purchases couldn't be restored. Try again.")
+        }
         _purchasing.value = true
         _restoreMessage.value = null
         return try {
@@ -238,7 +244,8 @@ class RevenueCatSubscriptionBilling @Inject constructor() : SubscriptionBilling,
         return listOfNotNull(
             monthly?.toUi(isYearly = false),
             yearly?.toUi(isYearly = true),
-            packs.firstOrNull()?.let { pack ->
+            // 1.4 sells no Report Pack (as iOS 1.4): a pack product in the offering is never offered.
+            packs.firstOrNull()?.takeIf { ReportCreditPolicy.SELLS_REPORT_PACK }?.let { pack ->
                 PlanPackageUi(
                     id = pack.identifier,
                     revenueCatPackage = pack,

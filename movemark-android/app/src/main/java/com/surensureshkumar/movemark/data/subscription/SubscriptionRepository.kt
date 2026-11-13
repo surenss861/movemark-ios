@@ -34,6 +34,9 @@ class SubscriptionRepository @Inject constructor(
 
     val isMockMode: Boolean get() = BillingConfig.isMockMode
 
+    /** No usable store key in this build (internal testing): nothing can be bought or restored yet. */
+    val subscriptionsComingSoon: Boolean get() = BillingConfig.subscriptionsComingSoon
+
     val hasPro: StateFlow<Boolean> get() = impl.hasPro
     val packages: StateFlow<List<PlanPackageUi>> get() = impl.packages
     val loading: StateFlow<Boolean> get() = impl.loading

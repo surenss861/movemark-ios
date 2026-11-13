@@ -78,7 +78,7 @@ class AccountViewModel @Inject constructor(
                 val userId = sessionManager.userId.value
                 reportCredits.restored(userId)
                 _notice.value = AccountNotice(
-                    if (reportCredits.hasUsablePackCredit(userId)) "Report Pack restored." else subscriptionRepository.restoreFoundNothingMessage,
+                    if (reportCredits.hasUsablePackCredit(userId)) "Purchases restored." else subscriptionRepository.restoreFoundNothingMessage,
                 )
             }
         }

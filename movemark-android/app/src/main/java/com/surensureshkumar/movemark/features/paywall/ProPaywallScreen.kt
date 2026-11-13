@@ -51,6 +51,8 @@ import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
 import com.surensureshkumar.movemark.core.design.components.MMProofCard
+import androidx.compose.ui.platform.testTag
+import com.surensureshkumar.movemark.data.subscription.BillingConfig
 import com.surensureshkumar.movemark.data.subscription.PlanPackageUi
 import com.surensureshkumar.movemark.features.account.AccountViewModel
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
@@ -167,6 +169,15 @@ fun ProPaywallScreen(
             Spacer(Modifier.height(16.dp))
 
             when {
+                viewModel.subscriptionsComingSoon -> {
+                    MMProofCard(modifier = Modifier.testTag("paywall.comingSoon")) {
+                        Text("Subscriptions coming soon", color = MMColors.TextPrimary, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(8.dp))
+                        Text(BillingConfig.COMING_SOON, color = MMColors.TextSecondary)
+                        Spacer(Modifier.height(12.dp))
+                        MMButton(text = "Continue on Free", onClick = onClose, style = MMButtonStyle.Secondary)
+                    }
+                }
                 loading && packages.isEmpty() -> {
                     CircularProgressIndicator(color = MMColors.Primary, modifier = Modifier.align(Alignment.CenterHorizontally))
                 }
