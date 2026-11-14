@@ -26,6 +26,11 @@ struct MMReceiptQAScreen: View {
         case "receipt-partial":
             return ProofSavedReceiptModel(roomName: "Living Room", photoCount: 3, pendingCount: 1, issueCount: 1,
                                           savedAt: savedAt, imageURL: url, primaryActionLabel: "Retry 1 photo")
+        case "receipt-device-time":
+            // No server created_at came back: the time is labelled as this device's.
+            return ProofSavedReceiptModel(roomName: "Living Room", photoCount: 4, issueCount: 1, savedAt: savedAt,
+                                          savedAtFromServer: false, imageURL: url,
+                                          primaryActionLabel: "Continue to next room")
         case "receipt-complete":
             return ProofSavedReceiptModel(roomName: "Living Room", photoCount: 4, savedAt: savedAt, imageURL: url,
                                           primaryActionLabel: "View move-in report")

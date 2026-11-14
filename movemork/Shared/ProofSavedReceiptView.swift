@@ -22,6 +22,10 @@ struct ProofSavedReceiptModel {
     var pendingCount: Int = 0
     var issueCount: Int = 0
     var savedAt: Date
+    /// True when `savedAt` is the server's `created_at` for the saved photos. False when only the device's clock
+    /// at the backend's confirmation is known: the receipt then says "on this device" instead of presenting it
+    /// as the server's record.
+    var savedAtFromServer: Bool = true
     var imageURL: URL?
     var imageName: String?
     var primaryActionLabel: String
@@ -159,7 +163,11 @@ struct ProofSavedReceiptView: View {
         if model.issueCount > 0 {
             fact("Issues", "\(model.issueCount) recorded", spoken: "\(Self.count(model.issueCount, "issue")) recorded")
         }
-        fact("Saved", savedTime, spoken: "Saved \(savedTime)", grows: true)
+        if model.savedAtFromServer {
+            fact("Saved", savedTime, spoken: "Saved \(savedTime)", grows: true)
+        } else {
+            fact("Confirmed", "\(savedTime) on this device", spoken: "Confirmed \(savedTime) on this device", grows: true)
+        }
     }
 
     private func fact(_ label: String, _ value: String, spoken: String, grows: Bool = false) -> some View {

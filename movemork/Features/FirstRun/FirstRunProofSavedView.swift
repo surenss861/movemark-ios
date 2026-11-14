@@ -42,6 +42,7 @@ struct FirstRunProofSavedView: View {
                 photoCount: summary.photoCount,
                 issueCount: summary.issueCount,
                 savedAt: summary.savedAt,
+                savedAtFromServer: summary.savedAtFromServer,
                 imageURL: previewURL,
                 primaryActionLabel: "Continue to next room",
                 secondaryActionLabel: "View proof vault"

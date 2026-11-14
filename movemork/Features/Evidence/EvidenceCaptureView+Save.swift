@@ -75,6 +75,13 @@ extension EvidenceCaptureView {
             // tag hint below says so). The retry state keeps the requested count for its own wording.
             let tagsFailed = outcome.tagInsertFailed || (retry?.outcomeHints.tagInsertFailed ?? false)
             let confirmedIssueCount = tagsFailed ? 0 : issueCount
+            // Saved: the server's created_at of the latest photo this run inserted; nil when none came back
+            // (e.g. only an earlier attempt's photos were found), and the receipt then says "on this device".
+            let serverSavedAt = result.saved
+                .compactMap { MMCaseDate.parse($0.serverCreatedAt) }
+                .filter(\.hasTime)
+                .map(\.date)
+                .max()
             if confirmed > 0 { propertyStore.invalidateVaultSummaries() }
 
             if confirmed > 0 {
@@ -139,7 +146,8 @@ extension EvidenceCaptureView {
                 )
                 if !result.saved.isEmpty {
                     presentReceipt(photoCount: result.savedTotal, pendingCount: result.pending.count,
-                                   issueCount: confirmedIssueCount, photo: result.saved.first)
+                                   issueCount: confirmedIssueCount, serverSavedAt: serverSavedAt,
+                                   photo: result.saved.first)
                 }
                 MMHaptics.warning()
                 return
@@ -147,7 +155,8 @@ extension EvidenceCaptureView {
             pendingRetry = nil
             var merged = outcome
             if let retry { merged.tagInsertFailed = retry.outcomeHints.tagInsertFailed || outcome.tagInsertFailed }
-            presentSaveSuccess(photoCount: result.savedTotal, issueCount: confirmedIssueCount, outcome: merged)
+            presentSaveSuccess(photoCount: result.savedTotal, issueCount: confirmedIssueCount,
+                               serverSavedAt: serverSavedAt, outcome: merged)
         }
     }
 
@@ -157,7 +166,8 @@ extension EvidenceCaptureView {
     }
 
     /// Full success: only reached when every photo the user asked to save is confirmed saved.
-    private func presentSaveSuccess(photoCount: Int, issueCount: Int, outcome: PropertyMutationOutcome) {
+    private func presentSaveSuccess(photoCount: Int, issueCount: Int, serverSavedAt: Date?,
+                                    outcome: PropertyMutationOutcome) {
         if let onFirstProofSaved, let property = propertyStore.currentProperty {
             onFirstProofSaved(
                 FirstRunSavedSummary(
@@ -165,7 +175,8 @@ extension EvidenceCaptureView {
                     roomName: roomName,
                     photoCount: photoCount,
                     issueCount: issueCount,
-                    savedAt: Date()
+                    savedAt: serverSavedAt ?? Date(),
+                    savedAtFromServer: serverSavedAt != nil
                 )
             )
             MMHaptics.success()
@@ -177,12 +188,13 @@ extension EvidenceCaptureView {
         if outcome.tagInsertFailed { hints += MoveMarkFlowMessage.tagInsertFailedHint }
         if !hints.isEmpty { successMessage = hints.trimmingCharacters(in: .whitespaces) }
         presentReceipt(photoCount: photoCount, pendingCount: 0, issueCount: issueCount,
-                       photo: outcome.photoResult?.saved.first)
+                       serverSavedAt: serverSavedAt, photo: outcome.photoResult?.saved.first)
     }
 
     /// The receipt after a save: what the backend confirmed, and the one next step.
     /// `photo` is one the save just confirmed (the receipt's image); nil shows no image, never another room's.
-    private func presentReceipt(photoCount: Int, pendingCount: Int, issueCount: Int, photo: EvidencePhoto?) {
+    private func presentReceipt(photoCount: Int, pendingCount: Int, issueCount: Int, serverSavedAt: Date?,
+                                photo: EvidencePhoto?) {
         let property = propertyStore.currentProperty
         // Photo totals, as on the comparison screen: a room with only empty entries still needs proof.
         let nextRoom = property?.rooms.first { room in
@@ -207,9 +219,9 @@ extension EvidenceCaptureView {
             photoCount: photoCount,
             pendingCount: pendingCount,
             issueCount: issueCount,
-            // The moment the backend confirmed the save (this runs only after that confirmation). The insert
-            // returns no server created_at, so this is the device clock at confirmation.
-            savedAt: Date(),
+            // The server's created_at; without one, the device clock at the backend's confirmation, labelled so.
+            savedAt: serverSavedAt ?? Date(),
+            savedAtFromServer: serverSavedAt != nil,
             next: next,
             // The original, not the ~320 px thumbnail: the receipt shows it screen-wide (≈1100 px on a 3x phone),
             // where the thumbnail was visibly soft. MMCachedAsyncImage decodes it at display size.

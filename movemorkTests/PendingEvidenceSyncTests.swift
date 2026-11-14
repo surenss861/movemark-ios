@@ -116,13 +116,14 @@ final class FakeSyncServer: PendingEvidenceBackend {
                               sourcePath: "\(id)_source")
     }
 
-    func insertPhoto(rowId: UUID, entryId: UUID, key: PendingEvidenceKey, upload: MoveMarkUpload) async throws {
+    func insertPhoto(rowId: UUID, entryId: UUID, key: PendingEvidenceKey, upload: MoveMarkUpload) async throws -> String? {
         try await step(.insert) {
             guard entries.contains(entryId), rows[rowId] == nil, tickets[upload.ticketId]?.state == "finalized"
             else { throw Rejected() }
             rows[rowId] = (entryId, upload.ticketId)
             tickets[upload.ticketId]!.state = "consumed"
         }
+        return "2026-11-14T21:12:03.123456+00:00"   // PostgREST's representation of created_at
     }
 
     func abandon(_ upload: MoveMarkUpload) async -> MoveMarkAbandonResult {
@@ -247,6 +248,8 @@ struct PendingEvidenceSyncTests {
         let done = await app.sync.sync(key)
         #expect(done.isComplete)
         #expect(done.savedTotal == 15 && done.saved.count == 11)
+        // Each photo this run inserted carries the server's created_at (the receipt's Saved time).
+        #expect(done.saved.allSatisfy { $0.serverCreatedAt != nil })
         #expect(await app.store.manifest(for: key) == nil)              // nothing left on the phone
         #expect(await app.store.summaries(userId: key.userId).isEmpty)
         expectServerClean(expected: first + more, entry: done.entryId)
@@ -451,7 +454,7 @@ private final class FailingTicketServer: PendingEvidenceBackend {
                 onTicket: @escaping (MoveMarkUpload) async -> Void) async throws -> MoveMarkUpload {
         throw FakeSyncServer.Offline()
     }
-    func insertPhoto(rowId: UUID, entryId: UUID, key: PendingEvidenceKey, upload: MoveMarkUpload) async throws {
+    func insertPhoto(rowId: UUID, entryId: UUID, key: PendingEvidenceKey, upload: MoveMarkUpload) async throws -> String? {
         try await base.insertPhoto(rowId: rowId, entryId: entryId, key: key, upload: upload)
     }
     func abandon(_ upload: MoveMarkUpload) async -> MoveMarkAbandonResult { await base.abandon(upload) }

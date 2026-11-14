@@ -25,6 +25,8 @@ struct SavedRoomReceipt: Identifiable {
     let pendingCount: Int
     let issueCount: Int
     let savedAt: Date
+    /// See ``ProofSavedReceiptModel/savedAtFromServer``.
+    let savedAtFromServer: Bool
     let next: Next
     /// Storage path of the original of a photo this save confirmed — the receipt's image (shown screen-wide, so
     /// never the ~320 px thumbnail).
@@ -44,7 +46,8 @@ struct SavedRoomReceipt: Identifiable {
     func model(imageURL: URL?) -> ProofSavedReceiptModel {
         ProofSavedReceiptModel(
             roomName: roomName, phaseLabel: phaseLabel, photoCount: photoCount, pendingCount: pendingCount,
-            issueCount: issueCount, savedAt: savedAt, imageURL: imageURL, primaryActionLabel: primaryActionLabel
+            issueCount: issueCount, savedAt: savedAt, savedAtFromServer: savedAtFromServer, imageURL: imageURL,
+            primaryActionLabel: primaryActionLabel
         )
     }
 }

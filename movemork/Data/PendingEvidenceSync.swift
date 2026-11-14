@@ -35,7 +35,8 @@ protocol PendingEvidenceBackend {
     /// Ticket → PUTs → finalize. `onTicket` runs before any byte is sent.
     func upload(_ source: MMEvidenceSource, key: PendingEvidenceKey,
                 onTicket: @escaping (MoveMarkUpload) async -> Void) async throws -> MoveMarkUpload
-    func insertPhoto(rowId: UUID, entryId: UUID, key: PendingEvidenceKey, upload: MoveMarkUpload) async throws
+    /// - Returns: the row's `created_at` as the server set it (nil when the response didn't carry it).
+    func insertPhoto(rowId: UUID, entryId: UUID, key: PendingEvidenceKey, upload: MoveMarkUpload) async throws -> String?
     func abandon(_ upload: MoveMarkUpload) async -> MoveMarkAbandonResult
 }
 
@@ -186,9 +187,11 @@ struct PendingEvidenceSync {
         await store.setUnresolved(PendingEvidenceUpload(upload), for: item.id, in: key)
 
         do {
-            try await backend.insertPhoto(rowId: item.id, entryId: entryId, key: key, upload: upload)
+            let createdAt = try await backend.insertPhoto(rowId: item.id, entryId: entryId, key: key, upload: upload)
             await store.confirm([item.id], in: key)
-            return Self.photo(item.id, upload)
+            var photo = Self.photo(item.id, upload)
+            photo.serverCreatedAt = createdAt
+            return photo
         } catch {
             result.insertFailures += 1
             switch await backend.abandon(upload) {
@@ -330,12 +333,12 @@ struct LivePendingEvidenceBackend: PendingEvidenceBackend {
                                                                isMoveOut: key.stage == .moveOut, onTicket: onTicket)
     }
 
-    func insertPhoto(rowId: UUID, entryId: UUID, key: PendingEvidenceKey, upload: MoveMarkUpload) async throws {
-        try await repo.insertEvidenceFile(
+    func insertPhoto(rowId: UUID, entryId: UUID, key: PendingEvidenceKey, upload: MoveMarkUpload) async throws -> String? {
+        try await repo.insertEvidenceFileRow(
             id: rowId, propertyId: key.propertyId, inspectionItemId: entryId, maintenanceIssueId: nil,
             filePath: upload.path, thumbnailPath: upload.thumbnailPath, sourcePath: upload.sourcePath,
             fileType: "image", capturedAt: upload.capturedAt ?? Date()
-        )
+        ).createdAt
     }
 
     func abandon(_ upload: MoveMarkUpload) async -> MoveMarkAbandonResult {
