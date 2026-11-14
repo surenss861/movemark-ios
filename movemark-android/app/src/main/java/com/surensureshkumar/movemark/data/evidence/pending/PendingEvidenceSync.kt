@@ -39,7 +39,8 @@ interface PendingEvidenceBackend {
     /** Ticket → PUTs → finalize. [onTicket] runs before any byte is sent. */
     suspend fun upload(source: EvidenceSource, key: PendingEvidenceKey, onTicket: suspend (MoveMarkUpload) -> Unit): MoveMarkUpload
 
-    suspend fun insertPhoto(rowId: UUID, entryId: UUID, key: PendingEvidenceKey, upload: MoveMarkUpload)
+    /** Inserts the photo's row; returns the server's created_at for it (null when the server sent none). */
+    suspend fun insertPhoto(rowId: UUID, entryId: UUID, key: PendingEvidenceKey, upload: MoveMarkUpload): String?
 
     suspend fun abandon(upload: MoveMarkUpload): AbandonResult
 }
@@ -63,6 +64,8 @@ data class PendingEvidenceSyncResult(
     val priorSaved: Int = 0,
     /** The last error a photo hit, for the user-facing message. */
     val lastError: Throwable? = null,
+    /** The latest server created_at among the photos this run confirmed (iOS receipt "Saved" time); null if none. */
+    val confirmedAt: String? = null,
 ) {
     sealed class Failure {
         /** The server couldn't be reached to create or check the entry; nothing was sent. */
@@ -147,6 +150,7 @@ class PendingEvidenceSync(
                 saved = if (photo != null) result.saved + photo else result.saved,
                 insertFailures = result.insertFailures + if (outcome.insertFailed) 1 else 0,
                 lastError = outcome.error ?: result.lastError,
+                confirmedAt = latestServerTime(result.confirmedAt, outcome.createdAt),
             )
         }
 
@@ -164,7 +168,7 @@ class PendingEvidenceSync(
         return finish(result, key)
     }
 
-    private data class SendOutcome(val insertFailed: Boolean = false, val error: Throwable? = null)
+    private data class SendOutcome(val insertFailed: Boolean = false, val error: Throwable? = null, val createdAt: String? = null)
 
     /** One photo: settle an earlier upload, upload (ticket recorded first), insert, confirm. */
     private suspend fun send(item: PendingEvidenceItem, entryId: UUID, key: PendingEvidenceKey): Pair<EvidencePhoto?, SendOutcome> {
@@ -201,9 +205,9 @@ class PendingEvidenceSync(
         store.setUnresolved(PendingEvidenceUpload.of(upload), item.id, key)
 
         return try {
-            backend.insertPhoto(UUID.fromString(item.id), entryId, key, upload)
+            val createdAt = backend.insertPhoto(UUID.fromString(item.id), entryId, key, upload)
             store.confirm(listOf(item.id), key)
-            photo(item.id, upload) to SendOutcome()
+            photo(item.id, upload) to SendOutcome(createdAt = createdAt)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -306,4 +310,29 @@ class PendingEvidenceSync(
 
     private fun photo(id: String, upload: MoveMarkUpload) =
         EvidencePhoto(id = UUID.fromString(id), filePath = upload.path, thumbnailPath = upload.thumbnailPath)
+}
+
+/** The later of two server timestamps (PostgREST created_at text); either may be null or unparsable. */
+internal fun latestServerTime(a: String?, b: String?): String? {
+    val ia = a?.let(::parseServerTimestamp)
+    val ib = b?.let(::parseServerTimestamp)
+    return when {
+        ib == null -> if (ia != null) a else null
+        ia == null -> b
+        ib.isAfter(ia) -> b
+        else -> a
+    }
+}
+
+/**
+ * A PostgREST / Postgres timestamptz as text: "2026-11-14T10:13:42.123456+00:00" (microseconds), "…Z", or the
+ * space-separated "2026-11-14 10:13:42.123456+00" form. Null when it doesn't parse.
+ */
+fun parseServerTimestamp(text: String): java.time.Instant? {
+    val t = text.trim().replace(' ', 'T').let { s ->
+        // "+00" / "-05" (hours only) -> "+00:00"
+        Regex("""([+-]\d{2})$""").replace(s) { "${it.groupValues[1]}:00" }
+    }
+    return runCatching { java.time.OffsetDateTime.parse(t).toInstant() }.getOrNull()
+        ?: runCatching { java.time.Instant.parse(t) }.getOrNull()
 }

@@ -145,7 +145,7 @@ fun MoveOutRoomsScreen(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ColumnScope.MoveOutContent(
+internal fun ColumnScope.MoveOutContent(
     o: MoveOutOverview,
     justCompared: Set<UUID>,
     checklist: MoveOutChecklistRow?,

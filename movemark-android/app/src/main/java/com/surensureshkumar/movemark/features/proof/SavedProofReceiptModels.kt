@@ -17,6 +17,10 @@ data class SavedProofReceiptPayload(
     val proofPhase: ProofPhase = ProofPhase.MoveIn,
     /** Issue tags saved on this entry, so the receipt matches what the room list shows. */
     val issueCount: Int = 0,
+    /** The saved entry (inspection_items.id). */
+    val entryId: UUID? = null,
+    /** The latest server created_at among this save's confirmed photos (the evidence_files insert's returned row). */
+    val serverSavedAt: String? = null,
 )
 
 @Singleton

@@ -142,7 +142,7 @@ class InspectionRepository(
         inspectionItemId: UUID?,
         maintenanceIssueId: UUID?,
         upload: MoveMarkUpload,
-    ) {
+    ): String? {
         val row = EvidenceFileRow(
             id = rowId.toString(),
             propertyId = propertyId.toString(),
@@ -155,8 +155,11 @@ class InspectionRepository(
             thumbnailPath = upload.thumbnailPath,
             sourcePath = upload.sourcePath,
         )
-        postgrest.insert("evidence_files", row)
+        // return=representation: the server-set created_at comes back with the row (as on iOS), the receipt's
+        // authoritative "Saved" time. Same single insert as before, just with the row in the response.
+        val inserted = postgrest.insertReturning<EvidenceFileRow, InsertedAtRow>("evidence_files", row)
         fileUrls.remember(rowId.toString(), upload.path, upload.thumbnailPath)
+        return inserted.firstOrNull()?.createdAt
     }
 
     /** Builds the working derivative and thumbnail for [source]; throws when the photo can't be rendered. */
@@ -253,3 +256,7 @@ class InspectionRepository(
         postgrest.delete("inspection_items") { eq("id", id.toString()) }
     }
 }
+
+/** The part of an inserted evidence_files row the app keeps: when the server recorded it. */
+@kotlinx.serialization.Serializable
+internal data class InsertedAtRow(@kotlinx.serialization.SerialName("created_at") val createdAt: String? = null)

@@ -44,6 +44,8 @@ fun RoomProofBottomSaveBar(
     onContinueWithSaved: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Partial save: names only the uploaded photos (RoomProofUploadMessages.continueWithUploaded). */
+    continueLabel: String = "Continue with uploaded photos",
 ) {
     Column(
         modifier = modifier
@@ -71,7 +73,7 @@ fun RoomProofBottomSaveBar(
 
         // Exactly one lime action.
         when {
-            isPartial -> MMPrimaryButton(title = "Continue with saved proof", onClick = onContinueWithSaved)
+            isPartial -> MMPrimaryButton(title = continueLabel, onClick = onContinueWithSaved)
             isFailed -> MMPrimaryButton(
                 title = RoomProofUploadMessages.RETRY_LABEL,
                 onClick = onRetry,

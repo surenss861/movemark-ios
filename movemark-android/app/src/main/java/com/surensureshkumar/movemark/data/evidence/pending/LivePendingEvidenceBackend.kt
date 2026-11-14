@@ -58,7 +58,7 @@ class LivePendingEvidenceBackend(
         onTicket = onTicket,
     )
 
-    override suspend fun insertPhoto(rowId: UUID, entryId: UUID, key: PendingEvidenceKey, upload: MoveMarkUpload) =
+    override suspend fun insertPhoto(rowId: UUID, entryId: UUID, key: PendingEvidenceKey, upload: MoveMarkUpload): String? =
         repo.insertEvidenceFile(rowId, UUID.fromString(key.propertyId), entryId, null, upload)
 
     override suspend fun abandon(upload: MoveMarkUpload): AbandonResult = storage.abandon(upload)

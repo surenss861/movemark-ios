@@ -204,7 +204,7 @@ class RoomProofViewModel @Inject constructor(
             _message.value = RoomProofUploadMessages.partial(manifest.savedCount, requested)
             pendingReceipt = room.value?.let { r ->
                 propertyStore.currentProperty.value?.let { p ->
-                    buildReceiptPayload(r, p.id, manifest.savedCount, requested, manifest.draft.tags.size)
+                    buildReceiptPayload(r, p.id, manifest.savedCount, requested, manifest.draft.tags.size, manifest.entryId?.let { runCatching { UUID.fromString(it.toString()) }.getOrNull() })
                 }
             }
         } else {
@@ -362,12 +362,12 @@ class RoomProofViewModel @Inject constructor(
                 val issueCount = draft.tags.size
                 if (!result.isComplete) {
                     _photos.value = stillPending
-                    pendingReceipt = buildReceiptPayload(room, property.id, result.savedTotal, result.requestedTotal, issueCount)
+                    pendingReceipt = buildReceiptPayload(room, property.id, result.savedTotal, result.requestedTotal, issueCount, result.entryId, result.confirmedAt)
                     _saveState.value = RoomProofSaveState.PartialSuccess(result.savedTotal, stillPending.size)
                     _message.value = RoomProofUploadMessages.partial(result.savedTotal, result.requestedTotal)
                     return@launch
                 }
-                val payload = buildReceiptPayload(room, property.id, result.savedTotal, result.requestedTotal, issueCount)
+                val payload = buildReceiptPayload(room, property.id, result.savedTotal, result.requestedTotal, issueCount, result.entryId, result.confirmedAt)
                 receiptCache.put(payload)
                 _photos.value = emptyList()
                 pendingReceipt = null
@@ -546,6 +546,8 @@ class RoomProofViewModel @Inject constructor(
         savedCount: Int,
         attemptedCount: Int,
         issueCount: Int,
+        entryId: UUID? = null,
+        serverSavedAt: String? = null,
     ): SavedProofReceiptPayload {
         val thumbnail = _photos.value.firstOrNull { it.status == PhotoUploadStatus.Uploaded }?.bytes
             ?: _photos.value.firstOrNull()?.bytes
@@ -560,6 +562,8 @@ class RoomProofViewModel @Inject constructor(
             thumbnailJpeg = thumbnail,
             proofPhase = proofPhase,
             issueCount = issueCount,
+            entryId = entryId,
+            serverSavedAt = serverSavedAt,
         )
     }
 

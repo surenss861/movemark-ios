@@ -1,5 +1,6 @@
 /**
- * @file Debug-only fixture gallery for visual QA (vault-*, sprint-*, reports-*, room-*)
+ * @file Debug-only fixture gallery for visual QA (vault-*, sprint-*, room-*, and the 1.4 full screens). The old
+ *       reports-* cases were removed with the retired report hero/export components (white on lime).
  * @domain design-system
  * @status stable
  * @see [[MMRichQAGallery.swift]] — iOS counterpart (same case names)
@@ -42,7 +43,6 @@ import com.surensureshkumar.movemark.core.design.MMTheme
 import com.surensureshkumar.movemark.core.design.components.MMRoomProgressCard
 import com.surensureshkumar.movemark.core.design.components.MMRoomProofRow
 import com.surensureshkumar.movemark.core.design.components.MMVaultProofHeroCard
-import com.surensureshkumar.movemark.data.export.ReportReadiness
 import com.surensureshkumar.movemark.data.models.EvidencePhoto
 import com.surensureshkumar.movemark.data.models.EvidenceRecord
 import com.surensureshkumar.movemark.data.models.RoomRecord
@@ -57,8 +57,6 @@ import com.surensureshkumar.movemark.features.proof.RoomPhotoViewer
 import com.surensureshkumar.movemark.features.proof.RoomProofBottomSaveBar
 import com.surensureshkumar.movemark.features.proof.RoomProofPhotoGrid
 import com.surensureshkumar.movemark.features.proof.RoomTopBar
-import com.surensureshkumar.movemark.features.reports.components.MMReportExportSection
-import com.surensureshkumar.movemark.features.reports.components.MMReportPreviewHero
 import java.io.File
 import java.time.Instant
 import java.util.UUID
@@ -100,6 +98,7 @@ private fun FullScreenCase(screen: String): Boolean {
     val receipt = com.surensureshkumar.movemark.features.proof.SavedProofReceiptUiState(
         roomName = "Kitchen", savedCount = 3, attemptedCount = 3, issueCount = 1,
         timestampLabel = "Move-in · Nov 13 · 5:54 PM", primaryActionLabel = "Continue to next room",
+        phaseLabel = "Move-in", savedTimeLabel = "Nov 13, 5:54 PM", savedTimeFromServer = true,
         thumbnailJpeg = remember { fixtureJpeg(3) },
     )
     val plans = listOf(
@@ -107,10 +106,10 @@ private fun FullScreenCase(screen: String): Boolean {
         com.surensureshkumar.movemark.data.subscription.PlanPackageUi("monthly", "MoveMark Pro Monthly", "Billed monthly", "$7.99 / month", isYearly = false),
     )
     when (screen) {
-        "receipt" -> com.surensureshkumar.movemark.features.proof.SavedProofReceiptContent(receipt, teen = false, onPrimary = {}, onViewVault = {}, onAddMorePhotos = {})
+        "receipt" -> com.surensureshkumar.movemark.features.proof.SavedProofReceiptContent(receipt, teen = false, onPrimary = {}, onViewEvidence = {}, onAddMorePhotos = {})
         "receipt-partial" -> com.surensureshkumar.movemark.features.proof.SavedProofReceiptContent(
             receipt.copy(savedCount = 2, attemptedCount = 8, hadPartialFailure = true, primaryActionLabel = "Retry 6 photos"),
-            teen = false, onPrimary = {}, onViewVault = {}, onAddMorePhotos = {},
+            teen = false, onPrimary = {}, onViewEvidence = {}, onAddMorePhotos = {},
         )
         "paywall-off", "paywall-plans", "paywall-failed" -> com.surensureshkumar.movemark.features.paywall.ProPaywallContent(
             reason = com.surensureshkumar.movemark.features.subscription.PaywallReason.ExtraProperty,
@@ -140,9 +139,91 @@ private fun FullScreenCase(screen: String): Boolean {
         "maintenance" -> com.surensureshkumar.movemark.features.maintenance.MaintenanceLogScreen(onBack = {}, onOpenIssue = {})
         "move-out" -> com.surensureshkumar.movemark.features.moveout.MoveOutRoomsScreen(onBack = {}, onOpenRoom = {})
         "dispute" -> com.surensureshkumar.movemark.features.dispute.DisputePacketScreen(onBack = {}, onCaptureMoveOut = {}, onMissing = {})
+        // Populated (fictional fixture rental, no account): the layouts with real-looking content.
+        "move-out-data" -> PopulatedMoveOut()
+        "dispute-data" -> PopulatedDispute()
+        "maintenance-data" -> com.surensureshkumar.movemark.features.maintenance.MaintenanceLogContent(
+            log = qaMaintenance, isLoading = false, isSubmitting = false, errorMessage = null,
+            onBack = {}, onOpenIssue = {}, onAddIncident = { _, _, _ -> },
+        )
         else -> return false
     }
     return true
+}
+
+// ---- Populated fixtures (fictional rental "Maple Street Apartment"; photos are generated locally) ----
+
+private fun qaEntry(title: String, photos: Int, seed: Int, daysAgo: Long, tags: List<String> = emptyList(), rating: Int = 4) =
+    EvidenceRecord(
+        id = UUID.nameUUIDFromBytes("$title-$seed".toByteArray()),
+        title = title,
+        notes = "",
+        photoCount = photos,
+        photos = List(photos) { EvidencePhoto(UUID.nameUUIDFromBytes("$title-$seed-$it".toByteArray()), "qa-fixture/room-${seed + it}.jpg") },
+        conditionRating = rating,
+        createdAt = Instant.now().minusSeconds(daysAgo * 86_400).toString(),
+        issueTagCount = tags.size,
+        issueTags = tags,
+    )
+
+private val qaRooms = listOf(
+    RoomRecord(UUID.nameUUIDFromBytes("kitchen".toByteArray()), "Kitchen",
+        moveInEvidence = listOf(qaEntry("Kitchen", 4, 1, 300)),
+        moveOutEvidence = listOf(qaEntry("Kitchen at move-out", 3, 2, 1, listOf("Scratch")))),
+    RoomRecord(UUID.nameUUIDFromBytes("living".toByteArray()), "Living Room",
+        moveInEvidence = listOf(qaEntry("Living Room", 3, 4, 300)),
+        moveOutEvidence = listOf(qaEntry("Living Room at move-out", 2, 5, 1))),
+    RoomRecord(UUID.nameUUIDFromBytes("bed2".toByteArray()), "Bedroom 2",
+        moveInEvidence = listOf(qaEntry("Bedroom 2", 2, 7, 300))),
+)
+
+private val qaProperty = com.surensureshkumar.movemark.data.models.PropertyRecord(
+    UUID.nameUUIDFromBytes("maple".toByteArray()), "Maple Street Apartment", "1 Test Lane", "Testville", "ON", qaRooms,
+)
+
+private val qaMaintenance = listOf(
+    com.surensureshkumar.movemark.data.models.MaintenanceRecord(UUID.nameUUIDFromBytes("m1".toByteArray()), "Dishwasher leaking", "Appliance",
+        "Water pools under the door after each cycle.", "open", null, 2, Instant.now().minusSeconds(86_400 * 3).toString()),
+    com.surensureshkumar.movemark.data.models.MaintenanceRecord(UUID.nameUUIDFromBytes("m2".toByteArray()), "Bedroom window won't latch", "Structural",
+        "", "open", "Landlord booked a repair for Friday.", 1, Instant.now().minusSeconds(86_400 * 10).toString()),
+    com.surensureshkumar.movemark.data.models.MaintenanceRecord(UUID.nameUUIDFromBytes("m3".toByteArray()), "Bathroom fan noisy", "HVAC",
+        "Replaced by the building.", "resolved", "Fixed on Oct 2.", 0, Instant.now().minusSeconds(86_400 * 40).toString()),
+)
+
+@Composable
+private fun PopulatedMoveOut() {
+    val context = LocalContext.current
+    com.surensureshkumar.movemark.core.design.MMScreen(
+        title = qaProperty.title, eyebrow = "Move-out", lines = listOf("Compare what changed since move-in."), onBack = {},
+    ) {
+        com.surensureshkumar.movemark.features.moveout.MoveOutContent(
+            o = com.surensureshkumar.movemark.domain.MoveOutOverview(qaRooms),
+            justCompared = emptySet(), checklist = null, loadingChecklist = false, error = null, errorFromExport = false,
+            queuedNotice = null, exporting = false, hasPro = true,
+            sign = { path -> fixturePhotoUri(context, path.filter { it.isDigit() }.toIntOrNull() ?: 0) },
+            onRetryChecklist = {}, onToggle = {}, onGenerate = {}, onRetryExport = {}, onOpenRoom = {},
+            onCaptureMoveIn = {}, onOpenReports = {}, onOpenPhoto = { _, _ -> },
+        )
+    }
+}
+
+@Composable
+private fun PopulatedDispute() {
+    val context = LocalContext.current
+    com.surensureshkumar.movemark.core.design.MMScreen(
+        title = "Dispute packet", lines = listOf("Build a record of the evidence related to this issue."), onBack = {},
+    ) {
+        com.surensureshkumar.movemark.features.dispute.DisputePacketContent(
+            model = com.surensureshkumar.movemark.domain.DisputePacketModel.make(
+                qaProperty, qaMaintenance, emptyList(), qaRooms.take(2).map { it.id }.toSet(), hasPro = true,
+            ),
+            question = "Was the kitchen counter scratch there at move-in?", amount = "350",
+            errorMessage = null, errorActionTitle = "Try again", isDownloading = false,
+            sign = { path -> fixturePhotoUri(context, path.filter { it.isDigit() }.toIntOrNull() ?: 0) },
+            onQuestion = {}, onAmount = {}, onToggleRoom = {}, onOpenPhoto = { _, _ -> }, onCaptureMoveOut = {},
+            onMissing = {}, onGenerate = {}, onView = {}, onShare = {}, onRetry = {},
+        )
+    }
 }
 
 private val sprintNames = listOf(
@@ -161,18 +242,6 @@ private fun QACase(screen: String) {
         "sprint-first" -> SprintCase(0, "Kitchen")
         "sprint-middle" -> SprintCase(2, "Primary Bedroom")
         "sprint-final" -> SprintCase(9, "Office")
-        "reports-empty" -> ReportCase(ReportReadiness.NotReady, "Document a room to make your first report.", emptyList(), "Generate record")
-        "reports-generating" -> ReportCase(ReportReadiness.Processing, "Generating your record.", listOf("9 rooms", "24 photos"), "Generating record", busy = true)
-        "reports-ready" -> ReportCase(
-            ReportReadiness.ReadyToShare,
-            "Your move-in record is ready.",
-            listOf("9 rooms", "24 photos", "2 issues"),
-            "View / Share",
-            generatedLine = "Generated Sep 28 · 6:34 PM",
-            recordId = "MM-RP-4C82",
-        )
-        "reports-failed" -> ReportCase(ReportReadiness.Failed, "The report didn’t finish.", listOf("9 rooms", "24 photos"), "Try again")
-        "reports-pro" -> ProCase()
         else -> VaultCase(9, 24, "123 Main St", "Primary Bedroom")
     }
 }
@@ -221,65 +290,7 @@ private fun SprintCase(doneThrough: Int, current: String) {
     }
 }
 
-@Composable
-private fun ReportCase(
-    readiness: ReportReadiness,
-    headline: String,
-    chips: List<String>,
-    action: String,
-    busy: Boolean = false,
-    generatedLine: String? = null,
-    recordId: String? = null,
-) {
-    MMReportPreviewHero(
-        readiness = readiness,
-        metricsLine = chips.joinToString(" · ").ifBlank { null },
-        headline = headline,
-        footnote = headline,
-        proofChips = chips,
-        primaryTitle = action,
-        primaryEnabled = !busy,
-        primaryLoading = busy,
-        onPrimary = {},
-        appeared = true,
-        reduceMotion = true,
-        generatedLine = generatedLine,
-        recordId = recordId,
-    )
-}
 
-@Composable
-private fun ProCase() {
-    MMReportPreviewHero(
-        readiness = ReportReadiness.ReadyToShare,
-        metricsLine = "9 rooms · 24 photos",
-        headline = "Your move-in record is ready.",
-        footnote = null,
-        proofChips = listOf("9 rooms", "24 photos"),
-        primaryTitle = "View / Share",
-        primaryEnabled = true,
-        primaryLoading = false,
-        onPrimary = {},
-        appeared = true,
-        reduceMotion = true,
-    )
-    Spacer(Modifier.height(16.dp))
-    MMReportExportSection(
-        sectionTitle = "Move-out report",
-        sectionSubtitle = "Re-capture the same rooms when you leave.",
-        statusLine = "Ready to share",
-        statusColor = MMColors.Primary,
-        metricsLine = null,
-        footnote = null,
-        primaryTitle = "Upgrade to Pro",
-        primaryEnabled = true,
-        primaryLoading = false,
-        onPrimary = {},
-        appeared = true,
-        reduceMotion = true,
-        isProLocked = true,
-    )
-}
 
 private fun qaRoom(name: String, photos: Int): RoomRecord {
     val evidence = if (photos == 0) {

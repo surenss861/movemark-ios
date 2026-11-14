@@ -66,11 +66,34 @@ fun MaintenanceLogScreen(
     val isSubmitting by viewModel.isSubmitting.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
 
+    LaunchedEffect(Unit) { viewModel.refresh() }
+
+    MaintenanceLogContent(
+        log = log,
+        isLoading = isLoading,
+        isSubmitting = isSubmitting,
+        errorMessage = errorMessage,
+        onBack = onBack,
+        onOpenIssue = onOpenIssue,
+        onAddIncident = viewModel::addIncident,
+    )
+}
+
+/** The log itself, from plain values (also rendered by the debug fixture gallery with populated cases). */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun MaintenanceLogContent(
+    log: List<MaintenanceRecord>,
+    isLoading: Boolean,
+    isSubmitting: Boolean,
+    errorMessage: String?,
+    onBack: () -> Unit,
+    onOpenIssue: (UUID) -> Unit,
+    onAddIncident: (title: String, category: String, details: String) -> Unit,
+) {
     var title by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("General") }
     var details by remember { mutableStateOf("") }
-
-    LaunchedEffect(Unit) { viewModel.refresh() }
 
     val openIssues = log.filter { it.status != "resolved" }
     val resolvedIssues = log.filter { it.status == "resolved" }
@@ -171,7 +194,7 @@ fun MaintenanceLogScreen(
                     MMPrimaryButton(
                         title = "Save incident",
                         onClick = {
-                            viewModel.addIncident(title, selectedCategory, details)
+                            onAddIncident(title, selectedCategory, details)
                             title = ""
                             details = ""
                             selectedCategory = "General"

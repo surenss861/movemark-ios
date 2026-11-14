@@ -37,6 +37,8 @@ private class FakeServer {
     var killAtTick = -1
     var offline = false
     var failInsertsAfterCommit = 0
+    /** What the fake server returns as each inserted row's created_at (PostgREST microsecond text). */
+    var serverCreatedAt: String? = null
     var abandonUnreachable = 0
     var ensureEntryFails = false
 
@@ -86,7 +88,7 @@ private class FakeServer {
             return upload
         }
 
-        override suspend fun insertPhoto(rowId: UUID, entryId: UUID, key: PendingEvidenceKey, upload: MoveMarkUpload) {
+        override suspend fun insertPhoto(rowId: UUID, entryId: UUID, key: PendingEvidenceKey, upload: MoveMarkUpload): String? {
             tick(); network()
             if (rowId in rows) throw IOException("duplicate key value violates unique constraint")
             require(entryId in entries) { "foreign key" }
@@ -96,6 +98,7 @@ private class FakeServer {
                 failInsertsAfterCommit--
                 throw IOException("response lost")
             }
+            return serverCreatedAt
         }
 
         override suspend fun abandon(upload: MoveMarkUpload): AbandonResult {
@@ -287,5 +290,47 @@ class PendingEvidenceSyncTest {
             assertEquals("kill at $killAt: no orphaned uploads", emptySet<String>(), server.orphanTickets())
             assertNull("kill at $killAt: phone is clear", store().manifest(testKey))
         }
+    }
+
+    @Test
+    fun theServersCreatedAtFromTheInsertComesBackAsConfirmedAt() = runTest {
+        val server = FakeServer()
+        server.serverCreatedAt = "2026-11-14T10:13:42.123456+00:00"
+        admit(1, 2)
+        val result = PendingEvidenceSync(store(), server.backend).sync(testKey)
+        assertEquals("2026-11-14T10:13:42.123456+00:00", result.confirmedAt)
+    }
+
+    @Test
+    fun noCreatedAtFromTheServerMeansNoConfirmedAt() = runTest {
+        val server = FakeServer()
+        admit(1)
+        val result = PendingEvidenceSync(store(), server.backend).sync(testKey)
+        assertNull(result.confirmedAt)
+    }
+
+    // ---- Saved locally vs confirmed by the server (owner safeguard) ----
+
+    @Test
+    fun aQueuedPhotoNeverGetsAServerTime() = runTest {
+        val server = FakeServer()
+        server.serverCreatedAt = "2026-11-14T10:13:42.123456+00:00"
+        server.offline = true
+        admit(1, 2)
+        val result = PendingEvidenceSync(store(), server.backend).sync(testKey)
+        assertTrue(result.pending.isNotEmpty()) // still on this phone
+        assertEquals(0, result.saved.size)
+        assertNull("no upload was confirmed, so no server time", result.confirmedAt)
+    }
+
+    @Test
+    fun aPhotoConfirmedWithoutTheInsertResponseHasNoServerTime() = runTest {
+        val server = FakeServer()
+        server.serverCreatedAt = "2026-11-14T10:13:42.123456+00:00"
+        server.failInsertsAfterCommit = 1 // the row committed, but its response (and created_at) was lost
+        admit(1)
+        val result = PendingEvidenceSync(store(), server.backend).sync(testKey)
+        assertEquals(1, result.saved.size)
+        assertNull("the time must come from the server's returned row, never be invented", result.confirmedAt)
     }
 }

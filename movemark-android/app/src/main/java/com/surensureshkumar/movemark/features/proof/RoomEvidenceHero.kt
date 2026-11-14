@@ -7,6 +7,7 @@
  */
 package com.surensureshkumar.movemark.features.proof
 
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -212,6 +213,7 @@ fun RoomEvidenceHero(
                         },
                     ),
                     isBusy = isBusy,
+                    quiet = hasPendingPhotos || isBusy,
                     onTakePhotos = onTakePhotos,
                     onChooseGallery = onChooseGallery,
                     modifier = Modifier.align(Alignment.BottomStart),
@@ -325,6 +327,8 @@ private fun HeroTitle(
     recorded: String?,
     chips: List<HeroChip>,
     isBusy: Boolean,
+    /** Photos are waiting or uploading: the save bar carries the one lime action, so this pill goes quiet. */
+    quiet: Boolean = false,
     onTakePhotos: () -> Unit,
     onChooseGallery: () -> Unit,
     modifier: Modifier = Modifier,
@@ -351,28 +355,39 @@ private fun HeroTitle(
             )
             recorded?.let { RecordedLine(it, onPhoto = true) }
         }
-        AddEvidencePill(isBusy, onTakePhotos, onChooseGallery, Modifier.padding(top = 6.dp))
+        AddEvidencePill(isBusy, onTakePhotos, onChooseGallery, Modifier.padding(top = 6.dp), quiet = quiet)
     }
 }
 
 /** A documented room's next action: the lime pill, as on iOS RC5 (lime is the screen's one action). */
 @Composable
-private fun AddEvidencePill(isBusy: Boolean, onTakePhotos: () -> Unit, onChooseGallery: () -> Unit, modifier: Modifier = Modifier) {
+private fun AddEvidencePill(
+    isBusy: Boolean,
+    onTakePhotos: () -> Unit,
+    onChooseGallery: () -> Unit,
+    modifier: Modifier = Modifier,
+    quiet: Boolean = false,
+) {
     var open by remember { mutableStateOf(false) }
+    val ink = if (quiet) Color.White else MMInk.OnLime
     Box(modifier.fillMaxWidth()) {
         Row(
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = 50.dp)
                 .clip(RoundedCornerShape(50))
-                .background(MMInk.Lime.copy(alpha = if (isBusy) 0.5f else 1f))
-                .clickable(enabled = !isBusy, role = Role.Button) { open = true },
+                .then(
+                    if (quiet) Modifier.border(1.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(50))
+                    else Modifier.background(MMInk.Lime.copy(alpha = if (isBusy) 0.5f else 1f)),
+                )
+                .clickable(enabled = !isBusy, role = Role.Button) { open = true }
+                .testTag(if (quiet) "room.addEvidence.quiet" else "room.addEvidence"),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Filled.PhotoCamera, contentDescription = null, tint = MMInk.OnLime, modifier = Modifier.size(18.dp))
+            Icon(Icons.Filled.PhotoCamera, contentDescription = null, tint = ink.copy(alpha = if (isBusy) 0.5f else 1f), modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Add evidence", color = MMInk.OnLime, fontSize = 15.5.sp, fontWeight = FontWeight.SemiBold)
+            Text("Add evidence", color = ink.copy(alpha = if (isBusy) 0.5f else 1f), fontSize = 15.5.sp, fontWeight = FontWeight.SemiBold)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(

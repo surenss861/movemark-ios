@@ -2,6 +2,8 @@ package com.surensureshkumar.movemark.features.proof
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 import com.surensureshkumar.movemark.core.navigation.Routes
 import com.surensureshkumar.movemark.data.property.PropertyStore
 import com.surensureshkumar.movemark.domain.ProofPhase
@@ -31,6 +33,12 @@ data class SavedProofReceiptUiState(
     val primaryActionLabel: String = "Continue next room",
     val nextRoomName: String? = null,
     val issueCount: Int = 0,
+    /** "Move-in" / "Move-out", shown at the receipt's top right (polished iOS Proof Slip). */
+    val phaseLabel: String = "Move-in",
+    /** When the proof was saved: the server's `created_at` of the new entry once the store has it. */
+    val savedTimeLabel: String = "",
+    /** True when [savedTimeLabel] is the server's time, false while it is still this phone's save time. */
+    val savedTimeFromServer: Boolean = false,
 )
 
 @HiltViewModel
@@ -54,6 +62,7 @@ class SavedProofReceiptViewModel @Inject constructor(
         val attempted = payload?.attemptedCount ?: saved
         val partial = payload?.hadPartialFailure == true
         val ts = payload?.timestampMillis ?: System.currentTimeMillis()
+        val serverTime = payload?.serverSavedAt?.let(com.surensureshkumar.movemark.data.evidence.pending::parseServerTimestamp)
         val nextRoom = propertyStore.currentProperty.value?.let { RoomProofMetrics.nextRoom(it, phase) }
         val totalRooms = propertyStore.currentProperty.value?.rooms?.size ?: 0
         val documented = propertyStore.currentProperty.value?.let { RoomProofMetrics.documentedCount(it, phase) } ?: 0
@@ -92,8 +101,16 @@ class SavedProofReceiptViewModel @Inject constructor(
             primaryActionLabel = primaryActionLabel,
             nextRoomName = nextRoom?.name,
             issueCount = payload?.issueCount ?: 0,
+            phaseLabel = phase.displayName,
+            // As iOS: the server's created_at returned by this save's evidence_files insert; without one, the
+            // phone's confirmation time, which the receipt labels "on this device".
+            savedTimeLabel = formatSavedTime(serverTime ?: Instant.ofEpochMilli(ts)),
+            savedTimeFromServer = serverTime != null,
         )
     }
+
+    private fun formatSavedTime(instant: Instant): String =
+        DateTimeFormatter.ofPattern("MMM d, h:mm a").withZone(ZoneId.systemDefault()).format(instant)
 
     /** Photos that did not save and still need a retry (iOS `pendingCount`). */
     val pendingCount: Int get() = (_uiState.value.attemptedCount - _uiState.value.savedCount).coerceAtLeast(0)

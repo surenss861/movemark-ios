@@ -1,5 +1,12 @@
 package com.surensureshkumar.movemark.features.proof
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.semantics.contentDescription
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
@@ -57,14 +64,16 @@ import com.surensureshkumar.movemark.data.evidence.PhotoPrivacy
 import com.surensureshkumar.movemark.data.evidence.PhotoPrivacyPolicy
 import java.util.UUID
 
-/** The room screen's dark field and the receipt's own ink (iOS `ProofSavedReceiptView.Ink`). */
+/** The room screen's dark field and the receipt's own ink (polished iOS `ProofSavedReceiptView.Ink`). */
 private object SlipInk {
     val Field = MMInk.Evidence
     val Text = Color.White
     val Secondary = Color.White.copy(alpha = 0.62f)
+    val Tertiary = Color.White.copy(alpha = 0.5f)
     val Rule = Color.White.copy(alpha = 0.12f)
     val Warning = Color(0xFFF2BC57)
     val PhotoFill = Color.White.copy(alpha = 0.06f)
+    val Outline = Color.White.copy(alpha = 0.22f)
 }
 
 /**
@@ -87,114 +96,158 @@ fun SavedProofReceiptScreen(
         state = state,
         teen = PhotoPrivacyPolicy.current == PhotoPrivacy.Teen,
         onPrimary = { isPartial -> if (isPartial) onAddMorePhotos(roomId) else onContinueNextRoom(viewModel.nextUndocumentedRoomId()) },
-        onViewVault = onViewVault,
+        // "View evidence" opens this room's saved entries; "Add more photos" opens the same room to capture more.
+        onViewEvidence = { onAddMorePhotos(roomId) },
         onAddMorePhotos = { onAddMorePhotos(roomId) },
     )
 }
 
-/** The receipt itself, from its state alone (also rendered by the debug fixture gallery). */
+/**
+ * The receipt itself, from its state alone (also rendered by the debug fixture gallery). The polished iOS Proof Slip:
+ * a header (state, phase, room), the confirmed facts on one ruled line (photos saved, issues, when it was saved: the
+ * server's time once known), the saved photo by itself taking the spare height, the preservation lines as a quiet
+ * caption, then one lime action, an outlined "View evidence" and a text "Add more photos".
+ */
 @Composable
 internal fun SavedProofReceiptContent(
     state: SavedProofReceiptUiState,
     teen: Boolean,
     onPrimary: (isPartial: Boolean) -> Unit,
-    onViewVault: () -> Unit,
+    onViewEvidence: () -> Unit,
     onAddMorePhotos: () -> Unit,
 ) {
     MMLightSystemBars(lightNavigationBar = false, lightStatusBar = false)
     val pending = (state.attemptedCount - state.savedCount).coerceAtLeast(0)
     val isPartial = state.hadPartialFailure && pending > 0
+    val large = mmIsLargeFont()
 
-    Column(
-        Modifier.fillMaxSize().background(SlipInk.Field).verticalScroll(rememberScrollState())
-            .statusBarsPadding().navigationBarsPadding()
-            .padding(horizontal = 20.dp).padding(top = 28.dp, bottom = 32.dp),
-    ) {
-        // What was recorded
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) {}) {
-            Icon(
-                if (isPartial) Icons.Filled.Error else Icons.Filled.CheckCircle,
-                contentDescription = null,
-                tint = if (isPartial) SlipInk.Warning else MMInk.Lime,
-                modifier = Modifier.size(20.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                if (isPartial) "PROOF PARTLY SAVED" else "PROOF SAVED",
-                style = mmFont(12f, FontWeight.SemiBold, tracking = 0.6f),
-                color = SlipInk.Secondary,
-            )
-        }
-        Text(
-            state.roomName,
-            style = mmFont(32f, FontWeight.SemiBold),
-            color = SlipInk.Text,
-            maxLines = 3,
-            modifier = Modifier.padding(top = 12.dp).semantics { heading() },
-        )
-        Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text("${receiptCount(state.savedCount, "photo")} saved", style = mmFont(16f, FontWeight.Medium), color = SlipInk.Text)
-            if (isPartial) {
-                Text(
-                    "${receiptCount(pending, "photo")} ${if (pending == 1) "needs" else "need"} a retry",
-                    style = mmFont(16f, FontWeight.Medium),
-                    color = SlipInk.Warning,
-                )
-            }
-            if (state.issueCount > 0) {
-                Text("${receiptCount(state.issueCount, "issue")} recorded", style = mmFont(16f, FontWeight.Medium), color = SlipInk.Text)
-            }
-        }
-        Text(state.timestampLabel, style = mmFont(14f), color = SlipInk.Secondary, modifier = Modifier.padding(top = 8.dp))
-
-        // One saved photo, by itself: no text over it.
-        val bitmap = state.thumbnailJpeg?.let { bytes -> remember(bytes) { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() } }
-        Box(
-            Modifier.padding(top = 24.dp).fillMaxWidth().height(if (mmIsLargeFont()) 160.dp else 220.dp)
-                .clip(RoundedCornerShape(16.dp)).background(SlipInk.PhotoFill),
-            contentAlignment = Alignment.Center,
+    BoxWithConstraints(Modifier.fillMaxSize().background(SlipInk.Field)) {
+        // The photo takes the spare height (iOS: min 220/160 at large text, max 400), so the actions sit low
+        // without a dead zone; on small screens or large text the receipt scrolls with the photo at its minimum.
+        val photoHeight = (maxHeight * 0.34f).coerceIn(if (mmIsLargeFont()) 160.dp else 220.dp, 400.dp)
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                .statusBarsPadding().navigationBarsPadding()
+                .padding(horizontal = 20.dp).padding(top = 24.dp, bottom = 16.dp),
         ) {
-            if (bitmap != null) {
-                Image(bitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            } else {
-                Icon(Icons.Outlined.Image, contentDescription = null, tint = SlipInk.Secondary, modifier = Modifier.size(28.dp))
+            // What was recorded
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) {}) {
+                Icon(
+                    if (isPartial) Icons.Filled.Error else Icons.Filled.CheckCircle,
+                    contentDescription = null,
+                    tint = if (isPartial) SlipInk.Warning else MMInk.Lime,
+                    modifier = Modifier.size(17.dp),
+                )
+                Spacer(Modifier.width(7.dp))
+                Text(
+                    if (isPartial) "PROOF PARTLY SAVED" else "PROOF SAVED",
+                    style = mmFont(12f, FontWeight.SemiBold, tracking = 0.6f),
+                    color = SlipInk.Secondary,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(state.phaseLabel.uppercase(), style = mmFont(12f, FontWeight.SemiBold, tracking = 0.6f), color = SlipInk.Tertiary)
+            }
+            Text(
+                state.roomName,
+                style = mmFont(32f, FontWeight.SemiBold),
+                color = SlipInk.Text,
+                maxLines = if (large) 3 else 2,
+                modifier = Modifier.padding(top = 10.dp).semantics { heading() },
+            )
+
+            // The confirmed facts on one ruled line, like a receipt.
+            Column(Modifier.padding(top = 16.dp).testTag("receipt.facts")) {
+                Box(Modifier.fillMaxWidth().height(0.5.dp).background(SlipInk.Rule))
+                val cells: @Composable (Modifier) -> Unit = { m ->
+                    Fact("Photos", "${state.savedCount} saved", "${receiptCount(state.savedCount, "photo")} saved", m)
+                    if (state.issueCount > 0) Fact("Issues", "${state.issueCount} recorded", "${receiptCount(state.issueCount, "issue")} recorded", m)
+                    // Server time once the save's entry is read back; until then it is honestly this phone's clock.
+                    val saved = if (state.savedTimeFromServer) state.savedTimeLabel else "Confirmed ${state.savedTimeLabel} on this device"
+                    Fact("Saved", saved, "Saved $saved", m)
+                }
+                if (large) {
+                    Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { cells(Modifier) }
+                } else {
+                    Row(Modifier.padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) { cells(Modifier) }
+                }
+                Box(Modifier.fillMaxWidth().height(0.5.dp).background(SlipInk.Rule))
+            }
+            if (isPartial) {
+                Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Refresh, contentDescription = null, tint = SlipInk.Warning, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "${receiptCount(pending, "photo")} ${if (pending == 1) "needs" else "need"} a retry",
+                        style = mmFont(14.5f, FontWeight.Medium),
+                        color = SlipInk.Warning,
+                    )
+                }
+            }
+
+            // One saved photo, by itself: no text over it. It takes the spare height (220-400dp).
+            val bitmap = state.thumbnailJpeg?.let { bytes -> remember(bytes) { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() } }
+            Box(
+                Modifier.padding(top = 22.dp).fillMaxWidth()
+                    .height(photoHeight)
+                    .clip(RoundedCornerShape(16.dp)).background(SlipInk.PhotoFill)
+                    .border(0.5.dp, SlipInk.Rule, RoundedCornerShape(16.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (bitmap != null) {
+                    Image(bitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                } else {
+                    Icon(Icons.Outlined.Image, contentDescription = null, tint = SlipInk.Secondary, modifier = Modifier.size(28.dp))
+                }
+            }
+
+            // How the proof is kept: a quiet caption under the photo.
+            Column(Modifier.padding(top = 12.dp, start = 2.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                if (teen) Assurance(Icons.Outlined.LocationOff, "Location and camera details removed for privacy")
+                else Assurance(Icons.Outlined.Shield, "Source files preserved")
+                Assurance(Icons.Outlined.Inventory2, "Recorded in your proof vault")
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // What next: one lime action, an outlined secondary, a text tertiary.
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                MMPrimaryButton(
+                    title = state.primaryActionLabel,
+                    onClick = { onPrimary(isPartial) },
+                    height = 52.dp,
+                    modifier = Modifier.testTag("receipt.primary"),
+                )
+                OutlinedButton(
+                    onClick = onViewEvidence,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("receipt.viewEvidence"),
+                    shape = RoundedCornerShape(50),
+                    border = BorderStroke(1.dp, SlipInk.Outline),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = SlipInk.Text),
+                ) { Text("View evidence", style = mmFont(15.5f, FontWeight.SemiBold), color = SlipInk.Text) }
+                if (!isPartial) {
+                    TextButton(onClick = onAddMorePhotos, modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)) {
+                        Text("Add more photos", style = mmFont(15f, FontWeight.Medium), color = SlipInk.Secondary)
+                    }
+                }
             }
         }
+    }
+}
 
-        // Assurances
-        Column(Modifier.padding(top = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.fillMaxWidth().height(1.dp).background(SlipInk.Rule))
-            if (teen) Assurance(Icons.Outlined.LocationOff, "Location and camera details removed for privacy")
-            else Assurance(Icons.Outlined.Shield, "Source files preserved")
-            Assurance(Icons.Outlined.Inventory2, "Recorded in your proof vault")
-            Box(Modifier.fillMaxWidth().height(1.dp).background(SlipInk.Rule))
-        }
-
-        // What next: one lime action, quiet text secondaries.
-        Column(Modifier.padding(top = 28.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            MMPrimaryButton(
-                title = state.primaryActionLabel,
-                onClick = { onPrimary(isPartial) },
-                modifier = Modifier.testTag("receipt.primary"),
-            )
-            QuietButton("View proof vault", Modifier.padding(top = 8.dp), onViewVault)
-            if (!isPartial) QuietButton("Add more photos", Modifier, onClick = onAddMorePhotos)
-        }
+@Composable
+private fun Fact(label: String, value: String, spoken: String, modifier: Modifier) {
+    Column(modifier.semantics(mergeDescendants = true) { contentDescription = spoken }, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(label.uppercase(), style = mmFont(11f, FontWeight.SemiBold, tracking = 0.6f), color = SlipInk.Tertiary)
+        Text(value, style = mmFont(15.5f, FontWeight.Medium), color = SlipInk.Text, maxLines = 2)
     }
 }
 
 @Composable
 private fun Assurance(icon: ImageVector, text: String) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) {}) {
-        Icon(icon, contentDescription = null, tint = SlipInk.Text.copy(alpha = 0.85f), modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(10.dp))
-        Text(text, style = mmFont(14.5f), color = SlipInk.Text.copy(alpha = 0.85f))
+        Icon(icon, contentDescription = null, tint = SlipInk.Secondary, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(7.dp))
+        Text(text, style = mmFont(13f), color = SlipInk.Secondary)
     }
 }
 
-@Composable
-private fun QuietButton(title: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    TextButton(onClick = onClick, modifier = modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-        Text(title, style = mmFont(15f, FontWeight.Medium), color = SlipInk.Text)
-    }
-}

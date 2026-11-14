@@ -61,11 +61,18 @@ object RoomProofUploadMessages {
     const val NOT_UPLOADED_YET = "These photos are on this phone but not uploaded yet."
     const val COULD_NOT_KEEP = "Couldn't keep this photo on your phone. Free up some space and try again."
 
-    /** "2 of 8 photos saved. 6 photos need retry." (iOS) */
+    /**
+     * "2 of 8 photos uploaded. 6 are on this phone, not uploaded yet." Uploaded (confirmed by the server) and kept on
+     * this phone are named apart, so no line reads as a completed save while photos are still pending.
+     */
     fun partial(uploaded: Int, total: Int): String {
         val left = (total - uploaded).coerceAtLeast(0)
-        return "$uploaded of $total photos saved. " + if (left == 1) "1 photo needs retry." else "$left photos need retry."
+        return "$uploaded of $total photos uploaded. " + if (left == 1) "1 is on this phone, not uploaded yet." else "$left are on this phone, not uploaded yet."
     }
+
+    /** The partial save's way forward: only the uploaded photos go on. */
+    fun continueWithUploaded(uploaded: Int): String =
+        if (uploaded == 1) "Continue with 1 uploaded photo" else "Continue with $uploaded uploaded photos"
 
     /** A failure the user can act on (too large, unsupported, rate limited) keeps its own words. */
     fun failure(error: Throwable?): String {

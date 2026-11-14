@@ -272,6 +272,9 @@ fun RoomProofScreen(
                         onContinueWithSaved = viewModel::continueWithSavedProof,
                         onRetry = viewModel::retryFailedUploads,
                         modifier = Modifier.navigationBarsPadding(),
+                        continueLabel = (saveState as? RoomProofSaveState.PartialSuccess)
+                            ?.let { RoomProofUploadMessages.continueWithUploaded(it.uploadedCount) }
+                            ?: "Continue with uploaded photos",
                     )
                 }
             },
