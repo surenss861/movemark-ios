@@ -115,16 +115,25 @@ class LegalGateViewModel @Inject constructor(
 
     /**
      * On return to the foreground and on the API's `LEGAL_ACCEPTANCE_REQUIRED`: a document published (or enforcement
-     * turned on) while the app was open shows the gate now. Any failure leaves the renter where they are, and the
-     * gate itself is never re-rendered under the renter's answers.
+     * turned on) while the app was open shows the gate now; and a gate shown for an account the server confirms has
+     * accepted is lifted. Any failure leaves the renter where they are, and the gate itself is never re-rendered
+     * under the renter's answers.
      */
     fun recheck() {
-        if (rechecking || _state.value.required != false) return
+        val current = _state.value
+        if (rechecking || current.required == null || current.isSaving) return
         rechecking = true
         viewModelScope.launch {
             try {
                 val status = repository.status() ?: return@launch
                 learnPhotoRule(status)
+                // On the gate, and the server says this account has already accepted: leave it. Only the server's
+                // "not required" (which only the real caller can get) opens the app; nothing is recorded here.
+                if (!status.needsAcceptance && _state.value.required == true && !_state.value.isSaving) {
+                    lastStatus = status
+                    _state.value = LegalGateState.from(status)
+                    return@launch
+                }
                 if (com.surensureshkumar.movemark.BuildConfig.DEBUG) android.util.Log.i("LegalGate", "recheck: required=${status.acceptanceRequired}")
                 if (status.needsAcceptance && _state.value.required == false) {
                     lastStatus = status

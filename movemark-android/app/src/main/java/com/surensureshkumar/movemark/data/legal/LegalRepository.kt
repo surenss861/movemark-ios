@@ -210,7 +210,12 @@ sealed interface LegalStatusResult {
 }
 
 @Singleton
-class LegalRepository @Inject constructor(private val postgrest: PostgrestClient) {
+class LegalRepository internal constructor(
+    private val postgrest: PostgrestClient,
+    private val confirmDelayMillis: Long,
+) {
+    @Inject constructor(postgrest: PostgrestClient) : this(postgrest, CONFIRM_DELAY_MILLIS)
+
     /** Null on any failure: for the foreground recheck, where a failure leaves the renter where they are. */
     suspend fun status(): LegalStatus? = (statusResult(retries = 0) as? LegalStatusResult.Success)?.status
 
@@ -219,6 +224,35 @@ class LegalRepository @Inject constructor(private val postgrest: PostgrestClient
      * once after a short pause, and an "unavailable" answer is retried [retries] times, a second apart.
      */
     suspend fun statusResult(retries: Int = 1): LegalStatusResult {
+        val first = fetchStatus(retries)
+        val status = (first as? LegalStatusResult.Success)?.status ?: return first
+        return LegalStatusResult.Success(confirmed(status))
+    }
+
+    /**
+     * A "required" answer is asked again before the gate is shown. `get_legal_status()` answers for
+     * `auth.user_id()` without a null check, so a request the Data API evaluates with no user id (a one-off on a
+     * fresh connection, seen as LEGAL_NOT_AUTHENTICATED from accept on dev) comes back as an account that never
+     * accepted: "required". That reopened the gate after acceptance (P1, Galaxy A14, 2026-11-13). "Not required"
+     * can only come from the real caller, so it is trusted at once; "required" must hold for [CONFIRMATIONS] more
+     * answers. A confirmation that fails changes nothing.
+     */
+    private suspend fun confirmed(status: LegalStatus): LegalStatus {
+        if (!status.needsAcceptance) return status
+        for (i in 1..CONFIRMATIONS) {
+            kotlinx.coroutines.delay(confirmDelayMillis)
+            val again = try {
+                retryingTransientAuth { postgrest.rpc("get_legal_status", LegalStatus.serializer()) }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                continue
+            }
+            if (!again.needsAcceptance) return again
+        }
+        return status
+    }
+
+    private suspend fun fetchStatus(retries: Int): LegalStatusResult {
         var attempt = 0
         while (true) {
             try {
@@ -250,3 +284,6 @@ class LegalRepository @Inject constructor(private val postgrest: PostgrestClient
     suspend fun accept(params: JsonObject): LegalStatus =
         postgrest.rpc("accept_legal_documents", LegalStatus.serializer(), params)
 }
+
+private const val CONFIRM_DELAY_MILLIS = 750L
+private const val CONFIRMATIONS = 2
