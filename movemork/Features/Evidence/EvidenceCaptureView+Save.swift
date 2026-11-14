@@ -71,6 +71,10 @@ extension EvidenceCaptureView {
             let result = await center.send(key)
             let outcome = await propertyStore.applyEvidenceSync(result, key: key, evidence: evidence, userId: userId)
             let confirmed = result.saved.count + result.alreadySaved
+            // The receipt states only confirmed facts: when the issue tags didn't save, it claims no issues (the
+            // tag hint below says so). The retry state keeps the requested count for its own wording.
+            let tagsFailed = outcome.tagInsertFailed || (retry?.outcomeHints.tagInsertFailed ?? false)
+            let confirmedIssueCount = tagsFailed ? 0 : issueCount
             if confirmed > 0 { propertyStore.invalidateVaultSummaries() }
 
             if confirmed > 0 {
@@ -135,7 +139,7 @@ extension EvidenceCaptureView {
                 )
                 if !result.saved.isEmpty {
                     presentReceipt(photoCount: result.savedTotal, pendingCount: result.pending.count,
-                                   issueCount: issueCount, photo: result.saved.first)
+                                   issueCount: confirmedIssueCount, photo: result.saved.first)
                 }
                 MMHaptics.warning()
                 return
@@ -143,7 +147,7 @@ extension EvidenceCaptureView {
             pendingRetry = nil
             var merged = outcome
             if let retry { merged.tagInsertFailed = retry.outcomeHints.tagInsertFailed || outcome.tagInsertFailed }
-            presentSaveSuccess(photoCount: result.savedTotal, issueCount: issueCount, outcome: merged)
+            presentSaveSuccess(photoCount: result.savedTotal, issueCount: confirmedIssueCount, outcome: merged)
         }
     }
 
@@ -203,6 +207,8 @@ extension EvidenceCaptureView {
             photoCount: photoCount,
             pendingCount: pendingCount,
             issueCount: issueCount,
+            // The moment the backend confirmed the save (this runs only after that confirmation). The insert
+            // returns no server created_at, so this is the device clock at confirmation.
             savedAt: Date(),
             next: next,
             // The original, not the ~320 px thumbnail: the receipt shows it screen-wide (≈1100 px on a 3x phone),
