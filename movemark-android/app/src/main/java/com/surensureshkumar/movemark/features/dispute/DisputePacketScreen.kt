@@ -130,7 +130,7 @@ fun DisputePacketScreen(
                         amount = amount,
                         errorMessage = error ?: if (timedOut && generating) "Taking longer than usual." else null,
                         errorActionTitle = if (error == null && timedOut && generating) "Check again" else "Try again",
-                        isDownisLoading = downloading,
+                        isDownloading = downloading,
                         sign = viewModel::signedPhotoUrl,
                         onQuestion = viewModel::setQuestion,
                         onAmount = viewModel::setAmount,
