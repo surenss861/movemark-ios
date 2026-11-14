@@ -139,6 +139,7 @@ private fun statusTextColor(tone: MMProofStatusTone) = when (tone) {
     MMProofStatusTone.Success -> MMColors.Primary.copy(alpha = 0.92f)
     MMProofStatusTone.Warning -> MMColors.SemanticWarning
     MMProofStatusTone.Danger -> MMColors.SemanticDanger
+    MMProofStatusTone.Info -> MMColors.SemanticInfo
     MMProofStatusTone.Neutral -> MMColors.TextMuted
 }
 

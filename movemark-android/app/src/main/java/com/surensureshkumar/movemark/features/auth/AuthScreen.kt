@@ -58,6 +58,7 @@ fun AuthScreen(
     val email by viewModel.email.collectAsState()
     val password by viewModel.password.collectAsState()
     val loading by viewModel.loading.collectAsState()
+    val confirmPassword by viewModel.confirmPassword.collectAsState()
     val message by viewModel.message.collectAsState()
     val isSignUp = mode == AuthMode.SignUp
 
@@ -108,6 +109,10 @@ fun AuthScreen(
                 MMTextField(email, viewModel::setEmail, "Email", keyboardType = KeyboardType.Email)
                 Spacer(Modifier.height(10.dp))
                 MMTextField(password, viewModel::setPassword, "Password", isPassword = true)
+                if (isSignUp) {
+                    Spacer(Modifier.height(10.dp))
+                    MMTextField(confirmPassword, viewModel::setConfirmPassword, "Confirm password", isPassword = true)
+                }
 
                 message?.let {
                     Spacer(Modifier.height(10.dp))

@@ -2,17 +2,21 @@
 //  ExportHistoryView.swift
 //  movemork
 //
-//  MoveMark — Reports history with proof trail and quiet row cards.
+//  MoveMark — Reports: loads the rental's exports, keeps their status current, and owns the secure
+//  report flow (authenticated download → local PDF → native preview / share). ``ReportsHomeView`` draws it.
 //
 
 import SwiftUI
-import Supabase
 
 struct ExportHistoryView: View {
     @Environment(PropertyStore.self) private var propertyStore
     @Environment(SessionManager.self) private var sessionManager
     @Environment(SubscriptionManager.self) private var subscriptionManager
     @Environment(\.mmRootTabBarVisible) private var rootTabBarVisible
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    /// Reports is kept alive behind the other tabs; this says whether it is the visible one.
+    @Environment(\.mmRootTabIsActive) private var rootTabIsActive
 
     private struct ReportPreviewItem: Identifiable {
         let id = UUID()
@@ -25,11 +29,12 @@ struct ExportHistoryView: View {
     var onOpenVaults: (() -> Void)? = nil
     var onContinueRoomProof: (() -> Void)? = nil
     var onOpenMoveOutProof: (() -> Void)? = nil
+    /// The dispute row opens the evidence packet builder, which generates, views and shares the packet.
+    var onOpenDisputePacket: (() -> Void)? = nil
 
     @State private var exports: [ExportRow] = []
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
-    @State private var successBanner: String? = nil
     @State private var shareItems: [Any] = []
     @State private var showShareSheet = false
     @State private var reportPreviewItem: ReportPreviewItem?
@@ -37,28 +42,33 @@ struct ExportHistoryView: View {
     @State private var verificationStatus: [UUID: ExportVerificationStatus] = [:]
     @State private var proofToast: MMProofToastMessage? = nil
     @State private var proofToastVisible = false
-    @State private var reportUnlockPulse = false
     @State private var lastReportReadiness: MMNextBestActionMapper.ReportReadiness? = nil
     @State private var isExporting = false
     @State private var isMoveOutExporting = false
     @State private var isDisputeExporting = false
     @State private var showPaywall = false
     @State private var activePaywallReason: PaywallReason = .unlimitedExports
-    @State private var reportsContentAppeared = false
+    /// A ready move-out report or dispute packet: view, share, or generate a new one.
+    @State private var otherReportMenu: ReportsHomeModel.OtherReport?
+    /// Share from inside the PDF preview: a sheet on the root can't present over the full-screen cover.
+    @State private var previewShareItems: [Any] = []
+    @State private var showPreviewShareSheet = false
+    /// The property whose exports last loaded successfully; `nil` until the first good load.
+    @State private var loadedPropertyId: UUID?
+    /// The last list fetch failed (previous rows, if any, are kept).
+    @State private var loadFailed = false
+    /// The single status poll; replaced (never doubled) when a refresh restarts it.
+    @State private var pollTask: Task<Void, Never>?
+    /// The poll budget ran out with a job still queued or processing.
+    @State private var pollTimedOut = false
+    /// Tags this view's refresh notifications so it doesn't reload twice for its own request.
+    @State private var instanceID = UUID()
+    /// On screen in its navigation stack (a pushed screen over it, or a closed stack, reads false).
+    @State private var isOnScreen = false
 
-    // MARK: - Realtime export status (falls back to polling below when unavailable)
-    @State private var exportsChannel: RealtimeChannelV2?
-    @State private var exportsRealtimeTask: Task<Void, Never>?
+    // MARK: - Export status (polled while a report is queued or processing)
 
-    private var apiBaseURL: String? {
-        guard
-            let value = Bundle.main.object(forInfoDictionaryKey: "MoveMarkAPIBaseURL") as? String,
-            !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else {
-            return nil
-        }
-        return value
-    }
+    private var apiBaseURL: String? { MoveMarkBackendConfig.apiBaseURLString }
 
     /// Prefer hydrated `currentProperty`; fall back to persisted `activePropertyId` so Exports matches Vault when hydration lags or the vault tab is not mounted.
     private var resolvedExportPropertyId: UUID? {
@@ -99,78 +109,51 @@ struct ExportHistoryView: View {
     }
 
     var body: some View {
-        ZStack {
-            Color.clear
-                .mmProofShellBackground(heroFocus: false, ctaBloom: false)
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    header
-                        .padding(.bottom, 24)
-
-                    if hasActiveVault {
-                        if shouldShowReportProofTrail {
-                            MMReportReadinessChecklist(
-                                items: reportChecklistItems,
-                                appeared: reportsContentAppeared
-                            )
-                        }
-
-                        reportPreviewHero
-                            .mmAppearRise(isVisible: reportsContentAppeared, delay: 0.06, offset: 6)
-
-                        secondaryExportSections
-                            .mmAppearRise(isVisible: reportsContentAppeared, delay: 0.12, offset: 6)
-                    }
-
-                    if let successBanner {
-                        MMCard(tone: .quiet, padding: 14, spacing: 8) {
-                            HStack(alignment: .top, spacing: 10) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(MoveMarkTheme.Colors.primary)
-                                Text(successBanner)
-                                    .font(MoveMarkTheme.Typography.subheadline)
-                                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            }
-                        }
-                    }
-
-                    if let errorMessage {
-                        MMErrorBanner(
-                            message: errorMessage,
-                            retryTitle: MMCopy.tryAgain,
-                            onRetry: { Task { await loadExports() } }
-                        )
-                    }
-
-                    if !hasActiveVault && !isLoading {
-                        noVaultSelectedState
-                    } else if hasActiveVault && !isLoading && exports.isEmpty {
-                        exportHistoryEmptyState
-                    } else if !isLoading, !exports.isEmpty {
-                        exportHistorySections
-                    }
-
-                    if rootTabBarVisible {
-                        MMSignedInScrollTailSpacer(kind: .reportsTab)
-                    }
+        ReportsHomeView(
+            model: reportsModel,
+            onPrimary: performPrimaryAction,
+            onShare: { if let row = latestReadyRow(of: ["move_in_report"]) { share(row) } },
+            onViewLastReport: { if let row = latestReadyRow(of: ["move_in_report"]) { viewReport(row) } },
+            onGenerateNew: { requestMoveInExport() },
+            onHistory: { item, action in
+                guard let row = exports.first(where: { $0.id == item.id }) else { return }
+                switch action {
+                case .view: viewReport(row)
+                case .share: share(row)
+                case .retry: retryExport(row)
                 }
-                .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.top, 10)
-                .mmScrollContentTopInset(2)
-            }
-            .refreshable {
-                await loadExports()
-            }
+            },
+            onOther: openOtherReport,
+            onRetry: { Task { await refreshAndPoll() } }
+        )
+        .refreshable {
+            await refreshAndPoll()
         }
+        // At the root the dark header runs under the status bar; pushed (from a saved room's receipt), the
+        // back button sits on the same dark band.
+        .toolbar(rootTabBarVisible ? .hidden : .automatic, for: .navigationBar)
+        .toolbarBackground(ReportsHomeView.headerColor, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
         .mmProofToast(message: proofToast, isVisible: proofToastVisible)
         .onChange(of: reportReadinessSnapshot) { _, _ in
             handleReportReadinessChange()
         }
         .onAppear {
+            isOnScreen = true
             lastReportReadiness = currentReportReadiness
-            if !reportsContentAppeared {
-                reportsContentAppeared = true
+        }
+        .confirmationDialog(
+            otherReportMenu?.title ?? "",
+            isPresented: Binding(get: { otherReportMenu != nil }, set: { if !$0 { otherReportMenu = nil } }),
+            titleVisibility: .visible,
+            presenting: otherReportMenu
+        ) { other in
+            let types = Self.exportTypes(forOther: other.id)
+            Button("View report") { if let row = latestReadyRow(of: types) { viewReport(row) } }
+            Button("Share") { if let row = latestReadyRow(of: types) { share(row) } }
+            Button(other.id == Self.moveOutID ? "Generate new report" : "Generate new packet") {
+                if other.id == Self.moveOutID { requestMoveOutExport() } else { requestDisputePacketExport() }
             }
         }
         .sheet(isPresented: $showShareSheet) {
@@ -196,6 +179,11 @@ struct ExportHistoryView: View {
                             }
                         }
                     }
+                    .sheet(isPresented: $showPreviewShareSheet) {
+                        if !previewShareItems.isEmpty {
+                            ReportPDFShareSheet(activityItems: previewShareItems)
+                        }
+                    }
             }
         }
         .overlay {
@@ -210,361 +198,326 @@ struct ExportHistoryView: View {
         .sheet(isPresented: $showPaywall) {
             ProPaywallView(
                 reason: activePaywallReason,
-                onClose: { showPaywall = false }
+                onClose: { showPaywall = false },
+                moveInRecorded: resolvedPropertyRecord.map { propertyStore.totalPhotoCount(for: $0) > 0 } ?? false
             )
         }
-        .task(id: resolvedExportPropertyId) {
-            await loadExports()
-            await subscribeExportsRealtime()
-            await pollActiveExportsWhileNeeded()
+        .task {
+            _ = await subscriptionManager.refreshServerReportCredits(forUser: sessionManager.userId)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .moveMarkExportsShouldRefresh)) { _ in
-            Task {
-                await loadExports()
-                await pollActiveExportsWhileNeeded()
-            }
+        .task(id: resolvedExportPropertyId) {
+            await refreshAndPoll()
         }
         .onDisappear {
-            teardownExportsRealtime()
+            isOnScreen = false
+            pollTask?.cancel()
+            pollTask = nil
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Back from the background: a job may have finished (or the poll was suspended mid-wait).
+            if phase == .active { Task { await refreshAndPoll(quietly: true) } }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .moveMarkExportsShouldRefresh)) { note in
+            // This view's own requests already reload and poll inline.
+            if (note.userInfo?[Self.refreshSourceKey] as? UUID) == instanceID { return }
+            // Returning to the tab: refresh behind what is already shown, never back through "Checking…".
+            Task { await refreshAndPoll(quietly: true) }
         }
     }
 
-    /// Subscribes to `postgres_changes` on `public.exports` for the active property so completed/failed
-    /// exports update immediately instead of waiting on the poll loop below. RLS (`exports_select_own`)
-    /// still scopes what this can see — the added `supabase_realtime` publication membership only changes
-    /// how the client is notified, not who can read which rows.
-    private func subscribeExportsRealtime() async {
-        teardownExportsRealtime()
-        guard let propertyId = resolvedExportPropertyId else { return }
+    // MARK: - What Reports shows
 
-        let channel = supabase.channel("exports-property-\(propertyId.uuidString)")
-        let changes = channel.postgresChange(
-            AnyAction.self,
-            schema: "public",
-            table: "exports",
-            filter: .eq("property_id", value: propertyId)
-        )
+    private static let moveOutID = "move_out"
+    private static let disputeID = "dispute"
+    private static let refreshSourceKey = "source"
+    private static let unavailableMessage = "Reports aren’t available right now. Try again later."
+    private static let slowMessage = "Taking longer than usual."
 
-        do {
-            try await channel.subscribeWithError()
-        } catch {
-            // Realtime unavailable (e.g. offline, socket blocked) — `pollActiveExportsWhileNeeded` below
-            // is the fallback and will run at its normal cadence since `exportsChannel` stays nil.
+    /// The list has never loaded for this rental and the last attempt failed: nothing about the reports
+    /// is known, so nothing is derived from the (empty) list.
+    private var isListUnavailable: Bool {
+        loadFailed && (loadedPropertyId == nil || loadedPropertyId != resolvedExportPropertyId)
+    }
+
+    private static func exportTypes(forOther id: String) -> Set<String> {
+        id == moveOutID ? ["move_out_report"] : ["dispute_packet", "dispute_summary"]
+    }
+
+    private var reportsModel: ReportsHomeModel {
+        var model = ReportsHomeModel(rentalName: activeVaultDisplayTitle ?? "Your rental", primary: primaryState)
+        if let property = resolvedPropertyRecord {
+            model.documented = propertyStore.documentedRoomCount(for: property)
+            model.totalRooms = propertyStore.totalRoomCount(for: property)
+            model.photos = propertyStore.totalPhotoCount(for: property)
+            model.records = propertyStore.uploadedSupportingRecordCount(for: property)
+            model.issues = propertyStore.openIssueCount(for: property)
+        }
+        model.primaryTitle = primaryTitle
+        model.history = historyItems
+        model.others = hasActiveVault && !isListUnavailable ? otherReports : []
+        model.errorMessage = errorMessage
+        if errorMessage == nil, pollTimedOut, hasActiveExportJob {
+            model.errorMessage = Self.slowMessage
+            model.errorActionTitle = "Check again"
+        }
+        return model
+    }
+
+    /// Move-in exports, newest first.
+    private var moveInRows: [ExportRow] {
+        exports.filter { $0.exportType == "move_in_report" }
+            .sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
+    }
+
+    /// The newest finished report of the types. A row whose last download failed is still a finished
+    /// report on the server, so it stays openable (the retry downloads it again).
+    private func latestReadyRow(of types: Set<String>) -> ExportRow? {
+        exports.filter { row in
+            guard types.contains(row.exportType) else { return false }
+            switch verificationStatus[row.id] {
+            case .ready, .invalidURL, .verificationFailed: return true
+            default: return false
+            }
+        }
+        .max { ($0.createdAt ?? "") < ($1.createdAt ?? "") }
+    }
+
+    /// The move-in report's state, from its newest attempt: an older failure never hides a newer report,
+    /// and a newer failure keeps the last good report openable.
+    private var primaryState: ReportsHomeModel.Primary {
+        guard hasActiveVault else { return isLoading ? .loading : .noRental }
+        if isExporting { return .generating }
+        if isListUnavailable { return isLoading ? .loading : .unavailable }
+        guard let latest = moveInRows.first else {
+            if isLoading { return .loading }
+            if isExportReadyForResolvedVault == true { return .canGenerate }
+            // Same rule as ``PropertyStore.isExportReady(for:)``: a documented room and one supporting record.
+            if let property = resolvedPropertyRecord, propertyStore.documentedRoomCount(for: property) > 0 {
+                return .needsProof(.record)
+            }
+            return .needsProof(.rooms)
+        }
+        switch verificationStatus[latest.id] ?? .unknown {
+        case .queued, .processing, .verifying:
+            return .generating
+        case .serverFailed, .missingPath:
+            return .failed(lastReadyAt: parsedDate(latestReadyRow(of: ["move_in_report"])?.createdAt))
+        case .unknown:
+            return .loading
+        case .ready, .invalidURL, .verificationFailed:
+            // A download problem is reported in the error row; the report itself exists.
+            return .ready(generatedAt: parsedDate(latest.createdAt))
+        }
+    }
+
+    private var primaryTitle: String {
+        switch primaryState {
+        case .noRental: return "Go to Proof"
+        case .needsProof(.rooms): return "Continue room proof"
+        case .needsProof(.record): return "Add a record"
+        case .canGenerate:
+            return subscriptionManager.canExportMoveIn(forUser: sessionManager.userId)
+                ? "Generate report" : "Upgrade for another report"
+        default: return "Generate report"
+        }
+    }
+
+    private func performPrimaryAction() {
+        switch primaryState {
+        case .noRental:
+            openProof()
+        case .needsProof(.rooms):
+            if let onContinueRoomProof { onContinueRoomProof() } else { openProof() }
+        case .needsProof(.record):
+            // Records are added from Proof's next actions (lease, deposit receipt, listing).
+            openProof()
+        case .canGenerate:
+            if subscriptionManager.canExportMoveIn(forUser: sessionManager.userId) {
+                requestMoveInExport()
+            } else {
+                activePaywallReason = .unlimitedExports
+                showPaywall = true
+            }
+        case .ready:
+            if let row = latestReadyRow(of: ["move_in_report"]) { viewReport(row) }
+        case .failed:
+            if let row = moveInRows.first { retryExport(row) }
+        case .unavailable:
+            Task { await refreshAndPoll() }
+        case .loading, .generating:
+            break
+        }
+    }
+
+    /// The Proof tab at the root; pushed (over Proof), back to it.
+    private func openProof() {
+        if let onOpenVaults { onOpenVaults() } else { dismiss() }
+    }
+
+    private var historyItems: [ReportsHomeModel.HistoryItem] {
+        let sorted = exports.sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
+        var seenTypes: Set<String> = []
+        return sorted.map { row in
+            let family = row.exportType == "dispute_summary" ? "dispute_packet" : row.exportType
+            let isNewestOfType = seenTypes.insert(family).inserted
+            let status: ReportsHomeModel.HistoryItem.Status = switch verificationStatus[row.id] ?? .unknown {
+            case .ready, .verificationFailed, .invalidURL: .ready
+            case .queued, .processing, .verifying, .unknown: .generating
+            case .serverFailed: .failed
+            case .missingPath: .unavailable
+            }
+            return ReportsHomeModel.HistoryItem(
+                id: row.id,
+                title: label(for: row.exportType),
+                date: parsedDate(row.createdAt),
+                status: status,
+                canRetry: status == .failed && isNewestOfType
+            )
+        }
+    }
+
+    private var otherReports: [ReportsHomeModel.OtherReport] {
+        let hasPro = subscriptionManager.hasPro
+        return [
+            ReportsHomeModel.OtherReport(
+                id: Self.moveOutID,
+                title: "Move-out report",
+                detail: hasPro ? otherDetail(moveOutReadiness, types: ["move_out_report"], noProof: "Not started")
+                    : "Re-capture rooms before you return the keys.",
+                isProLocked: !hasPro,
+                isGenerating: hasPro && (moveOutReadiness == .processing || isMoveOutExporting)
+            ),
+            ReportsHomeModel.OtherReport(
+                id: Self.disputeID,
+                title: "Dispute packet",
+                detail: hasPro ? otherDetail(disputeReadiness, types: ["dispute_packet", "dispute_summary"], noProof: "Needs move-in proof")
+                    : "Bundle your proof if your deposit is questioned.",
+                isProLocked: !hasPro,
+                isGenerating: hasPro && (disputeReadiness == .processing || isDisputeExporting)
+            ),
+        ]
+    }
+
+    private func otherDetail(_ readiness: SecondaryReportReadiness, types: Set<String>, noProof: String) -> String {
+        switch readiness {
+        case .noProof: return noProof
+        case .readyToMake: return "Ready to generate"
+        case .processing: return "Generating…"
+        case .failed: return "Couldn't generate · Tap to retry"
+        case .readyToShare:
+            guard let date = parsedDate(latestReadyRow(of: types)?.createdAt) else { return "Ready" }
+            return "Ready · \(ReportsHomeView.stamp(date))"
+        }
+    }
+
+    private func openOtherReport(_ other: ReportsHomeModel.OtherReport) {
+        let isMoveOut = other.id == Self.moveOutID
+        if !isMoveOut, let onOpenDisputePacket {
+            onOpenDisputePacket()
             return
         }
-
-        exportsChannel = channel
-        exportsRealtimeTask = Task {
-            for await _ in changes {
-                if Task.isCancelled { return }
-                await loadExportsQuietly()
-            }
+        if subscriptionManager.hasPro, (isMoveOut ? moveOutReadiness : disputeReadiness) == .readyToShare {
+            otherReportMenu = other
+            return
         }
+        let cta = isMoveOut ? moveOutPrimaryCTA : disputePrimaryCTA
+        if cta.enabled { cta.action() }
     }
 
-    private func teardownExportsRealtime() {
-        exportsRealtimeTask?.cancel()
-        exportsRealtimeTask = nil
-        if let exportsChannel {
-            Task { await supabase.removeChannel(exportsChannel) }
-            self.exportsChannel = nil
+    /// Reloads the list, then (re)starts the one status poll. `quietly` keeps what is on screen while the
+    /// fetch runs (no loading state, no cleared error row) once this rental's list has loaded.
+    private func refreshAndPoll(quietly: Bool = false) async {
+        if quietly, let loadedPropertyId, loadedPropertyId == resolvedExportPropertyId {
+            await loadExportsQuietly()
+        } else {
+            await loadExports()
         }
+        startPolling()
     }
 
-    /// Fallback when Realtime is unavailable (or as a safety net against a silently-dropped connection):
-    /// poll while any export is queued/processing. Once Realtime is connected, the interval is stretched
-    /// out significantly since Realtime — not this loop — is doing the real-time work.
+    /// Cancels any running poll and starts a fresh one, so two loops never run at once.
+    private func startPolling() {
+        pollTask?.cancel()
+        pollTimedOut = false
+        pollTask = Task { await pollActiveExportsWhileNeeded() }
+    }
+
+    private var hasActiveExportJob: Bool {
+        verificationStatus.values.contains { isActiveExportJob($0) }
+    }
+
+    /// Polls while any export is queued/processing, so a finished or failed report shows up without a
+    /// manual refresh. (There is no push channel on the Neon backend; the worker usually finishes within
+    /// seconds.) After the budget, Reports offers "Check again" instead of spinning forever.
     private func pollActiveExportsWhileNeeded() async {
-        let quickIntervalNanos: UInt64 = 2_500_000_000
-        let realtimeBackstopIntervalNanos: UInt64 = 15_000_000_000
+        let intervalNanos: UInt64 = 2_500_000_000
 
         for _ in 0..<40 {
-            let hasActive = verificationStatus.values.contains { status in
-                switch status {
-                case .queued, .processing, .verifying:
-                    return true
-                default:
-                    return false
-                }
+            guard !Task.isCancelled, hasActiveExportJob else { return }
+            do {
+                try await Task.sleep(nanoseconds: intervalNanos)
+            } catch {
+                return
             }
-            guard hasActive else { return }
-            let interval = exportsChannel != nil ? realtimeBackstopIntervalNanos : quickIntervalNanos
-            try? await Task.sleep(nanoseconds: interval)
+            guard !Task.isCancelled else { return }
             await loadExportsQuietly()
         }
+        if !Task.isCancelled, hasActiveExportJob { pollTimedOut = true }
     }
 
     private func loadExportsQuietly() async {
         guard let apiClient = try? makeAPIClient() else { return }
         guard let currentPropertyId = resolvedExportPropertyId else { return }
         do {
-            let token = try await currentAccessToken()
-            let items = try await apiClient.fetchExports(accessToken: token, propertyId: currentPropertyId)
-            var nextVerification: [UUID: ExportVerificationStatus] = [:]
-            for item in items {
-                switch item.status {
-                case .queued:
-                    nextVerification[item.id] = .queued
-                case .processing:
-                    nextVerification[item.id] = .processing
-                case .failed:
-                    nextVerification[item.id] = .serverFailed
-                case .completed:
-                    let fp = (item.filePath ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                    nextVerification[item.id] = fp.isEmpty ? .missingPath : .ready
-                }
-            }
-            exports = items.map { item in
-                ExportRow(
-                    id: item.id,
-                    disputeId: nil,
-                    propertyId: item.propertyId,
-                    userId: item.userId,
-                    exportType: item.type,
-                    filePath: item.filePath,
-                    createdAt: item.requestedAt ?? item.createdAt
-                )
-            }
-            verificationStatus = nextVerification
+            let items = try await apiClient.fetchExports(propertyId: currentPropertyId)
+            guard !Task.isCancelled, currentPropertyId == resolvedExportPropertyId else { return }
+            apply(items, for: currentPropertyId)
         } catch {
             // Quiet poll — keep existing list; user can pull to refresh.
         }
     }
 
-    private func canShareExport(_ status: ExportVerificationStatus) -> Bool {
-        switch status {
-        case .ready:
-            return true
-        case .serverFailed, .queued, .processing, .verifying, .missingPath, .invalidURL, .unknown, .verificationFailed:
-            return false
-        }
-    }
-
-    private func shouldShowVerifyButton(for status: ExportVerificationStatus) -> Bool {
-        switch status {
-        case .ready, .serverFailed:
-            return false
-        case .unknown, .queued, .processing, .verifying, .missingPath, .invalidURL, .verificationFailed:
-            return true
-        }
-    }
-
-    private var header: some View {
-        MMProofSectionHeader(
-            title: "Your reports",
-            subtitle: "Turn saved proof into shareable records."
-        )
-    }
-
-    private var exportContextStrip: some View {
-        MMCard(tone: .quiet, padding: 12, spacing: 8) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Text("Rental proof")
-                        .font(MoveMarkTheme.Typography.tinyEmphasis)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
-                    Text("·")
-                        .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(0.6))
-                    Text("Current vault")
-                        .font(MoveMarkTheme.Typography.captionEmphasis)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    Text("·")
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.45))
-                    Text(activeVaultDisplayTitle ?? "Selected vault")
-                        .font(MoveMarkTheme.Typography.captionEmphasis)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                }
-                Text(exportContextLine)
-                    .font(MoveMarkTheme.Typography.tinyMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
-                    .fixedSize(horizontal: false, vertical: true)
+    /// Replaces the list and its statuses with a successful fetch.
+    private func apply(_ items: [ExportListItem], for propertyId: UUID) {
+        var nextVerification: [UUID: ExportVerificationStatus] = [:]
+        for item in items {
+            switch item.status {
+            case .queued:
+                nextVerification[item.id] = .queued
+            case .processing:
+                nextVerification[item.id] = .processing
+            case .failed:
+                nextVerification[item.id] = .serverFailed
+            case .completed:
+                let fp = (item.filePath ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                nextVerification[item.id] = fp.isEmpty ? .missingPath : .ready
             }
         }
-    }
-
-    private var exportContextLine: String {
-        if resolvedPropertyRecord == nil {
-            return "Open your vault once to see if a report is ready."
+        // A report the renter is waiting on just finished while they're looking at Reports.
+        let finishedWhileWatching = nextVerification.contains { id, status in
+            guard status == .ready, let previous = verificationStatus[id] else { return false }
+            return isActiveExportJob(previous)
         }
-        let reports = exports.count
-        if reports == 0 {
-            return "No reports yet."
+        if finishedWhileWatching, isOnScreen, rootTabIsActive, scenePhase == .active {
+            MMHaptics.success()
         }
-        return reports == 1 ? "1 report ready to share." : "\(reports) reports ready to share."
-    }
-
-    private var shouldShowReportProofTrail: Bool {
-        switch currentReportReadiness {
-        case .notReady, .readyToMake, .readyToShare, .processing, .failed:
-            return true
-        case .noVault:
-            return false
-        }
-    }
-
-    private var reportPreviewHero: some View {
-        MMReportPreviewHero(
-            state: reportPreviewHeroState,
-            metricsLine: isLoading ? nil : readinessMetricsLine,
-            headline: reportHeroHeadline,
-            footnote: reportHeroFootnote,
-            proofChips: reportProofChips,
-            primaryTitle: reportPrimaryCTA.title,
-            isPrimaryDisabled: isExporting || currentReportReadiness == .processing || isLoading,
-            unlockPulse: reportUnlockPulse,
-            onPrimary: reportPrimaryCTA.action
-        )
-    }
-
-    private var reportPreviewHeroState: MMReportPreviewHero.State {
-        if isLoading { return .loading }
-        switch currentReportReadiness {
-        case .notReady, .noVault: return .notReady
-        case .readyToMake: return .canMake
-        case .processing: return .processing
-        case .readyToShare: return .ready
-        case .failed: return .failed
-        }
-    }
-
-    private var reportHeroHeadline: String {
-        if isLoading { return "Checking saved proof…" }
-        switch currentReportReadiness {
-        case .notReady, .noVault:
-            return "Finish room proof first."
-        case .readyToMake:
-            return "You have enough proof to create a move-in report."
-        case .readyToShare:
-            return "Your move-in report is ready to share."
-        case .processing:
-            return "Building your PDF report."
-        case .failed:
-            return "We couldn't finish your report."
-        }
-    }
-
-    private var reportHeroFootnote: String? {
-        guard !isLoading else { return nil }
-        switch currentReportReadiness {
-        case .notReady, .noVault:
-            return "Complete each room before creating your report."
-        case .readyToMake:
-            return "Add more rooms and docs for a stronger report."
-        default:
-            return nil
-        }
-    }
-
-    private var reportProofChips: [String] {
-        guard let property = resolvedPropertyRecord else { return [] }
-        var chips: [String] = []
-
-        let totalRooms = propertyStore.totalRoomCount(for: property)
-        let documented = propertyStore.documentedRoomCount(for: property)
-        if totalRooms > 0 {
-            chips.append("\(documented)/\(totalRooms) rooms")
-        }
-
-        let photos = propertyStore.totalPhotoCount(for: property)
-        if photos > 0 {
-            chips.append(photos == 1 ? "1 photo" : "\(photos) photos")
-        }
-
-        let requiredDocs = PropertyStore.moveInRequiredDocumentTypes.count
-        let missingDocs = propertyStore.missingSupportingRecordCount(for: property)
-        let uploadedDocs = max(0, requiredDocs - missingDocs)
-        if requiredDocs > 0 {
-            chips.append("\(uploadedDocs)/\(requiredDocs) docs")
-        }
-
-        return chips
-    }
-
-    private var reportChecklistItems: [MMProofChecklistItem] {
-        guard let property = resolvedPropertyRecord else {
-            return [
-                MMProofChecklistItem(title: "Room photos", detail: "Open your vault to start room proof", state: .incomplete),
-                MMProofChecklistItem(title: "Lease & docs", detail: "Add lease and deposit records", state: .incomplete),
-                MMProofChecklistItem(title: "Damage tags", detail: "Tag issues while you photograph rooms", state: .locked),
-                MMProofChecklistItem(title: "Move-out proof", detail: "Optional later — before you move out", state: .locked),
-                MMProofChecklistItem(title: "Report", detail: "Locked until proof is ready", state: .locked)
-            ]
-        }
-
-        let totalRooms = propertyStore.totalRoomCount(for: property)
-        let documented = propertyStore.documentedRoomCount(for: property)
-        let requiredDocs = PropertyStore.moveInRequiredDocumentTypes.count
-        let missingDocs = propertyStore.missingSupportingRecordCount(for: property)
-        let uploadedDocs = max(0, requiredDocs - missingDocs)
-
-        let openIssues = propertyStore.openIssueCount(for: property)
-
-        let roomsState: MMProofChecklistItem.State = {
-            if totalRooms == 0 { return .incomplete }
-            if documented == 0 { return .incomplete }
-            if documented >= totalRooms { return .complete }
-            return .incomplete
-        }()
-
-        let docsState: MMProofChecklistItem.State = missingDocs == 0 ? .complete : .incomplete
-
-        let issuesState: MMProofChecklistItem.State = {
-            if documented == 0 { return .locked }
-            return .complete
-        }()
-
-        let moveOutState: MMProofChecklistItem.State = .locked
-
-        let reportState: MMProofChecklistItem.State = {
-            if isExportReadyForResolvedVault == true { return .complete }
-            return .locked
-        }()
-
-        let issuesDetail: String = {
-            if documented == 0 { return "Tag scratches and stains as you photograph" }
-            if openIssues == 0 { return "No issues tagged yet" }
-            return openIssues == 1 ? "1 issue tagged" : "\(openIssues) issues tagged"
-        }()
-
-        let reportDetail: String = {
-            if isExportReadyForResolvedVault == true {
-                return "Can make from saved proof"
-            }
-            return "Unlocks after room proof + docs"
-        }()
-
-        return [
-            MMProofChecklistItem(
-                title: "Room photos",
-                detail: totalRooms == 0
-                    ? "Add rooms in your vault"
-                    : "\(documented) of \(totalRooms) rooms ready",
-                state: roomsState
-            ),
-            MMProofChecklistItem(
-                title: "Lease & docs",
-                detail: "\(uploadedDocs) of \(requiredDocs) docs uploaded",
-                state: docsState
-            ),
-            MMProofChecklistItem(
-                title: "Damage tags",
-                detail: issuesDetail,
-                state: issuesState
-            ),
-            MMProofChecklistItem(
-                title: "Move-out proof",
-                detail: "Optional later",
-                state: moveOutState
-            ),
-            MMProofChecklistItem(
-                title: "Report",
-                detail: reportDetail,
-                state: reportState
+        exports = items.map { item in
+            ExportRow(
+                id: item.id,
+                disputeId: nil,
+                propertyId: item.propertyId,
+                userId: item.userId,
+                exportType: item.type,
+                filePath: item.filePath,
+                createdAt: item.requestedAt ?? item.createdAt
             )
-        ]
+        }
+        verificationStatus = nextVerification
+        loadedPropertyId = propertyId
+        loadFailed = false
     }
 
-    /// Drives readiness transitions (unlock motion + toasts).
+    /// Drives readiness transitions (unlock haptic + toast).
     private var reportReadinessSnapshot: String {
         "\(hasActiveVault)-\(isExportReadyForResolvedVault.map { $0 ? 1 : 0 } ?? -1)-\(exports.count)-\(readinessPillText)"
     }
@@ -586,14 +539,8 @@ struct ExportHistoryView: View {
         guard let previous = lastReportReadiness else { return }
 
         if previous == .notReady, readiness == .readyToMake {
-            reportUnlockPulse = true
             MMHaptics.medium()
             presentProofToast(.exportsUnlocked())
-
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(0.55))
-                reportUnlockPulse = false
-            }
         }
     }
 
@@ -603,63 +550,6 @@ struct ExportHistoryView: View {
             message: $proofToast,
             isVisible: $proofToastVisible
         )
-    }
-
-    private var reportPrimaryCTA: (title: String, action: () -> Void) {
-        if isLoading {
-            return ("Checking report…", {})
-        }
-
-        switch currentReportReadiness {
-        case .notReady:
-            return ("Continue room proof", {
-                if let onContinueRoomProof {
-                    onContinueRoomProof()
-                } else {
-                    onOpenVaults?()
-                }
-            })
-        case .readyToMake:
-            if subscriptionManager.canExportMoveIn(forUser: sessionManager.userId) {
-                return (isExporting ? "Making report…" : "Make report", {
-                    requestMoveInExport()
-                })
-            }
-            return ("Upgrade for another report", {
-                activePaywallReason = .unlimitedExports
-                showPaywall = true
-            })
-        case .readyToShare:
-            return ("View / Share report", {
-                if let row = exports.first(where: {
-                    $0.exportType == "move_in_report" && verificationStatus[$0.id] == .ready
-                }) {
-                    viewReport(row)
-                }
-            })
-        case .processing:
-            return ("Building…", {})
-        case .failed:
-            return ("Try again", { Task { await loadExports() } })
-        case .noVault:
-            return ("Open vaults", { onOpenVaults?() })
-        }
-    }
-
-    private var readinessMetricsLine: String? {
-        guard let p = resolvedPropertyRecord else { return nil }
-        let documented = propertyStore.documentedRoomCount(for: p)
-        let total = propertyStore.totalRoomCount(for: p)
-        let issues = propertyStore.openIssueCount(for: p)
-
-        var parts: [String] = []
-        if total > 0 {
-            parts.append("\(documented) of \(total) rooms ready")
-        }
-        if issues > 0 {
-            parts.append(issues == 1 ? "1 issue tagged" : "\(issues) issues tagged")
-        }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private var readinessPillText: String {
@@ -676,95 +566,6 @@ struct ExportHistoryView: View {
         return hasActiveVault ? "Not ready" : "No vault"
     }
 
-    private var exportHistoryEmptyState: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Export history")
-                .font(MoveMarkTheme.Typography.footnoteEmphasis)
-                .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                .padding(.leading, 2)
-
-            Text("Create your first move-in report once proof is ready.")
-                .font(MoveMarkTheme.Typography.subheadline)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.top, 8)
-    }
-
-    private var noVaultSelectedState: some View {
-        ProofReportCard(
-            model: ProofReportModel(
-                reportTitle: "Move-in report",
-                metricsLine: "Pick a vault to see report readiness",
-                statusLabel: "Needs proof",
-                statusTone: .neutral,
-                footnote: "Reports belong to one rental. Create or open a vault first."
-            ),
-            primaryTitle: "Open vault",
-            onPrimary: { onOpenVaults?() },
-            primaryEnabled: showOpenVaultsCTA
-        )
-    }
-
-    private var secondaryExportSections: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            MMReportExportSection(
-                sectionTitle: "Move-out report",
-                sectionSubtitle: "Re-capture rooms before you return the keys.",
-                statusLabel: moveOutStatusLabel,
-                statusTone: moveOutStatusTone,
-                metricsLine: moveOutMetricsLine,
-                footnote: moveOutFootnote,
-                primaryTitle: moveOutPrimaryCTA.title,
-                primaryEnabled: moveOutPrimaryCTA.enabled,
-                isProcessing: moveOutReadiness == .processing,
-                isProLocked: !subscriptionManager.hasPro,
-                onPrimary: moveOutPrimaryCTA.action
-            )
-
-            MMReportExportSection(
-                sectionTitle: "Dispute packet",
-                sectionSubtitle: "Bundle your proof if your deposit is questioned.",
-                statusLabel: disputeStatusLabel,
-                statusTone: disputeStatusTone,
-                footnote: disputeFootnote,
-                primaryTitle: disputePrimaryCTA.title,
-                primaryEnabled: disputePrimaryCTA.enabled,
-                isProcessing: disputeReadiness == .processing,
-                isProLocked: !subscriptionManager.hasPro,
-                useQuietPrimaryWhenLocked: true,
-                legalNote: "MoveMark organizes your proof. It does not provide legal advice.",
-                onPrimary: disputePrimaryCTA.action
-            )
-        }
-    }
-
-    private var exportHistorySections: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Export history")
-                .font(MoveMarkTheme.Typography.footnoteEmphasis)
-                .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                .padding(.leading, 2)
-
-            VStack(spacing: 8) {
-                ForEach(exports) { row in
-                    let status = verificationStatus[row.id] ?? .unknown
-                    ExportHistoryRow(
-                        title: label(for: row.exportType),
-                        dateLine: formattedDate(row.createdAt),
-                        statusLabel: status.displayLabel,
-                        statusTone: historyStatusTone(status),
-                        isProcessing: isActiveExportJob(status),
-                        canShare: canShareExport(status),
-                        canRetry: status == .serverFailed,
-                        onShare: { share(row) },
-                        onRetry: { retryExport(row) }
-                    )
-                }
-            }
-        }
-    }
-
     private enum SecondaryReportReadiness {
         case noProof
         case readyToMake
@@ -777,11 +578,7 @@ struct ExportHistoryView: View {
         guard let property = resolvedPropertyRecord else { return .noProof }
         let photos = propertyStore.moveOutPhotoCount(for: property)
         if photos <= 0 { return .noProof }
-        let moveOutExports = exports.filter { $0.exportType == "move_out_report" }
-        if moveOutExports.contains(where: { verificationStatus[$0.id] == .serverFailed }) { return .failed }
-        if moveOutExports.contains(where: { isActiveExportJob(verificationStatus[$0.id] ?? .unknown) }) { return .processing }
-        if moveOutExports.contains(where: { verificationStatus[$0.id] == .ready }) { return .readyToShare }
-        return .readyToMake
+        return secondaryReadiness(of: ["move_out_report"])
     }
 
     private var disputeReadiness: SecondaryReportReadiness {
@@ -791,79 +588,23 @@ struct ExportHistoryView: View {
             $0.exportType == "move_in_report" && verificationStatus[$0.id] == .ready
         }
         if !hasProof { return .noProof }
-        let disputeExports = exports.filter { $0.exportType == "dispute_packet" || $0.exportType == "dispute_summary" }
-        if disputeExports.contains(where: { verificationStatus[$0.id] == .serverFailed }) { return .failed }
-        if disputeExports.contains(where: { isActiveExportJob(verificationStatus[$0.id] ?? .unknown) }) { return .processing }
-        if disputeExports.contains(where: { verificationStatus[$0.id] == .ready }) { return .readyToShare }
-        return .readyToMake
+        return secondaryReadiness(of: ["dispute_packet", "dispute_summary"])
     }
 
-    private var moveOutStatusLabel: String {
-        switch moveOutReadiness {
-        case .noProof: return "Needs proof"
-        case .readyToMake: return "Report can be made"
-        case .processing: return "Building report"
-        case .readyToShare: return "Ready to share"
-        case .failed: return "Failed"
-        }
-    }
-
-    private var disputeStatusLabel: String {
-        switch disputeReadiness {
-        case .noProof: return "Needs proof"
-        case .readyToMake: return "Report can be made"
-        case .processing: return "Building report"
-        case .readyToShare: return "Ready to share"
-        case .failed: return "Failed"
-        }
-    }
-
-    private var moveOutStatusTone: ProofStatusTone {
-        switch moveOutReadiness {
-        case .readyToShare: return .success
-        case .failed: return .danger
-        case .processing: return .warning
-        case .noProof: return .warning
-        case .readyToMake: return .neutral
-        }
-    }
-
-    private var disputeStatusTone: ProofStatusTone {
-        switch disputeReadiness {
-        case .readyToShare: return .success
-        case .failed: return .danger
-        case .processing: return .warning
-        case .noProof: return .warning
-        case .readyToMake: return .neutral
-        }
-    }
-
-    private var moveOutMetricsLine: String? {
-        guard let property = resolvedPropertyRecord else { return nil }
-        let photos = propertyStore.moveOutPhotoCount(for: property)
-        guard photos > 0 else { return nil }
-        let rooms = propertyStore.moveOutDocumentedRoomCount(for: property)
-        let total = propertyStore.totalRoomCount(for: property)
-        return "\(rooms) of \(total) rooms · \(photos) move-out photos"
-    }
-
-    private var moveOutFootnote: String? {
-        switch moveOutReadiness {
-        case .noProof: return "Capture move-out room photos first."
-        case .readyToMake: return "Add more move-out proof for a stronger report."
-        case .readyToShare: return "Your move-out report is ready to share."
-        case .failed: return "Something went wrong. Try again when you're ready."
-        case .processing: return nil
-        }
-    }
-
-    private var disputeFootnote: String? {
-        switch disputeReadiness {
-        case .noProof: return "Save move-in room proof before building a packet."
-        case .readyToMake: return "Add more proof for a stronger packet."
-        case .readyToShare: return "Your dispute packet is ready to share."
-        case .failed: return "Something went wrong. Try again when you're ready."
-        case .processing: return nil
+    /// Decided by the newest attempt of the type, as ``primaryState`` is: an older failure never hides a
+    /// newer report, and a newer failure reads as failed.
+    private func secondaryReadiness(of types: Set<String>) -> SecondaryReportReadiness {
+        guard let newest = exports.filter({ types.contains($0.exportType) })
+            .max(by: { ($0.createdAt ?? "") < ($1.createdAt ?? "") }) else { return .readyToMake }
+        let status = verificationStatus[newest.id] ?? .unknown
+        if isActiveExportJob(status) { return .processing }
+        switch status {
+        case .serverFailed, .missingPath:
+            return .failed
+        case .ready, .invalidURL, .verificationFailed:
+            return .readyToShare
+        default:
+            return latestReadyRow(of: types) != nil ? .readyToShare : .readyToMake
         }
     }
 
@@ -880,8 +621,8 @@ struct ExportHistoryView: View {
         case .readyToMake:
             return (isMoveOutExporting ? "Making report…" : "Make move-out report", !isMoveOutExporting, { requestMoveOutExport() })
         case .readyToShare:
-            return ("View / Share report", true, {
-                if let row = exports.first(where: { $0.exportType == "move_out_report" && verificationStatus[$0.id] == .ready }) {
+            return ("View / Share", true, {
+                if let row = latestReadyRow(of: ["move_out_report"]) {
                     viewReport(row)
                 }
             })
@@ -911,11 +652,8 @@ struct ExportHistoryView: View {
         case .readyToMake:
             return (isDisputeExporting ? "Building packet…" : "Build dispute packet", !isDisputeExporting, { requestDisputePacketExport() })
         case .readyToShare:
-            return ("View / Share packet", true, {
-                if let row = exports.first(where: {
-                    ($0.exportType == "dispute_packet" || $0.exportType == "dispute_summary") &&
-                    verificationStatus[$0.id] == .ready
-                }) {
+            return ("View / Share", true, {
+                if let row = latestReadyRow(of: ["dispute_packet", "dispute_summary"]) {
                     viewReport(row)
                 }
             })
@@ -935,15 +673,6 @@ struct ExportHistoryView: View {
         }
     }
 
-    private func historyStatusTone(_ status: ExportVerificationStatus) -> ProofStatusTone {
-        switch status {
-        case .ready: return .success
-        case .serverFailed: return .danger
-        case .queued, .processing, .verifying: return .warning
-        default: return .neutral
-        }
-    }
-
     private func requestMoveOutExport() {
         guard let property = resolvedPropertyRecord ?? propertyStore.currentProperty else { return }
         guard !isMoveOutExporting else { return }
@@ -953,7 +682,7 @@ struct ExportHistoryView: View {
             return
         }
         guard let baseURL = apiBaseURL else {
-            errorMessage = "API base URL is missing. Set MoveMarkAPIBaseURL in build settings."
+            errorMessage = Self.unavailableMessage
             return
         }
 
@@ -963,22 +692,15 @@ struct ExportHistoryView: View {
         Task { @MainActor in
             defer { isMoveOutExporting = false }
             do {
-                let session = try await supabase.auth.session
                 let apiClient = try ExportAPIClient(baseURLString: baseURL)
-                _ = try await apiClient.requestMoveOutExport(
-                    propertyId: property.id,
-                    accessToken: session.accessToken
-                )
+                _ = try await apiClient.requestMoveOutExport(propertyId: property.id)
                 MMProofToastPresenter.show(.reportQueued(), message: $proofToast, isVisible: $proofToastVisible)
-                NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
+                postExportsShouldRefresh()
                 await loadExports()
+                startPolling()
             } catch {
-                errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(
-                    error,
-                    fallback: "Couldn't queue move-out report. Try again.",
-                    intent: .mutate
-                )
-                MMHaptics.error()
+                await handleExportRequestError(error, paywallReason: .moveOutExport,
+                                               fallback: "Couldn't queue move-out report. Try again.")
             }
         }
     }
@@ -992,7 +714,7 @@ struct ExportHistoryView: View {
             return
         }
         guard let baseURL = apiBaseURL else {
-            errorMessage = "API base URL is missing. Set MoveMarkAPIBaseURL in build settings."
+            errorMessage = Self.unavailableMessage
             return
         }
 
@@ -1002,99 +724,15 @@ struct ExportHistoryView: View {
         Task { @MainActor in
             defer { isDisputeExporting = false }
             do {
-                let session = try await supabase.auth.session
                 let apiClient = try ExportAPIClient(baseURLString: baseURL)
-                _ = try await apiClient.requestDisputePacketExport(
-                    propertyId: property.id,
-                    accessToken: session.accessToken
-                )
+                _ = try await apiClient.requestDisputePacketExport(propertyId: property.id)
                 MMProofToastPresenter.show(.reportQueued(), message: $proofToast, isVisible: $proofToastVisible)
-                NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
+                postExportsShouldRefresh()
                 await loadExports()
+                startPolling()
             } catch {
-                errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(
-                    error,
-                    fallback: "Couldn't queue dispute packet. Try again.",
-                    intent: .mutate
-                )
-                MMHaptics.error()
-            }
-        }
-    }
-
-    private var reportPreviewMock: some View {
-        MMArtifactSurface {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Report preview")
-                        .font(MoveMarkTheme.Typography.tinyEmphasis)
-                        .tracking(0.4)
-                        .foregroundStyle(MoveMarkTheme.Colors.primaryPressed)
-
-                    Spacer()
-
-                    Image(systemName: "doc.richtext")
-                        .font(MoveMarkTheme.Typography.detailEmphasis)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                }
-
-                VStack(alignment: .leading, spacing: 5) {
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(MoveMarkTheme.Colors.textPrimary.opacity(0.18))
-                        .frame(width: 118, height: 8)
-
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(MoveMarkTheme.Colors.cardStroke)
-                        .frame(width: 160, height: 6)
-
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(MoveMarkTheme.Colors.cardStroke.opacity(0.7))
-                        .frame(height: 6)
-
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(MoveMarkTheme.Colors.cardStroke.opacity(0.7))
-                        .frame(height: 6)
-                }
-
-                HStack(spacing: 8) {
-                    statusPill("Rooms")
-                    statusPill("Photos")
-                    statusPill("Docs")
-                }
-            }
-            .padding(16)
-        }
-    }
-
-    private func statusPill(_ text: String) -> some View {
-        Text(text)
-            .font(MoveMarkTheme.Typography.tinyEmphasis)
-            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-            .padding(.horizontal, 10)
-            .frame(height: 26)
-            .background(MoveMarkTheme.Colors.cardRaised.opacity(0.5))
-            .clipShape(Capsule())
-    }
-
-    private var disputeRows: [ExportRow] {
-        exports.filter { $0.exportType == "dispute_packet" || $0.exportType == "dispute_summary" }
-    }
-
-    private func rows(for type: String) -> [ExportRow] {
-        exports.filter { $0.exportType == type }
-    }
-
-    @ViewBuilder
-    private func exportSection(title: String, rows: [ExportRow]) -> some View {
-        if !rows.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                MMSectionHeader(title: title, subtitle: nil)
-
-                VStack(spacing: 10) {
-                    ForEach(rows) { row in
-                        exportRowCard(row)
-                    }
-                }
+                await handleExportRequestError(error, paywallReason: .disputePacket,
+                                               fallback: "Couldn't queue dispute packet. Try again.")
             }
         }
     }
@@ -1114,330 +752,56 @@ struct ExportHistoryView: View {
         }
     }
 
-    private func exportRowCard(_ row: ExportRow) -> some View {
-        let status = verificationStatus[row.id] ?? .unknown
-
-        return MMCard(tone: .artifact, padding: 16, spacing: 12) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .top, spacing: 12) {
-                exportRowThumbnail(for: row)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Text(label(for: row.exportType))
-                            .font(MoveMarkTheme.Typography.cardTitle)
-                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                        exportStatusLabel(status)
-                    }
-
-                    Text(formattedDate(row.createdAt))
-                        .font(MoveMarkTheme.Typography.subheadlineMedium)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-
-                    Text(shortPath(row.filePath))
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.78))
-                        .lineLimit(1)
-
-                    if status == .serverFailed {
-                        Text(MoveMarkFlowMessage.exportServerFailedHint)
-                            .font(MoveMarkTheme.Typography.caption)
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    if case .verificationFailed(let msg) = status, !msg.isEmpty {
-                        Text(msg)
-                            .font(MoveMarkTheme.Typography.caption)
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            .lineLimit(2)
-                    }
-                }
-
-                Spacer(minLength: 0)
-                }
-
-                HStack(spacing: 8) {
-                    MMButton(
-                        title: MMNextBestAction.shareReport.title,
-                        action: { share(row) },
-                        kind: .primary,
-                        size: .compact,
-                        isDisabled: !canShareExport(status),
-                        expandsToFillWidth: false
-                    )
-
-                    if shouldShowVerifyButton(for: status) {
-                        MMButton(
-                            title: status == .verifying ? "Checking…" : "Check status",
-                            action: { verify(row) },
-                            kind: .quiet,
-                            size: .compact,
-                            isDisabled: status == .verifying,
-                            expandsToFillWidth: false
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private func exportRowThumbnail(for row: ExportRow) -> some View {
-        ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            MoveMarkTheme.Colors.cardRaised,
-                            MoveMarkTheme.Colors.cardRaised
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 58, height: 72)
-
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.cardStroke.opacity(0.6), lineWidth: 0.8)
-                .frame(width: 58, height: 72)
-
-            VStack(alignment: .leading, spacing: 5) {
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.textPrimary.opacity(0.2))
-                    .frame(width: 22, height: 4)
-
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.cardStroke)
-                    .frame(width: 30, height: 3)
-
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.cardStroke.opacity(0.7))
-                    .frame(width: 26, height: 3)
-
-                Spacer()
-
-                Image(systemName: icon(for: row.exportType))
-                    .font(MoveMarkTheme.Typography.detailEmphasis)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
-            }
-            .padding(10)
-            .frame(width: 58, height: 72, alignment: .topLeading)
-        }
-    }
-
-    private func icon(for exportType: String) -> String {
-        switch exportType {
-        case "move_in_report":
-            return "doc.text"
-        case "move_out_report":
-            return "doc.plaintext"
-        case "dispute_packet", "dispute_summary":
-            return "doc.richtext"
-        default:
-            return "doc"
-        }
-    }
-
-    @ViewBuilder
-    private func exportStatusLabel(_ status: ExportVerificationStatus) -> some View {
-        switch status {
-        case .ready:
-            HStack(spacing: 4) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(MoveMarkTheme.Typography.tiny)
-                    .foregroundStyle(MoveMarkTheme.Colors.semanticSuccess)
-
-                Text(status.displayLabel)
-                    .font(MoveMarkTheme.Typography.caption)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-            }
-
-        case .verifying:
-            HStack(spacing: 4) {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(MoveMarkTheme.Typography.tiny)
-                    .foregroundStyle(MoveMarkTheme.Colors.semanticWarning)
-
-                Text(status.displayLabel)
-                    .font(MoveMarkTheme.Typography.caption)
-                    .foregroundStyle(MoveMarkTheme.Colors.semanticWarning.opacity(0.95))
-            }
-
-        case .unknown:
-            Text(status.displayLabel)
-                .font(MoveMarkTheme.Typography.caption)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.9))
-
-        case .queued:
-            HStack(spacing: 4) {
-                Image(systemName: "tray.fill")
-                    .font(MoveMarkTheme.Typography.tiny)
-                    .foregroundStyle(MoveMarkTheme.Colors.semanticWarning)
-
-                Text(status.displayLabel)
-                    .font(MoveMarkTheme.Typography.caption)
-                    .foregroundStyle(MoveMarkTheme.Colors.semanticWarning.opacity(0.95))
-            }
-
-        case .processing:
-            HStack(spacing: 4) {
-                Image(systemName: "clock.fill")
-                    .font(MoveMarkTheme.Typography.tiny)
-                    .foregroundStyle(MoveMarkTheme.Colors.semanticWarning)
-
-                Text(status.displayLabel)
-                    .font(MoveMarkTheme.Typography.caption)
-                    .foregroundStyle(MoveMarkTheme.Colors.semanticWarning.opacity(0.95))
-            }
-
-        case .missingPath, .invalidURL, .verificationFailed:
-            HStack(spacing: 4) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(MoveMarkTheme.Typography.tiny)
-                    .foregroundStyle(MoveMarkTheme.Colors.semanticWarning)
-
-                Text(status.displayLabel)
-                    .font(MoveMarkTheme.Typography.caption)
-                    .foregroundStyle(MoveMarkTheme.Colors.semanticWarning.opacity(0.95))
-            }
-
-        case .serverFailed:
-            HStack(spacing: 4) {
-                Image(systemName: "xmark.octagon.fill")
-                    .font(MoveMarkTheme.Typography.tiny)
-                    .foregroundStyle(MoveMarkTheme.Colors.semanticDanger)
-
-                Text(status.displayLabel)
-                    .font(MoveMarkTheme.Typography.caption)
-                    .foregroundStyle(MoveMarkTheme.Colors.semanticDanger.opacity(0.95))
-            }
-        }
-    }
-
-    private func verify(_ row: ExportRow) {
-        verificationStatus[row.id] = .verifying
-        Task { @MainActor in
-            do {
-                let accessToken = try await currentAccessToken()
-                let client = try makeAPIClient()
-                _ = try await client.fetchDownloadURL(exportId: row.id.uuidString, accessToken: accessToken)
-                verificationStatus[row.id] = .ready
-                MMHaptics.success()
-            } catch let api as APIClientError {
-                if case .exportNotReady = api {
-                    verificationStatus[row.id] = .processing
-                    MMHaptics.soft()
-                } else if case .exportFailed = api {
-                    verificationStatus[row.id] = .serverFailed
-                    MMHaptics.error()
-                } else {
-                    verificationStatus[row.id] = .verificationFailed(
-                        MoveMarkFlowMessage.exportOrAPIFailed(
-                            api,
-                            fallback: "Verification failed. Try again."
-                        )
-                    )
-                    MMHaptics.error()
-                }
-            } catch {
-                verificationStatus[row.id] = .verificationFailed(
-                    MoveMarkFlowMessage.exportOrAPIFailed(
-                        error,
-                        fallback: "Verification failed. Try again."
-                    )
-                )
-                MMHaptics.error()
-            }
-        }
-    }
-
-    private func shortPath(_ value: String?) -> String {
-        value?.components(separatedBy: "/").last ?? (value ?? "—")
-    }
-
-    private static let exportHistoryDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "MMM d, yyyy · h:mm a"
-        return formatter
-    }()
-
-    private func formattedDate(_ value: String?) -> String {
-        guard let value else { return "Unknown date" }
+    private func parsedDate(_ value: String?) -> Date? {
+        guard let value else { return nil }
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        var date = iso.date(from: value)
-        if date == nil {
-            iso.formatOptions = [.withInternetDateTime]
-            date = iso.date(from: value)
-        }
-        guard let date else { return value }
-        return Self.exportHistoryDateFormatter.string(from: date)
+        if let date = iso.date(from: value) { return date }
+        iso.formatOptions = [.withInternetDateTime]
+        return iso.date(from: value)
     }
 
     private func loadExports() async {
         isLoading = true
         errorMessage = nil
-        successBanner = nil
         defer { isLoading = false }
 
-        await MainActor.run {
-            verificationStatus = [:]
-        }
+        // Statuses are kept while the fetch runs (no pull-to-refresh flicker) and when it fails.
 
         guard let apiClient = try? makeAPIClient() else {
-            errorMessage = "API base URL is missing. Set MoveMarkAPIBaseURL in build settings."
-            exports = []
+            errorMessage = Self.unavailableMessage
+            loadFailed = true
             return
         }
 
         guard let currentPropertyId = resolvedExportPropertyId else {
             exports = []
+            verificationStatus = [:]
+            loadedPropertyId = nil
+            loadFailed = false
             errorMessage = nil
             return
         }
 
-        do {
-            let token = try await currentAccessToken()
-            let items = try await apiClient.fetchExports(accessToken: token, propertyId: currentPropertyId)
+        // Another rental's reports never stand in for this one's.
+        if let loadedPropertyId, loadedPropertyId != currentPropertyId {
+            exports = []
+            verificationStatus = [:]
+            self.loadedPropertyId = nil
+        }
 
-            var nextVerification: [UUID: ExportVerificationStatus] = [:]
-            for item in items {
-                switch item.status {
-                case .queued:
-                    nextVerification[item.id] = .queued
-                case .processing:
-                    nextVerification[item.id] = .processing
-                case .failed:
-                    nextVerification[item.id] = .serverFailed
-                case .completed:
-                    let fp = (item.filePath ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                    if fp.isEmpty {
-                        nextVerification[item.id] = .missingPath
-                    } else {
-                        nextVerification[item.id] = .ready
-                    }
-                }
-            }
-            let rows = items.map { item in
-                ExportRow(
-                    id: item.id,
-                    disputeId: nil,
-                    propertyId: item.propertyId,
-                    userId: item.userId,
-                    exportType: item.type,
-                    filePath: item.filePath,
-                    createdAt: item.requestedAt ?? item.createdAt
-                )
-            }
-            exports = rows
-            verificationStatus = nextVerification
+        do {
+            let items = try await apiClient.fetchExports(propertyId: currentPropertyId)
+            guard currentPropertyId == resolvedExportPropertyId else { return }
+            apply(items, for: currentPropertyId)
         } catch {
+            guard currentPropertyId == resolvedExportPropertyId else { return }
+            // Keep the previous list and statuses; the error row offers Try again.
             errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(
                 error,
                 fallback: "Couldn’t load exports. Try again."
             )
-            exports = []
+            loadFailed = true
             MMHaptics.error()
         }
     }
@@ -1445,7 +809,8 @@ struct ExportHistoryView: View {
     private func retryExport(_ row: ExportRow) {
         switch row.exportType {
         case "move_in_report":
-            requestMoveInExport()
+            // A failed export never used the free report: the server decides (402 opens the paywall).
+            requestMoveInExport(checkLocalQuota: false)
         case "move_out_report":
             requestMoveOutExport()
         case "dispute_packet", "dispute_summary":
@@ -1455,43 +820,41 @@ struct ExportHistoryView: View {
         }
     }
 
+    /// The report as a local PDF named for people; reopening it uses the copy already on this iPhone.
     private func prepareLocalReportFile(for row: ExportRow) async throws -> URL {
-        let accessToken = try await currentAccessToken()
         let client = try makeAPIClient()
-        let response = try await client.fetchDownloadURL(exportId: row.id.uuidString, accessToken: accessToken)
-        guard let signedURL = URL(string: response.downloadUrl) else {
-            throw APIClientError.invalidResponse
-        }
-        return try await ReportFileDownloader.downloadPDF(
-            from: signedURL,
-            exportType: row.exportType
+        let fileName = ReportFileDownloader.reportFileName(
+            exportType: row.exportType,
+            rentalName: activeVaultDisplayTitle,
+            date: parsedDate(row.createdAt) ?? Date()
         )
+        return try await ReportFileDownloader.localReport(exportId: row.id, fileName: fileName) {
+            let response = try await client.fetchDownloadURL(exportId: row.id.uuidString)
+            guard let signedURL = URL(string: response.downloadUrl) else {
+                throw APIClientError.invalidResponse
+            }
+            return signedURL
+        }
     }
 
     private func viewReport(_ row: ExportRow) {
+        // A second tap while the first is opening (or once the preview is up) never starts more work.
+        guard !isDownloadingReport, reportPreviewItem == nil else { return }
+        MMHaptics.soft()
+        errorMessage = nil
+        // Already on this iPhone: open it at once, with no download and no "Opening report…" flash.
+        if let cached = ReportFileDownloader.cachedReport(exportId: row.id) {
+            presentPreview(of: cached, for: row)
+            return
+        }
+        isDownloadingReport = true
         Task { @MainActor in
-            MMHaptics.soft()
-            errorMessage = nil
-            successBanner = nil
-            isDownloadingReport = true
             defer { isDownloadingReport = false }
 
             do {
                 let localURL = try await prepareLocalReportFile(for: row)
                 try ReportFileDownloader.validateReportFile(at: localURL)
-                reportPreviewItem = ReportPreviewItem(
-                    fileURL: localURL,
-                    title: ReportFileDownloader.displayTitle(for: row.exportType),
-                    exportType: row.exportType
-                )
-                verificationStatus[row.id] = .ready
-                presentProofToast(
-                    MMProofToastMessage(
-                        kind: .success,
-                        title: "Report ready",
-                        message: "Preview or share your PDF."
-                    )
-                )
+                presentPreview(of: localURL, for: row)
             } catch let reportError as ReportFileError {
                 errorMessage = reportError.localizedDescription
                 MMHaptics.error()
@@ -1504,11 +867,27 @@ struct ExportHistoryView: View {
         }
     }
 
+    private func presentPreview(of localURL: URL, for row: ExportRow) {
+        reportPreviewItem = ReportPreviewItem(
+            fileURL: localURL,
+            title: ReportFileDownloader.displayTitle(for: row.exportType),
+            exportType: row.exportType
+        )
+        verificationStatus[row.id] = .ready
+        presentProofToast(
+            MMProofToastMessage(
+                kind: .success,
+                title: "Report ready",
+                message: "Preview or share your PDF."
+            )
+        )
+    }
+
     private func shareCachedReport(at fileURL: URL, exportType: String) {
         do {
             let item = try ReportFileDownloader.makeShareItem(for: fileURL, exportType: exportType)
-            shareItems = [item]
-            showShareSheet = true
+            previewShareItems = [item]
+            showPreviewShareSheet = true
             MoveMarkAnalytics.track(.reportShared, properties: ["type": exportType])
         } catch {
             errorMessage = (error as? ReportFileError)?.localizedDescription
@@ -1518,28 +897,22 @@ struct ExportHistoryView: View {
     }
 
     private func share(_ row: ExportRow) {
+        guard !isDownloadingReport, !showShareSheet else { return }
+        MMHaptics.soft()
+        errorMessage = nil
+        if let cached = ReportFileDownloader.cachedReport(exportId: row.id),
+           let item = try? ReportFileDownloader.makeShareItem(for: cached, exportType: row.exportType) {
+            presentShareSheet(item, for: row)
+            return
+        }
+        isDownloadingReport = true
         Task { @MainActor in
-            MMHaptics.soft()
-            errorMessage = nil
-            successBanner = nil
-            isDownloadingReport = true
             defer { isDownloadingReport = false }
 
             do {
                 let localURL = try await prepareLocalReportFile(for: row)
                 let item = try ReportFileDownloader.makeShareItem(for: localURL, exportType: row.exportType)
-                shareItems = [item]
-                showShareSheet = true
-                MoveMarkAnalytics.track(.reportShared, properties: ["type": row.exportType])
-                verificationStatus[row.id] = .ready
-                successBanner = nil
-                presentProofToast(
-                    MMProofToastMessage(
-                        kind: .success,
-                        title: "Ready to share",
-                        message: "Send your PDF report."
-                    )
-                )
+                presentShareSheet(item, for: row)
             } catch let reportError as ReportFileError {
                 errorMessage = reportError.localizedDescription
                 MMHaptics.error()
@@ -1554,14 +927,26 @@ struct ExportHistoryView: View {
         }
     }
 
+    private func presentShareSheet(_ item: ReportPDFActivityItem, for row: ExportRow) {
+        shareItems = [item]
+        showShareSheet = true
+        MoveMarkAnalytics.track(.reportShared, properties: ["type": row.exportType])
+        verificationStatus[row.id] = .ready
+        presentProofToast(
+            MMProofToastMessage(
+                kind: .success,
+                title: "Ready to share",
+                message: "Send your PDF report."
+            )
+        )
+    }
+
     private func handleReportDownloadAPIError(_ api: APIClientError, row: ExportRow) {
         if case .exportNotReady = api {
             verificationStatus[row.id] = .processing
-            successBanner = nil
             errorMessage = nil
         } else if case .exportFailed = api {
             verificationStatus[row.id] = .serverFailed
-            successBanner = nil
             errorMessage = MoveMarkFlowMessage.exportServerFailedHint
             presentProofToast(.reportFailed())
             MMHaptics.error()
@@ -1589,7 +974,9 @@ struct ExportHistoryView: View {
         }
     }
 
-    private func requestMoveInExport() {
+    /// `checkLocalQuota` is off for a retry of a failed report: failed exports don't count against the free
+    /// report on the server, but they did bump the local counter when they were queued.
+    private func requestMoveInExport(checkLocalQuota: Bool = true) {
         guard let property = resolvedPropertyRecord ?? propertyStore.currentProperty else { return }
         guard !isExporting else { return }
         guard !hasActiveMoveInExportJob else {
@@ -1602,13 +989,13 @@ struct ExportHistoryView: View {
             return
         }
         guard isExportReadyForResolvedVault == true else { return }
-        guard subscriptionManager.canExportMoveIn(forUser: sessionManager.userId) else {
+        guard !checkLocalQuota || subscriptionManager.canExportMoveIn(forUser: sessionManager.userId) else {
             activePaywallReason = .unlimitedExports
             showPaywall = true
             return
         }
         guard let baseURL = apiBaseURL else {
-            errorMessage = "API base URL is missing. Set MoveMarkAPIBaseURL in build settings."
+            errorMessage = Self.unavailableMessage
             return
         }
 
@@ -1619,14 +1006,11 @@ struct ExportHistoryView: View {
             defer { isExporting = false }
 
             do {
-                let session = try await supabase.auth.session
                 let apiClient = try ExportAPIClient(baseURLString: baseURL)
-                _ = try await apiClient.requestMoveInExport(
-                    propertyId: property.id,
-                    accessToken: session.accessToken
-                )
+                _ = try await apiClient.requestMoveInExport(propertyId: property.id)
 
-                if !subscriptionManager.hasPro, let uid = sessionManager.userId {
+                // A retry re-uses the report the failed attempt already counted.
+                if checkLocalQuota, !subscriptionManager.hasPro, let uid = sessionManager.userId {
                     subscriptionManager.incrementFreeMoveInExportCount(forUser: uid)
                 }
 
@@ -1637,17 +1021,40 @@ struct ExportHistoryView: View {
                     message: $proofToast,
                     isVisible: $proofToastVisible
                 )
-                NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil)
+                postExportsShouldRefresh()
                 await loadExports()
-                await pollActiveExportsWhileNeeded()
+                startPolling()
             } catch {
-                errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(
-                    error,
-                    fallback: "Couldn’t queue move-in report. Try again.",
-                    intent: .mutate
-                )
-                MMHaptics.error()
+                await handleExportRequestError(error, paywallReason: .unlimitedExports,
+                                               fallback: "Couldn’t queue move-in report. Try again.")
             }
+        }
+    }
+
+    /// Tells other Reports screens to reload; this one reloads and polls inline.
+    private func postExportsShouldRefresh() {
+        NotificationCenter.default.post(name: .moveMarkExportsShouldRefresh, object: nil,
+                                        userInfo: [Self.refreshSourceKey: instanceID])
+    }
+
+    /// 402 → the paywall (or "still syncing" right after a purchase); 409 → the job already exists, so show
+    /// it generating; anything else → the error row.
+    private func handleExportRequestError(_ error: Error, paywallReason: PaywallReason, fallback: String) async {
+        switch ExportRequestRefusal(error) {
+        case .paywall:
+            _ = await subscriptionManager.refreshServerReportCredits(forUser: sessionManager.userId)
+            if subscriptionManager.isPurchaseLikelySyncing {
+                errorMessage = SubscriptionManager.purchaseStillSyncingMessage
+            } else {
+                activePaywallReason = paywallReason
+                showPaywall = true
+            }
+        case .alreadyActive:
+            await loadExports()
+            startPolling()
+        case nil:
+            errorMessage = MoveMarkFlowMessage.exportOrAPIFailed(error, fallback: fallback, intent: .mutate)
+            MMHaptics.error()
         }
     }
 
@@ -1656,9 +1063,25 @@ struct ExportHistoryView: View {
         return try ExportAPIClient(baseURLString: apiBaseURL)
     }
 
-    private func currentAccessToken() async throws -> String {
-        let session = try await supabase.auth.session
-        return session.accessToken
+}
+
+/// How Reports and the packet builder handle an export POST the server refused.
+enum ExportRequestRefusal {
+    /// 402 `pro_required` / `quota_exhausted`.
+    case paywall
+    /// 409 `export_already_active`: a job for this report is already queued or processing.
+    case alreadyActive
+
+    init?(_ error: Error) {
+        guard let api = error as? APIClientError,
+              case .exportRequestRefused(let status, let code, _) = api else { return nil }
+        if status == 402 || code == "pro_required" || code == "quota_exhausted" {
+            self = .paywall
+        } else if status == 409 || code == "export_already_active" {
+            self = .alreadyActive
+        } else {
+            return nil
+        }
     }
 }
 

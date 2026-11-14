@@ -10,6 +10,8 @@ interface SubscriptionBilling {
     val purchasing: StateFlow<Boolean>
     val errorMessage: StateFlow<String?>
     val restoreMessage: StateFlow<String?>
+    /** Report Packs this store account has bought (one-time purchases), from the customer info. */
+    val reportPackPurchases: StateFlow<Int>
 
     suspend fun logIn(appUserId: String)
     suspend fun logOut()

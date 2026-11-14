@@ -19,7 +19,7 @@ enum FirstRunRoomOption: String, CaseIterable, Identifiable {
         switch self {
         case .kitchen: return "Kitchen"
         case .livingRoom: return "Living room"
-        case .bedroom: return "Bedroom"
+        case .bedroom: return "Primary bedroom"
         case .bathroom: return "Bathroom"
         case .hallway: return "Hallway"
         case .other: return "Other"
@@ -43,6 +43,8 @@ struct FirstRunRoomPickerView: View {
     let propertyId: UUID
     var moment: RentalMoment = .justMovedIn
     let onStartProof: (UUID, String) -> Void
+    /// Back out of the room pick (to the moment picker, or setup when no rental exists yet).
+    var onBack: (() -> Void)? = nil
 
     @Environment(PropertyStore.self) private var propertyStore
     @Environment(SessionManager.self) private var sessionManager
@@ -54,46 +56,27 @@ struct FirstRunRoomPickerView: View {
     @State private var isLoading = false
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 24) {
-                MMRenterHeader(
-                    title: moment.roomTitle,
-                    subtitle: moment.roomSubtitle
-                )
-
-                VStack(spacing: 10) {
-                    ForEach(FirstRunRoomOption.allCases) { option in
-                        roomOptionRow(option)
-                    }
-                }
-
-                if !errorMessage.isEmpty {
-                    Text(errorMessage)
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(.red.opacity(0.9))
-                }
-
-                ZStack {
-                    MMButton(
-                        title: "Start room proof",
-                        action: { startRoomProof() },
-                        kind: .primary,
-                        size: .auth,
-                        isDisabled: isLoading
-                    )
-                    .opacity(isLoading ? 0.6 : 1)
-
-                    if isLoading {
-                        ProgressView()
-                            .tint(MoveMarkTheme.Colors.primary)
-                    }
+        MMScreen(title: MoveMarkGrowthCopy.firstRunRoomTitle, subtitle: MoveMarkGrowthCopy.firstRunRoomSubtitle) {
+            if let onBack {
+                FirstRunBackButton(action: onBack).disabled(isLoading)
+            }
+        } content: {
+            MMGroup {
+                ForEach(Array(FirstRunRoomOption.allCases.enumerated()), id: \.element) { index, option in
+                    if index > 0 { MMRowDivider() }
+                    roomOptionRow(option)
                 }
             }
-            .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-            .padding(.top, 8)
-            .padding(.bottom, 32)
+
+            if !errorMessage.isEmpty {
+                MMNotice(message: errorMessage)
+                    .padding(.top, 22)
+            }
+
+            MMPrimaryButton(title: "Start room proof", isLoading: isLoading) { startRoomProof() }
+                .accessibilityIdentifier("firstRun.startRoomProof")
+                .padding(.top, 26)
         }
-        .mmProofShellBackground(heroFocus: false, ctaBloom: false)
         .sheet(isPresented: $showOtherSheet) {
             otherRoomSheet
         }
@@ -103,85 +86,25 @@ struct FirstRunRoomPickerView: View {
     }
 
     private func roomOptionRow(_ option: FirstRunRoomOption) -> some View {
-        let isSelected = selected == option
-        return Button {
+        MMSelectRow(title: option.title, isSelected: selected == option) {
             MMHaptics.selection()
             selected = option
-        } label: {
-            HStack {
-                Text(option.title)
-                    .font(MoveMarkTheme.Typography.bodySmallEmphasis)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                Spacer()
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(MoveMarkTheme.Typography.subtitleLarge)
-                    .foregroundStyle(
-                        isSelected
-                            ? MoveMarkTheme.Colors.primary
-                            : MoveMarkTheme.Colors.textSecondary.opacity(0.45)
-                    )
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(
-                        isSelected
-                            ? MoveMarkTheme.Colors.primary.opacity(0.12)
-                            : MoveMarkTheme.Colors.card.opacity(0.92)
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(
-                        isSelected
-                            ? MoveMarkTheme.Colors.primary.opacity(0.45)
-                            : MoveMarkTheme.Colors.cardStroke.opacity(0.45),
-                        lineWidth: 0.75
-                    )
-            )
         }
-        .buttonStyle(.plain)
     }
 
     private var otherRoomSheet: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Name this room")
-                    .font(MoveMarkTheme.Typography.cardTitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                MMTextField(
-                    title: "Room name",
-                    placeholder: "e.g. Office",
-                    text: $otherRoomName,
-                    density: .authCompact
-                )
-
-                MMButton(
-                    title: "Use this room",
-                    action: {
-                        showOtherSheet = false
-                        startRoomProof()
-                    },
-                    kind: .primary,
-                    size: .standard,
-                    isDisabled: otherRoomName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                )
-
-                Spacer()
+            FirstRunOtherRoomSheet(otherRoomName: $otherRoomName) {
+                showOtherSheet = false
+                startRoomProof()
             }
-            .padding(20)
-            .navigationTitle("Other room")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { showOtherSheet = false }
-                        .foregroundStyle(MoveMarkTheme.Colors.primary)
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
     }
 
     private func ensurePropertyLoaded() async {
@@ -215,7 +138,7 @@ struct FirstRunRoomPickerView: View {
                     await propertyStore.selectProperty(id: propertyId, userId: userId)
                 }
                 guard let property = propertyStore.currentProperty, property.id == propertyId else {
-                    errorMessage = "Couldn’t load your vault. Try again."
+                    errorMessage = "Couldn’t open your rental record. Try again."
                     return
                 }
 
@@ -227,7 +150,11 @@ struct FirstRunRoomPickerView: View {
                 MMHaptics.success()
                 onStartProof(roomId, roomName)
             } catch {
-                errorMessage = error.localizedDescription
+                // Our own guidance (below) reads as written; anything from the server goes through the room mapper.
+                let nsError = error as NSError
+                errorMessage = nsError.domain == "FirstRun"
+                    ? nsError.localizedDescription
+                    : MoveMarkFlowMessage.roomAddFailed(error)
                 MMHaptics.error()
             }
         }
@@ -266,5 +193,67 @@ struct FirstRunRoomPickerView: View {
             throw NSError(domain: "FirstRun", code: 4, userInfo: [NSLocalizedDescriptionKey: "Couldn’t open \(targetName). Try again."])
         }
         return (room.id, room.name)
+    }
+}
+
+extension FirstRunRoomPickerView {
+    /// Snapshot tests only: open on a given selection, optionally with an error showing. In an extension so
+    /// the memberwise init the flow uses stays as it is.
+    init(propertyId: UUID, moment: RentalMoment = .justMovedIn, previewSelection: FirstRunRoomOption, previewError: String = "") {
+        self.init(propertyId: propertyId, moment: moment, onStartProof: { _, _ in }, onBack: {})
+        _selected = State(initialValue: previewSelection)
+        _errorMessage = State(initialValue: previewError)
+    }
+}
+
+/// The "Other" room sheet: name the room, then go straight into its capture.
+struct FirstRunOtherRoomSheet: View {
+    @Binding var otherRoomName: String
+    let onUse: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let examples = ["Office", "Balcony", "Laundry", "Storage"]
+
+    private var isNameEmpty: Bool {
+        otherRoomName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        // Same grammar as the rental's Add a room: one line, the field, suggestions as wrapping chips.
+        MMSheetScaffold(title: "Add another room") {
+            Text("Name the space. You'll photograph it next.")
+                .mmFont(15)
+                .foregroundStyle(MMInk.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 8)
+
+            MMField(title: "Room name", placeholder: "e.g. Office", text: $otherRoomName,
+                    autocapitalization: .words, accessibilityID: "firstRun.otherRoomName",
+                    submitLabel: .done, onSubmit: { if !isNameEmpty { onUse() } })
+                .autocorrectionDisabled()
+                .padding(.top, 18)
+
+            FlowLayout(spacing: 8) {
+                ForEach(Self.examples, id: \.self) { name in
+                    let isSelected = otherRoomName.trimmingCharacters(in: .whitespaces)
+                        .caseInsensitiveCompare(name) == .orderedSame
+                    MMChip(title: name, isSelected: isSelected) {
+                        guard !isSelected else { return }
+                        MMHaptics.selection()
+                        otherRoomName = name
+                    }
+                    // The selected fill morphs across rather than snapping (scoped to the chip).
+                    .animation(reduceMotion ? nil : MMMotion.fastFade, value: isSelected)
+                    .fixedSize()
+                }
+            }
+            .padding(.top, 14)
+            .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Suggestions")
+
+            MMPrimaryButton(title: "Add room", isDisabled: isNameEmpty, action: onUse)
+                .accessibilityIdentifier("firstRun.addOtherRoom")
+                .padding(.top, 22)
+        }
     }
 }

@@ -1,5 +1,6 @@
 package com.surensureshkumar.movemark.core.design.components
 
+import com.surensureshkumar.movemark.core.design.mmLines
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -66,7 +67,7 @@ fun MMProofTaskCard(
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MMColors.TextPrimary,
-                    maxLines = 1,
+                    maxLines = mmLines(),
                     overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(Modifier.height(3.dp))

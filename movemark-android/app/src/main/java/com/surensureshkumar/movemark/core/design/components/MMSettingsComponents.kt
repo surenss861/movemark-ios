@@ -1,5 +1,6 @@
 package com.surensureshkumar.movemark.core.design.components
 
+import com.surensureshkumar.movemark.core.design.mmLines
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -137,7 +138,7 @@ fun MMSettingsRow(
         Spacer(Modifier.width(8.dp))
         when {
             pillText != null -> StatusPill(text = pillText, active = pillIsActive)
-            value != null -> Text(value, fontSize = 15.sp, color = MMColors.TextSecondary, maxLines = 1)
+            value != null -> Text(value, fontSize = 15.sp, color = MMColors.TextSecondary, maxLines = mmLines())
             accessory == MMSettingsAccessory.External -> {
                 Icon(
                     Icons.AutoMirrored.Filled.OpenInNew,

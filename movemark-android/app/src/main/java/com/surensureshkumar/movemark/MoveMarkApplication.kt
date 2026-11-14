@@ -5,6 +5,7 @@ import android.util.Log
 import com.revenuecat.purchases.LogLevel
 import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.PurchasesConfiguration
+import com.surensureshkumar.movemark.core.CrashReporting
 import com.surensureshkumar.movemark.data.subscription.BillingConfig
 import com.surensureshkumar.movemark.data.subscription.RevenueCatSubscriptionBilling
 import dagger.hilt.android.HiltAndroidApp
@@ -13,9 +14,14 @@ import dagger.hilt.android.HiltAndroidApp
 class MoveMarkApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        com.surensureshkumar.movemark.features.auth.social.LegalAcceptanceMethod.attach(this)
+        CrashReporting.start(
+            this,
+            CrashReporting.settings(BuildConfig.SENTRY_DSN, BuildConfig.DEBUG, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
+        )
         BillingConfig.logStartup()
         val key = BuildConfig.REVENUECAT_PUBLIC_KEY
-        if (BillingConfig.isRevenueCatMode && key.isNotBlank()) {
+        if (BillingConfig.shouldConfigureRevenueCat(key)) {
             if (BuildConfig.DEBUG) {
                 Purchases.logLevel = LogLevel.DEBUG
             }
@@ -28,7 +34,7 @@ class MoveMarkApplication : Application() {
                 )
             }
         } else if (BuildConfig.DEBUG && BillingConfig.isRevenueCatMode) {
-            Log.w(TAG, "RevenueCat skipped — set REVENUECAT_PUBLIC_KEY in local.properties")
+            Log.w(TAG, "RevenueCat skipped — set a goog_ REVENUECAT_PUBLIC_KEY in local.properties")
         }
     }
 

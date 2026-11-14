@@ -1,5 +1,6 @@
 package com.surensureshkumar.movemark.core.design.components
 
+import com.surensureshkumar.movemark.core.design.mmLines
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -55,6 +56,13 @@ data class MMProofArtifactModel(
     val statusTone: MMProofStatusTone = MMProofStatusTone.Success,
     val issueTags: List<String> = emptyList(),
 )
+
+/** "2 photos · 1 issue" — the artifact card's metadata line, pluralised. */
+fun proofArtifactSummary(photoCount: Int, issueCount: Int): String {
+    val photos = if (photoCount == 1) "1 photo" else "$photoCount photos"
+    val issues = if (issueCount == 1) "1 issue" else "$issueCount issues"
+    return "$photos · $issues"
+}
 
 /**
  * MoveMark proof artifact — photo-first evidence object with metadata strip.
@@ -267,7 +275,7 @@ private fun MMProofArtifactHeader(model: MMProofArtifactModel) {
             fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
             color = MMColors.TextPrimary,
-            maxLines = 1,
+            maxLines = mmLines(),
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 6.dp),
         )
@@ -293,7 +301,7 @@ private fun MMProofArtifactFooter(model: MMProofArtifactModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "${model.photoCount} photos · ${model.issueCount} issues",
+                proofArtifactSummary(model.photoCount, model.issueCount),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 color = MMColors.TextSecondary,

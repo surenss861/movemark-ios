@@ -2,12 +2,12 @@
 //  ExportRepository.swift
 //  movemork
 //
-//  MoveMark — Export record and file storage access.
-//  PDFs upload to `exports` under `{userId}/{propertyId}/...` (matches storage RLS). Formal packet rows may store HTTPS URLs instead.
+//  MoveMark — Export records. PDFs are written by the MoveMark worker and downloaded through
+//  `GET /api/exports/{id}/download` (see `ExportAPIClient`); the app never touches the `exports` bucket.
 //
 
 import Foundation
-import Supabase
+import PostgREST
 
 struct ExportRow: Codable, Identifiable {
     let id: UUID
@@ -34,7 +34,7 @@ struct ExportRepository {
     /// Capped so a long-tenured account can't grow this into an unbounded fetch; ordered so the cap keeps the most recent exports.
     /// (Not currently called — `ExportHistoryView` reads exports via `ExportAPIClient`/movemark-api instead — but capped for whenever this direct path is used.)
     func fetchExports(propertyId: UUID) async throws -> [ExportRow] {
-        try await supabase
+        try await dataAPI
             .from("exports")
             .select()
             .eq("property_id", value: propertyId)
@@ -42,34 +42,5 @@ struct ExportRepository {
             .limit(300)
             .execute()
             .value
-    }
-
-    func signedURL(filePath: String) async throws -> URL {
-        try await MoveMarkSignedURLCache.shared.url(bucket: "exports", path: filePath) {
-            try await supabase.storage
-                .from("exports")
-                .createSignedURL(path: filePath, expiresIn: 3600)
-        }
-    }
-
-    /// Verifies that an export row's file_path points to a usable file.
-    /// - Returns: `.ready` if path is valid and (for storage paths) signed URL succeeds; otherwise a specific failure.
-    func verify(filePath: String?) async -> ExportVerificationStatus {
-        let path = filePath?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if path.isEmpty {
-            return .missingPath
-        }
-
-        let lower = path.lowercased()
-        if lower.hasPrefix("http://") || lower.hasPrefix("https://") {
-            return URL(string: path) != nil ? .ready : .invalidURL
-        }
-
-        do {
-            _ = try await signedURL(filePath: path)
-            return .ready
-        } catch {
-            return .verificationFailed(MoveMarkFlowMessage.exportFileVerificationFailed(error))
-        }
     }
 }

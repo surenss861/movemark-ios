@@ -4,6 +4,12 @@
 //
 //  MoveMark — Dark Rental Proof Desk (warm charcoal, calm green, paper artifacts).
 //
+//  @file Design tokens: colors, type scale (sans / serif / mono voices), spacing, radii
+//  @domain design-system
+//  @status stable
+//  @see [[VISUAL_STANDARD]] — rules these tokens implement
+//  @see [[MMTypography.kt]] — Android counterpart
+//
 
 import SwiftUI
 #if os(iOS)
@@ -45,8 +51,8 @@ enum MoveMarkTheme {
 
         // Text (dark UI)
         static let textPrimary = Color(red: 0.949, green: 0.973, blue: 0.945)
-        static let textSecondary = Color(red: 0.659, green: 0.722, blue: 0.678)
-        static let textMuted = Color(red: 0.435, green: 0.514, blue: 0.463)
+        static let textSecondary = Color(red: 0.702, green: 0.757, blue: 0.718)        // lifted for contrast
+        static let textMuted = Color(red: 0.494, green: 0.565, blue: 0.518)
         /// Body copy that must not compete with the CTA. `textSecondary` is sage, which reads
         /// as a third brand colour wherever it sits beside emerald; this is that value with
         /// the green pulled out. Warm ivory rather than white — white goes flat over video.
@@ -69,33 +75,66 @@ enum MoveMarkTheme {
         static let semanticSuccess = primary
         static let semanticWarning = Color(red: 0.847, green: 0.604, blue: 0.118)
         static let semanticDanger = Color(red: 0.937, green: 0.357, blue: 0.357)
+        static let semanticInfo = Color(red: 0.502, green: 0.729, blue: 0.886)
+    }
+
+    /// The four surface levels. Everything the user sees sits on exactly one of these;
+    /// green is never a surface — it is reserved for the primary action and positive state.
+    enum Surface {
+        /// Level 0 — screen background.
+        static let background = Colors.appBackground
+        /// Level 1 — raised section / card. Near-neutral so green stays meaningful.
+        static let raised = Color(red: 0.071, green: 0.094, blue: 0.082)           // #121815
+        /// Level 2 — interactive row inside or beside a card.
+        static let interactive = Color(red: 0.090, green: 0.114, blue: 0.102)      // #171D1A
+        /// Level 3 — primary action fill.
+        static let primaryAction = Colors.primary
+    }
+
+    enum Stroke {
+        static let normal = Color.white.opacity(0.08)
+        static let interactive = Color.white.opacity(0.12)
+        static let selected = Colors.primary.opacity(0.26)
+    }
+
+    enum Radius {
+        static let hero: CGFloat = 24
+        static let card: CGFloat = 20
+        static let row: CGFloat = 16
+        static let button: CGFloat = 16
     }
 
     enum Spacing {
-        static let screenHorizontal: CGFloat = 22
-        static let panelPadding: CGFloat = 20
-        static let cornerRadius: CGFloat = 22
+        static let screenHorizontal: CGFloat = 20
+        static let panelPadding: CGFloat = 18
+        static let cornerRadius: CGFloat = Radius.card
+        /// Gap between top-level sections on a screen.
+        static let sectionGap: CGFloat = 30
+        /// Gap between sibling cards / rows in one section.
+        static let cardGap: CGFloat = 10
+        /// Vertical padding inside a list row.
+        static let rowVertical: CGFloat = 14
         static let fieldHeight: CGFloat = 58
         static let buttonHeight: CGFloat = 58
         static let heroButtonHeight: CGFloat = 68
         static let heroTopInset: CGFloat = 4
 
         static let headerToFirstCard: CGFloat = 28
-        static let cardStack: CGFloat = 16
+        static let cardStack: CGFloat = 12
         static let titleToSubtitle: CGFloat = 8
-        static let subtitleToContent: CGFloat = 24
+        static let subtitleToContent: CGFloat = 28
 
         /// Root tab rail content height (icons + labels; safe area is additional).
         static let rootTabBarContentHeight: CGFloat = 60
-        /// Floating evidence dock footprint (height + bottom inset above home indicator).
-        static let floatingDockHeight: CGFloat = 70
-        static let floatingDockBottomInset: CGFloat = 10
-        /// Scroll tail when floating dock is visible (Proof, Reports).
-        static let scrollTailRootTabChrome: CGFloat = 168
-        /// Reports tab — extra clearance so pro report cards clear the floating dock.
-        static let scrollTailReportsTabChrome: CGFloat = 210
-        /// Account — Sign out clears the bottom dock.
-        static let scrollTailAccountTabChrome: CGFloat = 144
+        /// Floating root dock footprint (height + gap above the home indicator).
+        static let floatingDockHeight: CGFloat = 66
+        static let floatingDockBottomInset: CGFloat = 12
+        /// Scroll tail when the floating dock is visible. The shell's safe-area inset does not reach the
+        /// tabs' scroll views (measured: they see only the home indicator), so the tail clears the whole
+        /// dock and leaves breathing room above it.
+        static let scrollTailRootTabChrome: CGFloat = floatingDockHeight + floatingDockBottomInset + 28
+        static let scrollTailReportsTabChrome: CGFloat = scrollTailRootTabChrome
+        static let scrollTailAccountTabChrome: CGFloat = scrollTailRootTabChrome
         /// Pushed signed-in flows (room proof, property detail) without tab bar.
         static let scrollTailFocusedSignedIn: CGFloat = 180
         static let scrollTailFocusedFlow: CGFloat = 24
@@ -109,6 +148,14 @@ enum MoveMarkTheme {
         private static func scaled(_ size: CGFloat, for style: UIFont.TextStyle) -> CGFloat {
             UIFontMetrics(forTextStyle: style).scaledValue(for: size)
         }
+
+        // Redesign scale: page title → hero title → card title → row title → body → metadata → section label.
+        static var pageTitle: Font { .system(size: scaled(38, for: .largeTitle), weight: .bold) }
+        static var heroTitle: Font { .system(size: scaled(28, for: .title1), weight: .bold) }
+        static var cardTitleCompact: Font { .system(size: scaled(20, for: .title3), weight: .semibold) }
+        static var rowTitle: Font { .system(size: scaled(17, for: .body), weight: .semibold) }
+        static var metadata: Font { .system(size: scaled(14, for: .footnote), weight: .regular) }
+        static var sectionLabel: Font { .system(size: scaled(13, for: .footnote), weight: .semibold) }
 
         static var hero: Font { .system(size: scaled(36, for: .largeTitle), weight: .bold) }
         static var heroLarge: Font { .system(size: scaled(38, for: .largeTitle), weight: .bold) }
@@ -150,7 +197,21 @@ enum MoveMarkTheme {
         static var tinyMedium: Font { .system(size: scaled(11, for: .caption2), weight: .medium) }
         static var tinyEmphasis: Font { .system(size: scaled(11, for: .caption2), weight: .semibold) }
         static var microLabel: Font { .system(size: scaled(10, for: .caption2), weight: .semibold) }
+        /// Case-file display. Serif so evidence headings are not another SF label.
+        static var editorialTitle: Font { .system(size: scaled(32, for: .title1), weight: .semibold, design: .serif) }
+        static var coverageFigure: Font { .system(size: scaled(44, for: .largeTitle), weight: .medium, design: .serif) }
+        static var statFigure: Font { .system(size: scaled(22, for: .title2), weight: .medium, design: .serif) }
+        static var monoMeta: Font { .system(size: scaled(12, for: .caption1), weight: .medium, design: .monospaced) }
+        static var kicker: Font { .system(size: scaled(11, for: .caption2), weight: .semibold) }
+        /// Large sans hero heading ("Primary Bedroom"). Replaces the retired editorial serif on redesigned screens.
+        static var roomTitle: Font { .system(size: scaled(34, for: .largeTitle), weight: .bold) }
         #else
+        static let pageTitle: Font = .system(size: 38, weight: .bold)
+        static let heroTitle: Font = .system(size: 28, weight: .bold)
+        static let cardTitleCompact: Font = .system(size: 20, weight: .semibold)
+        static let rowTitle: Font = .system(size: 17, weight: .semibold)
+        static let metadata: Font = .system(size: 14, weight: .regular)
+        static let sectionLabel: Font = .system(size: 13, weight: .semibold)
         static let hero: Font = .system(size: 36, weight: .bold)
         static let heroLarge: Font = .system(size: 38, weight: .bold)
         static let screenTitle: Font = .system(size: 34, weight: .bold)
@@ -188,6 +249,12 @@ enum MoveMarkTheme {
         static let tinyMedium: Font = .system(size: 11, weight: .medium)
         static let tinyEmphasis: Font = .system(size: 11, weight: .semibold)
         static let microLabel: Font = .system(size: 10, weight: .semibold)
+        static let editorialTitle: Font = .system(size: 32, weight: .semibold, design: .serif)
+        static let coverageFigure: Font = .system(size: 44, weight: .medium, design: .serif)
+        static let statFigure: Font = .system(size: 22, weight: .medium, design: .serif)
+        static let monoMeta: Font = .system(size: 12, weight: .medium, design: .monospaced)
+        static let roomTitle: Font = .system(size: 34, weight: .bold)
+        static let kicker: Font = .system(size: 11, weight: .semibold)
         #endif
     }
 }
@@ -333,6 +400,11 @@ extension View {
         mmEmeraldBackground(heroFocus: heroFocus, ctaBloom: ctaBloom)
     }
 
+    /// Layered case-file surface. Green stays out of the fill; emphasis only adds a soft light.
+    func mmCaseFilePlate(cornerRadius: CGFloat = MoveMarkTheme.Radius.hero, emphasis: Bool = false) -> some View {
+        modifier(MMCaseFilePlate(cornerRadius: cornerRadius, emphasis: emphasis))
+    }
+
     /// Keeps scroll content below status bar / TestFlight chrome.
     func mmScrollContentTopInset(_ extra: CGFloat = 0) -> some View {
         safeAreaPadding(.top, extra)
@@ -365,5 +437,54 @@ struct MMSignedInScrollTailSpacer: View {
         case .focusedSignedIn:
             MoveMarkTheme.Spacing.scrollTailFocusedSignedIn
         }
+    }
+}
+
+private struct MMCaseFilePlate: ViewModifier {
+    var cornerRadius: CGFloat
+    var emphasis: Bool
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        content
+            .background {
+                shape
+                    .fill(MoveMarkTheme.Surface.raised)
+                    .overlay {
+                        if emphasis {
+                            RadialGradient(
+                                colors: [
+                                    MoveMarkTheme.Colors.primary.opacity(0.11),
+                                    .clear
+                                ],
+                                center: UnitPoint(x: 0.12, y: 0.0),
+                                startRadius: 4,
+                                endRadius: 240
+                            )
+                            .clipShape(shape)
+                            .allowsHitTesting(false)
+                        }
+                    }
+                    .overlay(alignment: .top) {
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.07), .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: 36)
+                        .clipShape(shape)
+                        .allowsHitTesting(false)
+                    }
+            }
+            .overlay {
+                shape.stroke(Color.white.opacity(emphasis ? 0.12 : 0.08), lineWidth: 0.5)
+            }
+            .compositingGroup()
+            .shadow(
+                color: Color(red: 0.012, green: 0.035, blue: 0.024).opacity(emphasis ? 0.55 : 0.28),
+                radius: emphasis ? 22 : 8,
+                x: 0,
+                y: emphasis ? 14 : 4
+            )
     }
 }

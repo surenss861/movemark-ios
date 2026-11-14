@@ -2,7 +2,10 @@
 //  ProPaywallView.swift
 //  movemork
 //
-//  MoveMark — RevenueCat-backed Pro paywall.
+//  MoveMark — RevenueCat-backed Pro paywall: a dark, full-bleed conversion screen — the outcome, the rental
+//  timeline with only the genuinely-Pro parts marked (SubscriptionManager: canExportMoveOut, canUseCaseBuilder,
+//  unlimited reports, more rentals), App Store prices, one lime purchase action, restore / not now and legal.
+//  StoreKit's own purchase sheet stays native.
 //
 
 import SwiftUI
@@ -11,14 +14,19 @@ import RevenueCat
 struct ProPaywallView: View {
     let reason: PaywallReason
     let onClose: () -> Void
+    /// Whether the current rental already has move-in photos. Drives the first timeline step; when the
+    /// presenter doesn't know (default), the step reads neutrally instead of claiming "Recorded".
+    let moveInRecorded: Bool
 
     @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(SubscriptionManager.self) private var subscriptionManager
     @State private var localErrorMessage: String? = nil
     @State private var selectedPackageID: String? = nil
     @State private var restoreOutcomeMessage: String? = nil
     /// False until the first `refresh()` tied to this paywall presentation finishes (avoids a one-frame “fake” plan placeholder).
     @State private var initialOfferingsFetchCompleted = false
+    private let startsWithFetchedOfferings: Bool
     @State private var proofToast: MMProofToastMessage? = nil
     @State private var proofToastVisible = false
     @State private var showPurchaseSuccess = false
@@ -31,38 +39,109 @@ struct ProPaywallView: View {
 
     @Environment(SessionManager.self) private var sessionManager
 
+    init(
+        reason: PaywallReason,
+        onClose: @escaping () -> Void,
+        moveInRecorded: Bool = false,
+        initialOfferingsFetchCompleted: Bool = false,
+        showPurchaseSuccess: Bool = false,
+        purchaseSuccessWasReportPack: Bool = false,
+        restoreOutcomeMessage: String? = nil,
+        localErrorMessage: String? = nil,
+        toast: MMProofToastMessage? = nil
+    ) {
+        self.reason = reason
+        self.onClose = onClose
+        self.moveInRecorded = moveInRecorded
+        _initialOfferingsFetchCompleted = State(initialValue: initialOfferingsFetchCompleted)
+        // Only snapshot seams start with a finished fetch; the app always presents with the default (false).
+        self.startsWithFetchedOfferings = initialOfferingsFetchCompleted
+        _showPurchaseSuccess = State(initialValue: showPurchaseSuccess)
+        _purchaseSuccessWasReportPack = State(initialValue: purchaseSuccessWasReportPack)
+        _restoreOutcomeMessage = State(initialValue: restoreOutcomeMessage)
+        _localErrorMessage = State(initialValue: localErrorMessage)
+        _proofToast = State(initialValue: toast)
+        _proofToastVisible = State(initialValue: toast != nil)
+    }
+
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .top) {
-                Color.clear
-                    .mmProofShellBackground(heroFocus: true, ctaBloom: false)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    header
 
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 18) {
-                        header
-                        benefitsCard
-                        pricingCard
+                    // Came for one report: the Report Pack is the first answer, before the Pro story.
+                    if reason == .reportPack {
+                        reportPackSection
+                            .padding(.top, 26)
                     }
-                    .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                    .padding(.top, 14)
-                    .padding(.bottom, 36)
-                }
-                .allowsHitTesting(!showPurchaseSuccess)
 
+                    timeline
+                        .padding(.top, 30)
+
+                    truthLines
+                        .padding(.top, 4)
+
+                    if reason.prefersReportPackFirst, reason != .reportPack {
+                        reportPackSection
+                            .padding(.top, 30)
+                    }
+
+                    plansLoadSection
+                        .padding(.top, 30)
+
+                    // Below the fold with the other plan: the pinned bar carries only price and the one action.
+                    if !paywallPlansUnavailable || dynamicTypeSize.isAccessibilitySize {
+                        Group {
+                            if dynamicTypeSize.isAccessibilitySize { VStack(spacing: 0) { quietActions } }
+                            else { HStack(spacing: 0) { quietActions } }
+                        }
+                        .padding(.top, 22)
+                    }
+
+                    legalSection
+                        .padding(.top, 26)
+                }
+                .padding(.horizontal, MMMetrics.inset)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                purchaseFooter
+            }
+            .background(Self.surface.ignoresSafeArea())
+            .allowsHitTesting(!showPurchaseSuccess)
+            .overlay {
                 if showPurchaseSuccess {
                     purchaseSuccessOverlay
                 }
             }
             .task {
-                initialOfferingsFetchCompleted = false
                 MoveMarkAnalytics.track(
                     .paywallViewed,
-                    properties: ["reason": String(describing: reason)]
+                    properties: ["reason": reason.analyticsValue]
                 )
+                // A seeded state (snapshot goldens) keeps its offering: no store round trip piling up across tests.
+                guard !startsWithFetchedOfferings else { return }
+                initialOfferingsFetchCompleted = false
                 await subscriptionManager.refresh()
                 initialOfferingsFetchCompleted = true
+                await subscriptionManager.refreshServerReportCredits(forUser: sessionManager.userId)
             }
-            .mmProofToast(message: proofToast, isVisible: proofToastVisible)
+            .overlay(alignment: .top) {
+                // The proof toast as a calm, opaque notice on the dark surface (same message and presenter).
+                if proofToastVisible, let proofToast {
+                    MMEvidenceNotice(message: [proofToast.title, proofToast.message].compactMap { $0 }.joined(separator: ". "),
+                                     tone: proofToast.kind.lightTone)
+                        .background(Self.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
+                        .padding(.horizontal, MMMetrics.inset)
+                        .padding(.top, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
             .onChange(of: paywallPlansUnavailable) { wasUnavailable, isUnavailable in
                 guard isUnavailable, !wasUnavailable else { return }
                 MMProofToastPresenter.show(
@@ -74,185 +153,244 @@ struct ProPaywallView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: onClose) {
-                        ZStack {
-                            Circle()
-                                .fill(MoveMarkTheme.Colors.card.opacity(0.92))
-                                .frame(width: 42, height: 42)
-
-                            Image(systemName: "xmark")
-                                .font(MoveMarkTheme.Typography.subheadlineMedium)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        }
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
                     }
-                    .buttonStyle(.plain)
                     .accessibilityLabel("Close")
                     .disabled(subscriptionManager.isStoreKitBusy)
-                    .opacity(subscriptionManager.isStoreKitBusy ? 0.45 : 1)
                 }
             }
+            .toolbarBackground(Self.surface, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .tint(.white)
+            .environment(\.colorScheme, .dark)
+            .preferredColorScheme(.dark)
             .interactiveDismissDisabled(subscriptionManager.isStoreKitBusy || showPurchaseSuccess)
         }
     }
 
+    /// The paywall is a dark, full-bleed screen on the archival header colour.
+    private static let surface = MMInk.hero
+
+    // MARK: - Outcome
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            MMDarkEyebrow(text: "MoveMark Pro")
+
+            Text("Protect the full rental timeline.")
+                .mmFont(30, .semibold)
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+                .padding(.top, 10)
+
+            Text("Keep the record from move-in through move-out, and turn your evidence into reports when you need it.")
+                .mmFont(16)
+                .foregroundStyle(Color.white.opacity(0.78))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 10)
+
+            if let contextLine {
+                Text(contextLine)
+                    .mmFont(14)
+                    .foregroundStyle(MMInk.heroSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 10)
+            }
+        }
+    }
+
+    /// Why this paywall opened, stated as a fact (SubscriptionManager is the source of truth for each line).
+    private var contextLine: String? {
+        switch reason {
+        case .extraProperty: "Free includes one rental. Pro adds more."
+        case .unlimitedExports: "You’ve used your free move-in report."
+        case .disputePacket: "The evidence packet is part of Pro."
+        case .moveOutExport: "The move-out report is part of Pro."
+        case .reportPack: nil   // the Report Pack row right below says it
+        case .account: nil      // opened from Account: nothing was blocked
+        }
+    }
+
+    /// The rental timeline. Free keeps every step's record; only the move-out report and the evidence packet
+    /// are Pro (`canExportMoveOut`, `canUseCaseBuilder`).
+    private var timeline: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            MMDarkTimelineStep(phase: "Move-in", title: moveInRecorded ? "Recorded" : "Record every room", isRecorded: moveInRecorded)
+            MMDarkTimelineStep(phase: "During rental", title: "Maintenance cases")
+            MMDarkTimelineStep(phase: "Move-out", title: "Compare before and after", proPart: "Move-out report")
+            MMDarkTimelineStep(phase: "If questioned", title: "Build the evidence packet", proPart: "Evidence packet", isLast: true)
+        }
+    }
+
+    private var truthLines: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Free keeps the record. Pro turns it into the reports and evidence packet you’d use.")
+                .mmFont(15, .medium)
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Pro also includes unlimited reports and more than one rental.")
+                .mmFont(13.5)
+                .foregroundStyle(MMInk.heroSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 22)
+        .overlay(alignment: .top) { Rectangle().fill(MMInk.evidenceStroke).frame(height: 0.5) }
+    }
+
+    // MARK: - Success
+
     private var purchaseSuccessOverlay: some View {
         ZStack {
-            Color.black.opacity(0.52)
+            Color.black.opacity(0.55)
                 .ignoresSafeArea()
 
             VStack(spacing: 12) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(MoveMarkTheme.Typography.heroLarge)
-                    .foregroundStyle(MoveMarkTheme.Colors.primary)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(MMInk.onLime)
+                    .frame(width: 44, height: 44)
+                    .background(MMInk.limeMark, in: Circle())
 
                 Text(purchaseSuccessWasReportPack ? "Report Pack unlocked" : "Pro unlocked")
-                    .font(MoveMarkTheme.Typography.cardTitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                    .mmFont(19, .semibold)
+                    .foregroundStyle(.white)
+
+                Text(purchaseSuccessWasReportPack
+                     ? "One more move-in report is ready to make."
+                     : "Your move-out report and evidence packet are ready when you need them.")
+                    .mmFont(14)
+                    .foregroundStyle(MMInk.heroSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 28)
-            .padding(.vertical, 24)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(MoveMarkTheme.Colors.cardRaised.opacity(0.98))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(MoveMarkTheme.Colors.primary.opacity(0.35), lineWidth: 1)
-            )
+            .padding(.vertical, 26)
+            .frame(maxWidth: 320)
+            .background(Self.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color.white.opacity(0.16), lineWidth: 0.75))
+            .padding(.horizontal, MMMetrics.inset)
         }
         .transition(.opacity.combined(with: .scale(scale: 0.96)))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(purchaseSuccessWasReportPack ? "Report Pack unlocked" : "Pro unlocked")
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(reason.headline)
-                .font(MoveMarkTheme.Typography.cardValue)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
+    // MARK: - Purchase
 
-            Text(sharedValueLine)
-                .font(MoveMarkTheme.Typography.subheadline)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text(reason.subheadline)
-                .font(MoveMarkTheme.Typography.footnote)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.top, 10)
+    private var planGroupTitle: String {
+        reason == .reportPack ? "Or choose Pro" : "Choose your plan"
     }
 
-    private var sharedValueLine: String {
-        MoveMarkGrowthCopy.paywallValueLine
-    }
-
-    private var benefitsCard: some View {
-        MMCard {
-            VStack(alignment: .leading, spacing: 14) {
-                Text(benefitsTitle)
-                    .font(MoveMarkTheme.Typography.cardTitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                VStack(alignment: .leading, spacing: 14) {
-                    ForEach(Array(benefits.enumerated()), id: \.offset) { _, item in
-                        benefitRow(item.title, item.subtitle)
-                    }
-                }
+    /// One lime action, the Apple line, then the quiet ways out. Pinned so the purchase is always in reach.
+    private var purchaseFooter: some View {
+        VStack(spacing: 10) {
+            if let local = localErrorMessage, !displayPackages.isEmpty {
+                MMEvidenceNotice(message: paywallBannerMessage(local))
             }
-        }
-    }
-
-    private var pricingCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("MoveMark Pro")
-                    .font(MoveMarkTheme.Typography.caption)
-                    .tracking(0.9)
-                    .foregroundStyle(MoveMarkTheme.Colors.limeAccent.opacity(0.95))
-                    .textCase(.uppercase)
-
-                Text(reason == .reportPack ? "Choose Report Pack or Pro" : (reason == .moveOutExport ? "Choose your protection plan" : "Choose your plan"))
-                    .font(MoveMarkTheme.Typography.cardTitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-            }
-            .padding(.bottom, 4)
-
-            if reason.prefersReportPackFirst {
-                reportPackSection
-                    .padding(.top, 10)
-            }
-
-            paywallRestoreSection
-                .padding(.top, 10)
-
-            plansLoadSection
-                .padding(.top, 12)
-
-            if !displayPackages.isEmpty {
-                Text(
-                    "MoveMark Pro is an auto-renewing subscription (monthly or annual). Prices below come from the App Store. Apple processes payment and renewal."
-                )
-                .font(MoveMarkTheme.Typography.caption)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 10)
+            if let restoreOutcomeMessage {
+                MMEvidenceNotice(message: restoreOutcomeMessage, tone: .info)
             }
 
             if paywallPlansUnavailable {
-                plansUnavailableRecoveryBlock
-            } else if let local = localErrorMessage, !displayPackages.isEmpty {
-                MMErrorBanner(message: paywallBannerMessage(local), retryTitle: nil, onRetry: nil)
-                    .padding(.top, 14)
-            }
-
-            if let selectedPackage {
-                ZStack {
-                    MMButton(
-                        title: primaryPurchaseButtonTitle(for: selectedPackage),
-                        action: { startPurchase(selectedPackage) },
-                        kind: .primary,
-                        size: .hero,
-                        isDisabled: subscriptionManager.isStoreKitBusy
-                            || subscriptionManager.isRefreshingOfferings
-                            || showPurchaseSuccess
-                    )
-                    .opacity(subscriptionManager.isStoreKitBusy ? 0.7 : 1)
-
-                    if subscriptionManager.isStoreKitBusy, !showPurchaseSuccess {
-                        ProgressView()
-                            .tint(.white)
+                // What failed sits right above its recovery, not below the fold.
+                plansUnavailableNotice
+                MMPrimaryButton(
+                    title: subscriptionManager.isRefreshingOfferings
+                        ? "Trying…"
+                        : MMNextBestActionMapper.paywallPlansUnavailable().title,
+                    isLoading: subscriptionManager.isRefreshingOfferings,
+                    isDisabled: subscriptionManager.isRefreshingOfferings || subscriptionManager.isStoreKitBusy,
+                    action: {
+                        localErrorMessage = nil
+                        restoreOutcomeMessage = nil
+                        Task { @MainActor in
+                            await subscriptionManager.refresh()
+                        }
                     }
+                )
+            } else {
+                // The price is part of the first screen, read before the action: "$49.99 / year".
+                if let selectedPackage {
+                    VStack(spacing: 2) {
+                        Text(priceCaption(for: selectedPackage, product: selectedPackage.storeProduct))
+                            .mmFont(17, .semibold)
+                            .monospacedDigit()
+                            .foregroundStyle(.white)
+                        if selectedPackage.packageType == .annual, let monthly = selectedPackage.storeProduct.localizedPricePerMonth {
+                            Text("\(monthly) / month, billed yearly")
+                                .mmFont(13)
+                                .monospacedDigit()
+                                .foregroundStyle(MMInk.heroSecondary)
+                        }
+                    }
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityElement(children: .combine)
                 }
-                .padding(.top, 16)
+                MMPrimaryButton(
+                    title: selectedPackage.map { primaryPurchaseButtonTitle(for: $0) } ?? "Continue with Pro",
+                    isLoading: subscriptionManager.isStoreKitBusy && !showPurchaseSuccess,
+                    isDisabled: selectedPackage == nil
+                        || subscriptionManager.isStoreKitBusy
+                        || subscriptionManager.isRefreshingOfferings
+                        || showPurchaseSuccess,
+                    action: { if let selectedPackage { startPurchase(selectedPackage) } }
+                )
+
+                Text("Cancel anytime · Managed by Apple")
+                    .mmFont(12.5)
+                    .monospacedDigit()
+                    .foregroundStyle(MMInk.heroSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+
+            // Plans didn't load: the way out stays beside Try again.
+            if paywallPlansUnavailable, !dynamicTypeSize.isAccessibilitySize {
+                HStack(spacing: 0) { quietActions }
+            }
+        }
+        .padding(.horizontal, MMMetrics.inset)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+        .frame(maxWidth: .infinity)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        .background(Self.surface.ignoresSafeArea(edges: .bottom))
+        .overlay(alignment: .top) { Rectangle().fill(MMInk.evidenceStroke).frame(height: 0.5) }
+    }
+
+    @ViewBuilder
+    private var quietActions: some View {
+        MMSecondaryButton(
+            title: subscriptionManager.isStoreKitBusy ? "Restoring purchases…" : "Restore purchases",
+            tint: .white,
+            isDisabled: subscriptionManager.isStoreKitBusy,
+            action: { restorePurchases() }
+        )
+        MMSecondaryButton(
+            title: paywallPlansUnavailable ? "Continue on Free" : "Not now",
+            tint: MMInk.heroSecondary,
+            isDisabled: subscriptionManager.isStoreKitBusy,
+            action: { onClose() }
+        )
+    }
+
+    private var legalSection: some View {
+        VStack(spacing: 8) {
+            Text("MoveMark Pro is an auto-renewing subscription. Prices come from the App Store; Apple handles payment and renewal. Manage or cancel in Settings › Apple ID › Subscriptions.")
+                .mmFont(12.5)
+                .foregroundStyle(MMInk.heroSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
 
             paywallLegalLinks
-                .padding(.top, 8)
-
-            Text("Auto-renews until cancelled. Manage or cancel in Settings › Apple ID › Subscriptions.")
-                .font(MoveMarkTheme.Typography.caption)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 18)
         }
-        .padding(20)
-        .background(
-            LinearGradient(
-                colors: [MoveMarkTheme.Colors.cardRaised, MoveMarkTheme.Colors.card, MoveMarkTheme.Colors.surface],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(MoveMarkTheme.Colors.limeAccent.opacity(0.2), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.32), radius: 16, y: 8)
-        .shadow(color: MoveMarkTheme.Colors.primary.opacity(0.08), radius: 10, y: 4)
     }
 
     /// Empty catalog after at least one paywall fetch finished — never show silent placeholders.
@@ -260,34 +398,6 @@ struct ProPaywallView: View {
         displayPackages.isEmpty
             && !subscriptionManager.isRefreshingOfferings
             && initialOfferingsFetchCompleted
-    }
-
-    private var paywallRestoreSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Already subscribed on this Apple ID? Restore before purchasing again.")
-                .font(MoveMarkTheme.Typography.footnote)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Button {
-                restorePurchases()
-            } label: {
-                Text(subscriptionManager.isStoreKitBusy ? "Restoring purchases…" : "Restore purchases")
-                    .font(MoveMarkTheme.Typography.subheadlineMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.95))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
-            .disabled(subscriptionManager.isStoreKitBusy)
-
-            if let restoreOutcomeMessage {
-                MMCompactCallout(
-                    systemImage: "info.circle.fill",
-                    title: "Restore result",
-                    message: restoreOutcomeMessage
-                )
-            }
-        }
     }
 
     private var plansUnavailableTechnicalDetail: String {
@@ -315,112 +425,84 @@ struct ProPaywallView: View {
     @ViewBuilder
     private var paywallLegalLinks: some View {
         if termsOfUseURL != nil || privacyPolicyURL != nil {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Legal")
-                    .font(MoveMarkTheme.Typography.caption)
-                    .tracking(0.9)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    .textCase(.uppercase)
-
-                HStack(spacing: 20) {
-                    if let u = termsOfUseURL {
-                        Button {
-                            openURL(u)
-                        } label: {
-                            Text("Terms of Use")
-                                .font(MoveMarkTheme.Typography.subheadlineMedium)
-                                .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.92))
-                        }
-                        .buttonStyle(.plain)
+            HStack(spacing: 18) {
+                if let u = termsOfUseURL {
+                    Button {
+                        openURL(u)
+                    } label: {
+                        Text("Terms of Use").mmFont(13, .medium).foregroundStyle(.white).underline()
                     }
-                    if let p = privacyPolicyURL {
-                        Button {
-                            openURL(p)
-                        } label: {
-                            Text("Privacy Policy")
-                                .font(MoveMarkTheme.Typography.subheadlineMedium)
-                                .foregroundStyle(MoveMarkTheme.Colors.primary.opacity(0.92))
-                        }
-                        .buttonStyle(.plain)
+                    .buttonStyle(.plain)
+                }
+                if let p = privacyPolicyURL {
+                    Button {
+                        openURL(p)
+                    } label: {
+                        Text("Privacy Policy").mmFont(13, .medium).foregroundStyle(.white).underline()
                     }
+                    .buttonStyle(.plain)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 36)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Legal")
         }
     }
 
-    private var plansUnavailableRecoveryBlock: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Plans didn’t load")
-                .font(MoveMarkTheme.Typography.cardTitle)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-            Text("Try again in a minute. You can keep using Free for now.")
-                .font(MoveMarkTheme.Typography.subheadline)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            #if DEBUG
-            Text(plansUnavailableTechnicalDetail)
-                .font(MoveMarkTheme.Typography.caption)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.78))
-                .fixedSize(horizontal: false, vertical: true)
-            #endif
-
-            MMButton(
-                title: subscriptionManager.isRefreshingOfferings
-                    ? "Trying…"
-                    : MMNextBestActionMapper.paywallPlansUnavailable().title,
-                action: {
-                    localErrorMessage = nil
-                    restoreOutcomeMessage = nil
-                    Task { @MainActor in
-                        await subscriptionManager.refresh()
-                    }
-                },
-                kind: .primary,
-                size: .standard,
-                isDisabled: subscriptionManager.isRefreshingOfferings || subscriptionManager.isStoreKitBusy
-            )
-
-            MMButton(
-                title: "Continue on Free",
-                action: { onClose() },
-                kind: .secondary,
-                size: .standard,
-                isDisabled: subscriptionManager.isStoreKitBusy
-            )
-        }
-        .padding(.top, 14)
-    }
-
-    @ViewBuilder
-    private var plansLoadSection: some View {
-        if !displayPackages.isEmpty {
-            VStack(spacing: 12) {
-                ForEach(displayPackages, id: \.identifier) { package in
-                    pricingOption(package)
-                }
-            }
-        } else if subscriptionManager.isRefreshingOfferings || !initialOfferingsFetchCompleted {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 12) {
-                    ProgressView()
-                        .tint(MoveMarkTheme.Colors.primary)
-
-                    Text("Loading plans…")
-                        .font(MoveMarkTheme.Typography.subheadlineMedium)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.92))
-                }
-                Text("Fetching subscription options from the App Store. This usually takes a few seconds.")
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.82))
+    private var plansUnavailableNotice: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 15))
+                .foregroundStyle(MMEvidenceNotice.warningOnDark)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Plans didn’t load")
+                    .mmFont(16, .semibold)
+                    .foregroundStyle(.white)
+                Text("Try again in a minute. You can keep using Free for now.")
+                    .mmFont(14)
+                    .foregroundStyle(MMInk.heroSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 8)
-        } else {
-            EmptyView()
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(MMInk.evidenceRaised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(MMInk.evidenceStroke, lineWidth: 0.75))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var plansLoadSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if !paywallPlansUnavailable {
+                MMEvidenceSectionLabel(title: planGroupTitle)
+                if !displayPackages.isEmpty {
+                    ForEach(displayPackages, id: \.identifier) { package in
+                        pricingOption(package)
+                    }
+                } else {
+                    // Loading keeps the plan layout; prices only ever come from the App Store.
+                    VStack(spacing: 10) {
+                        MMDarkPlanRow(title: "Yearly", price: "$00.00 / year", detail: "Billed yearly")
+                        MMDarkPlanRow(title: "Monthly", price: "$0.00 / month", detail: "Billed monthly")
+                    }
+                    .redacted(reason: .placeholder)
+                    .accessibilityHidden(true)
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small).tint(MMInk.heroSecondary)
+                        Text("Getting prices from the App Store…").mmFont(13).foregroundStyle(MMInk.heroSecondary)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            } else {
+                #if DEBUG
+                // Diagnostics for builders only; the renter sees the notice above the recovery action.
+                Text(plansUnavailableTechnicalDetail)
+                    .mmFont(12)
+                    .foregroundStyle(MMInk.heroSecondary.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+                #endif
+            }
         }
     }
 
@@ -433,18 +515,8 @@ struct ProPaywallView: View {
             return purchaseSuccessWasReportPack ? "Report Pack unlocked" : "Pro unlocked"
         }
         if subscriptionManager.isStoreKitBusy { return "Starting…" }
-        return continuePurchaseTitle(for: package)
-    }
-
-    private func continuePurchaseTitle(for package: Package) -> String {
-        switch planKind(for: package) {
-        case .monthly:
-            return "Start Pro — Monthly"
-        case .yearly:
-            return "Start Pro — Yearly"
-        case .other:
-            return reason.ctaTitle
-        }
+        // The plan is chosen above (and named in its row); the action itself is always the same.
+        return "Continue with Pro"
     }
 
     private enum PlanKind {
@@ -486,38 +558,68 @@ struct ProPaywallView: View {
             || productID.localizedCaseInsensitiveContains("report_pack")
     }
 
-    @ViewBuilder
+    /// One report, no subscription — offered first when the renter only needs a single move-in report.
     private var reportPackSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Need one report only?")
-                .font(MoveMarkTheme.Typography.subheadlineMedium)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-            Text("Report Pack unlocks one extra polished move-in PDF — ideal for a single rental moment. Move-out exports stay on Pro.")
-                .font(MoveMarkTheme.Typography.footnote)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
+        VStack(alignment: .leading, spacing: 12) {
+            MMEvidenceSectionLabel(title: "One report only")
             if let pack = reportPackPackages.first {
-                MMButton(
-                    title: "Buy Report Pack · \(pack.storeProduct.localizedPriceString)",
-                    action: { startPurchase(pack, isReportPack: true) },
-                    kind: .secondary,
-                    size: .standard,
-                    isDisabled: subscriptionManager.isStoreKitBusy || showPurchaseSuccess
-                )
-            } else {
-                Text("Add product IDs report_pack / movemark_report_pack in RevenueCat to enable one-time purchase here. Pro still unlocks unlimited reports.")
-                    .font(MoveMarkTheme.Typography.caption)
-                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                Button {
+                    startPurchase(pack, isReportPack: true)
+                } label: {
+                    let price = Text(pack.storeProduct.localizedPriceString)
+                        .mmFont(16, .semibold)
+                        .monospacedDigit()
+                        .foregroundStyle(.white)
+                    let copy = VStack(alignment: .leading, spacing: 2) {
+                        Text("Report Pack").mmFont(16, .semibold).foregroundStyle(.white)
+                        Text("One move-in report · no subscription")
+                            .mmFont(13)
+                            .foregroundStyle(MMInk.heroSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Group {
+                        if dynamicTypeSize.isAccessibilitySize {
+                            VStack(alignment: .leading, spacing: 8) { copy; price }
+                        } else {
+                            HStack(spacing: 12) {
+                                Image(systemName: "doc.text")
+                                    .font(.system(size: 17))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 24)
+                                copy
+                                Spacer(minLength: 8)
+                                price.layoutPriority(1)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+                    .background(MMInk.evidenceRaised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(MMInk.evidenceStroke, lineWidth: 0.75))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(MMLightPressStyle())
+                .disabled(subscriptionManager.isStoreKitBusy || showPurchaseSuccess)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Buy Report Pack, one move-in report, no subscription, \(pack.storeProduct.localizedPriceString)")
+                .accessibilityAddTraits(.isButton)
+
+                Text("The move-out report and evidence packet stay on Pro.")
+                    .mmFont(12.5)
+                    .foregroundStyle(MMInk.heroSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+            } else {
+                #if DEBUG
+                MMEvidenceNotice(
+                    message: "Report Pack unavailable. Add product IDs report_pack / movemark_report_pack in RevenueCat to enable one-time purchase here. Pro still unlocks unlimited reports.",
+                    tone: .info
+                )
+                #else
+                MMEvidenceNotice(message: "Report Pack isn’t available right now. Pro still unlocks unlimited reports.", tone: .info)
+                #endif
             }
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(MoveMarkTheme.Colors.card.opacity(0.92))
-        )
     }
 
     private static func sortedPackagesForDisplay(_ packages: [Package]) -> [Package] {
@@ -570,84 +672,22 @@ struct ProPaywallView: View {
     private func pricingOption(_ package: Package) -> some View {
         let isSelected = selectedPackage?.identifier == package.identifier
         let product = package.storeProduct
-        let isYearly = package.packageType == .annual || Self.infersAnnualBilling(package)
-        let strokeWidth: CGFloat = (isSelected && isYearly) ? 1.8 : 1
-
         return Button {
             selectedPackageID = package.identifier
         } label: {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("MoveMark Pro")
-                        .font(MoveMarkTheme.Typography.caption)
-                        .tracking(0.85)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        .textCase(.uppercase)
-
-                    HStack(spacing: 8) {
-                        Text(planDisplayTitle(for: package))
-                            .font(MoveMarkTheme.Typography.subheadlineMedium)
-                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                        if isYearly {
-                            Text("Best value")
-                                .font(MoveMarkTheme.Typography.caption)
-                                .foregroundStyle(MoveMarkTheme.Colors.primary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(MoveMarkTheme.Colors.primary.opacity(0.16))
-                                .clipShape(Capsule())
-                        }
-                    }
-
-                    if let storeTitle = storeProductListingTitle(for: package, product: product) {
-                        Text(storeTitle)
-                            .font(MoveMarkTheme.Typography.footnote)
-                            .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.88))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Text(priceCaption(for: package, product: product))
-                        .font(MoveMarkTheme.Typography.subheadline)
-                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.95))
-
-                    Text(planSubtitle(for: package))
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                }
-
-                Spacer(minLength: 8)
-
-                Circle()
-                    .stroke(
-                        isSelected ? MoveMarkTheme.Colors.primary : MoveMarkTheme.Colors.cardStroke,
-                        lineWidth: 1.2
-                    )
-                    .background(
-                        Circle()
-                            .fill(isSelected ? MoveMarkTheme.Colors.primary : .clear)
-                            .padding(4)
-                    )
-                    .frame(width: 22, height: 22)
-                    .padding(.top, 2)
-            }
-            .padding(14)
-            .background(isSelected ? MoveMarkTheme.Colors.cardRaised.opacity(0.95) : MoveMarkTheme.Colors.card.opacity(0.92))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(
-                        isSelected
-                            ? MoveMarkTheme.Colors.primary.opacity(isYearly ? 0.95 : 0.75)
-                            : MoveMarkTheme.Colors.cardStroke,
-                        lineWidth: strokeWidth
-                    )
+            MMDarkPlanRow(
+                title: planDisplayTitle(for: package),
+                price: priceCaption(for: package, product: product),
+                detail: storeProductListingTitle(for: package, product: product) ?? planSubtitle(for: package),
+                isSelected: isSelected
             )
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MMLightPressStyle())
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             "MoveMark Pro, \(planDisplayTitle(for: package)), \(priceCaption(for: package, product: product))"
         )
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
     /// Shown when App Store localized title adds detail beyond our Monthly/Yearly label.
@@ -658,35 +698,6 @@ struct ProPaywallView: View {
         if raw.caseInsensitiveCompare(plan) == .orderedSame { return nil }
         if raw.caseInsensitiveCompare("MoveMark Pro") == .orderedSame { return nil }
         return raw
-    }
-
-    private func benefitRow(_ title: String, _ subtitle: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Circle()
-                .fill(MoveMarkTheme.Colors.primary.opacity(0.9))
-                .frame(width: 8, height: 8)
-                .padding(.top, 6)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(MoveMarkTheme.Typography.subheadlineMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-                Text(subtitle)
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-            }
-        }
-    }
-
-    private var benefitsTitle: String {
-        "MoveMark Pro includes"
-    }
-
-    private var benefits: [(title: String, subtitle: String)] {
-        MoveMarkGrowthCopy.paywallBenefits + [
-            ("Export history", "Reports and packets in one place."),
-        ]
     }
 
     private func priceCaption(for package: Package, product: StoreProduct) -> String {
@@ -731,20 +742,21 @@ struct ProPaywallView: View {
         }
     }
 
+    /// A plain billing fact under the plan name — no "best value" claims.
     private func planSubtitle(for package: Package) -> String {
         switch package.packageType {
         case .monthly:
-            return "Start now with full Pro access"
+            return "Billed monthly"
         case .annual:
-            return "Best value for full-term renter protection"
+            return "Billed yearly"
         default:
             if Self.infersAnnualBilling(package) {
-                return "Best value for full-term renter protection"
+                return "Billed yearly"
             }
             if Self.infersMonthlyBilling(package) {
-                return "Start now with full Pro access"
+                return "Billed monthly"
             }
-            return "Full MoveMark Pro access for this billing period"
+            return "Billed every \(periodLabel(for: package))"
         }
     }
 
@@ -775,6 +787,10 @@ struct ProPaywallView: View {
                     subscriptionManager.addReportPackCredit(forUser: userId)
                 }
                 MoveMarkAnalytics.track(.purchaseCompleted, properties: ["product": "report_pack"])
+                // The webhook may still be on its way; the sync window keeps the local credit usable meanwhile.
+                Task { @MainActor in
+                    await subscriptionManager.refreshServerReportCredits(forUser: sessionManager.userId)
+                }
                 await completePurchaseSuccess(isReportPack: true)
                 return
             }
@@ -799,7 +815,7 @@ struct ProPaywallView: View {
             let restored = await subscriptionManager.restorePurchases(forUser: sessionManager.userId)
             if restored, subscriptionManager.hasPro {
                 await completePurchaseSuccess(isReportPack: false)
-            } else if restored, subscriptionManager.reportPackCredits(forUser: sessionManager.userId) > 0 {
+            } else if restored, subscriptionManager.hasUsableReportPackCredit(forUser: sessionManager.userId) {
                 await completePurchaseSuccess(isReportPack: true)
             } else if let err = subscriptionManager.lastRestoreErrorMessage {
                 restoreOutcomeMessage = err

@@ -2,7 +2,8 @@
 //  WelcomeScreen.swift
 //  movemork
 //
-//  MoveMark — “Before they blame you” welcome (fixed zones, evidence capture hero).
+//  MoveMark — Welcome: brand → outcome (headline + body) → trust (a compact Proof Slip, the record the
+//  vault will hold) → action (lime Start move-in proof, a quiet way back into an existing vault).
 //
 
 import SwiftUI
@@ -12,21 +13,39 @@ struct WelcomeScreen: View {
     @State private var authInitialMode: AuthContainerView.Mode = .signUp
     /// New ID each launch so dismissed auth always reopens in the requested mode with a clean form.
     @State private var authPresentationID = UUID()
-    @State private var launchCTAPressed = false
 
-    @State private var cardVisible = false
-    @State private var tagsVisible = false
-    @State private var copyVisible = false
-    @State private var ctaVisible = false
+    /// One subtle fade for the whole page, once. Nothing moves in.
+    @State private var entranceVisible = false
+    /// False only in snapshot tests (see `init(previewSettled:)`); production always layers the video.
+    private var showsVideo = true
+    /// Snapshot tests only: render the Reduce Motion presentation without the system setting.
+    private var forcesReduceMotion = false
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 0 → 1 once, shortly after the page fades in; 1 immediately under Reduce Motion.
+    @State private var heroReveal: CGFloat = 0
+    /// The hero's frames, where the grade and veil ease so the live footage reads clearer.
+    @State private var heroCutouts: [CGRect] = []
+    private static let space = "welcome"
+
+    // Social sign-in (Debug live testing only until the security gates pass; see SocialSignIn.swift).
+    private var socialOverride: Bool? = nil
+    @State private var socialBusy: SocialProvider?
+    @State private var socialError: String?
+    private var showsSocial: Bool { socialOverride ?? SocialSignInConfig.isEnabled }
+
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(SessionManager.self) private var sessionManager: SessionManager?
 
-    /// Card and copy sit 20pt off each edge, so the receipt is exactly screen width - 40.
+    private var reduceMotion: Bool { systemReduceMotion || forcesReduceMotion }
+
+    /// Copy and slip sit 20pt off each edge.
     private let contentPadding: CGFloat = 20
-    /// Screen-edge inset for the bottom launch dock (38–40pt total).
+    /// Screen-edge inset for the bottom launch dock (30pt total).
     private let launchDockHorizontalInset: CGFloat = 30
+    /// The Welcome lockup is a step up from the 17pt header wordmark used everywhere else.
+    private let wordmarkSize: CGFloat = 21
 
     /// Accessibility Dynamic Type only. Keep the fixed poster composition through `.xxxLarge`;
     /// at AX sizes the same content grows and scrolls so CTA + Sign in stay reachable.
@@ -34,156 +53,152 @@ struct WelcomeScreen: View {
         dynamicTypeSize.isAccessibilitySize
     }
 
+    // No NavigationStack: nothing is ever pushed from Welcome, and a stack only reserved bar height
+    // (visibly so in the window-less snapshot host, which ignored the hidden toolbar).
     var body: some View {
-        NavigationStack {
-            GeometryReader { geo in
-                let layout = WelcomeZoneLayout(
-                    screenHeight: geo.size.height,
-                    safeTop: geo.safeAreaInsets.top,
-                    safeBottom: geo.safeAreaInsets.bottom
-                )
-                let cardWidth = min(geo.size.width - contentPadding * 2, 430)
-                let dockSideInset = max(0, launchDockHorizontalInset - contentPadding)
+        GeometryReader { geo in
+            let layout = WelcomeZoneLayout(
+                screenHeight: geo.size.height,
+                safeTop: geo.safeAreaInsets.top,
+                safeBottom: geo.safeAreaInsets.bottom
+            )
+            let dockSideInset = max(0, launchDockHorizontalInset - contentPadding)
 
             ZStack {
-                    // Frame 0 of the shipped master, so the handoff to video is invisible.
-                    // Also the Reduce Motion presentation and the failure path if the asset
-                    // is missing or AVFoundation cannot prepare it.
-                    //
-                    // Painted through an overlay rather than placed directly in the ZStack.
-                    // `scaledToFill` reports the *filled* size, not the proposed one: the poster
-                    // is 9:16, so on any screen taller than that it reports more width than it
-                    // was offered — ~538pt against a 440pt proposal on a 17 Pro Max — and a
-                    // ZStack sizes itself to its largest child. That widened the whole content
-                    // stack, and since the GeometryReader pins its content top-leading, every
-                    // point of the excess fell on the right: the launch dock's emerald chip ran
-                    // off the screen edge while the fixed-width receipt above it looked fine.
-                    // An overlay is sized by its host and never resizes it, so the fill is
-                    // painted and clipped without reaching layout at all. The SE was immune
-                    // only because 375x667 is exactly 9:16.
-                    Color.clear
-                        .overlay {
-                            Image("WelcomeBackgroundPoster")
-                                .resizable()
-                                .scaledToFill()
-                        }
-                        .clipped()
-                        .ignoresSafeArea()
-                        .accessibilityHidden(true)
-
-                    if !reduceMotion {
-                        WelcomeBackgroundVideo(isPlaying: shouldPlayWelcomeVideo)
-                            .ignoresSafeArea()
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
+                // Frame 0 of the shipped master, so the handoff to video is invisible.
+                // Also the Reduce Motion presentation and the failure path if the asset
+                // is missing or AVFoundation cannot prepare it.
+                //
+                // Painted through an overlay rather than placed directly in the ZStack.
+                // `scaledToFill` reports the *filled* size, not the proposed one: the poster
+                // is 9:16, so on any screen taller than that it reports more width than it
+                // was offered — ~538pt against a 440pt proposal on a 17 Pro Max — and a
+                // ZStack sizes itself to its largest child. That widened the whole content
+                // stack and pushed the launch dock off the right edge. An overlay is sized by
+                // its host and never resizes it, so the fill is painted and clipped without
+                // reaching layout at all.
+                Color.clear
+                    .overlay {
+                        Image("WelcomeBackgroundPoster")
+                            .resizable()
+                            .scaledToFill()
                     }
+                    .clipped()
+                    .ignoresSafeArea()
+                    .accessibilityHidden(true)
 
-                    // video -> emerald grade -> readability veil -> proof artifact -> copy -> CTA
-                    WelcomeEmeraldGrade()
-                    WelcomeReadabilityVeil()
+                if !reduceMotion && showsVideo {
+                    WelcomeBackgroundVideo(isPlaying: shouldPlayWelcomeVideo)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
 
-                    welcomeContent(
-                        layout: layout,
-                        cardWidth: cardWidth,
-                        dockSideInset: dockSideInset,
-                        safeBottom: geo.safeAreaInsets.bottom
-                    )
+                // video -> neutral grade -> readability veil -> brand / copy / hero / actions. The hero's frames are
+                // reported in this ZStack's (safe-area) space; the grade and veil are full-bleed, hence the shift.
+                let cutouts = heroCutouts.map { $0.offsetBy(dx: geo.safeAreaInsets.leading, dy: geo.safeAreaInsets.top) }
+                WelcomeNeutralGrade(cutouts: cutouts, cutoutStrength: 0.75)
+                WelcomeReadabilityVeil(cutouts: cutouts, cutoutStrength: 0.7)
+
+                welcomeContent(layout: layout, dockSideInset: dockSideInset, safeBottom: geo.safeAreaInsets.bottom)
+                    .opacity(entranceVisible ? 1 : 0)
                     .opacity(showAuth ? 0.32 : 1)
-                    .scaleEffect(showAuth ? 0.96 : 1, anchor: .center)
+                    .scaleEffect(showAuth && !reduceMotion ? 0.96 : 1, anchor: .center)
                     .allowsHitTesting(!showAuth)
+                    .accessibilityHidden(showAuth)
                     .animation(welcomeBackdropAnimation, value: showAuth)
 
-                    if showAuth {
-                        Color.black.opacity(0.38)
-                    .ignoresSafeArea()
-                            .transition(reduceMotion ? .opacity : .opacity.animation(.easeOut(duration: 0.28)))
+                if showAuth {
+                    Color.black.opacity(0.38)
+                        .ignoresSafeArea()
+                        .transition(reduceMotion ? .opacity : .opacity.animation(.easeOut(duration: 0.28)))
 
-                        AuthContainerView(initialMode: authInitialMode) {
-                            dismissAuth()
-                        }
-                        .id(authPresentationID)
-                        .transition(authSurfaceTransition)
-                        .zIndex(10)
+                    AuthContainerView(initialMode: authInitialMode) {
+                        dismissAuth()
                     }
+                    .id(authPresentationID)
+                    .transition(authSurfaceTransition)
+                    .zIndex(10)
                 }
             }
-            .onAppear { playEntrance() }
-            .onAppear {
-                MoveMarkAnalytics.track(.onboardingStarted)
-            }
+            .coordinateSpace(name: Self.space)
+            .onPreferenceChange(WelcomeCutoutKey.self) { heroCutouts = $0 }
+        }
+        .onAppear {
+            playEntrance()
+            MoveMarkAnalytics.track(.onboardingStarted)
+        }
+        // A finished password reset continues to sign in; an expired reset link to asking for a new one.
+        .onReceive(NotificationCenter.default.publisher(for: .moveMarkOpenAuth)) { note in
+            if let mode = note.object as? AuthContainerView.Mode { launchAuth(mode: mode) }
         }
     }
 
     // MARK: - Welcome content
 
     @ViewBuilder
-    private func welcomeContent(
-        layout: WelcomeZoneLayout,
-        cardWidth: CGFloat,
-        dockSideInset: CGFloat,
-        safeBottom: CGFloat
-    ) -> some View {
+    private func welcomeContent(layout: WelcomeZoneLayout, dockSideInset: CGFloat, safeBottom: CGFloat) -> some View {
         // Poster/background stays fixed. Only the interactive layer scrolls at AX sizes —
         // and CTA + Sign in travel with that layer (no bottom dock) so they cannot collide
         // with grown copy the way a fixed dock would.
         if usesAccessibilityScrollLayout {
             ScrollView {
-                welcomeInteractiveStack(
-                    layout: layout,
-                    cardWidth: cardWidth,
-                    dockSideInset: dockSideInset,
-                    pinsDockToBottom: false
-                )
-                .padding(.bottom, layout.bottomDockPadding(safeBottom: safeBottom))
+                welcomeInteractiveStack(layout: layout, dockSideInset: dockSideInset, pinsDockToBottom: false)
+                    .padding(.bottom, layout.bottomDockPadding(safeBottom: safeBottom))
             }
             .scrollIndicators(.hidden)
         } else {
-            welcomeInteractiveStack(
-                layout: layout,
-                cardWidth: cardWidth,
-                dockSideInset: dockSideInset,
-                pinsDockToBottom: true
-            )
-            .padding(.bottom, layout.bottomDockPadding(safeBottom: safeBottom))
+            welcomeInteractiveStack(layout: layout, dockSideInset: dockSideInset, pinsDockToBottom: true)
+                .padding(.bottom, layout.bottomDockPadding(safeBottom: safeBottom))
         }
     }
 
     private func welcomeInteractiveStack(
         layout: WelcomeZoneLayout,
-        cardWidth: CGFloat,
         dockSideInset: CGFloat,
         pinsDockToBottom: Bool
     ) -> some View {
+        // Brand → outcome → trust → action, read top to bottom in that order (also the VoiceOver order).
+        // The brand sits on the hero block as its lockup rather than alone in the corner; the block rides
+        // high over the darkened footage, the open doorway shows above it, and the dock owns the foot.
         VStack(alignment: .leading, spacing: 0) {
-            brandIdentityRow
-                .padding(.bottom, layout.brandToHeroGap)
-
-            WelcomeDepositCaseFile(
-                maxWidth: cardWidth,
-                cardVisible: cardVisible,
-                tagsVisible: tagsVisible,
-                compactHeight: layout.isCompactHeight
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            primaryCopyBlock
-                .padding(.top, layout.heroToCopyGap)
-
             if pinsDockToBottom {
-                Spacer(minLength: 8)
+                // Photo above the lockup. Capped, so on tall phones the rest of the slack falls between
+                // the slip and the dock and the hero block stays high; on short phones it gives way first.
+                Spacer(minLength: 6)
+                    .frame(maxHeight: layout.maxTopBreathing)
             } else {
-                Color.clear.frame(height: layout.heroToCopyGap)
+                Color.clear.frame(height: 16)
             }
 
-            bottomLaunchDock
+            brandIdentityRow
+
+            primaryCopyBlock
+                .padding(.top, layout.brandToHeadlineGap)
+
+            // The room itself becomes the evidence: no card, no sample record (WelcomeHero).
+            WelcomeHero(isCompact: layout.isCompactHeight || usesAccessibilityScrollLayout,
+                        reveal: heroReveal, coordinateSpace: Self.space)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, layout.copyToSlipGap)
+
+            if pinsDockToBottom {
+                Spacer(minLength: layout.slipToDockGap)
+            } else {
+                Color.clear.frame(height: layout.slipToDockGap)
+            }
+
+            bottomLaunchDock(isCompact: layout.isCompactHeight && !usesAccessibilityScrollLayout)
                 .padding(.horizontal, dockSideInset)
         }
         .padding(.horizontal, contentPadding)
-        .padding(.top, layout.topPadding)
+        // The poster composition is fixed through xxxLarge (as it always was); accessibility sizes
+        // get the scrolling layout and real growth, to the same ceiling as the app's sheets.
+        .dynamicTypeSize(usesAccessibilityScrollLayout ? ...DynamicTypeSize.accessibility2 : ...DynamicTypeSize.large)
     }
 
     private var welcomeBackdropAnimation: Animation? {
-        reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.9)
+        reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.9)
     }
 
     private var authSurfaceTransition: AnyTransition {
@@ -196,8 +211,9 @@ struct WelcomeScreen: View {
         )
     }
 
+    /// Navigation away is immediate: the auth surface starts presenting on the tap itself. The button's
+    /// own press style (`MMLightPressStyle`) carries the tactile response.
     private func launchAuth(mode: AuthContainerView.Mode) {
-        MMHaptics.soft()
         authInitialMode = mode
         authPresentationID = UUID()
 
@@ -205,15 +221,8 @@ struct WelcomeScreen: View {
             showAuth = true
             return
         }
-
-        withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
-            launchCTAPressed = true
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            withAnimation(.spring(response: 0.48, dampingFraction: 0.88)) {
-                showAuth = true
-                launchCTAPressed = false
-            }
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.88)) {
+            showAuth = true
         }
     }
 
@@ -236,177 +245,180 @@ struct WelcomeScreen: View {
 
     // MARK: - Brand
 
-    /// Wordmark only. The app icon already carries the mark on the Home Screen, and a badge
-    /// beside the word here made the corner read as a logo lockup on a marketing page rather
-    /// than as the quiet anchor this screen needs.
+    /// The app wordmark, a step larger than on the dark headers, set as the hero block's lockup.
+    /// Read once as "MoveMark" (the mark itself is hidden inside `MMWordmark`).
     private var brandIdentityRow: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Text("MoveMark")
-                .font(MoveMarkTheme.Typography.wordmark)
-                .tracking(-0.6)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary.opacity(0.92))
-
-            Spacer(minLength: 0)
-        }
-        .opacity(cardVisible ? 1 : 0)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.4), value: cardVisible)
+        MMWordmark(size: wordmarkSize)
+            .frame(minHeight: 44, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("MoveMark")
     }
 
     // MARK: - Copy (hero explains; dock launches)
 
     private var primaryCopyBlock: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Two Text views rather than one wrapped string: SwiftUI has no line-height
-            // multiplier, and a -4 VStack spacing is the only way to reach the ~0.96 leading
-            // this size wants. It also makes the break editorial rather than a function of
-            // device width — the headline is never one line, on any screen.
-            VStack(alignment: .leading, spacing: -4) {
+            // Two Text views rather than one wrapped string, so the break is editorial rather than a
+            // function of device width — the headline is never one line, on any screen.
+            VStack(alignment: .leading, spacing: -2) {
                 Text(MoveMarkGrowthCopy.welcomeHeadlineLead)
                 Text(MoveMarkGrowthCopy.welcomeHeadlineTail)
             }
-            .font(MoveMarkTheme.Typography.welcomeHeadline)
-            .tracking(-1.0)
-            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+            .mmFont(40, .semibold)
+            .tracking(-0.8)
+            .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.22), radius: 12, y: 2)
             // Fixed composition: one editorial line per Text through xxxLarge.
             // Accessibility sizes: let the lines wrap and grow — scroll carries the overflow.
             .modifier(WelcomeHeadlineDynamicTypeFit(allowsWrapping: usesAccessibilityScrollLayout))
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(MoveMarkGrowthCopy.welcomeHeadline)
+            .accessibilityAddTraits(.isHeader)
 
             Text(MoveMarkGrowthCopy.welcomeBody)
-                .font(MoveMarkTheme.Typography.welcomeBody)
-                .foregroundStyle(MoveMarkTheme.Colors.textBodyNeutral.opacity(0.72))
-                // Contrast the scrim cannot buy. The plate under this copy is bimodal on wide
-                // screens — a lit door edge around 70-120pt and the lit wall from 250pt out, both
-                // reaching 0.44 luma — so flattening the worst decile with the radial would take
-                // an opacity that reads as a panel. These raise contrast at the character edge,
-                // where it is actually judged, and cost the surrounding frame nothing. Shadow
-                // colour is appBackground, so on an already-dark plate they render as nothing.
-                .shadow(color: MoveMarkTheme.Colors.appBackground.opacity(0.85), radius: 3, x: 0, y: 1)
-                .shadow(color: MoveMarkTheme.Colors.appBackground.opacity(0.55), radius: 10, x: 0, y: 2)
-                // Body only — the headline keeps the full width so it stays on one line on large
-                // devices. Aspect-fill puts the lit wall and curtain on the right of wide screens,
-                // and this is the copy that runs into it; wrapping earlier keeps it over the dark
-                // centre-left rather than asking a scrim to cover ever more of the frame.
-                .frame(maxWidth: 330, alignment: .leading)
+                .mmFont(16)
+                .foregroundStyle(.white.opacity(0.78))
+                // Four lines on regular phones, and over the darker centre-left of the footage rather
+                // than the lit curtain on the right of wide screens.
+                .frame(maxWidth: 340, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            // Anchored to the copy, not to a region of the video: aspect-fill puts different
-            // footage behind this text on every device, so a fixed video-space allowance cannot
-            // protect it. `maxWidth` above pulls the copy off the lit curtain, but the lit wall
-            // still sits behind the centre-left on wide screens — 0.42 background luma there
-            // untreated, 0.29 with this. Falls to clear on the right so it reads as shading
-            // rather than a panel; measured across the full 8s loop it also holds the plate
-            // steady while the untreated footage beside it swings 0.35-0.39.
-            RadialGradient(
-                colors: [
-                    MoveMarkTheme.Colors.appBackground.opacity(0.42),
-                    MoveMarkTheme.Colors.appBackground.opacity(0.18),
-                    .clear
-                ],
-                center: UnitPoint(x: 0.32, y: 0.50),
-                startRadius: 10,
-                endRadius: 330
-            )
-            .blur(radius: 14)
-            .padding(.horizontal, -24)
-            .padding(.vertical, -18)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-        }
-        .opacity(copyVisible ? 1 : 0)
-        .offset(y: copyVisible ? 0 : 8)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.44).delay(0.22), value: copyVisible)
     }
 
     // MARK: - Bottom launch dock
 
-    private var bottomLaunchDock: some View {
+    /// The screen's one primary action (lime, as everywhere in the app) and a quiet way to sign in.
+    private func bottomLaunchDock(isCompact: Bool) -> some View {
         VStack(spacing: 0) {
-            WelcomeLaunchControl(
-                title: MoveMarkGrowthCopy.welcomeCTA,
-                action: { launchAuth(mode: .signUp) }
-            )
-            .scaleEffect(launchCTAPressed ? 0.97 : 1)
-            .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82), value: launchCTAPressed)
+            MMPrimaryButton(title: MoveMarkGrowthCopy.welcomeCTA) {
+                MMHaptics.light()
+                MoveMarkAnalytics.track(.welcomeStartProofTapped)
+                launchAuth(mode: .signUp)
+            }
             .accessibilityIdentifier("welcome.primaryCTA")
 
-            HStack(spacing: 6) {
-                Spacer(minLength: 0)
-                Text("Already have an account?")
-                    .font(MoveMarkTheme.Typography.welcomeSupporting)
-                    .foregroundStyle(MoveMarkTheme.Colors.textBodyNeutral.opacity(0.58))
-                Button {
-                    launchAuth(mode: .signIn)
-                } label: {
-                    Text("Sign in")
-                        .font(MoveMarkTheme.Typography.welcomeSupportingEmphasis)
-                        // Same emerald as the action chip, not `primary`. Emerald is a 44pt
-                        // accent now, so a #21B866 link under it would be the brightest green
-                        // on the screen — a secondary action out-shouting the primary one.
-                        .foregroundStyle(MoveMarkTheme.Colors.ctaActionEmerald)
+            if showsSocial {
+                WelcomeSocialActions(busyProvider: socialBusy) { startSocialSignIn($0) }
+                    .padding(.top, 14)
+                if let socialError {
+                    MMNotice(message: socialError).padding(.top, 8)
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("welcome.signIn")
-                Spacer(minLength: 0)
             }
-            .padding(.top, 22)
+
+            signInButton
+                .padding(.top, 4)
+
+            // Short screens with the social block need this line's height; the default layout keeps it.
+            if !(showsSocial && isCompact) {
+                Text(MoveMarkGrowthCopy.welcomeTrustLine)
+                    .mmFont(12.5)
+                    .foregroundStyle(.white.opacity(0.5))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 2)
+            }
         }
-        .opacity(ctaVisible ? 1 : 0)
-        .offset(y: ctaVisible ? 0 : 10)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.42).delay(0.32), value: ctaVisible)
     }
 
+    private var signInButton: some View {
+        Button {
+            MMHaptics.soft()
+            MoveMarkAnalytics.track(.welcomeSignInTapped)
+            launchAuth(mode: .signIn)
+        } label: {
+            Text(MoveMarkGrowthCopy.welcomeSecondaryCTA)
+                .mmFont(15.5, .semibold)
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(MMLightPressStyle())
+        .accessibilityIdentifier("welcome.signIn")
+    }
+
+    /// One quiet fade of the whole page, once, then the hero's single reveal. Reduce Motion: both are simply there.
     private func playEntrance() {
+        guard !entranceVisible else { return }
         if reduceMotion {
-            cardVisible = true
-            tagsVisible = true
-            copyVisible = true
-            ctaVisible = true
+            entranceVisible = true
+            heroReveal = 1
             return
         }
+        withAnimation(.easeOut(duration: 0.4)) {
+            entranceVisible = true
+        }
+        withAnimation(.easeInOut(duration: 0.8).delay(0.45)) {
+            heroReveal = 1
+        }
+    }
 
-        withAnimation(.easeOut(duration: 0.48)) {
-            cardVisible = true
+    /// A real session through `SessionManager`; the root moves on by itself. A cancelled sheet is silent.
+    private func startSocialSignIn(_ provider: SocialProvider) {
+        guard socialBusy == nil, SocialSignInConfig.mode == .live else { return }
+        MMHaptics.light()
+        socialError = nil
+        socialBusy = provider
+        Task { @MainActor in
+            defer { socialBusy = nil }
+            do {
+                try await sessionManager?.signInWithSocial(provider)
+            } catch SocialSignInError.cancelled {
+                // Closed the sheet; nothing to say.
+            } catch NeonAuthError.rejected(let code, let message) {
+                let shown = NeonAuthError.rejected(code: code, message: message).localizedDescription
+                #if DEBUG
+                print("[social-qa] session-exchange rejected=\(code ?? "no code")")
+                #endif
+                socialError = shown
+            } catch {
+                socialError = error.localizedDescription
+            }
         }
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.82).delay(0.14)) {
-            tagsVisible = true
-        }
-        withAnimation(.easeOut(duration: 0.44).delay(0.22)) {
-            copyVisible = true
-        }
-        withAnimation(.easeOut(duration: 0.42).delay(0.32)) {
-            ctaVisible = true
-        }
+    }
+}
+
+extension WelcomeScreen {
+    /// Snapshot tests only: the settled poster composition — what Reduce Motion shows — without the video
+    /// layer or the entrance. In an extension so `WelcomeScreen()` stays the production init.
+    init(previewSettled: Void, reduceMotion: Bool = false, showsSocial: Bool = false) {
+        self.init()
+        showsVideo = false
+        forcesReduceMotion = reduceMotion
+        socialOverride = showsSocial
+        _entranceVisible = State(initialValue: true)
+        _heroReveal = State(initialValue: 1)
     }
 }
 
 // MARK: - Zone layout
 
 private struct WelcomeZoneLayout {
-    let topPadding: CGFloat
-    let brandToHeroGap: CGFloat
-    let heroToCopyGap: CGFloat
-    /// Drives the proof artifact's density. Only the card responds to this — the zone gaps are
-    /// identical on every device, so the screen keeps one spacing rhythm.
+    /// Most photo the lockup may leave above itself; the rest of the slack goes above the dock.
+    let maxTopBreathing: CGFloat
+    let brandToHeadlineGap: CGFloat
+    let copyToSlipGap: CGFloat
+    let slipToDockGap: CGFloat
+    /// Drives the proof artifact's density. Only the slip responds to this — type never shrinks for it.
     let isCompactHeight: Bool
 
     init(screenHeight: CGFloat, safeTop: CGFloat, safeBottom: CGFloat) {
-        topPadding = max(4, safeTop - 71)
-        brandToHeroGap = 14
-        heroToCopyGap = 22
         // Available vertical space, not a device check: an SE is short because of what it
         // leaves the layout, and a model list would be wrong again on the next phone. This is
         // the safe-area-excluded height, so the measured split is SE 647 and 13 mini 728 on the
         // compact side, iPhone 16 759 and 17 Pro Max 860 on the regular side.
-        isCompactHeight = screenHeight < 750
+        isCompactHeight = screenHeight < 700
+        maxTopBreathing = (screenHeight * 0.135).rounded()
+        brandToHeadlineGap = 18
+        copyToSlipGap = isCompactHeight ? 16 : 20
+        slipToDockGap = 22
     }
 
     func bottomDockPadding(safeBottom: CGFloat) -> CGFloat {
-        max(36, safeBottom + 18)
+        max(28, safeBottom + 14)
     }
 }
 

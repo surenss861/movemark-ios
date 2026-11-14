@@ -30,6 +30,7 @@ data class SavedProofReceiptUiState(
     val roomDocumentedLabel: String = "Room now documented",
     val primaryActionLabel: String = "Continue next room",
     val nextRoomName: String? = null,
+    val issueCount: Int = 0,
 )
 
 @HiltViewModel
@@ -88,6 +89,7 @@ class SavedProofReceiptViewModel @Inject constructor(
             },
             primaryActionLabel = primaryActionLabel,
             nextRoomName = nextRoom?.name,
+            issueCount = payload?.issueCount ?: 0,
         )
     }
 

@@ -7,7 +7,17 @@ import androidx.camera.core.ImageCaptureException
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.surensureshkumar.movemark.core.navigation.Routes
+import com.surensureshkumar.movemark.data.auth.SessionManager
+import com.surensureshkumar.movemark.data.evidence.EvidenceCaptureSource
+import com.surensureshkumar.movemark.data.evidence.EvidenceImport
+import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceCenter
+import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceInput
+import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceKey
 import com.surensureshkumar.movemark.data.property.PropertyStore
+import com.surensureshkumar.movemark.domain.ProofPhase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,10 +35,48 @@ import kotlin.coroutines.resumeWithException
 @HiltViewModel
 class CameraCaptureViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    propertyStore: PropertyStore,
+    private val propertyStore: PropertyStore,
     private val resultHolder: CameraCaptureResultHolder,
+    private val sessionManager: SessionManager,
+    private val pendingCenter: PendingEvidenceCenter,
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
+    private val moveOut = ProofPhase.fromKey(savedStateHandle.get<String>(Routes.ProofPhaseArg)) == ProofPhase.MoveOut
+
+    /** Shots already written to the room's pending set (by id); they need no hand-off. */
+    private var admittedIds: List<String>
+        get() = savedStateHandle.get<List<String>>(ADMITTED_IDS_KEY).orEmpty()
+        set(value) { savedStateHandle[ADMITTED_IDS_KEY] = value }
+    private var admittedUris: Set<String>
+        get() = savedStateHandle.get<List<String>>(ADMITTED_URIS_KEY).orEmpty().toSet()
+        set(value) { savedStateHandle[ADMITTED_URIS_KEY] = value.toList() }
+
+    private fun pendingKey(): PendingEvidenceKey? {
+        val userId = sessionManager.userId.value ?: return null
+        val propertyId = propertyStore.currentProperty.value?.id ?: return null
+        return PendingEvidenceKey.of(userId, propertyId, roomId, moveOut)
+    }
+
+    /**
+     * Writes a shot to the room's pending set at once (iOS `admitCapture`), so a process kill while the camera is
+     * open loses nothing. Returns the stored file's uri, or null when it couldn't be kept there (the cache copy
+     * is then handed off on Done, as before).
+     */
+    private suspend fun admitCapture(file: java.io.File): Uri? {
+        val key = pendingKey() ?: return null
+        return try {
+            val source = withContext(Dispatchers.IO) { EvidenceImport.source(file.readBytes(), EvidenceCaptureSource.Camera) }
+            val id = UUID.randomUUID()
+            pendingCenter.admit(listOf(PendingEvidenceInput(id, source)), key, roomName.value)
+            val stored = java.io.File(pendingCenter.store.roomFolder(key), "${id.toString().lowercase()}.${source.fileExtension}")
+            withContext(Dispatchers.IO) { file.delete() }
+            admittedIds = admittedIds + id.toString().lowercase()
+            Uri.fromFile(stored).also { admittedUris = admittedUris + it.toString() }
+        } catch (e: Exception) {
+            android.util.Log.e("MoveMarkCamera", "Couldn't keep the shot in the pending set; handing off on Done", e)
+            null
+        }
+    }
     val roomId: UUID = UUID.fromString(
         checkNotNull(savedStateHandle.get<String>(com.surensureshkumar.movemark.core.navigation.Routes.RoomProofArg)),
     )
@@ -79,7 +127,8 @@ class CameraCaptureViewModel @Inject constructor(
                             }
                         },
                     )
-                }.let { uri ->
+                }.let { captured ->
+                    val uri = admitCapture(file) ?: captured
                     if (_capturedUris.value.none { it.toString() == uri.toString() }) {
                         setCapturedUris(_capturedUris.value + uri)
                     }
@@ -92,6 +141,11 @@ class CameraCaptureViewModel @Inject constructor(
         }
     }
 
+    /** The camera couldn't start on this device: say so; the photo library stays available. */
+    fun cameraUnavailable() {
+        _errorMessage.value = CAMERA_UNAVAILABLE
+    }
+
     fun addGalleryUris(uris: List<Uri>) {
         if (uris.isEmpty()) return
         val existing = _capturedUris.value.map { it.toString() }.toSet()
@@ -102,25 +156,36 @@ class CameraCaptureViewModel @Inject constructor(
 
     /** Delivers captured URIs to [resultHolder] and invokes [onResult] with whether there was anything to deliver. */
     fun finishAndDeliver(onResult: (Boolean) -> Unit) {
-        val uris = _capturedUris.value
-        if (uris.isEmpty()) {
+        val all = _capturedUris.value
+        if (all.isEmpty()) {
             onResult(false)
             return
         }
+        // Shots already in the pending set show up in the room by themselves; hand off only the rest.
+        val handOff = all.filter { it.toString() !in admittedUris }
         viewModelScope.launch {
-            resultHolder.deliver(roomId, uris)
+            if (handOff.isNotEmpty()) resultHolder.deliver(roomId, handOff)
             onResult(true)
         }
     }
 
+    /** The renter chose Discard: the shots taken here leave the phone too. */
     fun discardPending() {
+        val ids = admittedIds
+        val key = pendingKey()
         setCapturedUris(emptyList())
+        admittedIds = emptyList()
+        admittedUris = emptySet()
+        if (ids.isNotEmpty() && key != null) viewModelScope.launch { pendingCenter.remove(ids, key) }
     }
 
     fun hasCaptures(): Boolean = _capturedUris.value.isNotEmpty()
 
     private companion object {
+        const val CAMERA_UNAVAILABLE = "The camera couldn’t start on this phone. Add photos from your library instead."
         const val CAPTURED_URIS_KEY = "captured_uris"
+        const val ADMITTED_IDS_KEY = "admitted_ids"
+        const val ADMITTED_URIS_KEY = "admitted_uris"
 
         fun restoreCapturedUris(savedStateHandle: SavedStateHandle): List<Uri> =
             savedStateHandle.get<List<String>>(CAPTURED_URIS_KEY)?.map(Uri::parse) ?: emptyList()

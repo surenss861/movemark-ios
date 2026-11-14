@@ -34,12 +34,16 @@ class SubscriptionRepository @Inject constructor(
 
     val isMockMode: Boolean get() = BillingConfig.isMockMode
 
+    /** No usable store key in this build (internal testing): nothing can be bought or restored yet. */
+    val subscriptionsComingSoon: Boolean get() = BillingConfig.subscriptionsComingSoon
+
     val hasPro: StateFlow<Boolean> get() = impl.hasPro
     val packages: StateFlow<List<PlanPackageUi>> get() = impl.packages
     val loading: StateFlow<Boolean> get() = impl.loading
     val purchasing: StateFlow<Boolean> get() = impl.purchasing
     val errorMessage: StateFlow<String?> get() = impl.errorMessage
     val restoreMessage: StateFlow<String?> get() = impl.restoreMessage
+    val reportPackPurchases: StateFlow<Int> get() = impl.reportPackPurchases
 
     suspend fun logIn(appUserId: String) = impl.logIn(appUserId)
 
@@ -54,6 +58,14 @@ class SubscriptionRepository @Inject constructor(
     suspend fun restorePurchases() = impl.restorePurchases()
 
     fun clearRestoreMessage() = impl.clearRestoreMessage()
+
+    /** Restore found nothing to restore. Names the Report Pack only when the store sells one (iOS 1.4). */
+    val restoreFoundNothingMessage: String
+        get() = if (packages.value.any { it.isReportPack }) {
+            "No active subscription or Report Pack was found for this Google account."
+        } else {
+            "No active MoveMark subscription was found for this Google account."
+        }
 
     fun clearError() = impl.clearError()
 

@@ -8,12 +8,16 @@ object Routes {
 
     fun auth(mode: String) = "auth/$mode"
     const val Main = "main"
+    const val LegalAcceptance = "legal_acceptance"
+    const val LegalStatusUnavailable = "legal_status_unavailable"
     const val Onboarding = "onboarding"
     const val CreateProperty = "create_property"
     const val FirstRunRoomPicker = "first_run_room_picker"
     const val AddProperty = "add_property"
 
     const val MaintenanceLog = "maintenance_log"
+    const val Documents = "documents"
+    const val EditRental = "edit_rental"
     const val MaintenanceIssueArg = "issueId"
     const val MaintenanceIssueDetail = "maintenance_issue/{issueId}"
 
@@ -27,6 +31,7 @@ object Routes {
         "room_proof/${phase.key}/$roomId"
 
     const val MoveOutRooms = "move_out_rooms"
+    const val DisputePacket = "dispute_packet"
 
     const val SavedProofReceipt = "saved_proof_receipt/{proofPhase}/{roomId}"
     const val SavedProofReceiptArg = "roomId"

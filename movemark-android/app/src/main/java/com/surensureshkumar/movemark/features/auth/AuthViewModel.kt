@@ -33,6 +33,9 @@ class AuthViewModel @Inject constructor(
     private val _password = MutableStateFlow("")
     val password: StateFlow<String> = _password.asStateFlow()
 
+    private val _confirmPassword = MutableStateFlow("")
+    val confirmPassword: StateFlow<String> = _confirmPassword.asStateFlow()
+
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
@@ -41,8 +44,15 @@ class AuthViewModel @Inject constructor(
 
     fun setEmail(v: String) { _email.value = v }
     fun setPassword(v: String) { _password.value = v }
+    fun setConfirmPassword(v: String) { _confirmPassword.value = v }
 
     fun submit() {
+        if (_loading.value) return
+        // As iOS: sign-up asks for the password twice and stops on a mismatch before anything is sent.
+        if (_mode.value == AuthMode.SignUp && _password.value.isNotEmpty() && _password.value != _confirmPassword.value) {
+            _message.value = PASSWORDS_DO_NOT_MATCH
+            return
+        }
         viewModelScope.launch {
             _loading.value = true
             _message.value = null
@@ -60,6 +70,10 @@ class AuthViewModel @Inject constructor(
                 _loading.value = false
             }
         }
+    }
+
+    companion object {
+        const val PASSWORDS_DO_NOT_MATCH = "Passwords do not match."
     }
 
     fun resetPassword() {

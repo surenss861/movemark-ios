@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -95,13 +96,22 @@ fun CameraCaptureScreen(
             it.surfaceProvider = previewView.surfaceProvider
         }
         provider.unbindAll()
-        provider.bindToLifecycle(
-            lifecycleOwner,
-            CameraSelector.DEFAULT_BACK_CAMERA,
-            preview,
-            imageCapture,
-        )
-        cameraBound = true
+        // A camera HAL CameraX can't configure (seen: Android 17's new dynamic range profile with CameraX 1.4)
+        // must not take the app down: say so and keep the photo library.
+        try {
+            provider.bindToLifecycle(
+                lifecycleOwner,
+                CameraSelector.DEFAULT_BACK_CAMERA,
+                preview,
+                imageCapture,
+            )
+            cameraBound = true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            android.util.Log.e("CameraCapture", "camera bind failed", e)
+            runCatching { provider.unbindAll() }
+            viewModel.cameraUnavailable()
+        }
     }
 
     DisposableEffect(Unit) {
@@ -214,10 +224,10 @@ fun CameraCaptureScreen(
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(capturedUris, key = { it.toString() }) { uri ->
+                    itemsIndexed(capturedUris, key = { _, uri -> uri.toString() }) { index, uri ->
                         AsyncImage(
                             model = uri,
-                            contentDescription = null,
+                            contentDescription = "Captured photo ${index + 1}",
                             modifier = Modifier
                                 .size(56.dp)
                                 .clip(RoundedCornerShape(8.dp))

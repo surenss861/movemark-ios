@@ -8,20 +8,42 @@
     <application
         android:name=".MoveMarkApplication"
         android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="false"
+        android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.MoveMark">
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.MoveMark"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Password reset links: movemark://reset-password?token=… (the reset page's "Open in the app"). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="movemark" android:host="reset-password" />
+            </intent-filter>
+            <!-- Social sign-in return: movemark://auth/callback?neon_auth_session_verifier=… -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="movemark" android:host="auth" android:path="/callback" />
+            </intent-filter>
         </activity>
+
+        <!-- Sentry starts from MoveMarkApplication (only with a DSN, personal data off), never on its own. -->
+        <meta-data android:name="io.sentry.auto-init" android:value="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

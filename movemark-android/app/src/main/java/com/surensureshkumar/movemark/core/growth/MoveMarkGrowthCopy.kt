@@ -4,11 +4,14 @@ object MoveMarkGrowthCopy {
     const val AUDIENCE_CHIP = "For Ontario apartment renters"
 
     const val WELCOME_HEADLINE = "Prove what was already there."
+    const val WELCOME_HEADLINE_BROKEN = "Prove what was\nalready there."
+    const val WELCOME_TRUST_LINE = "Private evidence"
     const val WELCOME_BODY =
-        "Take room photos before you unpack. Turn them into a report when you need it."
+        "Photograph your rental before you unpack. Keep every photo, date and record together."
     const val WELCOME_PAIN_LINE =
         "Old damage can cost you your deposit — unless you have proof."
     const val WELCOME_CTA = "Start move-in proof"
+    const val WELCOME_SECONDARY_CTA = "I already have a vault"
 
     data class OnboardingStory(val title: String, val body: String)
 
@@ -38,8 +41,18 @@ object MoveMarkGrowthCopy {
     const val FIRST_RUN_ROOM_TITLE = "Start with one room."
     const val FIRST_RUN_ROOM_SUBTITLE = "Kitchen works well — save what was already there."
 
-    const val PAYWALL_VALUE_LINE =
-        "Turn move-in and move-out proof into reports — unlimited vaults, move-out capture, and dispute tools."
+    // Pro is sold by its outcome; the benefits list underneath is evidence for it.
+    const val PRO_OUTCOME_LINE = "Keep a complete rental record from move-in to move-out."
+    const val PAYWALL_VALUE_LINE = PRO_OUTCOME_LINE
+    const val PAYWALL_SUPPORT_LINE = "MoveMark Pro keeps your proof organized across the full rental lifecycle."
+    const val PRO_ACTIVE_SUMMARY = "Complete rental record, move-in to move-out."
+
+    const val MOVE_IN_RECORD_READY = "Your move-in record is ready."
+    const val MOVE_IN_RECORD_READY_DETAIL = "A dated record of the condition you documented at move-in."
+    const val MOVE_OUT_RECORD_READY = "Your move-out record is ready."
+    const val MOVE_OUT_RECORD_READY_DETAIL = "A dated record of the condition you documented before returning the keys."
+    const val DISPUTE_PACKET_READY = "Your evidence packet is ready."
+    const val DISPUTE_PACKET_READY_DETAIL = "Your saved rental evidence organized into one shareable record."
 
     val PAYWALL_BENEFITS = listOf(
         "Unlimited proof vaults" to "Protect more than one rental over time.",

@@ -10,6 +10,10 @@ struct FirstRunProofSavedView: View {
     var moment: RentalMoment = .justMovedIn
     let onContinueNextRoom: () -> Void
     let onViewProofVault: () -> Void
+    /// Finishing onboarding is in flight: the actions ignore taps until it settles.
+    var isBusy = false
+    var errorMessage: String? = nil
+    var onRetry: (() -> Void)? = nil
 
     @Environment(PropertyStore.self) private var propertyStore
     @State private var previewURL: URL?
@@ -31,28 +35,30 @@ struct FirstRunProofSavedView: View {
     }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            ProofSavedReceiptView(
-                model: ProofSavedReceiptModel(
-                    roomName: summary.roomName,
-                    phaseLabel: phaseLabel,
-                    photoCount: summary.photoCount,
-                    issueCount: summary.issueCount,
-                    timestampLabel: "\(phaseLabel) · \(formattedTime)",
-                    headerSubtitle: headerSubtitle,
-                    documentedLabel: moment.receiptDocumentedLabel,
-                    primaryActionLabel: "Continue next room",
-                    imageURL: previewURL
-                ),
-                onPrimary: onContinueNextRoom,
-                onViewVault: onViewProofVault,
-                onAddMorePhotos: onContinueNextRoom
-            )
-            .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-            .padding(.top, 8)
-            .padding(.bottom, 32)
+        ProofSavedReceiptView(
+            model: ProofSavedReceiptModel(
+                roomName: summary.roomName,
+                phaseLabel: phaseLabel,
+                photoCount: summary.photoCount,
+                issueCount: summary.issueCount,
+                savedAt: summary.savedAt,
+                imageURL: previewURL,
+                primaryActionLabel: "Continue to next room",
+                secondaryActionLabel: "View proof vault"
+            ),
+            onPrimary: onContinueNextRoom,
+            onSecondary: onViewProofVault,
+            onAddMorePhotos: onContinueNextRoom
+        )
+        .allowsHitTesting(!isBusy)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let errorMessage {
+                MMNotice(message: errorMessage, actionTitle: onRetry != nil ? MMCopy.tryAgain : nil, action: onRetry)
+                    .environment(\.colorScheme, .light)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
+            }
         }
-        .mmProofShellBackground(heroFocus: false, ctaBloom: false)
         .task {
             previewURL = await propertyStore.previewImageURL(for: summary.propertyId)
         }

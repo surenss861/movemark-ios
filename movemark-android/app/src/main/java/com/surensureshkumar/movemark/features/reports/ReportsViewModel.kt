@@ -3,9 +3,11 @@ package com.surensureshkumar.movemark.features.reports
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.surensureshkumar.movemark.core.growth.MoveMarkGrowthCopy
 import com.surensureshkumar.movemark.data.export.DisputePacketReadiness
 import com.surensureshkumar.movemark.data.export.DisputePacketReadinessMapper
-import com.surensureshkumar.movemark.data.export.ExportRealtimeWatcher
+import com.surensureshkumar.movemark.data.export.ExportStatusPoller
+import com.surensureshkumar.movemark.data.export.isActiveJob
 import com.surensureshkumar.movemark.data.export.ExportRepository
 import com.surensureshkumar.movemark.data.export.ExportRow
 import com.surensureshkumar.movemark.data.export.MoveOutReportReadiness
@@ -20,13 +22,17 @@ import com.surensureshkumar.movemark.domain.ProofPhase
 import com.surensureshkumar.movemark.domain.RoomProofMetrics
 import com.surensureshkumar.movemark.features.reports.components.ChecklistItemState
 import com.surensureshkumar.movemark.features.reports.components.ReportChecklistItem
+import com.surensureshkumar.movemark.data.remote.ExportApiException
+import com.surensureshkumar.movemark.data.auth.SessionManager
+import com.surensureshkumar.movemark.data.subscription.MoveInGate
+import com.surensureshkumar.movemark.data.subscription.ReportCreditPolicy
+import com.surensureshkumar.movemark.data.subscription.ReportCreditsManager
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import java.io.File
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -34,7 +40,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -61,10 +66,14 @@ data class ReportsUiState(
     val moveOutReportStatus: String = "Capture move-out proof first.",
     val disputeReadiness: DisputePacketReadiness = DisputePacketReadiness.NoProof,
     val disputePacketStatus: String = "Add room proof first.",
+    /** Display only: the rental the report covers, and its supporting-record and issue-tag counts. */
+    val rentalName: String = "",
+    val supportingRecords: Int = 0,
+    val issueTags: Int = 0,
 )
 
-/** Fallback poll cadence while an export is in flight, as a backstop for a dropped realtime socket. */
-private const val EXPORT_FALLBACK_POLL_INTERVAL_MS = 15_000L
+/** Lease, deposit receipt and listing proof — iOS `moveInRequiredDocumentTypes`. */
+private const val REQUIRED_SUPPORTING_RECORDS = 3
 
 enum class ReportPdfAction {
     View,
@@ -82,8 +91,9 @@ class ReportsViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val propertyStore: PropertyStore,
     private val exportRepository: ExportRepository,
-    private val exportRealtimeWatcher: ExportRealtimeWatcher,
-    subscriptionRepository: SubscriptionRepository,
+    private val subscriptionRepository: SubscriptionRepository,
+    private val credits: ReportCreditsManager,
+    private val sessionManager: SessionManager,
 ) : ViewModel() {
 
     val hasPro: StateFlow<Boolean> = subscriptionRepository.hasPro
@@ -142,24 +152,14 @@ class ReportsViewModel @Inject constructor(
                     return@collect
                 }
                 refreshExports()
-                // Realtime (task #14) replaces the old poll-driven refresh -- postgres_changes on
-                // `exports`, RLS-scoped the same as a direct .select() (exports_select_own), pushes
-                // an update the moment a status flips. The periodic fallback below is a backstop in
-                // case the socket never connects or silently drops; it only runs while something is
-                // actually in flight, so it isn't a constant battery-draining loop like the old
-                // pattern would be.
+                // While an export is in flight, poll the API until its PDF is ready (409 → 200); the poller
+                // probes nothing when no job is active, so this isn't a constant loop.
                 exportWatchJob = viewModelScope.launch {
-                    launch {
-                        runCatching {
-                            exportRealtimeWatcher.watchExportChanges(property.id) { refreshExports() }
-                        }
-                    }
-                    launch {
-                        while (isActive) {
-                            delay(EXPORT_FALLBACK_POLL_INTERVAL_MS)
-                            if (hasActiveExportJob()) refreshExports()
-                        }
-                    }
+                    ExportStatusPoller(isReady = { exportRepository.isReady(it.id) })
+                        .run(
+                            activeExports = { _exports.value.filter { it.verification.isActiveJob } },
+                            onChange = { refreshExports() },
+                        )
                 }
             }
         }
@@ -236,6 +236,29 @@ class ReportsViewModel @Inject constructor(
         }
     }
 
+    private val _paywallRequests = MutableSharedFlow<PaywallReason>(extraBufferCapacity = 1)
+
+    /** The server refused a report with 402: open the paywall for it (iOS `handleExportRequestError`). */
+    val paywallRequests: SharedFlow<PaywallReason> = _paywallRequests.asSharedFlow()
+
+    /** Shared handling of a refused export POST. Returns true when it was handled (paywall or already building). */
+    private suspend fun handleRefusal(error: Exception, reason: PaywallReason): Boolean = when (error) {
+        is ExportApiException.PaymentRequired -> {
+            subscriptionRepository.refreshCustomerInfo()
+            credits.refresh(sessionManager.userId.value)
+            // The server is the source of truth; a purchase may still be syncing to it.
+            if (credits.isPurchaseLikelySyncing) _banner.value = ReportCreditPolicy.PURCHASE_STILL_SYNCING to true
+            else _paywallRequests.tryEmit(reason)
+            true
+        }
+        is ExportApiException.AlreadyActive -> {
+            _banner.value = (error.message ?: "") to false
+            refreshExports()
+            true
+        }
+        else -> false
+    }
+
     private fun queueMoveInReport() {
         val property = propertyStore.currentProperty.value ?: return
         if (_actionInProgress.value) return
@@ -244,16 +267,31 @@ class ReportsViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
+            // Free accounts: one move-in report, plus one per Report Pack (server balance wins once known).
+            val userId = sessionManager.userId.value
+            when (credits.moveInGate(userId, subscriptionRepository.hasPro.value)) {
+                MoveInGate.Allowed -> Unit
+                MoveInGate.Paywall -> {
+                    _paywallRequests.tryEmit(PaywallReason.UnlimitedExports)
+                    return@launch
+                }
+                // Copy only: no credit is assumed while a purchase reaches the server.
+                MoveInGate.StillSyncing -> {
+                    _banner.value = ReportCreditPolicy.PURCHASE_STILL_SYNCING to true
+                    return@launch
+                }
+            }
             _actionInProgress.value = true
             _banner.value = null
             try {
                 withContext(Dispatchers.IO) {
                     exportRepository.queueMoveInReport(property.id)
                 }
+                if (!subscriptionRepository.hasPro.value) userId?.let { credits.recordMoveInExport(it) }
                 _banner.value = "Report queued. Building your PDF…" to false
                 refreshExports()
             } catch (e: Exception) {
-                _banner.value = exportRepository.userMessage(e) to true
+                if (!handleRefusal(e, PaywallReason.UnlimitedExports)) _banner.value = exportRepository.userMessage(e) to true
             } finally {
                 _actionInProgress.value = false
             }
@@ -277,7 +315,7 @@ class ReportsViewModel @Inject constructor(
                 _banner.value = "Move-out report queued. Building your PDF…" to false
                 refreshExports()
             } catch (e: Exception) {
-                _banner.value = exportRepository.userMessage(e) to true
+                if (!handleRefusal(e, PaywallReason.MoveOutReport)) _banner.value = exportRepository.userMessage(e) to true
             } finally {
                 _moveOutActionInProgress.value = false
             }
@@ -316,7 +354,7 @@ class ReportsViewModel @Inject constructor(
                 _banner.value = "Dispute packet queued. Building your PDF…" to false
                 refreshExports()
             } catch (e: Exception) {
-                _banner.value = exportRepository.userMessage(e) to true
+                if (!handleRefusal(e, PaywallReason.DisputePacket)) _banner.value = exportRepository.userMessage(e) to true
             } finally {
                 _disputeActionInProgress.value = false
             }
@@ -415,7 +453,7 @@ class ReportsViewModel @Inject constructor(
             totalRooms = total,
             totalPhotos = photos,
             proofChips = buildProofChips(documented, total, photos),
-            checklistItems = buildChecklist(documented, total, readiness, moveOutPhotos),
+            checklistItems = buildChecklist(documented, total, readiness, moveOutPhotos, property.supportingRecordCount),
             exports = exports,
             moveInActionInProgress = moveInBusy,
             moveOutActionInProgress = moveOutBusy,
@@ -428,6 +466,9 @@ class ReportsViewModel @Inject constructor(
             moveOutReportStatus = moveOutStatusLine(moveOutReadiness),
             disputeReadiness = disputeReadiness,
             disputePacketStatus = disputeStatusLine(disputeReadiness),
+            rentalName = property.title,
+            supportingRecords = property.supportingRecordCount,
+            issueTags = property.rooms.sumOf { RoomProofMetrics.issueTagCount(it) },
         )
     }
 
@@ -443,7 +484,15 @@ class ReportsViewModel @Inject constructor(
         total: Int,
         readiness: ReportReadiness,
         moveOutPhotos: Int,
+        supportingRecords: Int,
     ): List<ReportChecklistItem> {
+        // Same rule as iOS: lease, deposit receipt and listing proof; complete only when all
+        // three are on file, otherwise incomplete (never locked).
+        val docsState = if (supportingRecords >= REQUIRED_SUPPORTING_RECORDS) {
+            ChecklistItemState.Complete
+        } else {
+            ChecklistItemState.Incomplete
+        }
         val roomsState = when {
             total == 0 || documented == 0 -> ChecklistItemState.Incomplete
             documented >= total -> ChecklistItemState.Complete
@@ -468,8 +517,8 @@ class ReportsViewModel @Inject constructor(
             ),
             ReportChecklistItem(
                 title = "Lease & docs",
-                detail = "Add lease and deposit records in your vault",
-                state = ChecklistItemState.Locked,
+                detail = "${supportingRecords.coerceIn(0, REQUIRED_SUPPORTING_RECORDS)} of $REQUIRED_SUPPORTING_RECORDS docs uploaded",
+                state = docsState,
             ),
             ReportChecklistItem(
                 title = "Damage tags",
@@ -492,7 +541,7 @@ class ReportsViewModel @Inject constructor(
                     ReportReadiness.ReadyToShare -> "Ready to view or share"
                     ReportReadiness.Processing -> "Building from saved proof"
                     ReportReadiness.Failed -> "Last report failed — retry when ready"
-                    else -> "Unlocks after room proof"
+                    else -> "Unlocks after room proof + docs"
                 },
                 state = reportState,
             ),
@@ -519,7 +568,7 @@ fun disputePrimaryCta(
         DisputePacketReadiness.ReadyToMake ->
             Triple(if (busy) "Building packet…" else "Build dispute packet", !busy, busy)
         DisputePacketReadiness.ReadyToShare ->
-            Triple(if (busy) "Opening…" else "View / Share packet", !busy, busy)
+            Triple(if (busy) "Opening…" else "View / Share", !busy, busy)
         DisputePacketReadiness.Processing -> Triple("Building packet…", false, false)
         DisputePacketReadiness.Failed -> Triple(if (busy) "Retrying…" else "Retry packet", !busy, busy)
     }
@@ -538,9 +587,9 @@ private fun primaryCta(readiness: ReportReadiness, loading: Boolean, busy: Boole
     return when (readiness) {
         ReportReadiness.NotReady, ReportReadiness.NoVault -> Triple("Continue room proof", true, false)
         ReportReadiness.ReadyToMake -> Triple(if (busy) "Making report…" else "Make report", !busy, busy)
-        ReportReadiness.ReadyToShare -> Triple(if (busy) "Opening…" else "View / Share report", !busy, busy)
-        ReportReadiness.Processing -> Triple("Building report…", false, false)
-        ReportReadiness.Failed -> Triple(if (busy) "Retrying…" else "Retry report", !busy, busy)
+        ReportReadiness.ReadyToShare -> Triple(if (busy) "Opening…" else "View / Share", !busy, busy)
+        ReportReadiness.Processing -> Triple("Building…", false, false)
+        ReportReadiness.Failed -> Triple(if (busy) "Retrying…" else "Try again", !busy, busy)
     }
 }
 
@@ -553,10 +602,10 @@ fun moveOutPrimaryCta(
     return when (readiness) {
         MoveOutReportReadiness.NoProof -> Triple("Open move-out proof", true, false)
         MoveOutReportReadiness.ReadyToMake ->
-            Triple(if (busy) "Making move-out report…" else "Make move-out report", !busy, busy)
+            Triple(if (busy) "Making report…" else "Make move-out report", !busy, busy)
         MoveOutReportReadiness.ReadyToShare ->
-            Triple(if (busy) "Opening…" else "View / Share report", !busy, busy)
-        MoveOutReportReadiness.Processing -> Triple("Building move-out report…", false, false)
+            Triple(if (busy) "Opening…" else "View / Share", !busy, busy)
+        MoveOutReportReadiness.Processing -> Triple("Building report…", false, false)
         MoveOutReportReadiness.Failed -> Triple(if (busy) "Retrying…" else "Retry report", !busy, busy)
     }
 }
@@ -564,7 +613,7 @@ fun moveOutPrimaryCta(
 fun ReportsUiState.heroHeadline(): String = when (readiness) {
     ReportReadiness.NotReady, ReportReadiness.NoVault -> "Finish room proof first."
     ReportReadiness.ReadyToMake -> "You have enough proof to create a move-in report."
-    ReportReadiness.ReadyToShare -> "Your move-in report is ready to share."
+    ReportReadiness.ReadyToShare -> MoveMarkGrowthCopy.MOVE_IN_RECORD_READY
     ReportReadiness.Processing -> "Building your PDF report."
     ReportReadiness.Failed -> "We couldn't finish your report."
 }
@@ -572,7 +621,8 @@ fun ReportsUiState.heroHeadline(): String = when (readiness) {
 fun ReportsUiState.heroFootnote(): String? = when (readiness) {
     ReportReadiness.NotReady, ReportReadiness.NoVault ->
         "Complete each room before creating your report."
-    ReportReadiness.ReadyToMake -> "Add more rooms for a stronger report."
+    ReportReadiness.ReadyToMake -> "Add more rooms and docs for a stronger report."
+    ReportReadiness.ReadyToShare -> MoveMarkGrowthCopy.MOVE_IN_RECORD_READY_DETAIL
     else -> null
 }
 

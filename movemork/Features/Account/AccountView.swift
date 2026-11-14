@@ -2,7 +2,8 @@
 //  AccountView.swift
 //  movemork
 //
-//  MoveMark — quiet native account settings.
+//  MoveMark — Account: session, plan (RevenueCat entitlement), restore, legal links and deletion.
+//  ``AccountHomeView`` draws it.
 //
 
 import SwiftUI
@@ -10,7 +11,6 @@ import SwiftUI
 struct AccountView: View {
     @Environment(\.mmRootTabBarVisible) private var rootTabBarVisible
     @Environment(\.openURL) private var openURL
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(SessionManager.self) private var sessionManager
     @Environment(PropertyStore.self) private var propertyStore
     @Environment(SubscriptionManager.self) private var subscriptionManager
@@ -18,18 +18,12 @@ struct AccountView: View {
     @State private var showEditName = false
     @State private var showPaywall = false
     @State private var showDeleteAccount = false
-    @State private var resetMessage: String? = nil
-    @State private var resetError: String? = nil
-    @State private var isSendingReset = false
-    @State private var subscriptionRestoreFeedback: String? = nil
-    @State private var contentAppeared = false
+    @State private var restoreFeedback: AccountHomeModel.Feedback? = nil
+    /// Photos only on this iPhone (not uploaded yet) when Sign out was tapped; > 0 asks first.
+    @State private var unsavedPhotoCount = 0
+    @State private var confirmSignOut = false
 
     private static let appleSubscriptionsURL = URL(string: "https://apps.apple.com/account/subscriptions")!
-
-    private var displayName: String {
-        let name = sessionManager.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? "Add your name" : name
-    }
 
     private var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
@@ -37,293 +31,105 @@ struct AccountView: View {
         return "\(version) (\(build))"
     }
 
-    var body: some View {
-        ZStack {
-            Color.clear
-                .mmProofShellBackground(heroFocus: false, ctaBloom: false)
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    MMProofSectionHeader(
-                        title: "Account",
-                        subtitle: "Manage your profile, plan, and proof vaults."
-                    )
-                    .mmAppearRise(isVisible: contentAppeared, delay: 0, offset: 6)
-
-                    profileSection
-                    planSection
-                    privacySupportSection
-                    securitySection
-                    aboutSection
-                    signOutSection
-
-                    Color.clear
-                        .frame(height: rootTabBarVisible
-                            ? MoveMarkTheme.Spacing.scrollTailAccountTabChrome
-                            : MoveMarkTheme.Spacing.scrollTailFocusedFlow)
-                }
-                .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.top, 12)
-                .mmScrollContentTopInset(2)
-            }
-        }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            if !contentAppeared { contentAppeared = true }
-        }
-        .sheet(isPresented: $showPaywall) {
-            ProPaywallView(
-                reason: .extraProperty,
-                onClose: { showPaywall = false }
-            )
-        }
-        .sheet(isPresented: $showEditName) {
-            EditNameSheet(
-                currentName: sessionManager.firstName,
-                onSave: { newName in
-                    try sessionManager.updateProfileFullName(newName)
-                }
-            )
-        }
-        .sheet(isPresented: $showDeleteAccount) {
-            NavigationStack {
-                DeleteAccountView()
-            }
-            .environment(sessionManager)
-            .environment(propertyStore)
-            .environment(subscriptionManager)
-        }
-    }
-
-    // MARK: - Profile
-
-    private var profileSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            MMSettingsSectionHeader(title: "Profile")
-
-            MMSettingsGroup {
-                MMSettingsRow(
-                    title: "Name",
-                    accessory: .value(displayName),
-                    action: nil
-                )
-
-                MMSettingsDivider()
-
-                MMSettingsRow(
-                    title: "Email",
-                    accessory: .value(
-                        sessionManager.userEmail.isEmpty ? "—" : sessionManager.userEmail
-                    ),
-                    action: nil
-                )
-
-                MMSettingsDivider()
-
-                MMSettingsRow(
-                    title: "Edit name",
-                    subtitle: "Update how your name appears",
-                    action: { showEditName = true }
-                )
-            }
-        }
-        .mmAppearRise(isVisible: contentAppeared, delay: 0.04, offset: 6)
-    }
-
-    // MARK: - Plan
-
-    private var planSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            MMSettingsSectionHeader(
-                title: "Plan",
-                footer: planStatusSummary
-            )
-
-            MMSettingsGroup {
-                MMSettingsRow(
-                    title: subscriptionManager.hasPro ? "MoveMark Pro" : "MoveMark Free",
-                    accessory: .pill(
-                        subscriptionManager.hasPro ? "Active" : "Current",
-                        subscriptionManager.hasPro ? .success : .neutral
-                    ),
-                    action: nil
-                )
-
-                if !subscriptionManager.hasPro {
-                    MMSettingsDivider()
-
-                    MMSettingsRow(
-                        title: "Upgrade to Pro",
-                        subtitle: "Unlimited vaults, reports, and dispute tools",
-                        action: {
-                            subscriptionRestoreFeedback = nil
-                            showPaywall = true
-                        }
-                    )
-                }
-
-                if subscriptionManager.hasPro {
-                    MMSettingsDivider()
-
-                    MMSettingsRow(
-                        title: "Manage subscription",
-                        subtitle: "Apple subscriptions",
-                        accessory: .external,
-                        action: { openURL(Self.appleSubscriptionsURL) }
-                    )
-                }
-
-                MMSettingsDivider()
-
-                MMSettingsRow(
-                    title: subscriptionManager.isLoading ? "Restoring purchases…" : "Restore purchases",
-                    subtitle: "Sync MoveMark Pro with this Apple ID",
-                    isDisabled: subscriptionManager.isLoading,
-                    action: { runSubscriptionRestore() }
-                )
-            }
-
-            if let subscriptionRestoreFeedback {
-                Text(subscriptionRestoreFeedback)
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 4)
-                    .padding(.top, 2)
-            }
-        }
-        .mmAppearRise(isVisible: contentAppeared, delay: 0.08, offset: 6)
-    }
-
-    private var planStatusSummary: String {
-        if subscriptionManager.hasPro {
-            return "Unlimited vaults, reports, move-out proof, and dispute tools."
-        }
-        return "1 proof vault · 1 move-in report"
-    }
-
-    // MARK: - Privacy & support
-
-    private var privacySupportSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            MMSettingsSectionHeader(title: "Privacy & support")
-
-            MMSettingsGroup {
-                settingsLinkRow(
-                    title: "Privacy Policy",
-                    subtitle: "How we handle your data",
-                    url: privacyPolicyURL
-                )
-                MMSettingsDivider()
-                settingsLinkRow(
-                    title: "Terms of Use",
-                    subtitle: "Subscription and service terms",
-                    url: termsURL
-                )
-                MMSettingsDivider()
-                settingsLinkRow(
-                    title: "Contact Support",
-                    subtitle: "Get help with your account",
-                    url: supportURL ?? supportEmailURL
-                )
-                MMSettingsDivider()
-                MMSettingsRow(
-                    title: "Account & Data Deletion",
-                    subtitle: "Permanently delete your account and data",
-                    action: { showDeleteAccount = true }
-                )
-            }
-        }
-        .mmAppearRise(isVisible: contentAppeared, delay: 0.12, offset: 6)
-    }
-
-    private func settingsLinkRow(title: String, subtitle: String, url: URL?) -> some View {
-        MMSettingsRow(
-            title: title,
-            subtitle: url == nil ? "Not configured in this build" : subtitle,
-            accessory: url == nil ? .none : .external,
-            isDisabled: url == nil,
-            action: {
-                guard let url else { return }
-                openURL(url)
-            }
+    private var model: AccountHomeModel {
+        let name = sessionManager.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return AccountHomeModel(
+            email: sessionManager.userEmail,
+            name: name.isEmpty ? nil : name,
+            isPro: subscriptionManager.hasPro,
+            isRestoring: subscriptionManager.isStoreKitBusy,
+            restoreFeedback: restoreFeedback,
+            hasSupport: supportURL != nil,
+            hasPrivacyPolicy: privacyPolicyURL != nil,
+            hasTerms: termsURL != nil,
+            appVersion: appVersion
         )
     }
 
-    // MARK: - Security
-
-    private var securitySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            MMSettingsSectionHeader(title: "Security")
-
-            MMSettingsGroup {
-                MMSettingsRow(
-                    title: "Reset password",
-                    subtitle: "Send a link to your email",
-                    accessory: isSendingReset ? .value("Sending…") : .chevron,
-                    isDisabled: isSendingReset,
-                    action: { sendPasswordReset() }
+    var body: some View {
+        AccountHomeView(model: model, onAction: perform)
+            // At the root the dark header runs under the status bar; pushed, the back button sits on it.
+            .toolbar(rootTabBarVisible ? .hidden : .automatic, for: .navigationBar)
+            .toolbarBackground(AccountHomeView.headerColor, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .sheet(isPresented: $showPaywall) {
+                ProPaywallView(
+                    reason: .account,
+                    onClose: { showPaywall = false },
+                    moveInRecorded: hasMoveInPhotos
                 )
             }
-
-            if let resetMessage {
-                Text(resetMessage)
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                    .padding(.horizontal, 4)
-                    .padding(.top, 2)
-            }
-
-            if let resetError {
-                Text(resetError)
-                    .font(MoveMarkTheme.Typography.footnote)
-                    .foregroundStyle(MoveMarkTheme.Colors.semanticDanger.opacity(0.92))
-                    .padding(.horizontal, 4)
-                    .padding(.top, 2)
-            }
-        }
-        .mmAppearRise(isVisible: contentAppeared, delay: 0.16, offset: 6)
-    }
-
-    // MARK: - About
-
-    private var aboutSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            MMSettingsSectionHeader(title: "About")
-
-            MMSettingsGroup {
-                MMSettingsRow(
-                    title: "App version",
-                    accessory: .value(appVersion),
-                    action: nil
+            .sheet(isPresented: $showEditName) {
+                EditNameSheet(
+                    currentName: sessionManager.firstName,
+                    onSave: { newName in
+                        try await sessionManager.updateProfileFullName(newName)
+                    }
                 )
             }
-
-            Text("MoveMark helps renters document proof and records. It does not provide legal advice.")
-                .font(MoveMarkTheme.Typography.footnote)
-                .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 4)
-                .padding(.top, 2)
-        }
-        .mmAppearRise(isVisible: contentAppeared, delay: 0.2, offset: 6)
-    }
-
-    // MARK: - Sign out
-
-    private var signOutSection: some View {
-        MMSettingsGroup {
-            MMSettingsRow(
-                title: "Sign out",
-                subtitle: "Clear this device and return to Welcome",
-                action: {
-                    propertyStore.clear()
-                    Task { await sessionManager.signOut() }
+            .confirmationDialog(
+                unsavedPhotoCount == 1
+                    ? "1 photo hasn’t been saved yet. Signing out removes it from this iPhone."
+                    : "\(unsavedPhotoCount) photos haven’t been saved yet. Signing out removes them from this iPhone.",
+                isPresented: $confirmSignOut,
+                titleVisibility: .visible
+            ) {
+                Button("Sign out", role: .destructive) { signOut() }
+                Button("Cancel", role: .cancel) {}
+            }
+            .sheet(isPresented: $showDeleteAccount) {
+                NavigationStack {
+                    DeleteAccountView()
                 }
-            )
+                .environment(sessionManager)
+                .environment(propertyStore)
+                .environment(subscriptionManager)
+            }
+    }
+
+    private func perform(_ action: AccountHomeView.Action) {
+        switch action {
+        case .editName:
+            showEditName = true
+        case .subscription:
+            restoreFeedback = nil
+            if subscriptionManager.hasPro { openURL(Self.appleSubscriptionsURL) } else { showPaywall = true }
+        case .restore:
+            runSubscriptionRestore()
+        case .support:
+            if let supportURL { openURL(supportURL) }
+        case .privacy:
+            if let privacyPolicyURL { openURL(privacyPolicyURL) }
+        case .terms:
+            if let termsURL { openURL(termsURL) }
+        case .signOut:
+            guard let userId = sessionManager.userId else { signOut(); return }
+            Task {
+                unsavedPhotoCount = await PendingEvidenceCenter.shared.pendingCount(userId: userId)
+                if unsavedPhotoCount > 0 { confirmSignOut = true } else { signOut() }
+            }
+        case .deleteAccount:
+            showDeleteAccount = true
         }
-        .mmAppearRise(isVisible: contentAppeared, delay: 0.24, offset: 6)
+    }
+
+    /// Signing out on purpose clears this user's pending (not uploaded) photos from the phone.
+    private func signOut() {
+        let userId = sessionManager.userId
+        propertyStore.clear()
+        // Downloaded reports are personal records: they don't outlive the session on a shared iPhone.
+        ReportFileDownloader.clearCache()
+        Task {
+            if let userId { await PendingEvidenceCenter.shared.clearUser(userId) }
+            await sessionManager.signOut()
+        }
+    }
+
+    /// The current rental already has move-in photos (paywall timeline's first step).
+    private var hasMoveInPhotos: Bool {
+        guard let property = propertyStore.currentProperty else { return false }
+        return propertyStore.totalPhotoCount(for: property) > 0
     }
 
     // MARK: - Legal URLs
@@ -340,32 +146,21 @@ struct AccountView: View {
         legalURL(forInfoKey: "LegalSupportURL")
     }
 
-    private var supportEmail: String {
-        (Bundle.main.object(forInfoDictionaryKey: "LegalSupportEmail") as? String)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    }
-
-    private var supportEmailURL: URL? {
-        guard !supportEmail.isEmpty else { return nil }
-        return URL(string: "mailto:\(supportEmail)")
-    }
-
     // MARK: - Actions
 
     private func runSubscriptionRestore() {
-        subscriptionRestoreFeedback = nil
+        restoreFeedback = nil
 
         Task { @MainActor in
             let restored = await subscriptionManager.restorePurchases(forUser: sessionManager.userId)
             if restored, subscriptionManager.hasPro {
-                subscriptionRestoreFeedback = "MoveMark Pro is active on this Apple ID."
-            } else if restored, subscriptionManager.reportPackCredits(forUser: sessionManager.userId) > 0 {
-                subscriptionRestoreFeedback = "Report Pack credit restored on this Apple ID."
+                restoreFeedback = .init(message: "MoveMark Pro is active on this Apple ID.")
+            } else if restored, subscriptionManager.hasUsableReportPackCredit(forUser: sessionManager.userId) {
+                restoreFeedback = .init(message: "Report Pack credit restored on this Apple ID.")
             } else if let err = subscriptionManager.lastRestoreErrorMessage {
-                subscriptionRestoreFeedback = err
+                restoreFeedback = .init(message: err, isError: true)
             } else {
-                subscriptionRestoreFeedback =
-                    "No active MoveMark subscription or Report Pack was found for this Apple ID."
+                restoreFeedback = .init(message: "No active MoveMark subscription or Report Pack was found for this Apple ID.")
             }
         }
     }
@@ -380,76 +175,94 @@ struct AccountView: View {
         }
         return url
     }
-
-    private func sendPasswordReset() {
-        let email = sessionManager.userEmail
-        guard !email.isEmpty else {
-            resetError = "No email on file for this account."
-            resetMessage = nil
-            return
-        }
-
-        resetError = nil
-        resetMessage = nil
-        isSendingReset = true
-
-        Task { @MainActor in
-            defer { isSendingReset = false }
-            do {
-                try await sessionManager.sendPasswordReset(email: email)
-                resetMessage = "Check your email for a link to reset your password."
-            } catch {
-                resetError = MoveMarkFlowMessage.accountPasswordResetFailed(error)
-            }
-        }
-    }
 }
 
-private struct EditNameSheet: View {
+struct EditNameSheet: View {
     let currentName: String
-    let onSave: (String) throws -> Void
+    let onSave: (String) async throws -> Void
     @Environment(\.dismiss) private var dismiss
 
     @State private var name: String
     @State private var isSaving = false
     @State private var errorMessage: String? = nil
+    @FocusState private var fieldFocused: Bool
+    @State private var confirmDiscard = false
 
     private var trimmedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    init(currentName: String, onSave: @escaping (String) throws -> Void) {
+    /// An edited name that closing the sheet would lose.
+    private var hasChanges: Bool {
+        trimmedName != currentName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canSave: Bool {
+        !isSaving && !trimmedName.isEmpty && trimmedName != currentName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// `draftName` / `initialError` are snapshot seams for the error state; the app starts from the current name.
+    init(currentName: String, onSave: @escaping (String) async throws -> Void, draftName: String? = nil, initialError: String? = nil) {
         self.currentName = currentName
         self.onSave = onSave
-        _name = State(initialValue: currentName)
+        _name = State(initialValue: draftName ?? currentName)
+        _errorMessage = State(initialValue: initialError)
     }
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                MMTextField(title: "Full name", placeholder: "Enter your full name", text: $name)
+            MMSheetScaffold(title: "") {
+                VStack(alignment: .leading, spacing: 8) {
+                    // Field label in the light-sheet style ("Room name", "Issue title").
+                    Text("Your name")
+                        .mmFont(13, .medium)
+                        .foregroundStyle(MMInk.secondary)
+                        .accessibilityHidden(true)
+                    TextField("Full name", text: $name)
+                        .mmFont(17)
+                        .foregroundStyle(MMInk.text)
+                        .tint(MMInk.text)
+                        .textContentType(.name)
+                        .textInputAutocapitalization(.words)
+                        .autocorrectionDisabled()
+                        .submitLabel(.done)
+                        .onSubmit { if canSave { saveName() } }
+                        .focused($fieldFocused)
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 52)
+                        .background(MMInk.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(errorMessage == nil ? MMInk.cardStroke : MMInk.danger.opacity(0.6), lineWidth: 1))
+                        .accessibilityLabel("Your name")
+                        .accessibilityIdentifier("Full name")
+                    Text("Used on your MoveMark account.")
+                        .mmFont(13)
+                        .foregroundStyle(MMInk.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.top, 12)
 
                 if let errorMessage {
-                    Text(errorMessage)
-                        .font(MoveMarkTheme.Typography.footnote)
-                        .foregroundStyle(MoveMarkTheme.Colors.semanticDanger.opacity(0.92))
-                }
-            }
-            .padding()
-            .navigationTitle("Edit name")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    MMNotice(message: errorMessage)
+                        .padding(.top, 16)
                 }
 
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        saveName()
+                MMPrimaryButton(title: isSaving ? "Saving…" : "Save", isLoading: isSaving, isDisabled: !canSave) {
+                    saveName()
+                }
+                .padding(.top, 24)
+            }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        MMDiscardChanges.cancel(hasChanges: hasChanges, isConfirming: $confirmDiscard, dismiss: { dismiss() })
                     }
-                    .disabled(isSaving || trimmedName.isEmpty || trimmedName == currentName.trimmingCharacters(in: .whitespacesAndNewlines))
+                    .disabled(isSaving)
                 }
             }
+            .onAppear { fieldFocused = true }
+            .mmDiscardChangesGuard(hasChanges: hasChanges, isBusy: isSaving, isConfirming: $confirmDiscard,
+                                   onDiscard: { dismiss() })
         }
     }
 
@@ -459,15 +272,18 @@ private struct EditNameSheet: View {
             errorMessage = "Enter your full name."
             return
         }
+        guard !isSaving else { return }
         errorMessage = nil
         isSaving = true
-        defer { isSaving = false }
 
-        do {
-            try onSave(nextName)
-            dismiss()
-        } catch {
-            errorMessage = MoveMarkFlowMessage.accountProfileUpdateFailed(error)
+        Task { @MainActor in
+            defer { isSaving = false }
+            do {
+                try await onSave(nextName)
+                dismiss()
+            } catch {
+                errorMessage = MoveMarkFlowMessage.accountProfileUpdateFailed(error)
+            }
         }
     }
 }

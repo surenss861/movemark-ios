@@ -11,6 +11,8 @@ import UIKit
 struct ProofPhotoGridView: View {
     let images: [UIImage]
     var isUploading: Bool = false
+    /// Remove one pending photo (before saving). Nil: no remove control.
+    var onRemove: ((Int) -> Void)? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -29,6 +31,21 @@ struct ProofPhotoGridView: View {
                     ForEach(Array(images.enumerated()), id: \.offset) { index, image in
                         ProofPhotoGridCell(image: image, isUploading: isUploading)
                             .aspectRatio(1, contentMode: .fit)
+                            .overlay(alignment: .topTrailing) {
+                                if let onRemove, !isUploading {
+                                    Button { onRemove(index) } label: {
+                                        Image(systemName: "xmark")
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundStyle(.white)
+                                            .frame(width: 26, height: 26)
+                                            .background(Color.black.opacity(0.6), in: Circle())
+                                            .frame(width: 44, height: 44)
+                                            .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("Remove photo \(index + 1)")
+                                }
+                            }
                             .mmAppearRise(isVisible: true, delay: reduceMotion ? 0 : Double(index) * 0.03, offset: 4)
                     }
                 }

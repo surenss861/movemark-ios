@@ -2,7 +2,8 @@
 //  ExportHistoryRow.swift
 //  movemork
 //
-//  Compact export history row — document-first, not photo cards.
+//  Archival export row: title, date, and a status badge only when the export is not ready.
+//  Ready rows open on tap; failed rows offer Retry.
 //
 
 import SwiftUI
@@ -10,6 +11,7 @@ import SwiftUI
 struct ExportHistoryRow: View {
     let title: String
     let dateLine: String
+    var recordId: String? = nil
     let statusLabel: String
     let statusTone: ProofStatusTone
     var isProcessing: Bool = false
@@ -19,46 +21,47 @@ struct ExportHistoryRow: View {
     var onRetry: (() -> Void)? = nil
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            ProofDocumentPreview(
-                large: false,
-                isBright: canShare,
-                isProcessing: isProcessing
-            )
+        Button {
+            if canShare { onShare() } else if canRetry { onRetry?() }
+        } label: {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(MoveMarkTheme.Typography.subheadlineMedium)
+                        .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
+                        .lineLimit(2)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(MoveMarkTheme.Typography.detailMedium)
-                    .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                    .lineLimit(1)
+                    Text(dateLine)
+                        .font(MoveMarkTheme.Typography.monoMeta)
+                        .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                        .lineLimit(1)
 
-                Text(dateLine)
+                    if let recordId, !recordId.isEmpty {
+                        Text(recordId)
+                            .font(MoveMarkTheme.Typography.monoMeta)
+                            .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                            .lineLimit(1)
+                    }
+                }
+                .layoutPriority(1)
+
+                Spacer(minLength: 8)
+
+                if !canShare {
+                    ProofStatusBadge(text: canRetry ? "Failed · Retry" : statusLabel, tone: statusTone)
+                }
+
+                Image(systemName: "chevron.right")
                     .font(MoveMarkTheme.Typography.caption)
-                    .foregroundStyle(MoveMarkTheme.Colors.textMuted)
-
-                ProofStatusBadge(text: statusLabel, tone: statusTone)
+                    .foregroundStyle(MoveMarkTheme.Colors.textMuted.opacity(canShare || canRetry ? 1 : 0))
             }
-
-            Spacer(minLength: 0)
-
-            if canShare {
-                MMButton(
-                    title: "Share",
-                    action: onShare,
-                    kind: .quiet,
-                    size: .compact,
-                    expandsToFillWidth: false
-                )
-            } else if canRetry, let onRetry {
-                MMButton(
-                    title: "Retry",
-                    action: onRetry,
-                    kind: .quiet,
-                    size: .compact,
-                    expandsToFillWidth: false
-                )
-            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 13)
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, 4)
+        .buttonStyle(.plain)
+        .disabled(!canShare && !canRetry)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(canShare ? "Opens the report" : (canRetry ? "Retries the export" : ""))
     }
 }

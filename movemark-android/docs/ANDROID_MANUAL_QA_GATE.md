@@ -18,9 +18,9 @@ Expected:
 emulator-5554    device
 ```
 
-3. **Secrets** — `movemark-android/local.properties` has `SUPABASE_URL` and `SUPABASE_ANON_KEY` (copy from `local.properties.example`).
+3. **Endpoints** — `movemark-android/local.properties` has `NEON_AUTH_URL`, `NEON_DATA_API_URL` and `MOVEMARK_API_BASE_URL` for a non-production branch (copy from `local.properties.example`). Release builds always use production.
 
-4. **Supabase** — For sign-up QA, disable “Confirm email” in Supabase Auth **or** use the confirm-email message and sign in after confirming.
+4. **Neon Auth** — If the branch requires email verification, sign-up shows the confirm-email message; sign in after confirming.
 
 ---
 
@@ -66,7 +66,7 @@ Or Android Studio: open `movemark-android` → **Run**.
 - **Logcat:**
 
 ```bash
-adb logcat | grep -iE 'MoveMark|Supabase|AndroidRuntime|FATAL'
+adb logcat | grep -iE 'MoveMark|NeonAuth|AndroidRuntime|FATAL'
 ```
 
 ---
@@ -85,7 +85,7 @@ build:
 
 | Area | Symptom |
 |------|---------|
-| Auth | “Confirm your email” — sign in after confirm, or disable confirm in Supabase |
+| Auth | “Confirm your email” — sign in after confirming (branch requires verification) |
 | Vault empty | Property created but rooms missing — check `rooms` insert / RLS |
 | Upload | “Photos could not be uploaded” — `inspection-media` bucket + storage RLS |
 | Counts stuck | Save OK but still `0 of 10` — hydration; check Logcat after save |
