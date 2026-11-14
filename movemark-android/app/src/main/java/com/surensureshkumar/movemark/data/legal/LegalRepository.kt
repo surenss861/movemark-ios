@@ -196,6 +196,9 @@ enum class LegalStatusFailure {
 
     companion object {
         fun classify(error: Throwable): LegalStatusFailure = when {
+            // An identity the server couldn't read (after the one retry) is an error, never "required" (1059).
+            listOfNotNull((error as? PostgrestException)?.serverMessage, error.message)
+                .any { it.contains("LEGAL_NOT_AUTHENTICATED") } -> Unavailable
             generateSequence(error) { it.cause }.any { it is java.io.IOException } -> Offline
             (error as? PostgrestException)?.code == "PGRST202" ||
                 (error as? PostgrestException)?.serverMessage?.contains("PGRST202") == true -> ServerWithoutGate

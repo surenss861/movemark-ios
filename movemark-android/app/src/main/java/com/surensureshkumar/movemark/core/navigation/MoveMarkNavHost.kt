@@ -2,6 +2,7 @@ package com.surensureshkumar.movemark.core.navigation
 
 import com.surensureshkumar.movemark.features.account.AccountViewModel
 import com.surensureshkumar.movemark.features.legal.LegalAcceptanceScreen
+import com.surensureshkumar.movemark.features.legal.LegalGatePhase
 import com.surensureshkumar.movemark.features.legal.LegalGateViewModel
 import com.surensureshkumar.movemark.features.legal.LegalStatusUnavailableScreen
 import androidx.compose.runtime.Composable
@@ -94,7 +95,7 @@ fun MoveMarkNavHost() {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(authState, hasProperty, firstRunComplete, needsOnboarding, legal.required, legal.statusUnavailable) {
+    LaunchedEffect(authState, hasProperty, firstRunComplete, needsOnboarding, legal.phase) {
         when (authState) {
             AuthState.Loading -> Unit
             AuthState.SignedOut -> {
@@ -105,16 +106,18 @@ fun MoveMarkNavHost() {
                 }
             }
             AuthState.SignedIn -> {
-                val dest = when {
-                    legal.statusUnavailable -> Routes.LegalStatusUnavailable
-                    legal.required == null -> return@LaunchedEffect
-                    legal.required == true -> Routes.LegalAcceptance
+                val dest = when (legal.phase) {
+                    LegalGatePhase.Unavailable -> Routes.LegalStatusUnavailable
+                    LegalGatePhase.Loading -> return@LaunchedEffect
+                    LegalGatePhase.NeedsAcceptance -> Routes.LegalAcceptance
+                    LegalGatePhase.Accepted, LegalGatePhase.OpenOnCache -> when {
                     needsOnboarding == null -> return@LaunchedEffect
                     needsOnboarding == true -> Routes.Onboarding
                     hasProperty == false -> Routes.CreateProperty
                     hasProperty == true && firstRunComplete == false -> Routes.FirstRunRoomPicker
                     hasProperty == true -> Routes.Main
                     else -> return@LaunchedEffect
+                    }
                 }
                 if (navController.currentDestination?.route != dest) {
                     navController.navigate(dest) {

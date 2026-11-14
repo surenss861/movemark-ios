@@ -29,9 +29,29 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+/**
+ * Where the legal step stands for the signed-in session. "Needs acceptance" and "accepted" come only from an
+ * authenticated, successful status response; every other outcome has its own phase and never shows the agreement.
+ * (Signed out is the navigation's state: the gate resets to [Loading].)
+ */
+enum class LegalGatePhase {
+    /** No answer yet for this session. */
+    Loading,
+    /** The server confirmed, for this account, that the current documents still need agreeing to. */
+    NeedsAcceptance,
+    /** The server confirmed, for this account, that nothing is needed. */
+    Accepted,
+    /** Offline, or a server without the gate: the app opens on its cache; the server enforces, not this. */
+    OpenOnCache,
+    /** The server answered with an error, including an unauthenticated identity: "Can't open your Vault yet". */
+    Unavailable,
+}
+
 data class LegalGateState(
     /** Null until the server has answered for this session. */
     val required: Boolean? = null,
+    /** True only when [required] comes from an authenticated, successful status response. */
+    val verified: Boolean = false,
     val documents: LegalDocuments? = null,
     /** The server's `age_requirement`: null (a server without 1055) means no age question. */
     val ageRequirement: String? = null,
@@ -43,6 +63,16 @@ data class LegalGateState(
     val statusUnavailable: Boolean = false,
     val isRetrying: Boolean = false,
 ) {
+    val phase: LegalGatePhase
+        get() = when {
+            statusUnavailable -> LegalGatePhase.Unavailable
+            required == null -> LegalGatePhase.Loading
+            required == true && verified -> LegalGatePhase.NeedsAcceptance
+            required == true -> LegalGatePhase.Unavailable // never an unverified "required"
+            verified -> LegalGatePhase.Accepted
+            else -> LegalGatePhase.OpenOnCache
+        }
+
     /** The statement this build understands; null with no age code, or with one this build doesn't know. */
     val age: LegalAgeRequirement? get() = ageRequirement?.let(LegalAgeRequirement::fromCode)
 
@@ -59,6 +89,7 @@ data class LegalGateState(
         fun from(status: LegalStatus?, error: String? = null) = LegalGateState(
             // No answer (a server without the gate, or unreachable) opens the app: the server enforces, not this.
             required = status?.needsAcceptance == true,
+            verified = status != null,
             documents = status?.documents,
             ageRequirement = status?.ageRequirement,
             error = error,
