@@ -201,6 +201,15 @@ struct PendingEvidenceSyncTests {
         #expect(server.openTickets.isEmpty, "open tickets", sourceLocation: sourceLocation)
     }
 
+    /// The receipt's Saved time reads PostgREST's created_at (microseconds, +00:00) as a full timestamp.
+    @MainActor @Test func serverCreatedAtParsesAsTheReceiptTime() {
+        let parsed = MMCaseDate.parse("2026-11-14T21:12:03.123456+00:00")
+        #expect(parsed?.hasTime == true)
+        let utc = Calendar(identifier: .gregorian)
+        let parts = parsed.map { utc.dateComponents(in: TimeZone(identifier: "UTC")!, from: $0.date) }
+        #expect(parts?.hour == 21 && parts?.minute == 12 && parts?.second == 3)
+    }
+
     // MARK: The standard
 
     /// 10 photos captured → kill (mid-save) → reopen → offline → add more → kill again → reopen → reconnect:
