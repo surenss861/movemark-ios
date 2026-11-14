@@ -1,4 +1,4 @@
--- Rollback of 1059: get_legal_status() answers for auth.user_id() without a null check again (1030's body).
+-- Rollback of 1061: get_legal_status() answers for auth.user_id() without a null check again (1030's body).
 -- Ships as a new forward migration if ever needed, never pasted (see README).
 CREATE OR REPLACE FUNCTION public.get_legal_status()
 RETURNS jsonb

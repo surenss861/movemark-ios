@@ -1,5 +1,5 @@
 -- =============================================================================
--- 1059: get_legal_status() refuses a request without a user id instead of answering for nobody.
+-- 1061: get_legal_status() refuses a request without a user id instead of answering for nobody.
 --
 -- Found 2026-11-13 (Android 1.4.0 on a Galaxy A14, P1): after accepting, a cold start showed the agreement again.
 -- 1030 defined get_legal_status() as legal_status_for_user(nullif(auth.user_id(), '')::uuid) with no null check.
@@ -16,7 +16,7 @@
 -- Vault yet" with Try again, never the agreement. Android 1.4.0 2026111301 treats the error as "no answer" and opens
 -- the app (enforcement is off). Nothing is enforced or recorded by this migration.
 --
--- Rollback: rollback/1059_legal_status_requires_identity.down.sql (restores 1030's body).
+-- Rollback: rollback/1061_legal_status_requires_identity.down.sql (restores 1030's body).
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION public.get_legal_status()
