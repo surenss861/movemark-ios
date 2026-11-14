@@ -131,6 +131,15 @@ private fun FullScreenCase(screen: String): Boolean {
         )
         "onboarding" -> com.surensureshkumar.movemark.features.onboarding.OnboardingNameScreen(onContinue = {})
         "create-property" -> com.surensureshkumar.movemark.features.firstrun.CreatePropertyScreen(onCreated = {})
+        // The screens below read the signed-in rental; with none (fixture data only) they show their empty states,
+        // which is enough to check the 1.4 layout (header, sheet, groups, actions).
+        "first-room" -> com.surensureshkumar.movemark.features.firstrun.FirstRunRoomPickerScreen(onStartProof = {}, onSkipToMain = {})
+        "password-reset" -> com.surensureshkumar.movemark.features.auth.PasswordResetScreen(onReset = { _, _ -> }, onDone = {})
+        "edit-rental" -> com.surensureshkumar.movemark.features.property.EditRentalScreen(onClose = {})
+        "documents" -> com.surensureshkumar.movemark.features.documents.DocumentsScreen(onBack = {}, onEditRental = {})
+        "maintenance" -> com.surensureshkumar.movemark.features.maintenance.MaintenanceLogScreen(onBack = {}, onOpenIssue = {})
+        "move-out" -> com.surensureshkumar.movemark.features.moveout.MoveOutRoomsScreen(onBack = {}, onOpenRoom = {})
+        "dispute" -> com.surensureshkumar.movemark.features.dispute.DisputePacketScreen(onBack = {}, onCaptureMoveOut = {}, onMissing = {})
         else -> return false
     }
     return true

@@ -354,7 +354,7 @@ private fun Field(label: String, placeholder: String, value: String, onChange: (
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
-        label = { Text(label) },
+        label = { Text(label, color = MMInk.Secondary) },
         placeholder = { Text(placeholder) },
         keyboardOptions = keyboard,
         singleLine = false,

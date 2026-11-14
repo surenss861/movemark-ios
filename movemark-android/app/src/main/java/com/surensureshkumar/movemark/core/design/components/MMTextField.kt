@@ -3,6 +3,7 @@ package com.surensureshkumar.movemark.core.design.components
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -30,7 +31,9 @@ fun MMTextField(
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        label = { Text(label) },
+        // The app typography carries a light text colour; on the light sheet the label must be ink-secondary.
+        label = { Text(label, color = if (onLight) MMInk.Secondary else Color.Unspecified) },
+        textStyle = if (onLight) LocalTextStyle.current.copy(color = MMInk.Text) else LocalTextStyle.current,
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,

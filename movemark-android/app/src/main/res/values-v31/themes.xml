@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ draws its own splash: the app icon on windowSplashScreenBackground (not windowBackground).
+         Hero dark, as the app's first screens and the iOS launch, instead of the system's white. -->
+    <style name="Theme.MoveMark" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#FF161817</item>
+        <item name="android:navigationBarColor">#FF161817</item>
+        <item name="android:windowBackground">#FF161817</item>
+        <item name="android:windowSplashScreenBackground">#FF161817</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">#FF161817</item>
+    </style>
+</resources>

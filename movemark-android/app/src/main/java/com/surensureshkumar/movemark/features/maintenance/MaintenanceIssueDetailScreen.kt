@@ -254,7 +254,7 @@ fun MaintenanceIssueDetailScreen(
                     OutlinedTextField(
                         value = followUpNote,
                         onValueChange = { followUpNote = it },
-                        label = { Text("Landlord response or follow-up") },
+                        label = { Text("Landlord response or follow-up", color = MMInk.Secondary) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(100.dp),

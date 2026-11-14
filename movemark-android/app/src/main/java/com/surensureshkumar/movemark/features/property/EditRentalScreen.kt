@@ -149,8 +149,9 @@ private fun Field(
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
-        label = { Text(label) },
-        supportingText = supporting?.let { { Text(it) } },
+        label = { Text(label, color = MMInk.Secondary) },
+        supportingText = supporting?.let { { Text(it, color = MMInk.Secondary) } },
+        textStyle = androidx.compose.material3.LocalTextStyle.current.copy(color = MMInk.Text),
         keyboardOptions = KeyboardOptions(capitalization = capitalization, keyboardType = keyboard, imeAction = ImeAction.Next),
         modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
         colors = OutlinedTextFieldDefaults.colors(

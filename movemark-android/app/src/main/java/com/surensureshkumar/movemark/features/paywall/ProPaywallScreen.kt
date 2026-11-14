@@ -295,8 +295,8 @@ internal fun ProPaywallContent(
                     }
                 }
 
-                // Legal
-                Text(
+                // Legal (not in billing-off: nothing can be bought, so no subscription terms are claimed)
+                if (!comingSoon) Text(
                     "MoveMark Pro is an auto-renewing subscription. Prices come from Google Play; Google handles payment and renewal. Manage or cancel in Google Play › Subscriptions.",
                     style = mmFont(12.5f),
                     color = HeroSecondary,

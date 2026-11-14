@@ -317,8 +317,14 @@ fun MMSheet(content: @Composable ColumnScope.() -> Unit) {
             .background(MMInk.Sheet)
             .padding(horizontal = MMMetrics.Inset)
             .padding(top = 20.dp),
-        content = content,
-    )
+    ) {
+        // The app typography carries the dark theme's light text colour; on the sheet, text without its own colour
+        // (and text-field input) is ink.
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.material3.LocalTextStyle provides androidx.compose.material3.LocalTextStyle.current.copy(color = MMInk.Text),
+            androidx.compose.material3.LocalContentColor provides MMInk.Text,
+        ) { content() }
+    }
 }
 
 /** Large text (font scale ≥ 1.5): drop eyebrows and decorative glyphs, as iOS does at accessibility sizes. */

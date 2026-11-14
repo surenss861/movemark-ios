@@ -102,6 +102,7 @@ fun MaintenanceLogScreen(
                         value = title,
                         onValueChange = { title = it },
                         label = "Title",
+                        onLight = true,
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
@@ -141,7 +142,7 @@ fun MaintenanceLogScreen(
                     OutlinedTextField(
                         value = details,
                         onValueChange = { details = it },
-                        label = { Text("Details") },
+                        label = { Text("Details", color = MMInk.Secondary) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(100.dp),
