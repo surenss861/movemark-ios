@@ -1,5 +1,10 @@
 package com.surensureshkumar.movemark.features.maintenance
 
+import androidx.compose.ui.graphics.Color
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMPrimaryButton
+import com.surensureshkumar.movemark.core.design.MMSecondaryButton
+import com.surensureshkumar.movemark.core.design.MMScreen
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -43,11 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import com.surensureshkumar.movemark.core.design.MMBackground
-import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
-import com.surensureshkumar.movemark.core.design.components.MMButton
-import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
 import com.surensureshkumar.movemark.core.util.rememberSignedImageRequest
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -67,8 +68,8 @@ fun MaintenanceIssueDetailScreen(
     var followUpNote by rememberSaveable { mutableStateOf("") }
 
     val isResolved = issue?.status == "resolved"
-    val statusBg = if (isResolved) MMColors.Primary.copy(alpha = 0.15f) else MMColors.SemanticWarning.copy(alpha = 0.18f)
-    val statusColor = if (isResolved) MMColors.Primary else MMColors.SemanticWarning
+    val statusBg = if (isResolved) MMInk.Text.copy(alpha = 0.15f) else MMInk.Warning.copy(alpha = 0.18f)
+    val statusColor = if (isResolved) MMInk.Text else MMInk.Warning
 
     val context = LocalContext.current
     val photoPicker = rememberLauncherForActivityResult(
@@ -78,60 +79,27 @@ fun MaintenanceIssueDetailScreen(
         viewModel.attachPhotos(uris)
     }
 
-    MMBackground {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-                .padding(top = 12.dp, bottom = MMSpacing.TabScrollBottom.dp),
-        ) {
-            TextButton(onClick = onBack) {
-                Text("Back", color = MMColors.TextSecondary)
-            }
-            Spacer(Modifier.height(4.dp))
-
-            // Accent bar
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.12f)
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(MMColors.Primary),
-            )
-            Spacer(Modifier.height(12.dp))
-
-            Text(
-                text = issue?.title ?: "Issue detail",
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold,
-                color = MMColors.TextPrimary,
-            )
-            Text(
-                text = "Issue detail, timeline, and follow-up.",
-                fontSize = 15.sp,
-                color = MMColors.TextSecondary,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-
-            Spacer(Modifier.height(20.dp))
-
+    // 1.4 grammar (iOS issue detail in MMScreen): header with back and the issue title, the case on the light sheet.
+    MMScreen(
+        title = issue?.title ?: "Issue detail",
+        lines = listOf("Issue detail, timeline, and follow-up."),
+        onBack = onBack,
+    ) {
             issue?.let { rec ->
                 // Overview card
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(MMSpacing.CornerRadius.dp))
-                        .background(MMColors.Card)
-                        .border(0.75.dp, MMColors.CardStroke, RoundedCornerShape(MMSpacing.CornerRadius.dp))
+                        .background(Color.White)
+                        .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(MMSpacing.CornerRadius.dp))
                         .padding(16.dp),
                 ) {
                     Text(
                         text = "Overview",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = MMColors.TextMuted,
+                        color = MMInk.Secondary,
                     )
                     Spacer(Modifier.height(10.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -139,10 +107,10 @@ fun MaintenanceIssueDetailScreen(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
-                                .background(MMColors.CardRaised)
+                                .background(MMInk.Field)
                                 .padding(horizontal = 10.dp, vertical = 4.dp),
                         ) {
-                            Text(rec.category, fontSize = 12.sp, color = MMColors.TextSecondary)
+                            Text(rec.category, fontSize = 12.sp, color = MMInk.Secondary)
                         }
                         Spacer(Modifier.weight(1f))
                         // Status chip
@@ -165,7 +133,7 @@ fun MaintenanceIssueDetailScreen(
                         Text(
                             text = rec.details,
                             fontSize = 15.sp,
-                            color = MMColors.TextPrimary,
+                            color = MMInk.Text,
                         )
                     }
                     rec.createdAt?.let { dateStr ->
@@ -173,7 +141,7 @@ fun MaintenanceIssueDetailScreen(
                         Text(
                             text = "Logged ${dateStr.take(10)}",
                             fontSize = 12.sp,
-                            color = MMColors.TextMuted,
+                            color = MMInk.Secondary,
                         )
                     }
                     rec.landlordResponse?.takeIf { it.isNotBlank() }?.let { response ->
@@ -182,13 +150,13 @@ fun MaintenanceIssueDetailScreen(
                             text = "Landlord response",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = MMColors.TextMuted,
+                            color = MMInk.Secondary,
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
                             text = response,
                             fontSize = 15.sp,
-                            color = MMColors.TextPrimary,
+                            color = MMInk.Text,
                         )
                     }
                 }
@@ -200,8 +168,8 @@ fun MaintenanceIssueDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(MMSpacing.CornerRadius.dp))
-                        .background(MMColors.Card)
-                        .border(0.75.dp, MMColors.CardStroke, RoundedCornerShape(MMSpacing.CornerRadius.dp))
+                        .background(Color.White)
+                        .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(MMSpacing.CornerRadius.dp))
                         .padding(16.dp),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -209,7 +177,7 @@ fun MaintenanceIssueDetailScreen(
                             text = "Photos",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = MMColors.TextMuted,
+                            color = MMInk.Secondary,
                         )
                         Spacer(Modifier.weight(1f))
                         TextButton(
@@ -220,14 +188,14 @@ fun MaintenanceIssueDetailScreen(
                             },
                             enabled = !isUploadingPhotos,
                         ) {
-                            Text(if (isUploadingPhotos) "Uploading…" else "+ Add photos", color = MMColors.Primary, fontSize = 13.sp)
+                            Text(if (isUploadingPhotos) "Uploading…" else "+ Add photos", color = MMInk.Text, fontSize = 13.sp)
                         }
                     }
                     if (photos.isEmpty() && !isUploadingPhotos) {
                         Spacer(Modifier.height(4.dp))
                         Text(
                             "No photos attached yet.",
-                            color = MMColors.TextSecondary,
+                            color = MMInk.Secondary,
                             fontSize = 13.sp,
                         )
                     } else {
@@ -239,8 +207,8 @@ fun MaintenanceIssueDetailScreen(
                                         .padding(end = 8.dp)
                                         .size(72.dp)
                                         .clip(RoundedCornerShape(10.dp))
-                                        .background(MMColors.CardRaised)
-                                        .border(0.75.dp, MMColors.CardStroke, RoundedCornerShape(10.dp)),
+                                        .background(MMInk.Field)
+                                        .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(10.dp)),
                                 ) {
                                     photo.signedUrl?.let { url ->
                                         AsyncImage(
@@ -257,7 +225,7 @@ fun MaintenanceIssueDetailScreen(
                                         modifier = Modifier.size(72.dp),
                                         contentAlignment = Alignment.Center,
                                     ) {
-                                        CircularProgressIndicator(color = MMColors.Primary)
+                                        CircularProgressIndicator(color = MMInk.Text)
                                     }
                                 }
                             }
@@ -272,15 +240,15 @@ fun MaintenanceIssueDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(MMSpacing.CornerRadius.dp))
-                        .background(MMColors.Card)
-                        .border(0.75.dp, MMColors.CardStroke, RoundedCornerShape(MMSpacing.CornerRadius.dp))
+                        .background(Color.White)
+                        .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(MMSpacing.CornerRadius.dp))
                         .padding(16.dp),
                 ) {
                     Text(
                         text = "Follow-up note",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = MMColors.TextMuted,
+                        color = MMInk.Secondary,
                     )
                     Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
@@ -294,25 +262,25 @@ fun MaintenanceIssueDetailScreen(
                         maxLines = 5,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MMColors.Primary,
-                            unfocusedBorderColor = MMColors.CardStroke,
-                            focusedTextColor = MMColors.TextPrimary,
-                            unfocusedTextColor = MMColors.TextPrimary,
-                            focusedLabelColor = MMColors.TextSecondary,
-                            unfocusedLabelColor = MMColors.TextMuted,
-                            cursorColor = MMColors.Primary,
-                            focusedContainerColor = MMColors.FieldFill,
-                            unfocusedContainerColor = MMColors.FieldFill,
+                            focusedBorderColor = MMInk.Text,
+                            unfocusedBorderColor = MMInk.CardStroke,
+                            focusedTextColor = MMInk.Text,
+                            unfocusedTextColor = MMInk.Text,
+                            focusedLabelColor = MMInk.Secondary,
+                            unfocusedLabelColor = MMInk.Secondary,
+                            cursorColor = MMInk.Text,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White,
                         ),
                     )
                     Spacer(Modifier.height(12.dp))
-                    MMButton(
-                        text = "Save follow-up",
+                    MMPrimaryButton(
+                        title = "Save follow-up",
                         onClick = {
                             viewModel.saveFollowUp(followUpNote)
                             followUpNote = ""
                         },
-                        loading = isUpdating,
+                        isLoading = isUpdating,
                         enabled = followUpNote.isNotBlank() && !isUpdating,
                     )
                 }
@@ -325,28 +293,26 @@ fun MaintenanceIssueDetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(MMSpacing.CornerRadius.dp))
-                            .background(MMColors.Card)
-                            .border(0.75.dp, MMColors.CardStroke, RoundedCornerShape(MMSpacing.CornerRadius.dp))
+                            .background(Color.White)
+                            .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(MMSpacing.CornerRadius.dp))
                             .padding(16.dp),
                     ) {
                         Text(
                             text = "Status",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = MMColors.TextMuted,
+                            color = MMInk.Secondary,
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
                             text = "Mark this issue resolved once the landlord has addressed it.",
                             fontSize = 13.sp,
-                            color = MMColors.TextSecondary,
+                            color = MMInk.Secondary,
                         )
                         Spacer(Modifier.height(12.dp))
-                        MMButton(
-                            text = "Mark resolved",
+                        MMSecondaryButton(
+                            title = if (isUpdating) "Saving…" else "Mark resolved",
                             onClick = { viewModel.markResolved() },
-                            style = MMButtonStyle.Secondary,
-                            loading = isUpdating,
                             enabled = !isUpdating,
                         )
                     }
@@ -355,7 +321,7 @@ fun MaintenanceIssueDetailScreen(
             } ?: run {
                 Text(
                     text = "Issue not found.",
-                    color = MMColors.TextSecondary,
+                    color = MMInk.Secondary,
                     fontSize = 15.sp,
                 )
             }
@@ -366,11 +332,10 @@ fun MaintenanceIssueDetailScreen(
                     msg.contains("Enter", ignoreCase = true)
                 Text(
                     text = msg,
-                    color = if (isError) MMColors.SemanticDanger else MMColors.Primary,
+                    color = if (isError) MMInk.Danger else MMInk.Text,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                 )
             }
         }
-    }
 }

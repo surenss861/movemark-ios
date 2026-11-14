@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.surensureshkumar.movemark.core.design.MMColors
+import com.surensureshkumar.movemark.core.design.MMInk
 import com.surensureshkumar.movemark.domain.RentalDates
 import java.time.Instant
 import java.time.LocalDate
@@ -33,7 +34,7 @@ import java.time.ZoneOffset
 /** A date row: label and the chosen date; tap opens the Material date picker (iOS `DatePicker` row). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MMDateField(label: String, date: LocalDate, onChange: (LocalDate) -> Unit, modifier: Modifier = Modifier) {
+fun MMDateField(label: String, date: LocalDate, onChange: (LocalDate) -> Unit, modifier: Modifier = Modifier, onLight: Boolean = false) {
     var open by remember { mutableStateOf(false) }
     Row(
         modifier
@@ -44,8 +45,8 @@ fun MMDateField(label: String, date: LocalDate, onChange: (LocalDate) -> Unit, m
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, fontSize = 16.sp, color = MMColors.TextPrimary, modifier = Modifier.weight(1f))
-        Text(RentalDates.display(date), fontSize = 16.sp, color = MMColors.TextSecondary)
+        Text(label, fontSize = 16.sp, color = if (onLight) MMInk.Text else MMColors.TextPrimary, modifier = Modifier.weight(1f))
+        Text(RentalDates.display(date), fontSize = 16.sp, color = if (onLight) MMInk.Secondary else MMColors.TextSecondary)
     }
     if (open) {
         // The picker works in UTC midnight millis; a LocalDate maps to and from that without a zone shift.

@@ -1,5 +1,21 @@
 package com.surensureshkumar.movemark.features.firstrun
 
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
+import com.surensureshkumar.movemark.core.design.MMGroup
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMPrimaryButton
+import com.surensureshkumar.movemark.core.design.MMRowDivider
+import com.surensureshkumar.movemark.core.design.MMScreen
+import com.surensureshkumar.movemark.core.design.mmFont
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -20,11 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.surensureshkumar.movemark.core.design.MMBackground
-import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
-import com.surensureshkumar.movemark.core.design.components.MMButton
-import com.surensureshkumar.movemark.core.design.components.MMProofSectionHeader
 import com.surensureshkumar.movemark.core.growth.MoveMarkGrowthCopy
 import java.util.UUID
 
@@ -47,56 +59,49 @@ fun FirstRunRoomPickerScreen(
     val loading by viewModel.loading.collectAsState()
     val error by viewModel.error.collectAsState()
 
-    MMBackground {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-                .padding(top = 24.dp, bottom = MMSpacing.TabScrollBottom.dp),
-        ) {
-            MMProofSectionHeader(
-                title = MoveMarkGrowthCopy.FIRST_RUN_ROOM_TITLE,
-                subtitle = MoveMarkGrowthCopy.FIRST_RUN_ROOM_SUBTITLE,
-            )
-            Spacer(Modifier.height(16.dp))
-            FirstRunRoomOption.entries.forEach { option ->
-                val isSelected = selected == option
-                Text(
-                    option.label,
-                    modifier = Modifier
-                        .padding(vertical = 10.dp)
-                        .clickable { selected = option },
-                    color = if (isSelected) MMColors.Primary else MMColors.TextPrimary,
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    fontSize = 17.sp,
-                )
+    MMScreen(
+        title = MoveMarkGrowthCopy.FIRST_RUN_ROOM_TITLE,
+        lines = listOf(MoveMarkGrowthCopy.FIRST_RUN_ROOM_SUBTITLE),
+    ) {
+        MMGroup(modifier = Modifier.selectableGroup()) {
+            FirstRunRoomOption.entries.forEachIndexed { index, option ->
+                if (index > 0) MMRowDivider()
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                        .selectable(selected = selected == option, role = Role.RadioButton) { selected = option }
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(option.label, style = mmFont(16f), color = MMInk.Text, modifier = Modifier.weight(1f))
+                    RadioButton(
+                        selected = selected == option,
+                        onClick = null,
+                        colors = RadioButtonDefaults.colors(selectedColor = MMInk.Text, unselectedColor = MMInk.Secondary),
+                    )
+                }
             }
-            error?.let {
-                Spacer(Modifier.height(8.dp))
-                Text(it, color = MMColors.SemanticDanger, fontSize = 14.sp)
-            }
-            Spacer(Modifier.height(24.dp))
-            MMButton(
-                text = if (loading) "Opening room…" else "Start room proof",
-                onClick = {
-                    val p = property ?: return@MMButton
-                    val roomName = selected.defaultRoomName ?: selected.label
-                    val room = p.rooms.firstOrNull { it.name.equals(roomName, ignoreCase = true) }
-                        ?: p.rooms.firstOrNull()
-                    room?.let { onStartProof(it.id) }
-                },
-                loading = loading,
-                enabled = property != null && !loading,
-            )
-            Spacer(Modifier.height(12.dp))
-            MMButton(
-                text = "Skip for now",
-                onClick = {
-                    viewModel.markFirstRunComplete { onSkipToMain() }
-                },
-                enabled = !loading,
-            )
         }
+        error?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, color = MMInk.Danger, fontSize = 14.sp)
+        }
+        Spacer(Modifier.height(24.dp))
+        MMPrimaryButton(
+            title = if (loading) "Opening room…" else "Start room proof",
+            onClick = {
+                val p = property ?: return@MMPrimaryButton
+                val roomName = selected.defaultRoomName ?: selected.label
+                val room = p.rooms.firstOrNull { it.name.equals(roomName, ignoreCase = true) }
+                    ?: p.rooms.firstOrNull()
+                room?.let { onStartProof(it.id) }
+            },
+            isLoading = loading,
+            enabled = property != null && !loading,
+        )
+        TextButton(
+            onClick = { viewModel.markFirstRunComplete { onSkipToMain() } },
+            enabled = !loading,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 4.dp),
+        ) { Text("Skip for now", style = mmFont(15f, FontWeight.Medium), color = MMInk.Text) }
     }
 }

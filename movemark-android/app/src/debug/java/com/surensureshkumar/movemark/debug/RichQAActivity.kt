@@ -64,6 +64,7 @@ import java.time.Instant
 import java.util.UUID
 
 /** Debug-only. Start with: adb shell am start -n com.surensureshkumar.movemark/.debug.RichQAActivity --es case vault-9 */
+@dagger.hilt.android.AndroidEntryPoint
 class RichQAActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -74,6 +75,7 @@ class RichQAActivity : ComponentActivity() {
                     RoomQAScreen(screen)
                     return@MMTheme
                 }
+                if (FullScreenCase(screen)) return@MMTheme
                 Column(
                     Modifier
                         .fillMaxSize()
@@ -87,6 +89,51 @@ class RichQAActivity : ComponentActivity() {
             }
         }
     }
+}
+
+/**
+ * Full-screen 1.4 screens, fed fixture state only (no account, no network, no store): the receipt, the paywall
+ * (billing off and with plans), the agreement, Welcome, sign-up, onboarding and rental setup.
+ */
+@Composable
+private fun FullScreenCase(screen: String): Boolean {
+    val receipt = com.surensureshkumar.movemark.features.proof.SavedProofReceiptUiState(
+        roomName = "Kitchen", savedCount = 3, attemptedCount = 3, issueCount = 1,
+        timestampLabel = "Move-in · Nov 13 · 5:54 PM", primaryActionLabel = "Continue to next room",
+        thumbnailJpeg = remember { fixtureJpeg(3) },
+    )
+    val plans = listOf(
+        com.surensureshkumar.movemark.data.subscription.PlanPackageUi("yearly", "MoveMark Pro Yearly", "Billed yearly", "$49.99 / year", isYearly = true),
+        com.surensureshkumar.movemark.data.subscription.PlanPackageUi("monthly", "MoveMark Pro Monthly", "Billed monthly", "$7.99 / month", isYearly = false),
+    )
+    when (screen) {
+        "receipt" -> com.surensureshkumar.movemark.features.proof.SavedProofReceiptContent(receipt, teen = false, onPrimary = {}, onViewVault = {}, onAddMorePhotos = {})
+        "receipt-partial" -> com.surensureshkumar.movemark.features.proof.SavedProofReceiptContent(
+            receipt.copy(savedCount = 2, attemptedCount = 8, hadPartialFailure = true, primaryActionLabel = "Retry 6 photos"),
+            teen = false, onPrimary = {}, onViewVault = {}, onAddMorePhotos = {},
+        )
+        "paywall-off", "paywall-plans", "paywall-failed" -> com.surensureshkumar.movemark.features.paywall.ProPaywallContent(
+            reason = com.surensureshkumar.movemark.features.subscription.PaywallReason.ExtraProperty,
+            ui = when (screen) {
+                "paywall-off" -> com.surensureshkumar.movemark.features.paywall.PaywallUi(comingSoon = true)
+                "paywall-failed" -> com.surensureshkumar.movemark.features.paywall.PaywallUi(error = "Plans didn't load.")
+                else -> com.surensureshkumar.movemark.features.paywall.PaywallUi(packages = plans, selected = plans.first())
+            },
+            onClose = {}, onSelect = {}, onPurchase = {}, onBuyPack = {}, onRestore = {}, onRetry = {},
+        )
+        "legal" -> com.surensureshkumar.movemark.features.legal.LegalAcceptanceScreen(
+            state = com.surensureshkumar.movemark.features.legal.LegalGateState(required = true, verified = true, ageRequirement = "bands_v2"),
+            onAccept = {}, onSignOut = {}, onDeleteAccount = {},
+        )
+        "welcome" -> com.surensureshkumar.movemark.features.welcome.WelcomeRoute(onStartMoveIn = {}, onSignIn = {})
+        "auth-signup" -> com.surensureshkumar.movemark.features.auth.AuthScreen(
+            initialMode = com.surensureshkumar.movemark.features.auth.AuthMode.SignUp, onDismiss = {},
+        )
+        "onboarding" -> com.surensureshkumar.movemark.features.onboarding.OnboardingNameScreen(onContinue = {})
+        "create-property" -> com.surensureshkumar.movemark.features.firstrun.CreatePropertyScreen(onCreated = {})
+        else -> return false
+    }
+    return true
 }
 
 private val sprintNames = listOf(
@@ -279,6 +326,8 @@ private fun RoomQAScreen(screen: String) {
             phase = ProofPhase.MoveOut,
         )
         "room-pending" -> Fixture("Living Room", pending = 3)
+        "room-failed" -> Fixture("Living Room", pending = 3)
+        "room-partial" -> Fixture("Living Room", listOf(entry("Living Room", 2, 3, 5)), pending = 6)
         "room-viewer" -> Fixture("Kitchen", listOf(entry("Counters and cabinets", 4, 1, 20)))
         "room-dark" -> Fixture("Bedroom 2", listOf(entry("Bedroom 2 at night", 2, 100, 25, listOf("Stain"))))
         "room-long" -> Fixture("Primary Bedroom Closet and Ensuite Bathroom", listOf(entry("Closet", 2, 4, 30, listOf("Stain"))))
@@ -303,8 +352,14 @@ private fun RoomQAScreen(screen: String) {
             bottomBar = {
                 if (pending.isNotEmpty()) {
                     RoomProofBottomSaveBar(
-                        saveButtonLabel = "Save proof", statusLine = "${pending.size} photos ready to save",
-                        photoCount = pending.size, isBusy = false, isPartial = false, isFailed = false,
+                        saveButtonLabel = "Save proof",
+                        statusLine = when (screen) {
+                            "room-failed" -> com.surensureshkumar.movemark.features.proof.RoomProofUploadMessages.FULL_FAILURE
+                            "room-partial" -> com.surensureshkumar.movemark.features.proof.RoomProofUploadMessages.partial(2, 8)
+                            else -> "${pending.size} photos ready to save"
+                        },
+                        photoCount = pending.size, isBusy = false,
+                        isPartial = screen == "room-partial", isFailed = screen == "room-failed",
                         onSave = {}, onContinueWithSaved = {}, onRetry = {},
                         modifier = Modifier.navigationBarsPadding(),
                     )

@@ -1,5 +1,8 @@
 package com.surensureshkumar.movemark.features.moveout
 
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMPrimaryButton
+import com.surensureshkumar.movemark.core.design.MMScreen
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -51,7 +54,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.data.models.EvidencePhoto
 import com.surensureshkumar.movemark.domain.MoveOutComparison
@@ -80,10 +82,10 @@ fun MoveOutStateMark(state: State) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         val mark = Modifier.size(9.dp)
         when (state) {
-            State.NewIssue -> Box(mark.background(MMColors.SemanticWarning, CircleShape))
-            State.Changed -> Box(mark.border(1.75.dp, MMColors.SemanticWarning, CircleShape))
-            State.Missing, State.NoBaseline -> Box(mark.border(1.25.dp, MMColors.TextSecondary, CircleShape))
-            State.Unchanged -> Box(mark.background(MMColors.TextSecondary.copy(alpha = 0.55f), CircleShape))
+            State.NewIssue -> Box(mark.background(MMInk.Warning, CircleShape))
+            State.Changed -> Box(mark.border(1.75.dp, MMInk.Warning, CircleShape))
+            State.Missing, State.NoBaseline -> Box(mark.border(1.25.dp, MMInk.Secondary, CircleShape))
+            State.Unchanged -> Box(mark.background(MMInk.Secondary.copy(alpha = 0.55f), CircleShape))
         }
         Spacer(Modifier.width(7.dp))
         Text(
@@ -91,7 +93,7 @@ fun MoveOutStateMark(state: State) {
             fontSize = 11.5.sp,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 0.6.sp,
-            color = if (attention) MMColors.SemanticWarning else MMColors.TextSecondary,
+            color = if (attention) MMInk.Warning else MMInk.Secondary,
         )
     }
 }
@@ -104,7 +106,7 @@ private fun SideLabel(label: String, day: String?) {
         fontWeight = FontWeight.SemiBold,
         letterSpacing = 0.8.sp,
         fontFamily = FontFamily.Monospace,
-        color = MMColors.TextSecondary,
+        color = MMInk.Secondary,
     )
 }
 
@@ -124,10 +126,10 @@ private fun MoveOutPhoto(
         .fillMaxWidth()
         .height(height)
         .clip(RoundedCornerShape(12.dp))
-        .background(MMColors.FieldFill)
+        .background(Color.White)
     if (photo == null) {
-        Box(frame.border(1.dp, MMColors.CardStroke, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-            Text(if (count > 0) "$count photos" else "No photo", fontSize = 13.sp, color = MMColors.TextSecondary)
+        Box(frame.border(1.dp, MMInk.CardStroke, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+            Text(if (count > 0) "$count photos" else "No photo", fontSize = 13.sp, color = MMInk.Secondary)
         }
         return
     }
@@ -177,7 +179,7 @@ private fun ComparisonPair(item: MoveOutComparison, photoHeight: Dp, sign: SignP
                 onOpen = { onOpen(side) },
             )
             (if (moveIn) item.moveInCondition else item.moveOutCondition)?.let {
-                Text(MoveOutComparison.conditionLabel(it), fontSize = 13.sp, color = MMColors.TextPrimary)
+                Text(MoveOutComparison.conditionLabel(it), fontSize = 13.sp, color = MMInk.Text)
             }
         }
     }
@@ -196,9 +198,9 @@ private fun viewerActions(item: MoveOutComparison, onOpen: (MoveOutSide) -> Unit
 @Composable
 private fun JustCompared() {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Filled.Check, contentDescription = null, tint = MMColors.TextPrimary, modifier = Modifier.size(12.dp))
+        Icon(Icons.Filled.Check, contentDescription = null, tint = MMInk.Text, modifier = Modifier.size(12.dp))
         Spacer(Modifier.width(4.dp))
-        Text("Compared just now", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MMColors.TextPrimary)
+        Text("Compared just now", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MMInk.Text)
     }
 }
 
@@ -212,8 +214,8 @@ fun MoveOutSpreadCard(item: MoveOutComparison, sign: SignPhoto, justCompared: Bo
     Column(
         Modifier
             .fillMaxWidth()
-            .background(MMColors.EvidenceCard, CardShape)
-            .border(0.75.dp, MMColors.CardStroke, CardShape)
+            .background(MMInk.Paper, CardShape)
+            .border(0.75.dp, MMInk.CardStroke, CardShape)
             .semantics { customActions = viewerActions(item, onOpen) }
             .padding(16.dp),
     ) {
@@ -226,11 +228,11 @@ fun MoveOutSpreadCard(item: MoveOutComparison, sign: SignPhoto, justCompared: Bo
             item.roomName,
             fontSize = 21.sp,
             fontWeight = FontWeight.SemiBold,
-            color = MMColors.TextPrimary,
+            color = MMInk.Text,
             modifier = Modifier.padding(top = 6.dp).semantics { heading() },
         )
         item.headline?.let {
-            Text(it, fontSize = 15.5.sp, fontWeight = FontWeight.Medium, color = MMColors.TextPrimary, modifier = Modifier.padding(top = 3.dp))
+            Text(it, fontSize = 15.5.sp, fontWeight = FontWeight.Medium, color = MMInk.Text, modifier = Modifier.padding(top = 3.dp))
         }
         Spacer(Modifier.height(18.dp))
         ComparisonPair(item, if (isLargeFont()) 200.dp else 236.dp, sign, onOpen)
@@ -239,11 +241,11 @@ fun MoveOutSpreadCard(item: MoveOutComparison, sign: SignPhoto, justCompared: Bo
                 Modifier
                     .padding(top = 14.dp)
                     .fillMaxWidth()
-                    .background(MMColors.FieldFill, RoundedCornerShape(10.dp))
+                    .background(Color.White, RoundedCornerShape(10.dp))
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                details.forEach { Text(it, fontSize = 13.5.sp, color = MMColors.TextPrimary) }
+                details.forEach { Text(it, fontSize = 13.5.sp, color = MMInk.Text) }
             }
         }
     }
@@ -255,8 +257,8 @@ fun MoveOutMissingCard(item: MoveOutComparison, sign: SignPhoto, isPrimary: Bool
     Column(
         Modifier
             .fillMaxWidth()
-            .background(MMColors.EvidenceCard, CardShape)
-            .border(BorderStroke(1.dp, MMColors.CardStroke), CardShape)
+            .background(MMInk.Paper, CardShape)
+            .border(BorderStroke(1.dp, MMInk.CardStroke), CardShape)
             .semantics { customActions = viewerActions(item, onOpen) }
             .padding(14.dp),
     ) {
@@ -265,7 +267,7 @@ fun MoveOutMissingCard(item: MoveOutComparison, sign: SignPhoto, isPrimary: Bool
             item.roomName,
             fontSize = 19.sp,
             fontWeight = FontWeight.SemiBold,
-            color = MMColors.TextPrimary,
+            color = MMInk.Text,
             modifier = Modifier.padding(top = 6.dp).semantics { heading() },
         )
         Spacer(Modifier.height(12.dp))
@@ -273,16 +275,16 @@ fun MoveOutMissingCard(item: MoveOutComparison, sign: SignPhoto, isPrimary: Bool
         Spacer(Modifier.height(6.dp))
         MoveOutPhoto(MoveOutSide.MoveIn, item.moveInPhoto, item.moveInPhotoCount, 150.dp, sign, { onOpen(MoveOutSide.MoveIn) })
         item.moveInCondition?.let {
-            Text(MoveOutComparison.conditionLabel(it), fontSize = 13.sp, color = MMColors.TextPrimary, modifier = Modifier.padding(top = 6.dp))
+            Text(MoveOutComparison.conditionLabel(it), fontSize = 13.sp, color = MMInk.Text, modifier = Modifier.padding(top = 6.dp))
         }
-        HorizontalDivider(Modifier.padding(top = 14.dp), thickness = 0.75.dp, color = MMColors.CardStroke)
+        HorizontalDivider(Modifier.padding(top = 14.dp), thickness = 0.75.dp, color = MMInk.CardStroke)
         Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             SideLabel("MOVE-OUT", null)
             Spacer(Modifier.width(10.dp))
-            Text("No proof recorded yet", fontSize = 14.sp, color = MMColors.TextSecondary)
+            Text("No proof recorded yet", fontSize = 14.sp, color = MMInk.Secondary)
         }
         if (isPrimary) {
-            MMButton(text = "Capture move-out proof", onClick = onCapture, modifier = Modifier.padding(top = 14.dp))
+            MMPrimaryButton(title = "Capture move-out proof", onClick = onCapture, modifier = Modifier.padding(top = 14.dp))
         } else {
             CaptureLink(onCapture)
         }
@@ -298,10 +300,10 @@ private fun CaptureLink(onCapture: () -> Unit) {
             .clickable(role = Role.Button, onClick = onCapture),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.PhotoCamera, contentDescription = null, tint = MMColors.TextPrimary, modifier = Modifier.size(18.dp))
+        Icon(Icons.Filled.PhotoCamera, contentDescription = null, tint = MMInk.Text, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(7.dp))
-        Text("Capture move-out proof", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = MMColors.TextPrimary, modifier = Modifier.weight(1f))
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MMColors.TextMuted)
+        Text("Capture move-out proof", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = MMInk.Text, modifier = Modifier.weight(1f))
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MMInk.Secondary)
     }
 }
 
@@ -320,11 +322,11 @@ fun MoveOutMissingRow(item: MoveOutComparison, onCapture: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(item.roomName, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = MMColors.TextPrimary)
-            Text(detail, fontSize = 13.sp, color = MMColors.TextSecondary)
+            Text(item.roomName, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = MMInk.Text)
+            Text(detail, fontSize = 13.sp, color = MMInk.Secondary)
         }
-        Icon(Icons.Filled.PhotoCamera, contentDescription = null, tint = MMColors.TextPrimary, modifier = Modifier.size(18.dp))
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MMColors.TextMuted)
+        Icon(Icons.Filled.PhotoCamera, contentDescription = null, tint = MMInk.Text, modifier = Modifier.size(18.dp))
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MMInk.Secondary)
     }
 }
 
@@ -350,24 +352,24 @@ fun MoveOutCompactRow(item: MoveOutComparison, sign: SignPhoto, justCompared: Bo
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(item.roomName, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = MMColors.TextPrimary)
+                Text(item.roomName, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = MMInk.Text)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (item.state == State.Unchanged) {
-                        Icon(Icons.Filled.Check, contentDescription = null, tint = MMColors.TextSecondary, modifier = Modifier.size(12.dp))
+                        Icon(Icons.Filled.Check, contentDescription = null, tint = MMInk.Secondary, modifier = Modifier.size(12.dp))
                         Spacer(Modifier.width(4.dp))
                     }
                     Text(
                         if (justCompared) "${item.state.label} · compared just now" else item.state.label,
                         fontSize = 13.sp,
-                        color = MMColors.TextSecondary,
+                        color = MMInk.Secondary,
                     )
                 }
-                if (dates.isNotEmpty()) Text(dates, fontSize = 12.5.sp, color = MMColors.TextSecondary)
+                if (dates.isNotEmpty()) Text(dates, fontSize = 12.5.sp, color = MMInk.Secondary)
             }
             Icon(
                 if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                 contentDescription = null,
-                tint = MMColors.TextMuted,
+                tint = MMInk.Secondary,
             )
         }
         AnimatedVisibility(expanded) {
@@ -395,8 +397,8 @@ fun MoveOutTally(changed: Int, missing: Int, unchanged: Int, onSelect: (Int) -> 
                 .clickable(enabled = count > 0, onClickLabel = "Move to these rooms", role = Role.Button) { onSelect(index) }
                 .semantics(mergeDescendants = true) {},
         ) {
-            Text("$count", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = if (count == 0) MMColors.TextMuted else MMColors.TextPrimary)
-            Text(label, fontSize = 12.5.sp, color = MMColors.TextSecondary)
+            Text("$count", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = if (count == 0) MMInk.Secondary else MMInk.Text)
+            Text(label, fontSize = 12.5.sp, color = MMInk.Secondary)
         }
     }
     if (isLargeFont()) {
@@ -415,8 +417,8 @@ fun MoveOutHeaderProgress(done: Int, total: Int) {
         verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         Row {
-            Text("Move-out proof", fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = MMColors.TextPrimary, modifier = Modifier.weight(1f))
-            Text("${(fraction * 100).toInt()}%", fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = MMColors.TextSecondary)
+            Text("Move-out proof", fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = MMInk.Text, modifier = Modifier.weight(1f))
+            Text("${(fraction * 100).toInt()}%", fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = MMInk.Secondary)
         }
         Box(
             Modifier
@@ -429,10 +431,10 @@ fun MoveOutHeaderProgress(done: Int, total: Int) {
                     Modifier
                         .fillMaxWidth(fraction.coerceAtLeast(0.02f))
                         .height(4.dp)
-                        .background(MMColors.Primary, CircleShape),
+                        .background(MMInk.Text, CircleShape),
                 )
             }
         }
-        Text("$done of $total rooms captured", fontSize = 12.5.sp, color = MMColors.TextSecondary)
+        Text("$done of $total rooms captured", fontSize = 12.5.sp, color = MMInk.Secondary)
     }
 }

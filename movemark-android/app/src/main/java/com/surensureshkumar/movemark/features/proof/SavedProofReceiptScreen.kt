@@ -83,10 +83,27 @@ fun SavedProofReceiptScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     BackHandler { onBackSafe() }
+    SavedProofReceiptContent(
+        state = state,
+        teen = PhotoPrivacyPolicy.current == PhotoPrivacy.Teen,
+        onPrimary = { isPartial -> if (isPartial) onAddMorePhotos(roomId) else onContinueNextRoom(viewModel.nextUndocumentedRoomId()) },
+        onViewVault = onViewVault,
+        onAddMorePhotos = { onAddMorePhotos(roomId) },
+    )
+}
+
+/** The receipt itself, from its state alone (also rendered by the debug fixture gallery). */
+@Composable
+internal fun SavedProofReceiptContent(
+    state: SavedProofReceiptUiState,
+    teen: Boolean,
+    onPrimary: (isPartial: Boolean) -> Unit,
+    onViewVault: () -> Unit,
+    onAddMorePhotos: () -> Unit,
+) {
     MMLightSystemBars(lightNavigationBar = false, lightStatusBar = false)
     val pending = (state.attemptedCount - state.savedCount).coerceAtLeast(0)
     val isPartial = state.hadPartialFailure && pending > 0
-    val teen = PhotoPrivacyPolicy.current == PhotoPrivacy.Teen
 
     Column(
         Modifier.fillMaxSize().background(SlipInk.Field).verticalScroll(rememberScrollState())
@@ -157,13 +174,11 @@ fun SavedProofReceiptScreen(
         Column(Modifier.padding(top = 28.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             MMPrimaryButton(
                 title = state.primaryActionLabel,
-                onClick = {
-                    if (isPartial) onAddMorePhotos(roomId) else onContinueNextRoom(viewModel.nextUndocumentedRoomId())
-                },
+                onClick = { onPrimary(isPartial) },
                 modifier = Modifier.testTag("receipt.primary"),
             )
             QuietButton("View proof vault", Modifier.padding(top = 8.dp), onViewVault)
-            if (!isPartial) QuietButton("Add more photos", Modifier, onClick = { onAddMorePhotos(roomId) })
+            if (!isPartial) QuietButton("Add more photos", Modifier, onClick = onAddMorePhotos)
         }
     }
 }

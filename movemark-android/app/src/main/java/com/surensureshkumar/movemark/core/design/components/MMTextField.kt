@@ -12,7 +12,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import com.surensureshkumar.movemark.core.design.MMColors
+import com.surensureshkumar.movemark.core.design.MMInk
 
 @Composable
 fun MMTextField(
@@ -22,6 +24,8 @@ fun MMTextField(
     modifier: Modifier = Modifier,
     isPassword: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text,
+    /** On the 1.4 light sheet (MMScreen): ink text on the field fill, as the iOS forms. */
+    onLight: Boolean = false,
 ) {
     OutlinedTextField(
         value = value,
@@ -31,7 +35,17 @@ fun MMTextField(
         shape = RoundedCornerShape(16.dp),
         visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-        colors = OutlinedTextFieldDefaults.colors(
+        colors = if (onLight) OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = MMInk.Text,
+            unfocusedBorderColor = MMInk.Separator,
+            focusedTextColor = MMInk.Text,
+            unfocusedTextColor = MMInk.Text,
+            focusedLabelColor = MMInk.Secondary,
+            unfocusedLabelColor = MMInk.Secondary,
+            cursorColor = MMInk.Text,
+            focusedContainerColor = Color.White,
+            unfocusedContainerColor = Color.White,
+        ) else OutlinedTextFieldDefaults.colors(
             focusedBorderColor = MMColors.Primary,
             unfocusedBorderColor = MMColors.CardStroke,
             focusedTextColor = MMColors.TextPrimary,

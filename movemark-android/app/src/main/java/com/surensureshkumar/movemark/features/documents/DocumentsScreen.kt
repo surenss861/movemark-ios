@@ -1,5 +1,11 @@
 package com.surensureshkumar.movemark.features.documents
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.graphics.Color
+import com.surensureshkumar.movemark.core.design.MMGroup
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMRowDivider
+import com.surensureshkumar.movemark.core.design.MMScreen
 import android.content.Intent
 import androidx.core.content.FileProvider
 import android.net.Uri
@@ -42,10 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.surensureshkumar.movemark.core.design.MMBackground
-import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
-import com.surensureshkumar.movemark.core.design.components.MMCaseFilePlate
 import com.surensureshkumar.movemark.domain.VaultDocumentKind
 
 @Composable
@@ -104,96 +107,68 @@ fun DocumentsScreen(
         VaultDocumentKind.priority.filter { !VaultDocumentKind.isPresent(it, types) }
     }
 
-    MMBackground {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-                .padding(bottom = 32.dp),
-        ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onBack) {
-                    Text("Back", color = MMColors.TextSecondary)
-                }
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = onEditRental) {
-                    Text("Edit rental", color = MMColors.Primary, fontWeight = FontWeight.SemiBold)
-                }
+    // 1.4 grammar (iOS records screen in MMScreen): header with back and Edit rental, the records as one light group.
+    MMScreen(
+        title = "Receipts & lease docs",
+        eyebrow = "Records",
+        lines = listOf("Lease, deposit receipt, and other papers.", "$uploaded of ${VaultDocumentKind.all.size} uploaded"),
+        onBack = onBack,
+        trailing = {
+            TextButton(onClick = onEditRental, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text("Edit rental", color = Color.White, fontWeight = FontWeight.SemiBold)
             }
+        },
+    ) {
+        error?.let {
+            Text(it, color = MMInk.Danger, fontSize = 14.sp)
+            Spacer(Modifier.height(12.dp))
+        }
+        // Collapsed, this lists only missing priority records (as on iOS); with all three on
+        // file there is nothing to list, so no empty group — just "See all records".
+        if (visible.isNotEmpty()) MMGroup {
+            visible.forEachIndexed { index, kind ->
+                val present = VaultDocumentKind.isPresent(kind, types)
+                if (index > 0) MMRowDivider()
+                DocumentRow(
+                    kind = kind,
+                    present = present,
+                    busy = uploading == kind || deleting == kind,
+                    expanded = showAll,
+                    onUpload = {
+                        pendingKind = kind
+                        holdBack = true
+                        val mime = if (kind.acceptsImage) arrayOf("image/*") else arrayOf("*/*")
+                        picker.launch(mime)
+                    },
+                    onView = { viewModel.view(kind) },
+                    onDelete = { confirmDelete = kind },
+                )
+            }
+        }
+
+        confirmDelete?.let { kind ->
+            AlertDialog(
+                onDismissRequest = { confirmDelete = null },
+                title = { Text("Delete document?") },
+                text = { Text("This file will be removed from your vault. You can upload again later. This can't be undone.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        confirmDelete = null
+                        viewModel.delete(kind)
+                    }) { Text("Delete", color = MMInk.Danger) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmDelete = null }) { Text("Cancel", color = MMInk.Text) }
+                },
+            )
+        }
+
+        TextButton(onClick = { showAll = !showAll }, modifier = Modifier.heightIn(min = 48.dp).padding(top = 6.dp)) {
             Text(
-                "RECEIPTS & LEASE DOCS",
-                fontSize = 11.sp,
+                if (showAll) "Collapse records" else "See all records",
+                color = MMInk.Text,
                 fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.8.sp,
-                color = MMColors.TextSecondary,
             )
-            Text(
-                "Lease, deposit receipt, and other papers.",
-                fontSize = 15.sp,
-                color = MMColors.TextSecondary,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-            Text(
-                "$uploaded of ${VaultDocumentKind.all.size} uploaded",
-                fontSize = 12.sp,
-                color = MMColors.TextMuted,
-                modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
-            )
-
-            error?.let {
-                Text(it, color = MMColors.SemanticDanger, fontSize = 14.sp)
-                Spacer(Modifier.height(12.dp))
-            }
-
-            // Collapsed, this lists only missing priority records (as on iOS); with all three on
-            // file there is nothing to list, so no empty plate — just "See all records".
-            if (visible.isNotEmpty()) MMCaseFilePlate {
-                visible.forEachIndexed { index, kind ->
-                    val present = VaultDocumentKind.isPresent(kind, types)
-                    if (index > 0) Spacer(Modifier.height(14.dp))
-                    DocumentRow(
-                        kind = kind,
-                        present = present,
-                        busy = uploading == kind || deleting == kind,
-                        expanded = showAll,
-                        onUpload = {
-                            pendingKind = kind
-                            holdBack = true
-                            val mime = if (kind.acceptsImage) arrayOf("image/*") else arrayOf("*/*")
-                            picker.launch(mime)
-                        },
-                        onView = { viewModel.view(kind) },
-                        onDelete = { confirmDelete = kind },
-                    )
-                }
-            }
-
-            confirmDelete?.let { kind ->
-                AlertDialog(
-                    onDismissRequest = { confirmDelete = null },
-                    title = { Text("Delete document?") },
-                    text = { Text("This file will be removed from your vault. You can upload again later. This can't be undone.") },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            confirmDelete = null
-                            viewModel.delete(kind)
-                        }) { Text("Delete", color = MMColors.SemanticDanger) }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { confirmDelete = null }) { Text("Cancel", color = MMColors.TextSecondary) }
-                    },
-                )
-            }
-
-            TextButton(onClick = { showAll = !showAll }) {
-                Text(
-                    if (showAll) "Collapse records" else "See all records",
-                    color = MMColors.Primary,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
         }
     }
 }
@@ -208,25 +183,28 @@ private fun DocumentRow(
     onView: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Column(Modifier.weight(1f)) {
-            Text(kind.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = MMColors.TextPrimary)
+            Text(kind.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = MMInk.Text)
             Text(
                 if (present) kind.presentSubtitle else kind.missingSubtitle,
                 fontSize = 13.sp,
-                color = MMColors.TextSecondary,
+                color = MMInk.Secondary,
                 modifier = Modifier.padding(top = 2.dp),
             )
         }
         if (present) {
             TextButton(onClick = onView, enabled = !busy) {
-                Text("View", color = MMColors.TextPrimary, fontWeight = FontWeight.SemiBold)
+                Text("View", color = MMInk.Text, fontWeight = FontWeight.SemiBold)
             }
             TextButton(onClick = onUpload, enabled = !busy) {
-                Text(if (busy) "Saving…" else "Replace", color = MMColors.TextPrimary, fontWeight = FontWeight.SemiBold)
+                Text(if (busy) "Saving…" else "Replace", color = MMInk.Text, fontWeight = FontWeight.SemiBold)
             }
             IconButton(onClick = onDelete, enabled = !busy) {
-                Icon(Icons.Filled.Delete, contentDescription = "Delete ${kind.title}", tint = MMColors.TextSecondary)
+                Icon(Icons.Filled.Delete, contentDescription = "Delete ${kind.title}", tint = MMInk.Secondary)
             }
         } else {
             TextButton(onClick = onUpload, enabled = !busy, modifier = Modifier.clip(RoundedCornerShape(20.dp))) {
@@ -236,7 +214,7 @@ private fun DocumentRow(
                         expanded -> "Add"
                         else -> "Upload"
                     },
-                    color = MMColors.TextPrimary,
+                    color = MMInk.Text,
                     fontWeight = FontWeight.SemiBold,
                 )
             }

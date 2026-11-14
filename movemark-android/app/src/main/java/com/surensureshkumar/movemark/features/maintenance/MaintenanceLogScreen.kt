@@ -1,5 +1,9 @@
 package com.surensureshkumar.movemark.features.maintenance
 
+import androidx.compose.ui.graphics.Color
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMPrimaryButton
+import com.surensureshkumar.movemark.core.design.MMScreen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -41,10 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.surensureshkumar.movemark.core.design.MMBackground
-import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
-import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMTextField
 import com.surensureshkumar.movemark.data.models.MaintenanceRecord
 import java.util.UUID
@@ -74,62 +75,27 @@ fun MaintenanceLogScreen(
     val openIssues = log.filter { it.status != "resolved" }
     val resolvedIssues = log.filter { it.status == "resolved" }
 
-    MMBackground {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding(),
-        ) {
-            // Header
-            item {
-                Column(
-                    modifier = Modifier
-                        .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-                        .padding(top = 12.dp),
-                ) {
-                    TextButton(onClick = onBack) {
-                        Text("Back", color = MMColors.TextSecondary)
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.12f)
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(MMColors.Primary),
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = "Maintenance",
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MMColors.TextPrimary,
-                    )
-                    Text(
-                        text = "Track issues and landlord follow-up.",
-                        fontSize = 15.sp,
-                        color = MMColors.TextSecondary,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                    Spacer(Modifier.height(20.dp))
-                }
-            }
-
+    // 1.4 grammar (iOS maintenance in MMScreen): header with back, composer and cases on the light sheet.
+    MMScreen(
+        title = "Maintenance",
+        lines = listOf("Track issues and landlord follow-up."),
+        onBack = onBack,
+    ) {
             // Composer card
-            item {
+            run {
                 Column(
                     modifier = Modifier
-                        .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
+                        
                         .clip(RoundedCornerShape(MMSpacing.CornerRadius.dp))
-                        .background(MMColors.Card)
-                        .border(0.75.dp, MMColors.CardStroke, RoundedCornerShape(MMSpacing.CornerRadius.dp))
+                        .background(Color.White)
+                        .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(MMSpacing.CornerRadius.dp))
                         .padding(16.dp),
                 ) {
                     Text(
                         text = "Log a new incident",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = MMColors.TextPrimary,
+                        color = MMInk.Text,
                     )
                     Spacer(Modifier.height(12.dp))
                     MMTextField(
@@ -141,7 +107,7 @@ fun MaintenanceLogScreen(
                     Text(
                         text = "Category",
                         fontSize = 13.sp,
-                        color = MMColors.TextSecondary,
+                        color = MMInk.Secondary,
                     )
                     Spacer(Modifier.height(6.dp))
                     FlowRow(
@@ -153,10 +119,10 @@ fun MaintenanceLogScreen(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(20.dp))
-                                    .background(if (isSelected) MMColors.Primary else MMColors.CardRaised)
+                                    .background(if (isSelected) MMInk.Text else MMInk.Field)
                                     .border(
                                         1.dp,
-                                        if (isSelected) MMColors.Primary else MMColors.CardStroke,
+                                        if (isSelected) MMInk.Text else MMInk.CardStroke,
                                         RoundedCornerShape(20.dp),
                                     )
                                     .clickable { selectedCategory = cat }
@@ -166,7 +132,7 @@ fun MaintenanceLogScreen(
                                     text = cat,
                                     fontSize = 13.sp,
                                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (isSelected) androidx.compose.ui.graphics.Color.White else MMColors.TextSecondary,
+                                    color = if (isSelected) androidx.compose.ui.graphics.Color.White else MMInk.Secondary,
                                 )
                             }
                         }
@@ -183,33 +149,33 @@ fun MaintenanceLogScreen(
                         maxLines = 5,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MMColors.Primary,
-                            unfocusedBorderColor = MMColors.CardStroke,
-                            focusedTextColor = MMColors.TextPrimary,
-                            unfocusedTextColor = MMColors.TextPrimary,
-                            focusedLabelColor = MMColors.TextSecondary,
-                            unfocusedLabelColor = MMColors.TextMuted,
-                            cursorColor = MMColors.Primary,
-                            focusedContainerColor = MMColors.FieldFill,
-                            unfocusedContainerColor = MMColors.FieldFill,
+                            focusedBorderColor = MMInk.Text,
+                            unfocusedBorderColor = MMInk.CardStroke,
+                            focusedTextColor = MMInk.Text,
+                            unfocusedTextColor = MMInk.Text,
+                            focusedLabelColor = MMInk.Secondary,
+                            unfocusedLabelColor = MMInk.Secondary,
+                            cursorColor = MMInk.Text,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White,
                         ),
                     )
 
                     errorMessage?.let { msg ->
                         Spacer(Modifier.height(8.dp))
-                        Text(msg, color = MMColors.SemanticDanger, fontSize = 13.sp)
+                        Text(msg, color = MMInk.Danger, fontSize = 13.sp)
                     }
 
                     Spacer(Modifier.height(14.dp))
-                    MMButton(
-                        text = "Save incident",
+                    MMPrimaryButton(
+                        title = "Save incident",
                         onClick = {
                             viewModel.addIncident(title, selectedCategory, details)
                             title = ""
                             details = ""
                             selectedCategory = "General"
                         },
-                        loading = isSubmitting,
+                        isLoading = isSubmitting,
                         enabled = title.isNotBlank() && !isSubmitting,
                     )
                 }
@@ -217,21 +183,21 @@ fun MaintenanceLogScreen(
             }
 
             // Open incidents header
-            item {
+            run {
                 if (openIssues.isNotEmpty()) {
                     Text(
                         text = "Open incidents",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = MMColors.TextSecondary,
-                        modifier = Modifier.padding(horizontal = MMSpacing.ScreenHorizontal.dp),
+                        color = MMInk.Secondary,
+                        modifier = Modifier,
                     )
                     Spacer(Modifier.height(8.dp))
                 }
             }
 
             // Open issues
-            items(openIssues, key = { it.id.toString() }) { record ->
+            openIssues.forEach { record ->
                 MaintenanceIssueRow(
                     record = record,
                     onClick = { onOpenIssue(record.id) },
@@ -240,22 +206,22 @@ fun MaintenanceLogScreen(
             }
 
             // Resolved header
-            item {
+            run {
                 if (resolvedIssues.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
                     Text(
                         text = "Resolved",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = MMColors.TextSecondary,
-                        modifier = Modifier.padding(horizontal = MMSpacing.ScreenHorizontal.dp),
+                        color = MMInk.Secondary,
+                        modifier = Modifier,
                     )
                     Spacer(Modifier.height(8.dp))
                 }
             }
 
             // Resolved issues
-            items(resolvedIssues, key = { it.id.toString() }) { record ->
+            resolvedIssues.forEach { record ->
                 MaintenanceIssueRow(
                     record = record,
                     onClick = { onOpenIssue(record.id) },
@@ -264,29 +230,27 @@ fun MaintenanceLogScreen(
             }
 
             // Loading indicator
-            item {
+            run {
                 if (isLoading && log.isEmpty()) {
                     Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = MMColors.Primary)
+                        CircularProgressIndicator(color = MMInk.Text)
                     }
                 }
             }
 
-            item {
+            run {
                 if (!isLoading && log.isEmpty()) {
                     Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                         Text(
                             "No incidents logged yet.\nLog your first issue above.",
-                            color = MMColors.TextSecondary,
+                            color = MMInk.Secondary,
                             fontSize = 15.sp,
                         )
                     }
                 }
             }
 
-            item { Spacer(Modifier.height(MMSpacing.TabScrollBottom.dp)) }
         }
-    }
 }
 
 @Composable
@@ -297,11 +261,11 @@ private fun MaintenanceIssueRow(
     val isResolved = record.status == "resolved"
     Row(
         modifier = Modifier
-            .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
+            
             .fillMaxWidth()
             .clip(RoundedCornerShape(MMSpacing.CornerRadius.dp))
-            .background(MMColors.Card)
-            .border(0.75.dp, MMColors.CardStroke, RoundedCornerShape(MMSpacing.CornerRadius.dp))
+            .background(Color.White)
+            .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(MMSpacing.CornerRadius.dp))
             .clickable(onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.Top,
@@ -315,14 +279,14 @@ private fun MaintenanceIssueRow(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
-                        .background(MMColors.CardRaised)
+                        .background(MMInk.Field)
                         .padding(horizontal = 8.dp, vertical = 3.dp),
                 ) {
-                    Text(record.category, fontSize = 11.sp, color = MMColors.TextSecondary)
+                    Text(record.category, fontSize = 11.sp, color = MMInk.Secondary)
                 }
                 // Status chip
-                val statusBg = if (isResolved) MMColors.Primary.copy(alpha = 0.15f) else MMColors.SemanticWarning.copy(alpha = 0.18f)
-                val statusColor = if (isResolved) MMColors.Primary else MMColors.SemanticWarning
+                val statusBg = if (isResolved) MMInk.Text.copy(alpha = 0.15f) else MMInk.Warning.copy(alpha = 0.18f)
+                val statusColor = if (isResolved) MMInk.Text else MMInk.Warning
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
@@ -342,14 +306,14 @@ private fun MaintenanceIssueRow(
                 text = record.title,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = MMColors.TextPrimary,
+                color = MMInk.Text,
             )
             if (record.details.isNotBlank()) {
                 Spacer(Modifier.height(3.dp))
                 Text(
                     text = record.details,
                     fontSize = 13.sp,
-                    color = MMColors.TextSecondary,
+                    color = MMInk.Secondary,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -360,7 +324,7 @@ private fun MaintenanceIssueRow(
                 Text(
                     text = formatted,
                     fontSize = 11.sp,
-                    color = MMColors.TextMuted,
+                    color = MMInk.Secondary,
                 )
             }
         }
@@ -368,7 +332,7 @@ private fun MaintenanceIssueRow(
         Text(
             text = ">",
             fontSize = 16.sp,
-            color = MMColors.TextMuted,
+            color = MMInk.Secondary,
         )
     }
 }

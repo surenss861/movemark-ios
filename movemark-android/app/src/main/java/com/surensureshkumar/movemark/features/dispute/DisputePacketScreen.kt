@@ -1,5 +1,9 @@
 package com.surensureshkumar.movemark.features.dispute
 
+import androidx.compose.ui.graphics.Color
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMPrimaryButton
+import com.surensureshkumar.movemark.core.design.MMScreen
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.background
@@ -61,11 +65,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.surensureshkumar.movemark.core.design.MMBackground
-import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
-import com.surensureshkumar.movemark.core.design.components.MMButton
-import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
+import com.surensureshkumar.movemark.core.design.MMSecondaryButton
 import com.surensureshkumar.movemark.data.models.EvidencePhoto
 import com.surensureshkumar.movemark.domain.DisputePacketModel
 import com.surensureshkumar.movemark.domain.DisputePacketModel.Packet
@@ -110,23 +111,17 @@ fun DisputePacketScreen(
     }
 
     Box(Modifier.fillMaxSize()) {
-        MMBackground {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .imePadding()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-                    .padding(top = 4.dp, bottom = 48.dp),
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MMColors.TextPrimary)
-                }
+        // 1.4 grammar (iOS dispute builder in MMScreen): the purpose in the header, the packet on the sheet.
+        MMScreen(
+            title = "Dispute packet",
+            lines = listOf("Build a record of the evidence related to this issue."),
+            onBack = onBack,
+            modifier = Modifier.imePadding(),
+        ) {
                 val m = model
                 if (m == null) {
                     Header("No rental yet", null)
-                    Text("A packet is assembled from a rental's recorded evidence.", color = MMColors.TextSecondary, fontSize = 15.sp)
+                    Text("A packet is assembled from a rental's recorded evidence.", color = MMInk.Secondary, fontSize = 15.sp)
                 } else {
                     val generating = m.packet == Packet.Generating
                     DisputePacketContent(
@@ -135,7 +130,7 @@ fun DisputePacketScreen(
                         amount = amount,
                         errorMessage = error ?: if (timedOut && generating) "Taking longer than usual." else null,
                         errorActionTitle = if (error == null && timedOut && generating) "Check again" else "Try again",
-                        isDownloading = downloading,
+                        isDownisLoading = downloading,
                         sign = viewModel::signedPhotoUrl,
                         onQuestion = viewModel::setQuestion,
                         onAmount = viewModel::setAmount,
@@ -153,7 +148,6 @@ fun DisputePacketScreen(
                     )
                 }
             }
-        }
         viewing?.let { pdf ->
             ReportPdfViewer(pdf.file, pdf.displayTitle, onShare = { shareReportPdf(context, pdf.file, pdf.displayTitle) }, onClose = { viewing = null })
         }
@@ -166,14 +160,13 @@ fun DisputePacketScreen(
 
 @Composable
 private fun Header(title: String, status: String?, ready: Boolean = false) {
-    Text("DISPUTE PACKET", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp, color = MMColors.TextSecondary)
-    Text(title, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MMColors.TextPrimary, modifier = Modifier.padding(top = 4.dp).semantics { heading() })
-    Text("Build a record of the evidence related to this issue.", fontSize = 15.sp, color = MMColors.TextSecondary, modifier = Modifier.padding(top = 4.dp))
+    // The screen header carries "Dispute packet" and its purpose; this names the case on the sheet.
+    Text(title, style = com.surensureshkumar.movemark.core.design.mmFont(20f, FontWeight.SemiBold), color = MMInk.Text, modifier = Modifier.semantics { heading() })
     if (status != null) {
         Row(Modifier.padding(top = 18.dp).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(7.dp).background(if (ready) MMColors.Primary else MMColors.TextSecondary.copy(alpha = 0.6f), CircleShape))
+            Box(Modifier.size(7.dp).background(if (ready) MMInk.LimeMark else MMInk.Secondary.copy(alpha = 0.6f), CircleShape))
             Spacer(Modifier.width(7.dp))
-            Text(status, fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = MMColors.TextPrimary)
+            Text(status, fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = MMInk.Text)
         }
     }
 }
@@ -206,12 +199,12 @@ internal fun DisputePacketContent(
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .background(MMColors.SemanticInfo.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                    .background(MMInk.Secondary.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
                     .padding(horizontal = 14.dp, vertical = 12.dp),
             ) {
-                Text(errorMessage, fontSize = 14.sp, color = MMColors.TextPrimary)
+                Text(errorMessage, fontSize = 14.sp, color = MMInk.Text)
                 TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text(errorActionTitle, color = MMColors.TextPrimary, fontWeight = FontWeight.SemiBold)
+                    Text(errorActionTitle, color = MMInk.Text, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -240,8 +233,8 @@ internal fun DisputePacketContent(
                             MoveOutMissingCard(item, sign, isPrimary = false, onOpen = { onOpenPhoto(item, it) }, onCapture = { onCaptureMoveOut(item.id) })
                         else -> Box(
                             Modifier
-                                .background(MMColors.EvidenceCard, RoundedCornerShape(18.dp))
-                                .border(1.dp, MMColors.CardStroke, RoundedCornerShape(18.dp)),
+                                .background(MMInk.Paper, RoundedCornerShape(18.dp))
+                                .border(1.dp, MMInk.CardStroke, RoundedCornerShape(18.dp)),
                         ) { MoveOutCompactRow(item, sign, justCompared = false) { onOpenPhoto(item, it) } }
                     }
                 }
@@ -262,10 +255,10 @@ internal fun DisputePacketContent(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(item.title, fontSize = 16.sp, color = MMColors.TextPrimary)
-                                Text(item.detail, fontSize = 13.sp, color = MMColors.TextSecondary)
+                                Text(item.title, fontSize = 16.sp, color = MMInk.Text)
+                                Text(item.detail, fontSize = 13.sp, color = MMInk.Secondary)
                             }
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MMColors.TextMuted)
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MMInk.Secondary)
                         }
                     }
                 }
@@ -274,7 +267,7 @@ internal fun DisputePacketContent(
 
         Section(if (model.isGenerated) "A new packet would include" else "Generated packet includes") {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                model.contentLines.forEach { Text(it, fontSize = 15.sp, color = MMColors.TextPrimary) }
+                model.contentLines.forEach { Text(it, fontSize = 15.sp, color = MMInk.Text) }
             }
             if (model.records.isNotEmpty()) {
                 Group {
@@ -295,15 +288,15 @@ internal fun DisputePacketContent(
                                     DisputePacketModel.RecordKind.Maintenance -> Icons.Filled.Build
                                 },
                                 contentDescription = null,
-                                tint = MMColors.TextPrimary.copy(alpha = 0.8f),
+                                tint = MMInk.Text.copy(alpha = 0.8f),
                                 modifier = Modifier.size(20.dp),
                             )
                             Spacer(Modifier.width(16.dp))
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(record.title, fontSize = 16.sp, color = MMColors.TextPrimary)
-                                Text(record.detail, fontSize = 13.sp, color = MMColors.TextSecondary)
+                                Text(record.title, fontSize = 16.sp, color = MMInk.Text)
+                                Text(record.detail, fontSize = 13.sp, color = MMInk.Secondary)
                             }
-                            Icon(Icons.Filled.Check, contentDescription = null, tint = MMColors.TextPrimary.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
+                            Icon(Icons.Filled.Check, contentDescription = null, tint = MMInk.Text.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
                         }
                     }
                 }
@@ -312,24 +305,24 @@ internal fun DisputePacketContent(
 
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             when (val packet = model.packet) {
-                Packet.NeedsMoveInProof -> MMButton(text = "Add move-in proof", onClick = { onMissing(DisputePacketModel.Missing.Target.Rooms) })
+                Packet.NeedsMoveInProof -> MMPrimaryButton(title = "Add move-in proof", onClick = { onMissing(DisputePacketModel.Missing.Target.Rooms) })
                 Packet.Ready, is Packet.Failed -> {
                     if (packet is Packet.Failed) Caption("The last packet couldn't be generated. Your evidence is unchanged.", center = true)
-                    MMButton(text = "Generate evidence packet", onClick = onGenerate)
+                    MMPrimaryButton(title = "Generate evidence packet", onClick = onGenerate)
                     if (packet is Packet.Failed && packet.lastGoodDate != null) {
-                        MMButton(text = if (isDownloading) "Opening…" else "View last packet", onClick = onView, style = MMButtonStyle.Secondary, enabled = !isDownloading)
+                        MMSecondaryButton(title = if (isDownloading) "Opening…" else "View last packet", onClick = onView, enabled = !isDownloading)
                     }
                     if (!model.hasPro) Caption("The evidence packet is part of Pro.", center = true)
                 }
                 Packet.Generating -> {
-                    MMButton(text = "Generating evidence packet…", onClick = {}, loading = true, enabled = false)
+                    MMPrimaryButton(title = "Generating evidence packet…", onClick = {}, isLoading = true, enabled = false)
                     Caption("This takes a moment. You can leave this screen.", center = true)
                 }
                 is Packet.Generated -> {
-                    MMButton(text = if (isDownloading) "Opening…" else "View evidence packet", onClick = onView, loading = isDownloading, enabled = !isDownloading)
-                    MMButton(text = "Share", onClick = onShare, style = MMButtonStyle.Secondary, enabled = !isDownloading)
+                    MMPrimaryButton(title = if (isDownloading) "Opening…" else "View evidence packet", onClick = onView, isLoading = isDownloading, enabled = !isDownloading)
+                    MMSecondaryButton(title = "Share", onClick = onShare, enabled = !isDownloading)
                     TextButton(onClick = onGenerate, modifier = Modifier.heightIn(min = 48.dp)) {
-                        Text("Generate a new packet", fontSize = 14.sp, color = MMColors.TextSecondary)
+                        Text("Generate a new packet", fontSize = 14.sp, color = MMInk.Secondary)
                     }
                 }
             }
@@ -340,7 +333,7 @@ internal fun DisputePacketContent(
 @Composable
 private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = MMColors.TextPrimary, modifier = Modifier.semantics { heading() })
+        Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = MMInk.Text, modifier = Modifier.semantics { heading() })
         content()
     }
 }
@@ -350,7 +343,7 @@ private fun Caption(text: String, center: Boolean = false) {
     Text(
         text,
         fontSize = 13.sp,
-        color = MMColors.TextSecondary,
+        color = MMInk.Secondary,
         textAlign = if (center) TextAlign.Center else TextAlign.Start,
         modifier = Modifier.padding(start = 2.dp),
     )
@@ -367,13 +360,13 @@ private fun Field(label: String, placeholder: String, value: String, onChange: (
         singleLine = false,
         modifier = Modifier.fillMaxWidth(),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = MMColors.TextPrimary,
-            unfocusedTextColor = MMColors.TextPrimary,
-            focusedBorderColor = MMColors.Primary,
-            unfocusedBorderColor = MMColors.CardStroke,
-            focusedLabelColor = MMColors.TextSecondary,
-            unfocusedLabelColor = MMColors.TextSecondary,
-            cursorColor = MMColors.Primary,
+            focusedTextColor = MMInk.Text,
+            unfocusedTextColor = MMInk.Text,
+            focusedBorderColor = MMInk.Text,
+            unfocusedBorderColor = MMInk.CardStroke,
+            focusedLabelColor = MMInk.Secondary,
+            unfocusedLabelColor = MMInk.Secondary,
+            cursorColor = MMInk.Text,
         ),
     )
 }
@@ -391,16 +384,16 @@ private fun RoomChip(name: String, selected: Boolean, onClick: () -> Unit) {
     ) {
         Row(
             Modifier
-                .background(if (selected) MMColors.Primary.copy(alpha = 0.18f) else MMColors.EvidenceCard, shape)
-                .border(1.dp, if (selected) MMColors.Primary else MMColors.CardStroke, shape)
+                .background(if (selected) MMInk.Text.copy(alpha = 0.18f) else MMInk.Paper, shape)
+                .border(1.dp, if (selected) MMInk.Text else MMInk.CardStroke, shape)
                 .padding(horizontal = 14.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (selected) {
-                Icon(Icons.Filled.Check, contentDescription = null, tint = MMColors.Primary, modifier = Modifier.size(14.dp))
+                Icon(Icons.Filled.Check, contentDescription = null, tint = MMInk.Text, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(6.dp))
             }
-            Text(name, fontSize = 14.sp, color = MMColors.TextPrimary)
+            Text(name, fontSize = 14.sp, color = MMInk.Text)
         }
     }
 }
@@ -410,11 +403,11 @@ private fun Group(content: @Composable ColumnScope.() -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
-            .background(MMColors.EvidenceCard, RoundedCornerShape(18.dp))
-            .border(1.dp, MMColors.CardStroke, RoundedCornerShape(18.dp)),
+            .background(MMInk.Paper, RoundedCornerShape(18.dp))
+            .border(1.dp, MMInk.CardStroke, RoundedCornerShape(18.dp)),
         content = content,
     )
 }
 
 @Composable
-private fun Divider(start: Int = 16) = HorizontalDivider(Modifier.padding(start = start.dp), thickness = 0.5.dp, color = MMColors.CardStroke)
+private fun Divider(start: Int = 16) = HorizontalDivider(Modifier.padding(start = start.dp), thickness = 0.5.dp, color = MMInk.CardStroke)

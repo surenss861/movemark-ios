@@ -37,10 +37,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.surensureshkumar.movemark.core.design.MMBackground
-import com.surensureshkumar.movemark.core.design.MMColors
+import androidx.compose.ui.graphics.Color
+import com.surensureshkumar.movemark.core.design.MMGroup
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMPrimaryButton
+import com.surensureshkumar.movemark.core.design.MMRowDivider
+import com.surensureshkumar.movemark.core.design.MMScreen
 import com.surensureshkumar.movemark.core.design.MMSpacing
-import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMDateField
 import com.surensureshkumar.movemark.domain.RentalEditForm
 
@@ -54,42 +57,30 @@ fun EditRentalScreen(onClose: () -> Unit, viewModel: EditRentalViewModel = hiltV
     fun close() = if (viewModel.hasChanges) confirmDiscard = true else onClose()
     BackHandler(enabled = !saving) { close() }
 
-    MMBackground {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .imePadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-                .padding(bottom = 40.dp),
-        ) {
-            IconButton(onClick = ::close, enabled = !saving) {
-                Icon(Icons.Filled.Close, contentDescription = "Close", tint = MMColors.TextPrimary)
-            }
-            EditRentalForm(form, viewModel.initial, viewModel::update)
-            (error ?: form.validationError ?: form.leaseError(viewModel.initial) ?: form.detailsIssue(viewModel.initial))?.let {
-                Spacer(Modifier.height(16.dp))
-                Text(it, color = if (error != null) MMColors.SemanticDanger else MMColors.TextSecondary, fontSize = 14.sp)
-            }
-            Spacer(Modifier.height(22.dp))
-            MMButton(
-                text = "Save changes",
-                onClick = { viewModel.save(onClose) },
-                loading = saving,
-                enabled = !saving && form.canSave(viewModel.initial),
-            )
+    // 1.4 grammar (iOS EditPropertyView inside MMScreen): header with back, the form on the light sheet, one action.
+    MMScreen(title = "Edit rental", onBack = { if (!saving) close() }, modifier = Modifier.imePadding()) {
+        EditRentalForm(form, viewModel.initial, viewModel::update)
+        (error ?: form.validationError ?: form.leaseError(viewModel.initial) ?: form.detailsIssue(viewModel.initial))?.let {
+            Spacer(Modifier.height(16.dp))
+            Text(it, color = if (error != null) MMInk.Danger else MMInk.Secondary, fontSize = 14.sp)
         }
+        Spacer(Modifier.height(22.dp))
+        MMPrimaryButton(
+            title = "Save changes",
+            onClick = { viewModel.save(onClose) },
+            isLoading = saving,
+            enabled = !saving && form.canSave(viewModel.initial),
+        )
     }
     if (confirmDiscard) {
         AlertDialog(
             onDismissRequest = { confirmDiscard = false },
             title = { Text("Discard your changes?") },
             confirmButton = {
-                TextButton(onClick = { confirmDiscard = false; onClose() }) { Text("Discard", color = MMColors.SemanticDanger) }
+                TextButton(onClick = { confirmDiscard = false; onClose() }) { Text("Discard", color = MMInk.Danger) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing", color = MMColors.TextSecondary) }
+                TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing", color = MMInk.Text) }
             },
         )
     }
@@ -97,7 +88,6 @@ fun EditRentalScreen(onClose: () -> Unit, viewModel: EditRentalViewModel = hiltV
 
 @Composable
 internal fun EditRentalForm(form: RentalEditForm, initial: RentalEditForm, onChange: ((RentalEditForm) -> RentalEditForm) -> Unit) {
-    Text("Edit rental", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MMColors.TextPrimary, modifier = Modifier.semantics { heading() })
     Section("Rental") {
         Field("Name (optional)", form.name, "Shown instead of the address") { v -> onChange { it.copy(name = v) } }
         Field("Street address", form.addressLine1) { v -> onChange { it.copy(addressLine1 = v) } }
@@ -108,13 +98,17 @@ internal fun EditRentalForm(form: RentalEditForm, initial: RentalEditForm, onCha
         Field("Country", form.country, capitalization = KeyboardCapitalization.Characters) { v -> onChange { it.copy(country = v) } }
     }
     Section("Dates") {
-        MMDateField("Move-in date", form.moveInDate, { v -> onChange { it.copy(moveInDate = v) } })
-        MMDateField("Lease start", form.leaseStart, { v -> onChange { it.copy(leaseStart = v) } })
-        MMDateField("Lease end", form.leaseEnd, { v -> onChange { it.copy(leaseEnd = v) } })
+        MMGroup {
+            MMDateField("Move-in date", form.moveInDate, { v -> onChange { it.copy(moveInDate = v) } }, onLight = true)
+            MMRowDivider()
+            MMDateField("Lease start", form.leaseStart, { v -> onChange { it.copy(leaseStart = v) } }, onLight = true)
+            MMRowDivider()
+            MMDateField("Lease end", form.leaseEnd, { v -> onChange { it.copy(leaseEnd = v) } }, onLight = true)
+        }
         Text(
             "Your move-in date anchors the record: proof captured around it shows the condition you moved into.",
             fontSize = 13.sp,
-            color = MMColors.TextSecondary,
+            color = MMInk.Secondary,
             modifier = Modifier.padding(start = 4.dp, top = 6.dp),
         )
     }
@@ -131,13 +125,13 @@ internal fun EditRentalForm(form: RentalEditForm, initial: RentalEditForm, onCha
 
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
-    Spacer(Modifier.height(26.dp))
+    Spacer(Modifier.height(22.dp))
     Text(
         title.uppercase(),
         fontSize = 12.sp,
         fontWeight = FontWeight.Medium,
         letterSpacing = 0.3.sp,
-        color = MMColors.TextSecondary,
+        color = MMInk.Secondary,
         modifier = Modifier.padding(start = 4.dp, bottom = 12.dp).semantics { heading() },
     )
     content()
@@ -160,13 +154,17 @@ private fun Field(
         keyboardOptions = KeyboardOptions(capitalization = capitalization, keyboardType = keyboard, imeAction = ImeAction.Next),
         modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = MMColors.TextPrimary,
-            unfocusedTextColor = MMColors.TextPrimary,
-            focusedBorderColor = MMColors.Primary,
-            unfocusedBorderColor = MMColors.CardStroke,
-            focusedLabelColor = MMColors.TextSecondary,
-            unfocusedLabelColor = MMColors.TextSecondary,
-            cursorColor = MMColors.Primary,
+            focusedTextColor = MMInk.Text,
+            unfocusedTextColor = MMInk.Text,
+            focusedBorderColor = MMInk.Text,
+            unfocusedBorderColor = MMInk.Separator,
+            focusedLabelColor = MMInk.Secondary,
+            unfocusedLabelColor = MMInk.Secondary,
+            cursorColor = MMInk.Text,
+            focusedContainerColor = Color.White,
+            unfocusedContainerColor = Color.White,
+            focusedSupportingTextColor = MMInk.Secondary,
+            unfocusedSupportingTextColor = MMInk.Secondary,
         ),
     )
 }

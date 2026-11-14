@@ -107,16 +107,6 @@ fun ProPaywallScreen(
     val purchaseSuccess by viewModel.purchaseSuccess.collectAsState()
     val restoreNote by viewModel.restoreNote.collectAsState()
     val packWasBought by viewModel.purchaseWasReportPack.collectAsState()
-    // Yearly first, as iOS lists plans.
-    val plans = packages.filterNot { it.isReportPack }.sortedByDescending { it.isYearly }
-    val reportPack = packages.firstOrNull { it.isReportPack }
-    val offersReportPack = reason == PaywallReason.UnlimitedExports
-    val isMockMode = viewModel.isMockMode
-    val comingSoon = viewModel.subscriptionsComingSoon
-    val busy = loading || purchasing
-    val plansUnavailable = !comingSoon && plans.isEmpty() && !loading && error != null
-
-    MMLightSystemBars(lightNavigationBar = false, lightStatusBar = false)
 
     LaunchedEffect(Unit) {
         viewModel.clearMessages()
@@ -132,6 +122,71 @@ fun ProPaywallScreen(
     }
 
     BackHandler(enabled = !purchasing) { onClose() }
+
+    ProPaywallContent(
+        reason = reason,
+        ui = PaywallUi(
+            packages = packages, selected = selected, loading = loading, purchasing = purchasing, error = error,
+            restoreMessage = restoreMessage, restoreNote = restoreNote, purchaseSuccess = purchaseSuccess,
+            packWasBought = packWasBought, isMockMode = viewModel.isMockMode, comingSoon = viewModel.subscriptionsComingSoon,
+            canPurchase = activity != null,
+        ),
+        onClose = onClose,
+        onSelect = viewModel::selectPlan,
+        onPurchase = { activity?.let { act -> viewModel.purchase(act) { } } },
+        onBuyPack = { pack -> activity?.let { viewModel.purchaseReportPack(it, pack) { } } },
+        onRestore = { viewModel.restore { onClose() } },
+        onRetry = viewModel::loadPlans,
+    )
+}
+
+/** Everything the paywall shows, as plain values (the debug fixture gallery renders it without a store). */
+internal data class PaywallUi(
+    val packages: List<PlanPackageUi> = emptyList(),
+    val selected: PlanPackageUi? = null,
+    val loading: Boolean = false,
+    val purchasing: Boolean = false,
+    val error: String? = null,
+    val restoreMessage: String? = null,
+    val restoreNote: String? = null,
+    val purchaseSuccess: Boolean = false,
+    val packWasBought: Boolean = false,
+    val isMockMode: Boolean = false,
+    val comingSoon: Boolean = false,
+    val canPurchase: Boolean = true,
+)
+
+@Composable
+internal fun ProPaywallContent(
+    reason: PaywallReason,
+    ui: PaywallUi,
+    onClose: () -> Unit,
+    onSelect: (PlanPackageUi) -> Unit,
+    onPurchase: () -> Unit,
+    onBuyPack: (PlanPackageUi) -> Unit,
+    onRestore: () -> Unit,
+    onRetry: () -> Unit,
+) {
+    val context = LocalContext.current
+    val packages = ui.packages
+    val selected = ui.selected
+    val loading = ui.loading
+    val purchasing = ui.purchasing
+    val error = ui.error
+    val restoreMessage = ui.restoreMessage
+    val purchaseSuccess = ui.purchaseSuccess
+    val restoreNote = ui.restoreNote
+    val packWasBought = ui.packWasBought
+    // Yearly first, as iOS lists plans.
+    val plans = packages.filterNot { it.isReportPack }.sortedByDescending { it.isYearly }
+    val reportPack = packages.firstOrNull { it.isReportPack }
+    val offersReportPack = reason == PaywallReason.UnlimitedExports
+    val isMockMode = ui.isMockMode
+    val comingSoon = ui.comingSoon
+    val busy = loading || purchasing
+    val plansUnavailable = !comingSoon && plans.isEmpty() && !loading && error != null
+
+    MMLightSystemBars(lightNavigationBar = false, lightStatusBar = false)
 
     Box(Modifier.fillMaxSize().background(PaywallSurface)) {
         Column(Modifier.fillMaxSize()) {
@@ -178,8 +233,8 @@ fun ProPaywallScreen(
                     Spacer(Modifier.height(26.dp))
                     ReportPackSection(
                         pack = reportPack,
-                        enabled = !busy && !purchaseSuccess && activity != null,
-                        onBuy = { pack -> activity?.let { viewModel.purchaseReportPack(it, pack) { } } },
+                        enabled = !busy && !purchaseSuccess && ui.canPurchase,
+                        onBuy = onBuyPack,
                     )
                 }
 
@@ -222,7 +277,7 @@ fun ProPaywallScreen(
                                     plan = plan,
                                     selected = selected?.id == plan.id,
                                     enabled = !busy && !purchaseSuccess,
-                                    onSelect = { viewModel.selectPlan(plan) },
+                                    onSelect = { onSelect(plan) },
                                 )
                             }
                         }
@@ -234,7 +289,8 @@ fun ProPaywallScreen(
                             Color.White,
                             enabled = !busy,
                             modifier = Modifier.weight(1f),
-                        ) { viewModel.restore { onClose() } }
+                            onClick = onRestore,
+                        )
                         QuietAction("Not now", HeroSecondary, enabled = !purchasing, modifier = Modifier.weight(1f), onClick = onClose)
                     }
                 }
@@ -281,16 +337,16 @@ fun ProPaywallScreen(
                             title = if (loading) "Trying…" else "Try again",
                             isLoading = loading,
                             enabled = !loading,
-                            onClick = viewModel::loadPlans,
+                            onClick = onRetry,
                         )
                         Row(Modifier.fillMaxWidth()) {
-                            QuietAction("Restore purchases", Color.White, enabled = !busy, modifier = Modifier.weight(1f)) { viewModel.restore { onClose() } }
+                            QuietAction("Restore purchases", Color.White, enabled = !busy, modifier = Modifier.weight(1f), onClick = onRestore)
                             QuietAction("Continue on Free", HeroSecondary, enabled = !purchasing, modifier = Modifier.weight(1f), onClick = onClose)
                         }
                     }
                     else -> {
                         if (error != null && plans.isNotEmpty()) {
-                            Text(error!!, style = mmFont(14f), color = Color(0xFFFF8A80), textAlign = TextAlign.Center)
+                            Text(error, style = mmFont(14f), color = Color(0xFFFF8A80), textAlign = TextAlign.Center)
                         }
                         selected?.let { plan ->
                             Text(plan.price, style = mmFont(17f, FontWeight.SemiBold), color = Color.White, textAlign = TextAlign.Center)
@@ -303,8 +359,8 @@ fun ProPaywallScreen(
                                 else -> "Continue with Pro"
                             },
                             isLoading = purchasing && !purchaseSuccess,
-                            enabled = !(selected == null || activity == null || busy || purchaseSuccess),
-                            onClick = { activity?.let { act -> viewModel.purchase(act) { } } },
+                            enabled = !(selected == null || !ui.canPurchase || busy || purchaseSuccess),
+                            onClick = onPurchase,
                             modifier = Modifier.testTag("paywall.continue"),
                         )
                         Text("Cancel anytime · Managed by Google Play", style = mmFont(12.5f), color = HeroSecondary, textAlign = TextAlign.Center)

@@ -1,5 +1,9 @@
 package com.surensureshkumar.movemark.features.moveout
 
+import androidx.compose.ui.graphics.Color
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMPrimaryButton
+import com.surensureshkumar.movemark.core.design.MMScreen
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -54,11 +58,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.surensureshkumar.movemark.core.design.MMBackground
-import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
-import com.surensureshkumar.movemark.core.design.components.MMButton
-import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
+import com.surensureshkumar.movemark.core.design.MMSecondaryButton
 import com.surensureshkumar.movemark.data.models.EvidencePhoto
 import com.surensureshkumar.movemark.data.property.MoveOutChecklistRow
 import com.surensureshkumar.movemark.domain.MoveOutComparison
@@ -102,32 +103,17 @@ fun MoveOutRoomsScreen(
     }
 
     Box(Modifier.fillMaxSize()) {
-        MMBackground {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-                    .padding(top = 4.dp, bottom = 48.dp),
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MMColors.TextPrimary)
-                }
-                Text("MOVE-OUT", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp, color = MMColors.TextSecondary)
-                Text(
-                    viewModel.rentalName,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MMColors.TextPrimary,
-                    modifier = Modifier.padding(top = 4.dp).semantics { heading() },
-                )
-                Text("Compare what changed since move-in.", fontSize = 15.sp, color = MMColors.TextSecondary, modifier = Modifier.padding(top = 4.dp))
-
+        // 1.4 grammar (iOS MoveOutFoundationView in MMScreen): rental and purpose in the header, the comparison on the sheet.
+        MMScreen(
+            title = viewModel.rentalName,
+            eyebrow = "Move-out",
+            lines = listOf("Compare what changed since move-in."),
+            onBack = onBack,
+        ) {
                 val o = overview
                 when {
-                    o == null && loading -> CircularProgressIndicator(color = MMColors.Primary, modifier = Modifier.padding(top = 24.dp))
-                    o == null -> Text("No rental loaded.", color = MMColors.TextSecondary, modifier = Modifier.padding(top = 24.dp))
+                    o == null && loading -> CircularProgressIndicator(color = MMInk.Text, modifier = Modifier.padding(top = 24.dp))
+                    o == null -> Text("No rental loaded.", color = MMInk.Secondary, modifier = Modifier.padding(top = 24.dp))
                     else -> MoveOutContent(
                         o = o,
                         justCompared = justCompared,
@@ -150,7 +136,6 @@ fun MoveOutRoomsScreen(
                     )
                 }
             }
-        }
         viewer?.let { (photos, start) ->
             RoomPhotoViewer(photos = photos, start = start, signPhotoUrl = viewModel::signedPhotoUrl, onDismiss = { viewer = null })
         }
@@ -202,12 +187,12 @@ private fun ColumnScope.MoveOutContent(
                     scope.launch { jumpTargets[index].bringIntoView() }
                 }
                 if (o.isSubstantiallyCompared) {
-                    HorizontalDivider(Modifier.padding(vertical = 14.dp), thickness = 0.75.dp, color = MMColors.CardStroke)
+                    HorizontalDivider(Modifier.padding(vertical = 14.dp), thickness = 0.75.dp, color = MMInk.CardStroke)
                     Text(
                         if (o.missing.isEmpty()) "Your move-out record now shows how the rental changed since move-in."
                         else "Your move-out record now shows how most of the rental changed since move-in.",
                         fontSize = 14.sp,
-                        color = MMColors.TextPrimary,
+                        color = MMInk.Text,
                     )
                 }
             }
@@ -258,15 +243,15 @@ private fun ColumnScope.MoveOutContent(
         }
     } else {
         Panel {
-            Text("No move-in proof to compare yet", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = MMColors.TextPrimary)
+            Text("No move-in proof to compare yet", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = MMInk.Text)
             Text(
                 if (o.rooms.isEmpty()) "Add your rooms and photograph each one as it is now. Before you leave, you’ll capture them again here and see what changed — and what didn’t."
                 else "Photograph each room as it is now. Before you leave, you’ll capture them again here and see what changed — and what didn’t.",
                 fontSize = 14.sp,
-                color = MMColors.TextSecondary,
+                color = MMInk.Secondary,
                 modifier = Modifier.padding(top = 6.dp),
             )
-            MMButton(text = "Capture move-in proof", onClick = onCaptureMoveIn, modifier = Modifier.padding(top = 16.dp))
+            MMPrimaryButton(title = "Capture move-in proof", onClick = onCaptureMoveIn, modifier = Modifier.padding(top = 16.dp))
         }
     }
 
@@ -275,8 +260,8 @@ private fun ColumnScope.MoveOutContent(
 
     if (o.hasBaseline) {
         Spacer(Modifier.height(30.dp))
-        Text("Move-out report", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = MMColors.TextPrimary, modifier = Modifier.semantics { heading() })
-        Text("One organized, dated PDF of each room’s move-out proof.", fontSize = 14.sp, color = MMColors.TextSecondary, modifier = Modifier.padding(top = 4.dp))
+        Text("Move-out report", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = MMInk.Text, modifier = Modifier.semantics { heading() })
+        Text("One organized, dated PDF of each room’s move-out proof.", fontSize = 14.sp, color = MMInk.Secondary, modifier = Modifier.padding(top = 4.dp))
         if (errorFromExport && error != null) {
             Spacer(Modifier.height(16.dp))
             MoveOutNotice(error, actionTitle = "Try again", onAction = onRetryExport)
@@ -285,27 +270,26 @@ private fun ColumnScope.MoveOutContent(
             queuedNotice != null -> {
                 Spacer(Modifier.height(16.dp))
                 MoveOutNotice(queuedNotice, success = true)
-                MMButton(
-                    text = "Open Reports",
-                    onClick = onOpenReports,
-                    style = if (o.isComplete) MMButtonStyle.Primary else MMButtonStyle.Secondary,
-                    modifier = Modifier.padding(top = 14.dp),
-                )
+                if (o.isComplete) {
+                    MMPrimaryButton(title = "Open Reports", onClick = onOpenReports, modifier = Modifier.padding(top = 14.dp))
+                } else {
+                    MMSecondaryButton(title = "Open Reports", onClick = onOpenReports, modifier = Modifier.padding(top = 14.dp))
+                }
             }
-            o.isComplete -> MMButton(
-                text = if (exporting) "Queuing report…" else "Generate move-out report",
+            o.isComplete -> MMPrimaryButton(
+                title = if (exporting) "Queuing report…" else "Generate move-out report",
                 onClick = onGenerate,
-                loading = exporting,
+                isLoading = exporting,
                 enabled = !exporting,
                 modifier = Modifier.padding(top = 18.dp),
             )
-            else -> Text(o.remainingRoomsLine, fontSize = 14.5.sp, fontWeight = FontWeight.Medium, color = MMColors.TextPrimary, modifier = Modifier.padding(top = 12.dp))
+            else -> Text(o.remainingRoomsLine, fontSize = 14.5.sp, fontWeight = FontWeight.Medium, color = MMInk.Text, modifier = Modifier.padding(top = 12.dp))
         }
         if (queuedNotice == null && o.isComplete) {
             Text(
                 if (hasPro) "Included with Pro" else "Pro required for move-out reports",
                 fontSize = 12.5.sp,
-                color = MMColors.TextSecondary,
+                color = MMInk.Secondary,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
             )
@@ -324,9 +308,9 @@ private fun ChecklistSection(checklist: MoveOutChecklistRow?, loading: Boolean, 
         }
         loading -> TitledGroup("Closeout checklist", null) {
             Row(Modifier.heightIn(min = 52.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.size(16.dp), color = MMColors.TextSecondary, strokeWidth = 2.dp)
+                CircularProgressIndicator(Modifier.size(16.dp), color = MMInk.Secondary, strokeWidth = 2.dp)
                 Spacer(Modifier.width(10.dp))
-                Text("Loading checklist…", fontSize = 15.sp, color = MMColors.TextSecondary)
+                Text("Loading checklist…", fontSize = 15.sp, color = MMInk.Secondary)
             }
         }
     }
@@ -350,19 +334,19 @@ internal fun ChecklistItemRow(title: String, done: Boolean, onToggle: () -> Unit
         Box(
             Modifier
                 .size(22.dp)
-                .then(if (done) Modifier.background(MMColors.Primary, CircleShape) else Modifier.border(1.25.dp, MMColors.TextSecondary.copy(alpha = 0.5f), CircleShape)),
+                .then(if (done) Modifier.background(MMInk.Text, CircleShape) else Modifier.border(1.25.dp, MMInk.Secondary.copy(alpha = 0.5f), CircleShape)),
             contentAlignment = Alignment.Center,
         ) {
-            if (done) Icon(Icons.Filled.Check, contentDescription = null, tint = MMColors.AppBackground, modifier = Modifier.size(13.dp))
+            if (done) Icon(Icons.Filled.Check, contentDescription = null, tint = MMInk.Sheet, modifier = Modifier.size(13.dp))
         }
         Spacer(Modifier.width(12.dp))
-        Text(title, fontSize = 16.sp, color = MMColors.TextPrimary)
+        Text(title, fontSize = 16.sp, color = MMInk.Text)
     }
 }
 
 @Composable
 internal fun MoveOutNotice(message: String, success: Boolean = false, actionTitle: String? = null, onAction: (() -> Unit)? = null) {
-    val tint = if (success) MMColors.Primary else MMColors.SemanticWarning
+    val tint = if (success) MMInk.Text else MMInk.Warning
     Column(
         Modifier
             .fillMaxWidth()
@@ -370,10 +354,10 @@ internal fun MoveOutNotice(message: String, success: Boolean = false, actionTitl
             .border(0.75.dp, tint.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
-        Text(message, fontSize = 14.sp, color = MMColors.TextPrimary)
+        Text(message, fontSize = 14.sp, color = MMInk.Text)
         if (actionTitle != null && onAction != null) {
             TextButton(onClick = onAction, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(actionTitle, color = MMColors.TextPrimary, fontWeight = FontWeight.SemiBold)
+                Text(actionTitle, color = MMInk.Text, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -384,8 +368,8 @@ private fun Panel(content: @Composable ColumnScope.() -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
-            .background(MMColors.EvidenceCard, RoundedCornerShape(18.dp))
-            .border(0.75.dp, MMColors.CardStroke, RoundedCornerShape(18.dp))
+            .background(MMInk.Paper, RoundedCornerShape(18.dp))
+            .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(18.dp))
             .padding(14.dp),
         content = content,
     )
@@ -395,10 +379,10 @@ private fun Panel(content: @Composable ColumnScope.() -> Unit) {
 private fun Section(title: String, count: Int, caption: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(modifier) {
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = MMColors.TextPrimary, modifier = Modifier.weight(1f).semantics { heading() })
-            Text("$count ${if (count == 1) "room" else "rooms"}", fontSize = 13.sp, color = MMColors.TextSecondary)
+            Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = MMInk.Text, modifier = Modifier.weight(1f).semantics { heading() })
+            Text("$count ${if (count == 1) "room" else "rooms"}", fontSize = 13.sp, color = MMInk.Secondary)
         }
-        Text(caption, fontSize = 13.sp, color = MMColors.TextSecondary, modifier = Modifier.padding(top = 3.dp))
+        Text(caption, fontSize = 13.sp, color = MMInk.Secondary, modifier = Modifier.padding(top = 3.dp))
         Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
     }
 }
@@ -408,8 +392,8 @@ private fun Group(content: @Composable ColumnScope.() -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
-            .background(MMColors.EvidenceCard, RoundedCornerShape(18.dp))
-            .border(1.dp, MMColors.CardStroke, RoundedCornerShape(18.dp)),
+            .background(MMInk.Paper, RoundedCornerShape(18.dp))
+            .border(1.dp, MMInk.CardStroke, RoundedCornerShape(18.dp)),
         content = content,
     )
 }
@@ -422,13 +406,13 @@ private fun TitledGroup(title: String, footer: String?, modifier: Modifier = Mod
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 0.6.sp,
-            color = MMColors.TextSecondary,
+            color = MMInk.Secondary,
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp).semantics { heading() },
         )
         Group(content)
-        footer?.let { Text(it, fontSize = 12.5.sp, color = MMColors.TextSecondary, modifier = Modifier.padding(start = 4.dp, top = 8.dp)) }
+        footer?.let { Text(it, fontSize = 12.5.sp, color = MMInk.Secondary, modifier = Modifier.padding(start = 4.dp, top = 8.dp)) }
     }
 }
 
 @Composable
-private fun RowDivider() = HorizontalDivider(Modifier.padding(start = 16.dp), thickness = 0.5.dp, color = MMColors.CardStroke)
+private fun RowDivider() = HorizontalDivider(Modifier.padding(start = 16.dp), thickness = 0.5.dp, color = MMInk.CardStroke)
