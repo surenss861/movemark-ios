@@ -33,6 +33,17 @@ struct SavedRoomReceipt: Identifiable {
     /// Never another room's or a maintenance photo: with no path, the receipt shows no image.
     var photoPath: String? = nil
 
+    /// The receipt's server time: the latest `created_at` among photos the server confirmed in this save. Nil
+    /// when none carries one (nothing confirmed, or only an earlier attempt's photos found), and the receipt
+    /// then labels its time as this device's. Photos still queued on this iPhone are never in `confirmed`.
+    static func serverSavedAt(of confirmed: [EvidencePhoto]) -> Date? {
+        confirmed
+            .compactMap { MMCaseDate.parse($0.serverCreatedAt) }
+            .filter(\.hasTime)
+            .map(\.date)
+            .max()
+    }
+
     var primaryActionLabel: String {
         switch next {
         case .room: return "Continue to next room"

@@ -201,6 +201,38 @@ struct PendingEvidenceSyncTests {
         #expect(server.openTickets.isEmpty, "open tickets", sourceLocation: sourceLocation)
     }
 
+    /// Saved locally is never confirmed by the server: a photo still queued on this iPhone gets no server
+    /// timestamp, stays pending, and the receipt's time comes only from photos the server confirmed. With no
+    /// confirmed photo in the run, the receipt has no server time and labels its time as this device's.
+    @Test func queuedPhotoGetsNoServerTimestampUntilConfirmed() async throws {
+        defer { cleanup() }
+        let app = launch()
+        let shots = try photos(2)
+        try await capture(shots, into: app.store)
+        // The first photo uploads and is confirmed; the second's upload fails, so it stays on this iPhone.
+        let partial = await PendingEvidenceSync(store: app.store, backend: FailingTicketServer(base: server, allowing: 1)).sync(key)
+        #expect(partial.saved.count == 1 && partial.pending.count == 1 && partial.savedTotal == 1)
+        #expect(partial.saved.allSatisfy { $0.serverCreatedAt != nil })            // confirmed → server time
+        #expect(partial.pending.map(\.id) == [shots[1].id])                         // queued → pending only
+        #expect(!partial.saved.contains { $0.id == shots[1].id })
+        #expect(SavedRoomReceipt.serverSavedAt(of: partial.saved) != nil)
+        #expect(await app.store.manifest(for: key)?.items.map(\.id) == [shots[1].id])  // still on this iPhone
+
+        // Nothing confirmed at all (offline): no server time exists for the receipt.
+        server.offline = true
+        let offline = await app.sync.sync(key)
+        #expect(offline.saved.isEmpty && offline.pending.count == 1)
+        #expect(SavedRoomReceipt.serverSavedAt(of: offline.saved) == nil)
+        // Photos without a server created_at (e.g. found from an earlier attempt) never yield a server time.
+        #expect(SavedRoomReceipt.serverSavedAt(of: [EvidencePhoto(id: UUID(), filePath: "a.jpg")]) == nil)
+
+        // Back online: the retry confirms it, and only then does it carry the server's time.
+        server.offline = false
+        let retry = await app.sync.sync(key)
+        #expect(retry.isComplete && retry.saved.map(\.id) == [shots[1].id])
+        #expect(retry.saved.allSatisfy { $0.serverCreatedAt != nil })
+    }
+
     /// The receipt's Saved time reads PostgREST's created_at (microseconds, +00:00) as a full timestamp.
     @MainActor @Test func serverCreatedAtParsesAsTheReceiptTime() {
         let parsed = MMCaseDate.parse("2026-11-14T21:12:03.123456+00:00")
@@ -449,11 +481,13 @@ struct PendingEvidenceSyncTests {
     }
 }
 
-/// The real server, except every ticket request fails (a storage outage).
+/// The real server, except ticket requests fail (a storage outage) — all of them, or every one after the
+/// first `allowing` uploads (a save that drops mid-way).
 @MainActor
 private final class FailingTicketServer: PendingEvidenceBackend {
     let base: FakeSyncServer
-    init(base: FakeSyncServer) { self.base = base }
+    private var allowing: Int
+    init(base: FakeSyncServer, allowing: Int = 0) { self.base = base; self.allowing = allowing }
     func ensureEntry(id: UUID, key: PendingEvidenceKey, title: String, draft: PendingEvidenceDraft) async throws -> Bool {
         try await base.ensureEntry(id: id, key: key, title: title, draft: draft)
     }
@@ -461,7 +495,9 @@ private final class FailingTicketServer: PendingEvidenceBackend {
     func deleteEntry(id: UUID) async throws { try await base.deleteEntry(id: id) }
     func upload(_ source: MMEvidenceSource, key: PendingEvidenceKey,
                 onTicket: @escaping (MoveMarkUpload) async -> Void) async throws -> MoveMarkUpload {
-        throw FakeSyncServer.Offline()
+        guard allowing > 0 else { throw FakeSyncServer.Offline() }
+        allowing -= 1
+        return try await base.upload(source, key: key, onTicket: onTicket)
     }
     func insertPhoto(rowId: UUID, entryId: UUID, key: PendingEvidenceKey, upload: MoveMarkUpload) async throws -> String? {
         try await base.insertPhoto(rowId: rowId, entryId: entryId, key: key, upload: upload)

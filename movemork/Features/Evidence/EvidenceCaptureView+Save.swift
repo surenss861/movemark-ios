@@ -77,11 +77,7 @@ extension EvidenceCaptureView {
             let confirmedIssueCount = tagsFailed ? 0 : issueCount
             // Saved: the server's created_at of the latest photo this run inserted; nil when none came back
             // (e.g. only an earlier attempt's photos were found), and the receipt then says "on this device".
-            let serverSavedAt = result.saved
-                .compactMap { MMCaseDate.parse($0.serverCreatedAt) }
-                .filter(\.hasTime)
-                .map(\.date)
-                .max()
+            let serverSavedAt = SavedRoomReceipt.serverSavedAt(of: result.saved)
             if confirmed > 0 { propertyStore.invalidateVaultSummaries() }
 
             if confirmed > 0 {
