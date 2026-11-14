@@ -205,7 +205,9 @@ extension EvidenceCaptureView {
             issueCount: issueCount,
             savedAt: Date(),
             next: next,
-            photoPath: photo.map { $0.thumbnailPath ?? $0.filePath }
+            // The original, not the ~320 px thumbnail: the receipt shows it screen-wide (≈1100 px on a 3x phone),
+            // where the thumbnail was visibly soft. MMCachedAsyncImage decodes it at display size.
+            photoPath: photo?.filePath
         )
     }
 

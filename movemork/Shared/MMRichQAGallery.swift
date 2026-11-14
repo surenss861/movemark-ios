@@ -28,6 +28,9 @@ struct MMRichQAGallery: View {
         } else if screen == "evidence-retry" {
             // The production room screen with a partial save waiting for its retry (MMEvidenceRetryQAFixture).
             MMEvidenceRetryQAScreen()
+        } else if screen.hasPrefix("receipt-") {
+            // The saved-proof receipt (MMReceiptQAFixture).
+            MMReceiptQAScreen(screen: screen)
         } else if screen.hasPrefix("room-") {
             RoomQAScreen(screen: screen)
         } else if screen.hasPrefix("proof-") {

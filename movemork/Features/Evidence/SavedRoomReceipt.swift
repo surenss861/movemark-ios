@@ -26,7 +26,8 @@ struct SavedRoomReceipt: Identifiable {
     let issueCount: Int
     let savedAt: Date
     let next: Next
-    /// Storage path (thumbnail when there is one) of a photo this save confirmed — the receipt's image.
+    /// Storage path of the original of a photo this save confirmed — the receipt's image (shown screen-wide, so
+    /// never the ~320 px thumbnail).
     /// Never another room's or a maintenance photo: with no path, the receipt shows no image.
     var photoPath: String? = nil
 

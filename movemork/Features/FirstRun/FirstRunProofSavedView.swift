@@ -60,7 +60,8 @@ struct FirstRunProofSavedView: View {
             }
         }
         .task {
-            previewURL = await propertyStore.previewImageURL(for: summary.propertyId)
+            // The original: the receipt shows it screen-wide, where the thumbnail was soft.
+            previewURL = await propertyStore.previewImageURL(for: summary.propertyId, original: true)
         }
     }
 }
