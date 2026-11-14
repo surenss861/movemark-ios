@@ -22,6 +22,10 @@ class MainActivity : ComponentActivity() {
         // A social return is offered even on a recreated Activity (the attempt may still be waiting in its
         // ViewModel; a repeat of the same link is ignored). A reset link only when it launched the app, not again
         // after a configuration change.
+        // Debug builds only: log the crash-report payload Sentry would send, and send nothing (CrashReporting).
+        if (BuildConfig.DEBUG && savedInstanceState == null && intent?.getBooleanExtra("movemark.sentry_selftest", false) == true) {
+            Thread { com.surensureshkumar.movemark.core.CrashReporting.runSelfTest(applicationContext, BuildConfig.DEBUG) }.start()
+        }
         val wasSocialReturn = SocialBrowserSession.offer(intent?.data)
         if (savedInstanceState == null && !wasSocialReturn) PasswordResetLink.offer(intent?.dataString)
         // System bars follow the app's surfaces, not the phone's theme: MoveMark has one dark theme, and everything
