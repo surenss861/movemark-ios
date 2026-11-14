@@ -155,7 +155,7 @@ fun AccountScreen(
                         if (!isMockMode) PlaySubscriptionIntents.openManageSubscriptions(context)
                     } else {
                         viewModel.dismissNotice()
-                        onShowPaywall(PaywallReason.ExtraProperty)
+                        onShowPaywall(PaywallReason.Account)
                     }
                 },
             )

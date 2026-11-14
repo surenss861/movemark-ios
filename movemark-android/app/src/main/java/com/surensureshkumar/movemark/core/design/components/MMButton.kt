@@ -5,6 +5,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.runtime.getValue
@@ -44,7 +45,8 @@ fun MMButton(
     val scaledModifier = modifier
         .scale(scale)
         .fillMaxWidth()
-        .height(height)
+        // A minimum, so large font scales wrap the label instead of clipping it (F29).
+        .heightIn(min = height)
     when (style) {
         MMButtonStyle.Primary -> Button(
             onClick = onClick,
@@ -53,15 +55,16 @@ fun MMButton(
             modifier = scaledModifier,
             shape = shape,
             colors = ButtonDefaults.buttonColors(
-                containerColor = MMColors.Primary,
-                contentColor = androidx.compose.ui.graphics.Color.White,
-                disabledContainerColor = MMColors.Primary.copy(alpha = 0.4f),
+                containerColor = MMColors.ActionPrimary,
+                contentColor = MMColors.OnActionPrimary,
+                disabledContainerColor = MMColors.ActionPrimary.copy(alpha = 0.4f),
+                disabledContentColor = MMColors.OnActionPrimary.copy(alpha = 0.6f),
             ),
         ) {
             if (loading) {
                 CircularProgressIndicator(
                     modifier = Modifier.height(22.dp),
-                    color = androidx.compose.ui.graphics.Color.White,
+                    color = MMColors.OnActionPrimary,
                     strokeWidth = 2.dp,
                 )
             } else {

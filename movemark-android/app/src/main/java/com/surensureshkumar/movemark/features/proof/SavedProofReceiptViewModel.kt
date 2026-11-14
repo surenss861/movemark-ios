@@ -64,11 +64,13 @@ class SavedProofReceiptViewModel @Inject constructor(
             else -> "$saved photos saved"
         }
         val headerSubtitle = "$roomName proof · $photosSavedLine · $phaseLabel"
+        // iOS SavedRoomReceipt.primaryActionLabel: retry first, then the next room, then the report.
+        val pending = (attempted - saved).coerceAtLeast(0)
         val primaryActionLabel = when {
-            nextRoom != null -> "Continue with ${nextRoom.name}"
-            documented >= totalRooms && totalRooms > 0 && phase == ProofPhase.MoveIn -> "Go to Reports"
-            phase == ProofPhase.MoveOut -> "Continue next move-out room"
-            else -> "Go to Reports"
+            partial && pending > 0 -> "Retry ${receiptCount(pending, "photo")}"
+            nextRoom != null -> "Continue to next room"
+            phase == ProofPhase.MoveOut -> "Make move-out report"
+            else -> "View move-in report"
         }
 
         _uiState.value = SavedProofReceiptUiState(
@@ -93,6 +95,9 @@ class SavedProofReceiptViewModel @Inject constructor(
         )
     }
 
+    /** Photos that did not save and still need a retry (iOS `pendingCount`). */
+    val pendingCount: Int get() = (_uiState.value.attemptedCount - _uiState.value.savedCount).coerceAtLeast(0)
+
     fun nextUndocumentedRoomId(): UUID? {
         val property = propertyStore.currentProperty.value ?: return null
         return RoomProofMetrics.nextRoom(property, proofPhase)?.id
@@ -104,3 +109,5 @@ class SavedProofReceiptViewModel @Inject constructor(
         return "${phase.displayName} · ${formatter.format(Instant.ofEpochMilli(millis))}"
     }
 }
+
+internal fun receiptCount(n: Int, noun: String): String = "$n ${if (n == 1) noun else noun + "s"}"

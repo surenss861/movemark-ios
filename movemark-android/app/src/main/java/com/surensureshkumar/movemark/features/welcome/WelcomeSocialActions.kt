@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -80,7 +81,8 @@ fun WelcomeSocialActions(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(MMSpacing.ButtonHeight.dp)
+                    // A minimum, not a fixed height: at large font scales the label wraps instead of being clipped (F29).
+                    .heightIn(min = MMSpacing.ButtonHeight.dp)
                     .testTag("welcome.social.${provider.id}"),
             ) {
                 if (busy) {
@@ -95,7 +97,14 @@ fun WelcomeSocialActions(
                         Spacer(Modifier.width(2.dp))
                     }
                     // Explicit: the app theme's text style is light-on-dark and would override the button's content colour.
-                    Text(provider.buttonTitle, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color(0xFF1F1F1F))
+                    Text(
+                        provider.buttonTitle,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF1F1F1F),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
                 }
             }
         }

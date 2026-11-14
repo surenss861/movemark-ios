@@ -101,7 +101,7 @@ object MMInk {
     val Card = Color.White
     val CardStroke = Color(0xFFECECEC)
     val Text = Color(0xFF141415)
-    val Secondary = Color(0xFF7E7F80)
+    val Secondary = Color(0xFF6D6E6F)       // 5.1:1 on white, 4.8:1 on Sheet (was #7E7F80: 4.0:1 / 3.8:1)
     val Separator = Color(0xFFEAEAEB)
     val Field = Color(0xFFF3F3F2)
     val Lime = Color(0xFFCAE36C)            // the one action

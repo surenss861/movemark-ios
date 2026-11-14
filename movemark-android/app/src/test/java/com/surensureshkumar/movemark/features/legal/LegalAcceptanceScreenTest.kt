@@ -9,6 +9,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.surensureshkumar.movemark.data.legal.LegalAgeBand
+import com.surensureshkumar.movemark.data.legal.LegalAgeChoice
 import com.surensureshkumar.movemark.data.legal.LegalUnavailable
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -181,5 +182,15 @@ class LegalAcceptanceScreenTest {
         compose.onNodeWithText("Sign out").performClick()
         assertEquals(1, retries)
         assertEquals(1, signOuts)
+    }
+
+    @Test fun adultsAnswerFirstAndNothingIsPreselected() {
+        assertEquals(LegalAgeChoice.Adult, LEGAL_AGE_DISPLAY_ORDER.first())
+        assertEquals(LegalAgeChoice.entries.toSet(), LEGAL_AGE_DISPLAY_ORDER.toSet())
+        show()
+        agree()
+        tap("legal.quebec.no")
+        LegalAgeChoice.entries.forEach { compose.onNodeWithTag("legal.age.${it.name}").assertIsNotSelected() }
+        compose.onNodeWithTag("legal.continue").assertIsNotEnabled()
     }
 }

@@ -42,7 +42,11 @@ object BillingConfig {
     val subscriptionsComingSoon: Boolean
         get() = isRevenueCatMode && keyProblem(BuildConfig.REVENUECAT_PUBLIC_KEY) != null
 
+    /** Standalone (restore message): says what and why in one line. */
     const val COMING_SOON = "Subscriptions are coming soon. Everything free in MoveMark works today."
+    /** Under the "Subscriptions coming soon" heading on the paywall, so the heading isn't repeated (F3). */
+    const val COMING_SOON_TITLE = "Subscriptions coming soon"
+    const val COMING_SOON_BODY = "Everything free in MoveMark works today."
 
     fun logStartup() {
         if (BuildConfig.DEBUG) {

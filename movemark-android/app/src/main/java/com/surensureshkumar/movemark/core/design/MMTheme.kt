@@ -11,7 +11,7 @@ import androidx.compose.ui.graphics.Color
 
 private val MoveMarkColorScheme = darkColorScheme(
     primary = MMColors.Primary,
-    onPrimary = Color.White,
+    onPrimary = MMColors.OnActionPrimary,
     background = MMColors.AppBackground,
     onBackground = MMColors.TextPrimary,
     surface = MMColors.Surface,

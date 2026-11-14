@@ -36,6 +36,9 @@ import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,7 +62,7 @@ import com.surensureshkumar.movemark.data.legal.LegalUnavailable
 private val Hero = Color(0xFF161817)
 private val Sheet = Color(0xFFF8F8F8)
 private val Ink = Color(0xFF141415)
-private val Quiet = Color(0xFF7E7F80)
+private val Quiet = Color(0xFF6D6E6F) // = MMInk.Secondary (AA for small text)
 private val Stroke = Color(0xFFECECEC)
 private val Lime = Color(0xFFCAE36C)
 private val OnLime = Color(0xFF111608)
@@ -205,6 +208,14 @@ fun LegalAcceptanceScreen(
     }
 }
 
+/**
+ * Display order of the age answers: most renters are adults, so "18 or older" comes first (C-05). Only the order on
+ * screen changes; nothing is preselected and the enum (and what is sent) is unchanged.
+ */
+internal val LEGAL_AGE_DISPLAY_ORDER = listOf(
+    LegalAgeChoice.Adult, LegalAgeChoice.FourteenToSeventeen, LegalAgeChoice.Thirteen, LegalAgeChoice.Under13,
+)
+
 internal const val CHILDRENS_PRIVACY_URL = "https://movemark.ca/privacy#childrens-privacy"
 
 /** The consent line and the age notices, word for word as iOS 1.4. */
@@ -253,6 +264,7 @@ private fun PrimaryButton(label: String, enabled: Boolean, tag: String, onClick:
  * age range: four plain answers, nothing pre-selected, no date of birth. Under 13 stops too. Nothing suggests changing
  * an answer.
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun AgeRangeQuestion(
     choice: LegalAgeChoice?,
@@ -278,9 +290,15 @@ private fun AgeRangeQuestion(
             return@Column
         }
         if (livesInQuebec != false) return@Column
-        Column(Modifier.fillMaxWidth().selectableGroup().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // After "No", the age question scrolls into view so "18 or older" isn't below the fold (C-05).
+        val ageQuestion = remember { BringIntoViewRequester() }
+        LaunchedEffect(Unit) { ageQuestion.bringIntoView() }
+        Column(
+            Modifier.fillMaxWidth().selectableGroup().padding(top = 8.dp).bringIntoViewRequester(ageQuestion),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
             Text("How old are you?", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            LegalAgeChoice.entries.forEach { option ->
+            LEGAL_AGE_DISPLAY_ORDER.forEach { option ->
                 RadioRow(option.label, selected = choice == option, tag = "legal.age.${option.name}") { onChoice(option) }
             }
         }

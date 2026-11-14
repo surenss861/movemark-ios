@@ -54,12 +54,18 @@ fun RoomProofSaveState.saveButtonLabel(): String = when (this) {
 }
 
 object RoomProofUploadMessages {
-    const val FULL_FAILURE = "Photos couldn't upload. Check your connection and try again."
-    const val RETRY_LABEL = "Retry upload"
+    // Calm, factual, as iOS (MMEvidenceSyncState / the partial-save notice): what saved, what still needs a retry,
+    // and that nothing is lost. No alarm red; the one action is the retry.
+    const val FULL_FAILURE = "Upload didn’t finish. Your photos are still on this phone."
+    const val RETRY_LABEL = "Try again"
     const val NOT_UPLOADED_YET = "These photos are on this phone but not uploaded yet."
     const val COULD_NOT_KEEP = "Couldn't keep this photo on your phone. Free up some space and try again."
 
-    fun partial(uploaded: Int, total: Int) = "$uploaded of $total photos saved."
+    /** "2 of 8 photos saved. 6 photos need retry." (iOS) */
+    fun partial(uploaded: Int, total: Int): String {
+        val left = (total - uploaded).coerceAtLeast(0)
+        return "$uploaded of $total photos saved. " + if (left == 1) "1 photo needs retry." else "$left photos need retry."
+    }
 
     /** A failure the user can act on (too large, unsupported, rate limited) keeps its own words. */
     fun failure(error: Throwable?): String {

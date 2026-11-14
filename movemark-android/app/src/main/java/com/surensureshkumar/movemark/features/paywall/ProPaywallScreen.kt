@@ -1,26 +1,43 @@
 package com.surensureshkumar.movemark.features.paywall
 
 import android.app.Activity
-import android.content.Intent
-import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,37 +45,51 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.material.icons.filled.Description
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.surensureshkumar.movemark.core.design.MMBackground
 import com.surensureshkumar.movemark.core.design.MMColors
+import com.surensureshkumar.movemark.core.design.MMEyebrowStyle
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMLightSystemBars
+import com.surensureshkumar.movemark.core.design.MMMetrics
+import com.surensureshkumar.movemark.core.design.MMPrimaryButton
 import com.surensureshkumar.movemark.core.design.MMSpacing
-import com.surensureshkumar.movemark.core.design.components.MMButton
-import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
-import com.surensureshkumar.movemark.core.design.components.MMProofCard
-import androidx.compose.ui.platform.testTag
+import com.surensureshkumar.movemark.core.design.mmFont
 import com.surensureshkumar.movemark.data.subscription.BillingConfig
 import com.surensureshkumar.movemark.data.subscription.PlanPackageUi
 import com.surensureshkumar.movemark.features.account.AccountViewModel
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
-import com.surensureshkumar.movemark.core.growth.MoveMarkGrowthCopy
 import com.surensureshkumar.movemark.features.subscription.SubscriptionViewModel
 
+/** The paywall is one dark, full-bleed surface on the archival header colour (iOS `ProPaywallView.surface`). */
+private val PaywallSurface = MMInk.Hero
+private val HeroSecondary = MMInk.HeroSecondary
+private val EvidenceRaised = Color.White.copy(alpha = 0.06f)
+private val EvidenceStroke = Color.White.copy(alpha = 0.12f)
+
+/**
+ * MoveMark Pro, in the locked iOS 1.4 information hierarchy (`ProPaywallView`): the outcome headline, the rental
+ * timeline (move-in, during the rental, move-out, if questioned) with the Pro parts marked, the truth lines, the plan
+ * picker with Google Play prices, and a pinned footer carrying the price and the one lime "Continue with Pro".
+ * Billing off (an internal build without a store key) says subscriptions are coming soon and makes no purchase claim.
+ */
 @Composable
 fun ProPaywallScreen(
     reason: PaywallReason,
@@ -76,12 +107,16 @@ fun ProPaywallScreen(
     val purchaseSuccess by viewModel.purchaseSuccess.collectAsState()
     val restoreNote by viewModel.restoreNote.collectAsState()
     val packWasBought by viewModel.purchaseWasReportPack.collectAsState()
-    val plans = packages.filterNot { it.isReportPack }
+    // Yearly first, as iOS lists plans.
+    val plans = packages.filterNot { it.isReportPack }.sortedByDescending { it.isYearly }
     val reportPack = packages.firstOrNull { it.isReportPack }
-    // Came for one report: the Report Pack is the first answer, before the Pro story (iOS prefersReportPackFirst).
     val offersReportPack = reason == PaywallReason.UnlimitedExports
     val isMockMode = viewModel.isMockMode
+    val comingSoon = viewModel.subscriptionsComingSoon
     val busy = loading || purchasing
+    val plansUnavailable = !comingSoon && plans.isEmpty() && !loading && error != null
+
+    MMLightSystemBars(lightNavigationBar = false, lightStatusBar = false)
 
     LaunchedEffect(Unit) {
         viewModel.clearMessages()
@@ -96,156 +131,294 @@ fun ProPaywallScreen(
         }
     }
 
-    MMBackground {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = MMSpacing.ScreenHorizontal.dp),
-        ) {
+    BackHandler(enabled = !purchasing) { onClose() }
+
+    Box(Modifier.fillMaxSize().background(PaywallSurface)) {
+        Column(Modifier.fillMaxSize()) {
             Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
+                Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = onClose, enabled = !busy) {
-                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = MMColors.TextSecondary)
+                IconButton(onClick = onClose, enabled = !purchasing) {
+                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White)
                 }
             }
-            Text(reason.headline, color = MMColors.TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Text(reason.subheadline, color = MMColors.TextSecondary, fontSize = 15.sp)
-            Spacer(Modifier.height(6.dp))
-            Text(reason.valueProp, color = MMColors.TextMuted, fontSize = 14.sp)
-            if (isMockMode) {
-                Spacer(Modifier.height(8.dp))
+            Column(
+                Modifier.weight(1f).verticalScroll(rememberScrollState())
+                    .padding(horizontal = MMMetrics.Inset).padding(top = 4.dp, bottom = 24.dp),
+            ) {
+                // Outcome
+                Text("MOVEMARK PRO", style = MMEyebrowStyle, color = HeroSecondary)
                 Text(
-                    "Test billing mode. No real purchase will be made.",
-                    color = MMColors.TextMuted,
-                    fontSize = 12.sp,
+                    "Protect the full rental timeline.",
+                    style = mmFont(30f, FontWeight.SemiBold),
+                    color = Color.White,
+                    modifier = Modifier.padding(top = 10.dp).semantics { heading() },
                 )
-            }
-            if (purchaseSuccess) {
-                Spacer(Modifier.height(12.dp))
                 Text(
-                    if (packWasBought) "Report Pack unlocked" else "Pro unlocked",
-                    color = MMColors.Primary,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    "Keep the record from move-in through move-out, and turn your evidence into reports when you need it.",
+                    style = mmFont(16f),
+                    color = Color.White.copy(alpha = 0.78f),
+                    modifier = Modifier.padding(top = 10.dp),
                 )
-            }
-            if (reportPack != null && showsReportPackSection(offersReportPack, reportPack)) {
-                Spacer(Modifier.height(20.dp))
-                ReportPackSection(
-                    pack = reportPack,
-                    enabled = !busy && !purchaseSuccess && activity != null,
-                    onBuy = { pack -> activity?.let { viewModel.purchaseReportPack(it, pack) { } } },
+                reason.contextLine?.let {
+                    Text(it, style = mmFont(14f), color = HeroSecondary, modifier = Modifier.padding(top = 10.dp))
+                }
+                if (isMockMode) {
+                    Text(
+                        "Test billing mode. No real purchase will be made.",
+                        style = mmFont(12.5f),
+                        color = HeroSecondary,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+
+                if (reportPack != null && showsReportPackSection(offersReportPack, reportPack)) {
+                    Spacer(Modifier.height(26.dp))
+                    ReportPackSection(
+                        pack = reportPack,
+                        enabled = !busy && !purchaseSuccess && activity != null,
+                        onBuy = { pack -> activity?.let { viewModel.purchaseReportPack(it, pack) { } } },
+                    )
+                }
+
+                // The rental timeline: Free keeps every step's record; the move-out report and the evidence packet are Pro.
+                Column(Modifier.padding(top = 30.dp).testTag("paywall.timeline")) {
+                    TimelineStep(phase = "Move-in", title = "Record every room")
+                    TimelineStep(phase = "During rental", title = "Maintenance cases")
+                    TimelineStep(phase = "Move-out", title = "Compare before and after", proPart = "Move-out report")
+                    TimelineStep(phase = "If questioned", title = "Build the evidence packet", proPart = "Evidence packet", isLast = true)
+                }
+
+                // Truth lines
+                Box(Modifier.padding(top = 26.dp).fillMaxWidth().height(0.5.dp).background(EvidenceStroke))
+                Text(
+                    "Free keeps the record. Pro turns it into the reports and evidence packet you’d use.",
+                    style = mmFont(15f, FontWeight.Medium),
+                    color = Color.White,
+                    modifier = Modifier.padding(top = 22.dp),
                 )
-            }
-            Spacer(Modifier.height(16.dp))
-            MMProofCard {
-                Text("MoveMark Pro includes", color = MMColors.TextPrimary, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(4.dp))
-                Text(MoveMarkGrowthCopy.PAYWALL_SUPPORT_LINE, color = MMColors.TextSecondary, fontSize = 13.sp)
-                Spacer(Modifier.height(12.dp))
-                MoveMarkGrowthCopy.PAYWALL_BENEFITS.forEach { (title, subtitle) ->
-                    Row(Modifier.fillMaxWidth()) {
-                        Icon(
-                            Icons.Filled.CheckCircle,
-                            contentDescription = null,
-                            tint = com.surensureshkumar.movemark.core.design.MMInk.LimeMark,
-                            modifier = Modifier.padding(end = 8.dp),
-                        )
-                        Column {
-                            Text(title, color = MMColors.TextPrimary, fontWeight = FontWeight.Medium, fontSize = 15.sp)
-                            Text(subtitle, color = MMColors.TextSecondary, fontSize = 13.sp)
+                Text(
+                    "Pro also includes unlimited reports and more than one rental.",
+                    style = mmFont(13.5f),
+                    color = HeroSecondary,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+
+                // Plans
+                if (!comingSoon && !plansUnavailable) {
+                    Text("CHOOSE YOUR PLAN", style = MMEyebrowStyle, color = HeroSecondary, modifier = Modifier.padding(top = 30.dp, bottom = 12.dp))
+                    if (plans.isEmpty()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(color = HeroSecondary, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Getting prices from Google Play…", style = mmFont(13f), color = HeroSecondary)
+                        }
+                    } else {
+                        Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            plans.forEach { plan ->
+                                PlanRow(
+                                    plan = plan,
+                                    selected = selected?.id == plan.id,
+                                    enabled = !busy && !purchaseSuccess,
+                                    onSelect = { viewModel.selectPlan(plan) },
+                                )
+                            }
                         }
                     }
-                    Spacer(Modifier.height(10.dp))
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-
-            when {
-                viewModel.subscriptionsComingSoon -> {
-                    MMProofCard(modifier = Modifier.testTag("paywall.comingSoon")) {
-                        Text("Subscriptions coming soon", color = MMColors.TextPrimary, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(8.dp))
-                        Text(BillingConfig.COMING_SOON, color = MMColors.TextSecondary)
-                        Spacer(Modifier.height(12.dp))
-                        MMButton(text = "Continue on Free", onClick = onClose, style = MMButtonStyle.Secondary)
-                    }
-                }
-                loading && packages.isEmpty() -> {
-                    CircularProgressIndicator(color = MMColors.Primary, modifier = Modifier.align(Alignment.CenterHorizontally))
-                }
-                error != null && packages.isEmpty() -> {
-                    MMProofCard {
-                        Text("Plans didn't load.", color = MMColors.TextPrimary, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(8.dp))
-                        Text(error ?: "Try again.", color = MMColors.TextSecondary)
-                        Spacer(Modifier.height(12.dp))
-                        MMButton(text = "Try again", onClick = viewModel::loadPlans, style = MMButtonStyle.Action)
-                        Spacer(Modifier.height(8.dp))
-                        MMButton(text = "Continue on Free", onClick = onClose, style = MMButtonStyle.Secondary)
-                    }
-                }
-                else -> {
-                    plans.forEach { plan ->
-                        PlanCard(
-                            plan = plan,
-                            selected = selected?.id == plan.id,
-                            onSelect = { viewModel.selectPlan(plan) },
+                    // Below the fold with the plans: the pinned footer carries only the price and the one action.
+                    Row(Modifier.padding(top = 22.dp).fillMaxWidth()) {
+                        QuietAction(
+                            if (purchasing) "Restoring purchases…" else "Restore purchases",
+                            Color.White,
                             enabled = !busy,
-                        )
-                        Spacer(Modifier.height(10.dp))
+                            modifier = Modifier.weight(1f),
+                        ) { viewModel.restore { onClose() } }
+                        QuietAction("Not now", HeroSecondary, enabled = !purchasing, modifier = Modifier.weight(1f), onClick = onClose)
                     }
-                    error?.let {
-                        Text(it, color = MMColors.SemanticDanger, fontSize = 14.sp)
-                        Spacer(Modifier.height(8.dp))
+                }
+
+                // Legal
+                Text(
+                    "MoveMark Pro is an auto-renewing subscription. Prices come from Google Play; Google handles payment and renewal. Manage or cancel in Google Play › Subscriptions.",
+                    style = mmFont(12.5f),
+                    color = HeroSecondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 26.dp),
+                )
+                Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.Center) {
+                    TextButton(onClick = { com.surensureshkumar.movemark.core.ui.openInAppBrowser(context, AccountViewModel.TERMS_URL) }) {
+                        Text("Terms of Use", style = mmFont(13f, FontWeight.Medium), color = Color.White, textDecoration = TextDecoration.Underline)
                     }
-                    (restoreNote ?: restoreMessage)?.let {
-                        Text(it, color = MMColors.Primary, fontSize = 14.sp)
-                        Spacer(Modifier.height(8.dp))
+                    TextButton(onClick = { com.surensureshkumar.movemark.core.ui.openInAppBrowser(context, AccountViewModel.PRIVACY_URL) }) {
+                        Text("Privacy Policy", style = mmFont(13f, FontWeight.Medium), color = Color.White, textDecoration = TextDecoration.Underline)
                     }
-                    MMButton(
-                        text = when {
-                            purchasing -> if (isMockMode) "Unlocking Pro…" else "Starting Pro…"
-                            isMockMode -> "Unlock Pro for testing"
-                            else -> "Start Pro"
-                        },
-                        onClick = {
-                            activity?.let { act ->
-                                viewModel.purchase(act) { }
-                            }
-                        },
-                        enabled = selected != null && activity != null && !busy,
-                        loading = purchasing,
-                        style = MMButtonStyle.Action,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    MMButton(
-                        text = "Restore purchases",
-                        onClick = { viewModel.restore { onClose() } },
-                        style = MMButtonStyle.Secondary,
-                        enabled = !busy,
-                    )
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
-            Row(Modifier.fillMaxWidth()) {
-                TextButton(onClick = {
-                    com.surensureshkumar.movemark.core.ui.openInAppBrowser(context, AccountViewModel.TERMS_URL)
-                }) { Text("Terms of Use", color = MMColors.TextSecondary) }
-                TextButton(onClick = {
-                    com.surensureshkumar.movemark.core.ui.openInAppBrowser(context, AccountViewModel.PRIVACY_URL)
-                }) { Text("Privacy Policy", color = MMColors.TextSecondary) }
+            // Pinned footer: one lime action, the store line, and the way out when plans can't be bought.
+            Column(
+                Modifier.fillMaxWidth().background(PaywallSurface).navigationBarsPadding()
+                    .padding(horizontal = MMMetrics.Inset).padding(top = 12.dp, bottom = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Box(Modifier.fillMaxWidth().height(0.5.dp).background(EvidenceStroke))
+                (restoreNote ?: restoreMessage)?.takeIf { !comingSoon }?.let {
+                    Text(it, style = mmFont(14f), color = Color.White, textAlign = TextAlign.Center,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                }
+                when {
+                    comingSoon -> {
+                        DarkNotice(BillingConfig.COMING_SOON_TITLE, BillingConfig.COMING_SOON_BODY, tag = "paywall.comingSoon")
+                        MMPrimaryButton(title = "Continue on Free", onClick = onClose)
+                    }
+                    plansUnavailable -> {
+                        // What failed sits right above its recovery; said once.
+                        DarkNotice("Plans didn’t load", "Try again in a minute. You can keep using Free for now.", tag = "paywall.plansUnavailable")
+                        MMPrimaryButton(
+                            title = if (loading) "Trying…" else "Try again",
+                            isLoading = loading,
+                            enabled = !loading,
+                            onClick = viewModel::loadPlans,
+                        )
+                        Row(Modifier.fillMaxWidth()) {
+                            QuietAction("Restore purchases", Color.White, enabled = !busy, modifier = Modifier.weight(1f)) { viewModel.restore { onClose() } }
+                            QuietAction("Continue on Free", HeroSecondary, enabled = !purchasing, modifier = Modifier.weight(1f), onClick = onClose)
+                        }
+                    }
+                    else -> {
+                        if (error != null && plans.isNotEmpty()) {
+                            Text(error!!, style = mmFont(14f), color = Color(0xFFFF8A80), textAlign = TextAlign.Center)
+                        }
+                        selected?.let { plan ->
+                            Text(plan.price, style = mmFont(17f, FontWeight.SemiBold), color = Color.White, textAlign = TextAlign.Center)
+                        }
+                        MMPrimaryButton(
+                            title = when {
+                                purchaseSuccess -> if (packWasBought) "Report Pack unlocked" else "Pro unlocked"
+                                purchasing -> "Starting…"
+                                isMockMode -> "Continue with Pro (test)"
+                                else -> "Continue with Pro"
+                            },
+                            isLoading = purchasing && !purchaseSuccess,
+                            enabled = !(selected == null || activity == null || busy || purchaseSuccess),
+                            onClick = { activity?.let { act -> viewModel.purchase(act) { } } },
+                            modifier = Modifier.testTag("paywall.continue"),
+                        )
+                        Text("Cancel anytime · Managed by Google Play", style = mmFont(12.5f), color = HeroSecondary, textAlign = TextAlign.Center)
+                    }
+                }
             }
-            Spacer(Modifier.height(24.dp))
         }
+
+        if (purchaseSuccess) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
+                Column(
+                    Modifier.padding(horizontal = MMMetrics.Inset).widthIn(max = 320.dp)
+                        .background(PaywallSurface, RoundedCornerShape(20.dp))
+                        .border(0.75.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(20.dp))
+                        .padding(horizontal = 28.dp, vertical = 26.dp)
+                        .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(Modifier.size(44.dp).background(MMInk.LimeMark, CircleShape), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Check, contentDescription = null, tint = MMInk.OnLime, modifier = Modifier.size(20.dp))
+                    }
+                    Text(if (packWasBought) "Report Pack unlocked" else "Pro unlocked", style = mmFont(19f, FontWeight.SemiBold), color = Color.White)
+                    Text(
+                        if (packWasBought) "One more move-in report is ready to make."
+                        else "Your move-out report and evidence packet are ready when you need them.",
+                        style = mmFont(14f), color = HeroSecondary, textAlign = TextAlign.Center,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** One step of the rental timeline on the dark surface (iOS `MMDarkTimelineStep`). */
+@Composable
+private fun TimelineStep(phase: String, title: String, proPart: String? = null, isLast: Boolean = false) {
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).semantics(mergeDescendants = true) {}) {
+        Column(Modifier.width(18.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                Modifier.padding(top = 1.dp).size(18.dp).background(MMInk.Evidence, CircleShape)
+                    .border(1.5.dp, Color.White.copy(alpha = 0.45f), CircleShape),
+            )
+            if (!isLast) Box(Modifier.width(1.5.dp).weight(1f).background(Color.White.copy(alpha = 0.16f)))
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.padding(bottom = if (isLast) 0.dp else 18.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(phase.uppercase(), style = MMEyebrowStyle, color = HeroSecondary)
+            Text(title, style = mmFont(17f, FontWeight.SemiBold), color = Color.White)
+            proPart?.let {
+                Row(
+                    Modifier.padding(top = 3.dp).semantics { contentDescription = "$it, included with Pro" },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(it, style = mmFont(13.5f, FontWeight.Medium), color = Color.White)
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "Pro",
+                        style = mmFont(11.5f, FontWeight.SemiBold),
+                        color = MMInk.Evidence,
+                        modifier = Modifier.background(Color.White, RoundedCornerShape(50)).padding(horizontal = 7.dp, vertical = 2.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** A selectable plan: radio, name, Google Play price, one quiet line (iOS `MMDarkPlanRow`), as a native radio. */
+@Composable
+private fun PlanRow(plan: PlanPackageUi, selected: Boolean, enabled: Boolean, onSelect: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(shape)
+            .background(if (selected) Color.White.copy(alpha = 0.09f) else EvidenceRaised, shape)
+            .border(if (selected) 1.5.dp else 0.75.dp, if (selected) Color.White.copy(alpha = 0.85f) else EvidenceStroke, shape)
+            .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .testTag("paywall.plan.${if (plan.isYearly) "yearly" else "monthly"}"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = null,
+            colors = RadioButtonDefaults.colors(selectedColor = Color.White, unselectedColor = Color.White.copy(alpha = 0.4f)),
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(if (plan.isYearly) "Yearly" else "Monthly", style = mmFont(16f, FontWeight.SemiBold), color = Color.White)
+            Text(plan.periodLabel, style = mmFont(13f), color = HeroSecondary)
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(plan.price, style = mmFont(16f, FontWeight.SemiBold), color = Color.White)
+    }
+}
+
+@Composable
+private fun QuietAction(title: String, color: Color, enabled: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    TextButton(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 48.dp)) {
+        Text(title, style = mmFont(15f, FontWeight.Medium), color = if (enabled) color else color.copy(alpha = 0.5f), textAlign = TextAlign.Center)
+    }
+}
+
+/** A notice on the dark surface: what happened, then one quiet line (iOS `plansUnavailableNotice`). */
+@Composable
+private fun DarkNotice(title: String, body: String, tag: String) {
+    val shape = RoundedCornerShape(14.dp)
+    Column(
+        Modifier.fillMaxWidth().background(EvidenceRaised, shape).border(0.75.dp, EvidenceStroke, shape).padding(14.dp)
+            .testTag(tag).semantics(mergeDescendants = true) {},
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(title, style = mmFont(16f, FontWeight.SemiBold), color = Color.White)
+        Text(body, style = mmFont(14f), color = HeroSecondary)
     }
 }
 
@@ -296,42 +469,5 @@ private fun ReportPackSection(pack: PlanPackageUi?, enabled: Boolean, onBuy: (Pl
             }
         }
         Text("The move-out report and evidence packet stay on Pro.", color = MMColors.TextSecondary, fontSize = 12.5.sp)
-    }
-}
-
-@Composable
-private fun PlanCard(
-    plan: PlanPackageUi,
-    selected: Boolean,
-    onSelect: () -> Unit,
-    enabled: Boolean,
-) {
-    val border = if (selected) MMColors.Primary else MMColors.CardStroke
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled, onClick = onSelect),
-        shape = RoundedCornerShape(MMSpacing.CornerRadius.dp),
-        color = MMColors.Card,
-        border = BorderStroke(if (selected) 2.dp else 1.dp, border),
-    ) {
-        Row(
-            Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(plan.title, color = MMColors.TextPrimary, fontWeight = FontWeight.SemiBold)
-                Text(plan.periodLabel, color = MMColors.TextSecondary, fontSize = 13.sp)
-            }
-            Text(plan.price, color = MMColors.Primary, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-            if (selected) {
-                Icon(
-                    Icons.Filled.CheckCircle,
-                    contentDescription = null,
-                    tint = MMColors.Primary,
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-            }
-        }
     }
 }

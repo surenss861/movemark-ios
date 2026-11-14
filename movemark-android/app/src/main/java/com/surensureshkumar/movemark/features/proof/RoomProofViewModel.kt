@@ -469,9 +469,9 @@ class RoomProofViewModel @Inject constructor(
                 "That entry was deleted, so its photos moved to a new entry here. Save to upload them."
             }
             result.pending.isNotEmpty() && result.confirmed == 0 ->
-                "${RoomProofUploadMessages.FULL_FAILURE} The photos are kept on this phone."
+                RoomProofUploadMessages.FULL_FAILURE
             result.pending.isNotEmpty() ->
-                "${RoomProofUploadMessages.partial(result.savedTotal, result.requestedTotal)} The rest are kept on this phone."
+                "${RoomProofUploadMessages.partial(result.savedTotal, result.requestedTotal)} They’re kept on this phone."
             result.confirmed == 1 -> "1 photo added"
             result.confirmed > 1 -> "${result.confirmed} photos added"
             else -> null
