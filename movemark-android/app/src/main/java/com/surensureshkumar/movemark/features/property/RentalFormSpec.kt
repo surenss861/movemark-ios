@@ -47,5 +47,5 @@ object RentalFormSpec {
 
     /** The notice above Save: the save's own failure first, else a lease that ends before it starts. */
     fun notice(saveError: String?, form: RentalEditForm, initial: RentalEditForm): String? =
-        saveError ?: form.leaseError(initial)
+        saveError ?: form.leaseError(initial) ?: form.countryIssue
 }

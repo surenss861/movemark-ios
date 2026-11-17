@@ -48,4 +48,16 @@ class RentalFormSpecTest {
         assertEquals(backwards.leaseError(initial), RentalFormSpec.notice(null, backwards, initial))
         assertEquals("Couldn't save your changes. Try again.", RentalFormSpec.notice("Couldn't save your changes. Try again.", backwards, initial))
     }
+
+    @Test
+    fun otherWithNoCountryCodeCannotBeSaved() {
+        val initial = RentalEditForm(addressLine1 = "1 A St", country = "CA")
+        val other = RentalFormSpec.choose("Other", initial)
+        assertEquals(RentalEditForm.COUNTRY_CODE_NEEDED, other.countryIssue)
+        assertEquals(false, other.canSave(initial))
+        assertEquals(RentalEditForm.COUNTRY_CODE_NEEDED, RentalFormSpec.notice(null, other, initial))
+        val typed = other.copy(country = "FR")
+        assertNull(typed.countryIssue)
+        assertEquals("FR", typed.toPatch(initial).country)
+    }
 }

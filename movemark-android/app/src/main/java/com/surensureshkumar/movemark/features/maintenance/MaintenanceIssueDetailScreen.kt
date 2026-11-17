@@ -81,6 +81,7 @@ fun MaintenanceIssueDetailScreen(
 ) {
     val issue by viewModel.issue.collectAsState()
     val hasLoadedIssue by viewModel.hasLoadedIssue.collectAsState()
+    val issueLookupFailed by viewModel.issueLookupFailed.collectAsState()
     val isSavingFollowUp by viewModel.isSavingFollowUp.collectAsState()
     val isResolving by viewModel.isResolving.collectAsState()
     val message by viewModel.message.collectAsState()
@@ -105,11 +106,24 @@ fun MaintenanceIssueDetailScreen(
     val case = issue
     if (case == null) {
         MMScreen(
-            title = if (hasLoadedIssue) "Case not found" else "Opening case",
+            title = when {
+                !hasLoadedIssue -> "Opening case"
+                issueLookupFailed -> "Couldn’t open this case"
+                else -> "Case not found"
+            },
             eyebrow = "Maintenance case",
             onBack = onBack,
         ) {
-            if (hasLoadedIssue) {
+            if (hasLoadedIssue && issueLookupFailed) {
+                // iOS MaintenanceIssueDetailContainerView: a failed lookup offers Try again.
+                com.surensureshkumar.movemark.core.design.MMEmptyBlock(
+                    icon = Icons.Outlined.FindInPage,
+                    title = "The case file didn’t load",
+                    message = "Couldn’t load this issue. Try again.",
+                    actionTitle = "Try again",
+                    onAction = viewModel::retryLoadIssue,
+                )
+            } else if (hasLoadedIssue) {
                 com.surensureshkumar.movemark.core.design.MMEmptyBlock(
                     icon = Icons.Outlined.FindInPage,
                     title = "This case isn't available",

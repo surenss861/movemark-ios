@@ -67,6 +67,10 @@ class MaintenanceIssueDetailViewModel @Inject constructor(
     private val _hasLoadedIssue = MutableStateFlow(false)
     val hasLoadedIssue: StateFlow<Boolean> = _hasLoadedIssue.asStateFlow()
 
+    private val _issueLookupFailed = MutableStateFlow(false)
+    /** The row couldn't be read (network/server) and nothing was shown: "The case file didn't load" + Try again. */
+    val issueLookupFailed: StateFlow<Boolean> = _issueLookupFailed.asStateFlow()
+
     private val _isSavingFollowUp = MutableStateFlow(false)
     val isSavingFollowUp: StateFlow<Boolean> = _isSavingFollowUp.asStateFlow()
 
@@ -115,9 +119,23 @@ class MaintenanceIssueDetailViewModel @Inject constructor(
         }
     }
 
+    /** iOS container "Try again": reads the case file again. */
+    fun retryLoadIssue() {
+        val id = issueId ?: return
+        _issueLookupFailed.value = false
+        _hasLoadedIssue.value = false
+        viewModelScope.launch {
+            reloadRow(id)
+            _hasLoadedIssue.value = true
+        }
+    }
+
     /** Reads the full row; on failure keeps what is shown (the store's record) rather than blanking the case. */
     private suspend fun reloadRow(id: UUID) {
-        val row = runCatching { maintenanceRepository.fetchIssue(id) }.getOrNull() ?: return
+        val result = runCatching { maintenanceRepository.fetchIssue(id) }
+        // A failed lookup (not "no such row") with nothing to show is recoverable, not "not found".
+        _issueLookupFailed.value = result.isFailure && _issue.value == null
+        val row = result.getOrNull() ?: return
         // Guard against a stale link to a different rental's case (iOS container view).
         val active = propertyStore.activePropertyId.value
         if (active != null && !row.propertyId.equals(active.toString(), ignoreCase = true)) return

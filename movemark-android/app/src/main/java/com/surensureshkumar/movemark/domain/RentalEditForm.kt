@@ -66,8 +66,11 @@ data class RentalEditForm(
             ?: amountIssue(depositAmount.takeIf { it != initial.depositAmount }.orEmpty())
             ?: amountIssue(rentAmount.takeIf { it != initial.rentAmount }.orEmpty())
 
+    /** "Other" with no code typed: never saved as "CA" behind the renter's back. */
+    val countryIssue: String? get() = if (country.isBlank()) COUNTRY_CODE_NEEDED else null
+
     fun canSave(initial: RentalEditForm): Boolean =
-        validationError == null && leaseError(initial) == null && detailsIssue(initial) == null
+        validationError == null && leaseError(initial) == null && detailsIssue(initial) == null && countryIssue == null
 
     fun toPatch(initial: RentalEditForm = this): PropertyPatch {
         val lease = savesLease(initial)
@@ -93,6 +96,8 @@ data class RentalEditForm(
     }
 
     companion object {
+        const val COUNTRY_CODE_NEEDED = "Enter a country code, e.g. FR."
+
         fun from(row: PropertyRow, today: LocalDate = LocalDate.now()): RentalEditForm {
             val title = row.title.trim()
             val street = row.addressLine1.trim()

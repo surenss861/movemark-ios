@@ -31,6 +31,8 @@ class AuthViewModelResetTest {
         var signUpResult = SignUpResult.SignedIn
         var signUpError: Exception? = null
         var signIns = 0
+        var available = true
+        override val resetAvailable: Boolean get() = available
 
         override suspend fun signIn(email: String, password: String) {
             signIns++
@@ -66,6 +68,19 @@ class AuthViewModelResetTest {
         assertEquals("", vm.password.value)
         vm.switchMode()
         assertEquals(AuthMode.SignIn, vm.mode.value)
+    }
+
+    @Test
+    fun withoutAResetPageThereIsNoResetMode() {
+        // iOS PasswordResetRequest.isAvailable: no reset page, no "Forgot password?".
+        actions.available = false
+        val vm = viewModel()
+        assertEquals(false, vm.resetAvailable)
+        vm.openResetPassword()
+        assertEquals(AuthMode.SignIn, vm.mode.value)
+        val routed = viewModel()
+        routed.start(AuthMode.ResetPassword)
+        assertEquals(AuthMode.SignIn, routed.mode.value)
     }
 
     @Test

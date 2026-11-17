@@ -65,7 +65,7 @@ data class MaintenanceIssueDraft(
 )
 
 /** Photos per pick, the same as the case file's "Add photos" (iOS allows 10). */
-internal const val MAINTENANCE_PHOTO_PICK_LIMIT = 6
+internal const val MAINTENANCE_PHOTO_PICK_LIMIT = 10 // iOS PhotosPicker maxSelectionCount
 
 /**
  * Record an issue (iOS `MaintenanceNewIssueSheet`): the focused surface opened from the log's "+" and its empty

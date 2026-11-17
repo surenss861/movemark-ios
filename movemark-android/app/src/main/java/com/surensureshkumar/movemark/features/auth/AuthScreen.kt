@@ -60,6 +60,7 @@ data class AuthFormState(
     val resetSentTo: String? = null,
     val resendCooldown: Int = 0,
     val resending: Boolean = false,
+    val resetAvailable: Boolean = true,
 ) {
     /** iOS `headerTitle`. */
     val headerTitle: String
@@ -115,6 +116,7 @@ fun AuthScreen(
             resetSentTo = resetSentTo,
             resendCooldown = resendCooldown,
             resending = resending,
+            resetAvailable = viewModel.resetAvailable,
         ),
         onDismiss = onDismiss,
         onEmailChange = viewModel::setEmail,
@@ -224,8 +226,8 @@ private fun ColumnScope.AuthForm(
             )
         }
     }
-    if (mode == AuthMode.SignIn) {
-        // Quiet, under the password it's about (iOS `forgotPasswordButton`).
+    if (mode == AuthMode.SignIn && state.resetAvailable) {
+        // Quiet, under the password it's about (iOS `forgotPasswordButton`; hidden without a reset page).
         AuthTextAction(
             title = "Forgot password?",
             onClick = onForgotPassword,

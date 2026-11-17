@@ -68,6 +68,7 @@ sealed class NeonAuthException(message: String) : Exception(message) {
             "PASSWORD_TOO_LONG" -> "Password is too long."
             "INVALID_EMAIL" -> "Enter a valid email."
             "INVALID_TOKEN" -> "This reset link is invalid or has expired. Request a new one."
+            "RATE_LIMITED" -> "Too many attempts. Wait a minute, then try again."
             else -> message.ifEmpty { "Couldn’t reach MoveMark. Try again." }
         }
     }
@@ -339,8 +340,13 @@ class NeonAuthClient(
     // ---- Password reset ----
 
     /** Emails a reset link. Answers the same whether or not the address has an account. */
-    suspend fun requestPasswordReset(email: String) {
-        post("request-password-reset", mapOf("email" to email), storeSession = false)
+    /** [redirectTo]: the reset page the email links to (iOS sends MOVEMARK_PASSWORD_RESET_URL the same way). */
+    suspend fun requestPasswordReset(email: String, redirectTo: String? = null) {
+        val fields = buildMap {
+            put("email", email)
+            redirectTo?.takeIf { it.isNotBlank() }?.let { put("redirectTo", it) }
+        }
+        post("request-password-reset", fields, storeSession = false)
     }
 
     /** Sets a new password from the token in a reset link. Managed Neon Auth does not revoke other sessions. */
@@ -366,6 +372,8 @@ class NeonAuthClient(
             val err = runCatching { json.parseToJsonElement(response.bodyString()).jsonObject }.getOrNull()
             val code = err?.get("code")?.jsonPrimitive?.contentOrNull
             Log.i(TAG, "$path failed HTTP ${response.code} code=${code ?: "-"}")
+            // iOS: a throttled request is RATE_LIMITED whatever the body says.
+            if (response.code == 429) throw NeonAuthException.Rejected("RATE_LIMITED", "")
             throw NeonAuthException.Rejected(code, err?.get("message")?.jsonPrimitive?.contentOrNull.orEmpty())
         }
         if (storeSession) {

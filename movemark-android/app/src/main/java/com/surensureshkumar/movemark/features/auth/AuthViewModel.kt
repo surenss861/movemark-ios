@@ -49,12 +49,17 @@ interface AuthActions {
 
     /** Asks for a reset link. Neon Auth answers the same whether or not the address has an account. */
     suspend fun requestPasswordReset(email: String)
+
+    /** iOS `PasswordResetRequest.isAvailable`: only with a reset page the emails can link to. */
+    val resetAvailable: Boolean get() = true
 }
 
 private class SessionAuthActions(
     private val sessionManager: SessionManager,
     private val propertyStore: PropertyStore,
 ) : AuthActions {
+    override val resetAvailable: Boolean get() = sessionManager.passwordResetUrl != null
+
     override suspend fun signIn(email: String, password: String) {
         sessionManager.signIn(email, password)
         sessionManager.userId.value?.let { propertyStore.fetchAll(it) }
@@ -136,10 +141,13 @@ class AuthViewModel internal constructor(
     private var cooldownJob: Job? = null
 
     /** The route's mode, applied once: a configuration change must not throw the person out of reset mode. */
+    /** False hides "Forgot password?" and reset mode (no reset page configured), as iOS. */
+    val resetAvailable: Boolean get() = actions.resetAvailable
+
     fun start(initial: AuthMode) {
         if (started) return
         started = true
-        _mode.value = initial
+        _mode.value = if (initial == AuthMode.ResetPassword && !resetAvailable) AuthMode.SignIn else initial
     }
 
     fun setMode(value: AuthMode) {
@@ -156,6 +164,7 @@ class AuthViewModel internal constructor(
 
     /** "Forgot password?" (iOS `openResetPassword`). */
     fun openResetPassword() {
+        if (!resetAvailable) return
         _mode.value = AuthMode.ResetPassword
         _password.value = ""
         _message.value = null

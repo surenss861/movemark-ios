@@ -58,6 +58,9 @@ android {
         buildConfigField("String", "BILLING_MODE", "\"$billingModeProp\"")
         // Crash reporting (Sentry): empty DSN = disabled. Use the Android project's DSN, not the iOS one.
         buildConfigField("String", "SENTRY_DSN", "\"${localProp("SENTRY_DSN")}\"")
+        // The page reset emails link to (it hands the token to movemark://reset-password). Empty = "Forgot password?"
+        // is hidden, as iOS without MOVEMARK_PASSWORD_RESET_URL. Release is pinned below.
+        buildConfigField("String", "PASSWORD_RESET_URL", "\"${localProp("MOVEMARK_PASSWORD_RESET_URL", "https://account.movemark.ca/reset")}\"")
     }
 
     // Play upload key, read from local.properties (gitignored). Without it, release builds are left unsigned.
@@ -92,6 +95,7 @@ android {
             buildConfigField("String", "NEON_AUTH_URL", "\"$prodNeonAuthUrl\"")
             buildConfigField("String", "NEON_DATA_API_URL", "\"$prodNeonDataApiUrl\"")
             buildConfigField("String", "MOVEMARK_API_BASE_URL", "\"$prodMoveMarkApiBaseUrl\"")
+            buildConfigField("String", "PASSWORD_RESET_URL", "\"https://account.movemark.ca/reset\"")
             // Off in release until the account-linking tests pass. Internal test builds opt in: -PmovemarkInternalSocial=true
             buildConfigField("boolean", "SOCIAL_SIGN_IN_ENABLED", (project.findProperty("movemarkInternalSocial") == "true").toString())
             isMinifyEnabled = false

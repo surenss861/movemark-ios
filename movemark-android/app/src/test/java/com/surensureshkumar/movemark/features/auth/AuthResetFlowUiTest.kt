@@ -25,6 +25,12 @@ class AuthResetFlowUiTest {
     private fun tap(tag: String) = compose.onNodeWithTag(tag).performScrollTo().performClick()
 
     @Test
+    fun forgotPasswordIsHiddenWithoutAResetPage() {
+        compose.setContent { AuthContent(state = AuthFormState(mode = AuthMode.SignIn, resetAvailable = false)) }
+        compose.onNodeWithTag("auth.forgotPassword").assertDoesNotExist()
+    }
+
+    @Test
     fun forgotPasswordIsOfferedOnSignIn() {
         var opened = 0
         compose.setContent { AuthContent(state = AuthFormState(mode = AuthMode.SignIn), onForgotPassword = { opened++ }) }

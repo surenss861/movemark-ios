@@ -53,6 +53,9 @@ class SessionManager @Inject constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    /** The reset page reset emails link to; null hides "Forgot password?" (iOS `PasswordResetRequest.isAvailable`). */
+    val passwordResetUrl: String? = com.surensureshkumar.movemark.BuildConfig.PASSWORD_RESET_URL.trim().takeIf { it.isNotEmpty() }
+
     private val _authState = MutableStateFlow(AuthState.Loading)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
@@ -140,7 +143,7 @@ class SessionManager @Inject constructor(
         requireConfigured()
         val trimmed = email.trim()
         if (trimmed.isEmpty()) throw AuthException("Enter your email.")
-        auth.requestPasswordReset(trimmed)
+        auth.requestPasswordReset(trimmed, redirectTo = passwordResetUrl)
     }
 
     /**
