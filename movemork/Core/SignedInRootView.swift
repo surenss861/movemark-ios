@@ -15,17 +15,18 @@ struct SignedInRootView: View {
 
     var body: some View {
         Group {
-            if !propertyStore.hasCompletedInitialFetch {
+            switch destination {
+            case .wait:
                 MMLaunchWait()
-            } else if shouldShowLoadFailure {
+            case .loadFailure:
                 PropertyLoadFailureView(
                     isRetrying: isRetrying,
                     onRetry: { Task { await retry() } },
                     onSignOut: { Task { await sessionManager.signOut() } }
                 )
-            } else if shouldShowFirstRunProof {
+            case .firstRun:
                 FirstRunProofFlowView(requiresOnboarding: false)
-            } else {
+            case .app:
                 AuthenticatedTabShellView()
             }
         }
@@ -34,28 +35,23 @@ struct SignedInRootView: View {
         }
     }
 
-    /// A failed load must never be mistaken for an empty account.
+    /// A failed load must never be mistaken for an empty account (``LaunchGate``: unknown is not incomplete).
     ///
-    /// `fetchAll` sets `hasCompletedInitialFetch` in a `defer`, so a thrown error still reaches the
-    /// branches below with `properties` empty and `currentProperty` nil — which reads exactly like a
-    /// brand-new user and would push an existing renter into first-run (and let them create a second
-    /// property). `FirstRunProofPreferences` is device-local UserDefaults, so it does not catch this
-    /// on a new device, a reinstall, or a restored backup.
-    ///
-    /// A cached snapshot is still trustworthy, so only block when there is nothing to show at all.
-    private var shouldShowLoadFailure: Bool {
-        propertyStore.lastFetchFailed && propertyStore.currentProperty == nil
-    }
-
-    private var shouldShowFirstRunProof: Bool {
-        guard let userId = sessionManager.userId else { return false }
-        if FirstRunProofPreferences.isComplete(userId: userId) { return false }
-        if propertyStore.firstRunAwaitingReceiptDismissal { return true }
-        if propertyStore.properties.isEmpty { return true }
-        guard let property = propertyStore.currentProperty ?? hydratedFirstProperty else {
-            return true
-        }
-        return propertyStore.documentedRoomCount(for: property) == 0
+    /// `fetchAll` sets `hasCompletedInitialFetch` in a `defer`, so a thrown error still arrives here with
+    /// `properties` empty — which reads exactly like a brand-new user and would push an existing renter into
+    /// first run (and let them create a second property). `FirstRunProofPreferences` is device-local, so it does
+    /// not catch this on a new device, a reinstall, or a restored backup. A cached snapshot is still trustworthy.
+    private var destination: LaunchGate.Destination {
+        let property = propertyStore.currentProperty ?? hydratedFirstProperty
+        return LaunchGate.signedInDestination(.init(
+            hasCompletedInitialFetch: propertyStore.hasCompletedInitialFetch,
+            lastFetchFailed: propertyStore.lastFetchFailed,
+            hasCurrentProperty: propertyStore.currentProperty != nil,
+            propertiesEmpty: propertyStore.properties.isEmpty,
+            documentedRoomCount: property.map { propertyStore.documentedRoomCount(for: $0) },
+            firstRunComplete: sessionManager.userId.map { FirstRunProofPreferences.isComplete(userId: $0) } ?? true,
+            awaitingReceiptDismissal: propertyStore.firstRunAwaitingReceiptDismissal
+        ))
     }
 
     private var hydratedFirstProperty: PropertyRecord? {
