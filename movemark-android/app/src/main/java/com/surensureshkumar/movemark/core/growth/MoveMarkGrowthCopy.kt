@@ -34,7 +34,10 @@ object MoveMarkGrowthCopy {
         ),
     )
 
-    // iOS 1.4 MoveMarkGrowthCopy (firstRunSetup*, firstRunRoom*), word for word.
+    // iOS 1.4 MoveMarkGrowthCopy (firstRunMoment*, firstRunSetup*, firstRunRoom*), word for word.
+    const val FIRST_RUN_MOMENT_TITLE = "What are you documenting?"
+    const val FIRST_RUN_MOMENT_SUBTITLE = "We’ll start you in the right proof flow."
+
     const val FIRST_RUN_SETUP_TITLE = "Where are you documenting?"
     const val FIRST_RUN_SETUP_SUBTITLE = "This address appears on your proof record and reports."
     const val FIRST_RUN_SETUP_CTA = "Create rental record"

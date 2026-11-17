@@ -1,8 +1,9 @@
 /**
- * @file The one place that decides where a launch lands. Every launch gate (legal, name, rental, first room) reports a
+ * @file The one place that decides where a launch lands. Every launch gate (legal, rental, first room) reports a
  *       status that keeps "we don't know yet / couldn't check" apart from "the server said this step is incomplete".
- *       The rule: UNKNOWN ≠ INCOMPLETE. A failed or missing lookup never routes into onboarding, rental setup or the
- *       first-room picker, and a genuine first-run requirement is never skipped.
+ *       The rule: UNKNOWN ≠ INCOMPLETE. A failed or missing lookup never routes into first run (moment picker, rental
+ *       setup, first-room pick), and a genuine first-run requirement is never skipped. The renter's name no longer
+ *       gates anything (iOS 1.4 has no name step: identity lives in Account), so [ProfileStatus] is display-only.
  * @domain onboarding-auth
  * @status wip
  * @see [[StartupCoordinator.kt]]
@@ -12,13 +13,13 @@ package com.surensureshkumar.movemark.core.startup
 
 import com.surensureshkumar.movemark.data.auth.AuthState
 
-/** The renter's name, as far as this launch knows it. */
+/** The renter's name, as far as this launch knows it. Shown in Account; never a launch gate. */
 enum class ProfileStatus {
     /** Not looked up yet, and nothing cached for this account. */
     Unknown,
     /** A name is on file: confirmed by the server, or by the last confirmed answer cached on this device. */
     HasName,
-    /** The server answered, this session, that the account has no name yet. The only state that opens onboarding. */
+    /** The server answered, this session, that the account has no name yet (Account offers to add one). */
     NeedsName,
     /** The lookup failed (offline, timeout, server error) and nothing is cached. Not the same as [NeedsName]. */
     Unavailable,
@@ -29,7 +30,7 @@ enum class RentalStatus {
     Unknown,
     /** A rental is loaded: from the server, or from this device's cache of the last successful load. */
     HasRental,
-    /** The server's listing answered, this session, with no rentals. The only state that opens rental setup. */
+    /** The server's listing answered, this session, with no rentals. The state that opens first run for a new account. */
     NoRental,
     /** The listing failed and nothing usable is cached. Not the same as [NoRental]. */
     Unavailable,
@@ -56,9 +57,11 @@ enum class StartupDestination {
     SignIn,
     LegalAcceptance,
     LegalStatusUnavailable,
+    /**
+     * First run (iOS FirstRunProofFlowView, "What are you documenting?"): moment → rental setup → first room. Only on a
+     * confirmed answer: the server's empty rental listing, or a loaded rental whose first room is confirmed not done.
+     */
     Onboarding,
-    CreateProperty,
-    FirstRunRoomPicker,
     Main,
     /** Couldn't reach MoveMark and nothing on this device says where to go: a recoverable state with a retry. */
     Offline,
@@ -76,18 +79,16 @@ object StartupRouter {
     fun resolve(
         auth: AuthState,
         legal: LegalRouting,
-        profile: ProfileStatus,
         rental: RentalStatus,
         firstRun: FirstRunStatus,
     ): StartupDestination = when (auth) {
         AuthState.Loading -> StartupDestination.Hold
         AuthState.SignedOut -> StartupDestination.SignIn
-        AuthState.SignedIn -> signedIn(legal, profile, rental, firstRun)
+        AuthState.SignedIn -> signedIn(legal, rental, firstRun)
     }
 
     private fun signedIn(
         legal: LegalRouting,
-        profile: ProfileStatus,
         rental: RentalStatus,
         firstRun: FirstRunStatus,
     ): StartupDestination {
@@ -97,23 +98,16 @@ object StartupRouter {
             LegalRouting.Required -> return StartupDestination.LegalAcceptance
             LegalRouting.Clear -> Unit
         }
-        when (profile) {
-            ProfileStatus.NeedsName -> return StartupDestination.Onboarding
-            ProfileStatus.Unknown -> return StartupDestination.Hold
-            // A name we couldn't check is not a missing name. With a rental on this device the renter goes on to it;
-            // without one there is no way to tell a new account from an offline one, so: the offline state.
-            ProfileStatus.Unavailable -> if (rental != RentalStatus.HasRental) {
-                return if (rental == RentalStatus.Unknown) StartupDestination.Hold else StartupDestination.Offline
-            }
-            ProfileStatus.HasName -> Unit
-        }
+        // iOS opens first run (needsOnboarding) until the first proof is saved, and opens the app when the profile
+        // couldn't be read. Here: first run on a confirmed empty listing or a confirmed-incomplete first room; a listing
+        // that failed is the offline state, one still loading holds.
         return when (rental) {
             RentalStatus.Unknown -> StartupDestination.Hold
-            RentalStatus.NoRental -> StartupDestination.CreateProperty
+            RentalStatus.NoRental -> StartupDestination.Onboarding
             RentalStatus.Unavailable -> StartupDestination.Offline
             RentalStatus.HasRental -> when (firstRun) {
                 FirstRunStatus.Unknown -> StartupDestination.Hold
-                FirstRunStatus.Incomplete -> StartupDestination.FirstRunRoomPicker
+                FirstRunStatus.Incomplete -> StartupDestination.Onboarding
                 FirstRunStatus.Complete -> StartupDestination.Main
             }
         }

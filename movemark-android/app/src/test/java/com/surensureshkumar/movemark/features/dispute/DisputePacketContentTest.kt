@@ -1,12 +1,11 @@
 package com.surensureshkumar.movemark.features.dispute
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -36,16 +35,35 @@ class DisputePacketContentTest {
     )
     private val property = PropertyRecord(UUID.randomUUID(), "12 Elm St", "12 Elm St", "Toronto", "ON", listOf(room))
 
-    private fun render(model: DisputePacketModel, events: MutableList<String>) = compose.setContent {
-        Column(Modifier.verticalScroll(rememberScrollState())) {
-            DisputePacketContent(
-                model = model, question = "", amount = "", errorMessage = null, errorActionTitle = "Try again",
-                isDownloading = false, sign = { null }, onQuestion = {}, onAmount = {},
-                onToggleRoom = { events += "toggle" }, onOpenPhoto = { _, _ -> }, onCaptureMoveOut = {},
-                onMissing = { events += "missing:$it" }, onGenerate = { events += "generate" },
-                onView = { events += "view" }, onShare = { events += "share" }, onRetry = {},
-            )
-        }
+    // DisputePacketContent is the whole screen (MMScreen scrolls itself), so it isn't wrapped in a scroll here.
+    private fun render(model: DisputePacketModel, events: MutableList<String>, error: String? = null) = compose.setContent {
+        DisputePacketContent(
+            model = model, question = "", amount = "", errorMessage = error, errorActionTitle = "Try again",
+            isDownloading = false, sign = { null }, onQuestion = {}, onAmount = {},
+            onToggleRoom = { events += "toggle" }, onOpenPhoto = { _, _ -> }, onCaptureMoveOut = {},
+            onMissing = { events += "missing:$it" }, onGenerate = { events += "generate" },
+            onView = { events += "view" }, onShare = { events += "share" }, onRetry = { events += "retry" },
+        )
+    }
+
+    @Test
+    fun headerNamesTheRentalOnceWithPurposeAndStatus() {
+        val model = DisputePacketModel.make(property, emptyList(), emptyList(), emptySet(), hasPro = true)
+        render(model, mutableListOf())
+        compose.onNodeWithText("DISPUTE PACKET").assertIsDisplayed()
+        compose.onNodeWithText("Build a record of the evidence related to this issue.").assertIsDisplayed()
+        compose.onNodeWithText("Ready to generate").assertIsDisplayed()
+        // The rental's name is the header title only; the sheet doesn't repeat it.
+        compose.onAllNodesWithText(model.title).assertCountEquals(1)
+    }
+
+    @Test
+    fun errorShowsAsANoticeWithItsAction() {
+        val events = mutableListOf<String>()
+        render(DisputePacketModel.make(property, emptyList(), emptyList(), emptySet(), hasPro = true), events, error = "Taking longer than usual.")
+        compose.onNodeWithText("Taking longer than usual.").assertIsDisplayed()
+        compose.onNodeWithText("Try again").performClick()
+        assertEquals(listOf("retry"), events)
     }
 
     @Test

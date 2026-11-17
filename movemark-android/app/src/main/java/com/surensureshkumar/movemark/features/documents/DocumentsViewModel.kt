@@ -41,6 +41,10 @@ class DocumentsViewModel @Inject constructor(
     private val _uploading = MutableStateFlow<VaultDocumentKind?>(null)
     val uploading: StateFlow<VaultDocumentKind?> = _uploading.asStateFlow()
 
+    /** The record whose upload last failed: the error notice's "Try again" picks a file for it again. */
+    private val _failedUpload = MutableStateFlow<VaultDocumentKind?>(null)
+    val failedUpload: StateFlow<VaultDocumentKind?> = _failedUpload.asStateFlow()
+
     /** A downloaded copy in app-private cache, to open through FileProvider (never a signed URL handed out). */
     private val _openFile = MutableSharedFlow<Pair<File, String>>(extraBufferCapacity = 1)
     val openFile: SharedFlow<Pair<File, String>> = _openFile.asSharedFlow()
@@ -49,7 +53,10 @@ class DocumentsViewModel @Inject constructor(
         val propertyId = propertyStore.activePropertyId.value ?: return
         viewModelScope.launch {
             runCatching { documentRepository.fetchDocuments(propertyId) }
-                .onSuccess { _documents.value = it }
+                .onSuccess {
+                    _documents.value = it
+                    if (_failedUpload.value == null) _error.value = null
+                }
                 .onFailure { _error.value = "Couldn't load your records." }
         }
     }
@@ -63,6 +70,7 @@ class DocumentsViewModel @Inject constructor(
         }
         if (bytes.size > MAX_BYTES) {
             _error.value = "That file is too large. Choose one under 20 MB."
+            _failedUpload.value = kind
             return
         }
         // The file picker can pop this screen as it returns. Keep the save alive so the
@@ -70,6 +78,7 @@ class DocumentsViewModel @Inject constructor(
         uploadScope.launch {
             _uploading.value = kind
             _error.value = null
+            _failedUpload.value = null
             val saved = runCatching {
                 documentRepository.replaceDocument(
                     propertyId,
@@ -84,8 +93,9 @@ class DocumentsViewModel @Inject constructor(
                 _error.value = if ((failure as? MoveMarkStorageException.Rejected)?.code == MoveMarkStorageException.TEEN_METADATA_CODE) {
                     MoveMarkStorageException.TEEN_METADATA_MESSAGE
                 } else {
-                    "Couldn't upload that file. Try again."
+                    "Couldn't upload that file."
                 }
+                _failedUpload.value = kind
                 _uploading.value = null
                 return@launch
             }
@@ -107,8 +117,9 @@ class DocumentsViewModel @Inject constructor(
         viewModelScope.launch {
             _deleting.value = kind
             _error.value = null
+            _failedUpload.value = null
             runCatching { documentRepository.deleteDocuments(propertyId, kind) }
-                .onFailure { _error.value = "Couldn't delete that file. Try again." }
+                .onFailure { _error.value = "Couldn't delete that file." }
             runCatching { documentRepository.fetchDocuments(propertyId) }.onSuccess { _documents.value = it }
             propertyStore.refreshActive(userId)
             _deleting.value = null

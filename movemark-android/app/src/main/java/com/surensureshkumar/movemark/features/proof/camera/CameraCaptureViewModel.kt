@@ -102,14 +102,22 @@ class CameraCaptureViewModel @Inject constructor(
     private val _isCapturing = MutableStateFlow(false)
     val isCapturing: StateFlow<Boolean> = _isCapturing.asStateFlow()
 
-    private val _errorMessage = MutableStateFlow<String?>(null)
-    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+    /** The transient "Photo added" / failure capsule over the preview (presentation only; iOS `flash(message:)`). */
+    private val _notice = MutableStateFlow<CameraNotice?>(null)
+    val notice: StateFlow<CameraNotice?> = _notice.asStateFlow()
+
+    /** The camera couldn't be bound on this phone: the screen says "Camera unavailable"; the library stays. */
+    private val _cameraUnavailable = MutableStateFlow(false)
+    val isCameraUnavailable: StateFlow<Boolean> = _cameraUnavailable.asStateFlow()
+
+    private fun showNotice(message: String) {
+        _notice.value = CameraCaptureUi.nextNotice(_notice.value, message)
+    }
 
     fun capture(imageCapture: ImageCapture) {
         if (_isCapturing.value) return
         viewModelScope.launch {
             _isCapturing.value = true
-            _errorMessage.value = null
             try {
                 val file = CameraPhotoStorage.newCaptureFile(context, roomId)
                 val output = ImageCapture.OutputFileOptions.Builder(file).build()
@@ -133,8 +141,9 @@ class CameraCaptureViewModel @Inject constructor(
                         setCapturedUris(_capturedUris.value + uri)
                     }
                 }
+                showNotice(CameraCaptureUi.PHOTO_ADDED)
             } catch (_: Exception) {
-                _errorMessage.value = "Photo couldn't be captured. Try again."
+                showNotice(CameraCaptureUi.PHOTO_FAILED)
             } finally {
                 _isCapturing.value = false
             }
@@ -143,7 +152,7 @@ class CameraCaptureViewModel @Inject constructor(
 
     /** The camera couldn't start on this device: say so; the photo library stays available. */
     fun cameraUnavailable() {
-        _errorMessage.value = CAMERA_UNAVAILABLE
+        _cameraUnavailable.value = true
     }
 
     fun addGalleryUris(uris: List<Uri>) {
@@ -151,7 +160,6 @@ class CameraCaptureViewModel @Inject constructor(
         val existing = _capturedUris.value.map { it.toString() }.toSet()
         val merged = _capturedUris.value + uris.filter { it.toString() !in existing }
         setCapturedUris(merged)
-        _errorMessage.value = null
     }
 
     /** Delivers captured URIs to [resultHolder] and invokes [onResult] with whether there was anything to deliver. */
@@ -182,7 +190,6 @@ class CameraCaptureViewModel @Inject constructor(
     fun hasCaptures(): Boolean = _capturedUris.value.isNotEmpty()
 
     private companion object {
-        const val CAMERA_UNAVAILABLE = "The camera couldn’t start on this phone. Add photos from your library instead."
         const val CAPTURED_URIS_KEY = "captured_uris"
         const val ADMITTED_IDS_KEY = "admitted_ids"
         const val ADMITTED_URIS_KEY = "admitted_uris"

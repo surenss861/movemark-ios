@@ -37,4 +37,23 @@ class PasswordResetLinkTest {
         PasswordResetLink.consume()
         assertNull(PasswordResetLink.token.value)
     }
+
+    @Test
+    fun anErrorLinkIsAnExpiredLinkNotAToken() {
+        assertEquals(PasswordResetLink.Payload.Invalid, PasswordResetLink.payload("movemark://reset-password?error=INVALID_TOKEN"))
+        assertNull(PasswordResetLink.token("movemark://reset-password?error=INVALID_TOKEN"))
+        assertEquals(PasswordResetLink.Payload.Token("t1"), PasswordResetLink.payload("movemark://reset-password?error=X&token=t1"))
+        assertEquals(PasswordResetLink.Payload.Token("t2"), PasswordResetLink.payload("movemark://reset-password#token=t2"))
+        assertNull(PasswordResetLink.payload("movemark://reset-password?error="))
+        assertNull(PasswordResetLink.payload("movemark://other?error=INVALID_TOKEN"))
+    }
+
+    @Test
+    fun offeringAnErrorLinkQueuesTheExpiredStateWithoutAToken() {
+        assertTrue(PasswordResetLink.offer("movemark://reset-password?error=INVALID_TOKEN"))
+        assertEquals(PasswordResetLink.Payload.Invalid, PasswordResetLink.payload.value)
+        assertNull(PasswordResetLink.token.value)
+        PasswordResetLink.consume()
+        assertNull(PasswordResetLink.payload.value)
+    }
 }

@@ -301,6 +301,10 @@ data class MaintenanceIssueRow(
     @SerialName("date_reported") var dateReported: String? = null,
     @SerialName("follow_up_date") var followUpDate: String? = null,
     @SerialName("created_at") var createdAt: String? = null,
+    /** Set on every follow-up and on resolve; the case file dates "Repair completed" by it (iOS). */
+    @SerialName("updated_at") var updatedAt: String? = null,
+    /** How the issue was reported to the landlord, when recorded (iOS shows it on "Case recorded"). */
+    @SerialName("report_method") var reportMethod: String? = null,
 )
 
 data class MaintenanceRecord(

@@ -1,6 +1,28 @@
 package com.surensureshkumar.movemark.features.dispute
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
+import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.unit.Dp
+import com.surensureshkumar.movemark.core.design.MMEmptyBlock
+import com.surensureshkumar.movemark.core.design.MMGroup
+import com.surensureshkumar.movemark.core.design.MMMetrics
+import com.surensureshkumar.movemark.core.design.MMNotice
+import com.surensureshkumar.movemark.core.design.MMNoticeTone
+import com.surensureshkumar.movemark.core.design.MMRowChevron
+import com.surensureshkumar.movemark.core.design.MMRowDivider
+import com.surensureshkumar.movemark.core.design.MMSectionTitle
+import com.surensureshkumar.movemark.core.design.mmFont
+import com.surensureshkumar.movemark.core.design.mmPressable
+import com.surensureshkumar.movemark.domain.VaultDocumentKind
+import com.surensureshkumar.movemark.features.documents.recordIcon
 import com.surensureshkumar.movemark.core.design.MMInk
 import com.surensureshkumar.movemark.core.design.MMPrimaryButton
 import com.surensureshkumar.movemark.core.design.MMScreen
@@ -111,43 +133,43 @@ fun DisputePacketScreen(
     }
 
     Box(Modifier.fillMaxSize()) {
-        // 1.4 grammar (iOS dispute builder in MMScreen): the purpose in the header, the packet on the sheet.
-        MMScreen(
-            title = "Dispute packet",
-            lines = listOf("Build a record of the evidence related to this issue."),
-            onBack = onBack,
-            modifier = Modifier.imePadding(),
-        ) {
-                val m = model
-                if (m == null) {
-                    Header("No rental yet", null)
-                    Text("A packet is assembled from a rental's recorded evidence.", color = MMInk.Secondary, fontSize = 15.sp)
-                } else {
-                    val generating = m.packet == Packet.Generating
-                    DisputePacketContent(
-                        model = m,
-                        question = question,
-                        amount = amount,
-                        errorMessage = error ?: if (timedOut && generating) "Taking longer than usual." else null,
-                        errorActionTitle = if (error == null && timedOut && generating) "Check again" else "Try again",
-                        isDownloading = downloading,
-                        sign = viewModel::signedPhotoUrl,
-                        onQuestion = viewModel::setQuestion,
-                        onAmount = viewModel::setAmount,
-                        onToggleRoom = viewModel::toggleRoom,
-                        onOpenPhoto = { item, side ->
-                            val photos = if (side == MoveOutSide.MoveIn) item.moveInPhotos else item.moveOutPhotos
-                            photos.firstOrNull()?.let { viewer = photos to it }
-                        },
-                        onCaptureMoveOut = onCaptureMoveOut,
-                        onMissing = onMissing,
-                        onGenerate = viewModel::generate,
-                        onView = { viewModel.open(share = false) },
-                        onShare = { viewModel.open(share = true) },
-                        onRetry = viewModel::refreshAndPoll,
-                    )
-                }
+        val m = model
+        if (m == null) {
+            // iOS: the same header with "No rental yet", and an empty block on the sheet.
+            MMScreen(title = "No rental yet", eyebrow = "Dispute packet", onBack = onBack) {
+                MMEmptyBlock(
+                    icon = Icons.Outlined.Description,
+                    title = "No rental yet",
+                    message = "A packet is assembled from a rental's recorded evidence.",
+                )
             }
+        } else {
+            val generating = m.packet == Packet.Generating
+            DisputePacketContent(
+                model = m,
+                question = question,
+                amount = amount,
+                errorMessage = error ?: if (timedOut && generating) "Taking longer than usual." else null,
+                errorActionTitle = if (error == null && timedOut && generating) "Check again" else "Try again",
+                isDownloading = downloading,
+                sign = viewModel::signedPhotoUrl,
+                onQuestion = viewModel::setQuestion,
+                onAmount = viewModel::setAmount,
+                onToggleRoom = viewModel::toggleRoom,
+                onOpenPhoto = { item, side ->
+                    val photos = if (side == MoveOutSide.MoveIn) item.moveInPhotos else item.moveOutPhotos
+                    photos.firstOrNull()?.let { viewer = photos to it }
+                },
+                onCaptureMoveOut = onCaptureMoveOut,
+                onMissing = onMissing,
+                onGenerate = viewModel::generate,
+                onView = { viewModel.open(share = false) },
+                onShare = { viewModel.open(share = true) },
+                onRetry = viewModel::refreshAndPoll,
+                onBack = onBack,
+                modifier = Modifier.imePadding(),
+            )
+        }
         viewing?.let { pdf ->
             ReportPdfViewer(pdf.file, pdf.displayTitle, onShare = { shareReportPdf(context, pdf.file, pdf.displayTitle) }, onClose = { viewing = null })
         }
@@ -158,20 +180,11 @@ fun DisputePacketScreen(
     }
 }
 
-@Composable
-private fun Header(title: String, status: String?, ready: Boolean = false) {
-    // The screen header carries "Dispute packet" and its purpose; this names the case on the sheet.
-    Text(title, style = com.surensureshkumar.movemark.core.design.mmFont(20f, FontWeight.SemiBold), color = MMInk.Text, modifier = Modifier.semantics { heading() })
-    if (status != null) {
-        Row(Modifier.padding(top = 18.dp).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(7.dp).background(if (ready) MMInk.LimeMark else MMInk.Secondary.copy(alpha = 0.6f), CircleShape))
-            Spacer(Modifier.width(7.dp))
-            Text(status, fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = MMInk.Text)
-        }
-    }
-}
-
-/** Presentational: header → what is being questioned → evidence to review → missing proof → contents → one action. */
+/**
+ * Presentational (iOS `DisputePacketContent`): the dark header — DISPUTE PACKET, the rental's name, the purpose line
+ * and the packet's status — then what is being questioned → evidence to review → missing proof → contents → one
+ * action on the sheet.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun DisputePacketContent(
@@ -192,21 +205,66 @@ internal fun DisputePacketContent(
     onView: () -> Unit,
     onShare: () -> Unit,
     onRetry: () -> Unit,
+    onBack: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
 ) {
-    Header(model.title, model.statusLine, model.isReadyState)
-    Column(Modifier.padding(top = 28.dp), verticalArrangement = Arrangement.spacedBy(32.dp)) {
+    MMScreen(
+        title = model.title,
+        eyebrow = "Dispute packet",
+        lines = listOf(DISPUTE_PURPOSE_LINE),
+        onBack = onBack,
+        modifier = modifier,
+        headerAccessory = { PacketStatus(model.statusLine, model.isReadyState) },
+    ) {
+        DisputePacketSheet(
+            model, question, amount, errorMessage, errorActionTitle, isDownloading, sign, onQuestion, onAmount,
+            onToggleRoom, onOpenPhoto, onCaptureMoveOut, onMissing, onGenerate, onView, onShare, onRetry,
+        )
+    }
+}
+
+internal const val DISPUTE_PURPOSE_LINE = "Build a record of the evidence related to this issue."
+
+/** The status on the dark header: a lime dot when ready or generated, else a quiet one, and the status line. */
+@Composable
+private fun PacketStatus(status: String, ready: Boolean) {
+    // MMHeader adds 22dp above the accessory; iOS sets the status 18 below the purpose line.
+    Row(
+        Modifier
+            .offset(y = (-4).dp)
+            .semantics(mergeDescendants = true) {},
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(7.dp).background(if (ready) MMInk.LimeMark else MMInk.HeroSecondary.copy(alpha = 0.62f * 0.6f), CircleShape))
+        Spacer(Modifier.width(7.dp))
+        Text(status, style = mmFont(12.5f, FontWeight.Medium), color = Color.White)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DisputePacketSheet(
+    model: DisputePacketModel,
+    question: String,
+    amount: String,
+    errorMessage: String?,
+    errorActionTitle: String,
+    isDownloading: Boolean,
+    sign: suspend (String) -> String?,
+    onQuestion: (String) -> Unit,
+    onAmount: (String) -> Unit,
+    onToggleRoom: (UUID) -> Unit,
+    onOpenPhoto: (MoveOutComparison, MoveOutSide) -> Unit,
+    onCaptureMoveOut: (UUID) -> Unit,
+    onMissing: (DisputePacketModel.Missing.Target) -> Unit,
+    onGenerate: () -> Unit,
+    onView: () -> Unit,
+    onShare: () -> Unit,
+    onRetry: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(32.dp)) {
         if (errorMessage != null) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .background(MMInk.Secondary.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-            ) {
-                Text(errorMessage, fontSize = 14.sp, color = MMInk.Text)
-                TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text(errorActionTitle, color = MMInk.Text, fontWeight = FontWeight.SemiBold)
-                }
-            }
+            MMNotice(message = errorMessage, tone = MMNoticeTone.Info, actionTitle = errorActionTitle, onAction = onRetry)
         }
 
         Section("What is being questioned") {
@@ -220,7 +278,11 @@ internal fun DisputePacketContent(
                 Caption("Rooms appear here once they have proof.")
             } else {
                 Caption("Select the rooms you want to review while building this packet. The generated packet includes the full rental record.")
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(
+                    Modifier.semantics { contentDescription = "Rooms to review" },
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     model.selectableRooms.forEach { room ->
                         RoomChip(room.name, room.id in model.selectedRoomIds) { onToggleRoom(room.id) }
                     }
@@ -233,8 +295,9 @@ internal fun DisputePacketContent(
                             MoveOutMissingCard(item, sign, isPrimary = false, onOpen = { onOpenPhoto(item, it) }, onCapture = { onCaptureMoveOut(item.id) })
                         else -> Box(
                             Modifier
-                                .background(MMInk.Paper, RoundedCornerShape(18.dp))
-                                .border(1.dp, MMInk.CardStroke, RoundedCornerShape(18.dp)),
+                                .clip(RoundedCornerShape(MMMetrics.CardRadius))
+                                .background(MMInk.Card)
+                                .border(1.dp, MMInk.CardStroke, RoundedCornerShape(MMMetrics.CardRadius)),
                         ) { MoveOutCompactRow(item, sign, justCompared = false) { onOpenPhoto(item, it) } }
                     }
                 }
@@ -243,61 +306,39 @@ internal fun DisputePacketContent(
 
         if (model.missing.isNotEmpty()) {
             Section("Missing proof") {
-                Group {
+                MMGroup {
                     model.missing.forEachIndexed { index, item ->
-                        if (index > 0) Divider()
+                        if (index > 0) MMRowDivider()
                         Row(
                             Modifier
                                 .fillMaxWidth()
+                                .mmPressable { onMissing(item.target) }
+                                .semantics(mergeDescendants = true) {}
                                 .heightIn(min = 56.dp)
-                                .clickable(role = Role.Button) { onMissing(item.target) }
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(item.title, fontSize = 16.sp, color = MMInk.Text)
-                                Text(item.detail, fontSize = 13.sp, color = MMInk.Secondary)
+                                Text(item.title, style = mmFont(16f), color = MMInk.Text)
+                                Text(item.detail, style = mmFont(13f), color = MMInk.Secondary)
                             }
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MMInk.Secondary)
+                            MMRowChevron()
                         }
                     }
                 }
             }
         }
 
-        Section(if (model.isGenerated) "A new packet would include" else "Generated packet includes") {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                model.contentLines.forEach { Text(it, fontSize = 15.sp, color = MMInk.Text) }
+        Section(if (model.isGenerated) "A new packet would include" else "Generated packet includes", spacing = 10.dp) {
+            Column(Modifier.padding(start = 2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                model.contentLines.forEach { Text(it, style = mmFont(15f), color = MMInk.Text) }
             }
             if (model.records.isNotEmpty()) {
-                Group {
+                MMGroup(Modifier.padding(top = 6.dp)) {
                     model.records.forEachIndexed { index, record ->
-                        if (index > 0) Divider(start = 52)
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 58.dp)
-                                .semantics(mergeDescendants = true) { stateDescription = "Included" }
-                                .padding(horizontal = 16.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                when (record.kind) {
-                                    DisputePacketModel.RecordKind.Report -> Icons.Filled.Description
-                                    DisputePacketModel.RecordKind.Document -> Icons.AutoMirrored.Filled.InsertDriveFile
-                                    DisputePacketModel.RecordKind.Maintenance -> Icons.Filled.Build
-                                },
-                                contentDescription = null,
-                                tint = MMInk.Text.copy(alpha = 0.8f),
-                                modifier = Modifier.size(20.dp),
-                            )
-                            Spacer(Modifier.width(16.dp))
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(record.title, fontSize = 16.sp, color = MMInk.Text)
-                                Text(record.detail, fontSize = 13.sp, color = MMInk.Secondary)
-                            }
-                            Icon(Icons.Filled.Check, contentDescription = null, tint = MMInk.Text.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
-                        }
+                        if (index > 0) MMRowDivider(leading = 52.dp)
+                        IncludedRow(record)
                     }
                 }
             }
@@ -305,12 +346,21 @@ internal fun DisputePacketContent(
 
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             when (val packet = model.packet) {
-                Packet.NeedsMoveInProof -> MMPrimaryButton(title = "Add move-in proof", onClick = { onMissing(DisputePacketModel.Missing.Target.Rooms) })
+                Packet.NeedsMoveInProof -> MMPrimaryButton(
+                    title = "Add move-in proof",
+                    onClick = { onMissing(DisputePacketModel.Missing.Target.Rooms) },
+                    icon = Icons.Outlined.PhotoCamera,
+                )
                 Packet.Ready, is Packet.Failed -> {
                     if (packet is Packet.Failed) Caption("The last packet couldn't be generated. Your evidence is unchanged.", center = true)
-                    MMPrimaryButton(title = "Generate evidence packet", onClick = onGenerate)
+                    MMPrimaryButton(title = "Generate evidence packet", onClick = onGenerate, icon = Icons.Outlined.Description)
                     if (packet is Packet.Failed && packet.lastGoodDate != null) {
-                        MMSecondaryButton(title = if (isDownloading) "Opening…" else "View last packet", onClick = onView, enabled = !isDownloading)
+                        MMSecondaryButton(
+                            title = if (isDownloading) "Opening…" else "View last packet",
+                            onClick = onView,
+                            icon = Icons.Outlined.Description,
+                            enabled = !isDownloading,
+                        )
                     }
                     if (!model.hasPro) Caption("The evidence packet is part of Pro.", center = true)
                 }
@@ -319,10 +369,16 @@ internal fun DisputePacketContent(
                     Caption("This takes a moment. You can leave this screen.", center = true)
                 }
                 is Packet.Generated -> {
-                    MMPrimaryButton(title = if (isDownloading) "Opening…" else "View evidence packet", onClick = onView, isLoading = isDownloading, enabled = !isDownloading)
-                    MMSecondaryButton(title = "Share", onClick = onShare, enabled = !isDownloading)
+                    MMPrimaryButton(
+                        title = if (isDownloading) "Opening…" else "View evidence packet",
+                        onClick = onView,
+                        icon = Icons.Outlined.Description,
+                        isLoading = isDownloading,
+                        enabled = !isDownloading,
+                    )
+                    MMSecondaryButton(title = "Share", onClick = onShare, icon = Icons.Outlined.Share, enabled = !isDownloading)
                     TextButton(onClick = onGenerate, modifier = Modifier.heightIn(min = 48.dp)) {
-                        Text("Generate a new packet", fontSize = 14.sp, color = MMInk.Secondary)
+                        Text("Generate a new packet", style = mmFont(14f), color = MMInk.Secondary)
                     }
                 }
             }
@@ -330,10 +386,44 @@ internal fun DisputePacketContent(
     }
 }
 
+/** A record already on file, in the rental record's row geometry: icon, title, what it is, a quiet check. */
 @Composable
-private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = MMInk.Text, modifier = Modifier.semantics { heading() })
+private fun IncludedRow(record: DisputePacketModel.Record) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) { stateDescription = "Included" }
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            includedIcon(record),
+            contentDescription = null,
+            tint = MMInk.Text.copy(alpha = 0.8f),
+            modifier = Modifier.size(20.dp).width(24.dp),
+        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(record.title, style = mmFont(16f), color = MMInk.Text)
+            Text(record.detail, style = mmFont(13f), color = MMInk.Secondary)
+        }
+        Icon(Icons.Filled.Check, contentDescription = null, tint = MMInk.Text.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
+    }
+}
+
+/** iOS: reports "doc.richtext", documents their record icon, maintenance "wrench.and.screwdriver". */
+private fun includedIcon(record: DisputePacketModel.Record): ImageVector = when (record.kind) {
+    DisputePacketModel.RecordKind.Report -> Icons.Outlined.Description
+    DisputePacketModel.RecordKind.Document ->
+        VaultDocumentKind.entries.firstOrNull { it.raw == record.id }?.let(::recordIcon) ?: Icons.AutoMirrored.Outlined.InsertDriveFile
+    DisputePacketModel.RecordKind.Maintenance -> Icons.Outlined.Build
+}
+
+@Composable
+private fun Section(title: String, spacing: Dp = 12.dp, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
+        MMSectionTitle(title)
         content()
     }
 }
@@ -342,7 +432,7 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
 private fun Caption(text: String, center: Boolean = false) {
     Text(
         text,
-        fontSize = 13.sp,
+        style = mmFont(13f),
         color = MMInk.Secondary,
         textAlign = if (center) TextAlign.Center else TextAlign.Start,
         modifier = Modifier.padding(start = 2.dp),
@@ -355,9 +445,10 @@ private fun Field(label: String, placeholder: String, value: String, onChange: (
         value = value,
         onValueChange = onChange,
         label = { Text(label, color = MMInk.Secondary) },
-        placeholder = { Text(placeholder) },
+        placeholder = { Text(placeholder, color = MMInk.Secondary.copy(alpha = 0.7f)) },
         keyboardOptions = keyboard,
         singleLine = false,
+        shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth(),
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = MMInk.Text,
@@ -367,47 +458,39 @@ private fun Field(label: String, placeholder: String, value: String, onChange: (
             focusedLabelColor = MMInk.Secondary,
             unfocusedLabelColor = MMInk.Secondary,
             cursorColor = MMInk.Text,
+            focusedContainerColor = MMInk.Card,
+            unfocusedContainerColor = MMInk.Card,
         ),
     )
 }
 
+/**
+ * iOS `MMChip`: selected is solid ink with white semibold text; unselected a white card with a hairline stroke;
+ * 36dp tall inside a 48dp touch target. Never green.
+ */
 @Composable
 private fun RoomChip(name: String, selected: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(50)
-    Row(
+    Box(
         Modifier
             .heightIn(min = 48.dp)
-            .clickable(role = Role.Checkbox, onClick = onClick)
-            .semantics { this.selected = selected; stateDescription = if (selected) "Selected" else "Not selected" }
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .mmPressable(role = Role.Checkbox, onClick = onClick)
+            .semantics { this.selected = selected; stateDescription = if (selected) "Selected" else "Not selected" },
+        contentAlignment = Alignment.Center,
     ) {
-        Row(
+        Box(
             Modifier
-                .background(if (selected) MMInk.Text.copy(alpha = 0.18f) else MMInk.Paper, shape)
-                .border(1.dp, if (selected) MMInk.Text else MMInk.CardStroke, shape)
-                .padding(horizontal = 14.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .heightIn(min = 36.dp)
+                .clip(CircleShape)
+                .background(if (selected) MMInk.Text else MMInk.Card)
+                .border(1.dp, if (selected) Color.Transparent else MMInk.CardStroke, CircleShape)
+                .padding(horizontal = 14.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            if (selected) {
-                Icon(Icons.Filled.Check, contentDescription = null, tint = MMInk.Text, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(6.dp))
-            }
-            Text(name, fontSize = 14.sp, color = MMInk.Text)
+            Text(
+                name,
+                style = mmFont(14f, if (selected) FontWeight.SemiBold else FontWeight.Normal),
+                color = if (selected) Color.White else MMInk.Text,
+            )
         }
     }
 }
-
-@Composable
-private fun Group(content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(MMInk.Paper, RoundedCornerShape(18.dp))
-            .border(1.dp, MMInk.CardStroke, RoundedCornerShape(18.dp)),
-        content = content,
-    )
-}
-
-@Composable
-private fun Divider(start: Int = 16) = HorizontalDivider(Modifier.padding(start = start.dp), thickness = 0.5.dp, color = MMInk.CardStroke)

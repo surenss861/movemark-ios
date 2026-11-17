@@ -128,11 +128,11 @@ private fun FullScreenCase(screen: String): Boolean {
         "auth-signup" -> com.surensureshkumar.movemark.features.auth.AuthScreen(
             initialMode = com.surensureshkumar.movemark.features.auth.AuthMode.SignUp, onDismiss = {},
         )
-        "onboarding" -> com.surensureshkumar.movemark.features.onboarding.OnboardingNameScreen(onContinue = {})
+        "onboarding" -> com.surensureshkumar.movemark.features.firstrun.FirstRunMomentPickerScreen(isPreparing = false, onSelect = {}, onSignOut = {})
         "create-property" -> com.surensureshkumar.movemark.features.firstrun.CreatePropertyScreen(onCreated = {})
         // The screens below read the signed-in rental; with none (fixture data only) they show their empty states,
         // which is enough to check the 1.4 layout (header, sheet, groups, actions).
-        "first-room" -> com.surensureshkumar.movemark.features.firstrun.FirstRunRoomPickerScreen(onStartProof = {}, onSkipToMain = {})
+        "first-room" -> com.surensureshkumar.movemark.features.firstrun.FirstRunRoomPickerScreen(onStartProof = {}, onBack = {})
         "password-reset" -> com.surensureshkumar.movemark.features.auth.PasswordResetScreen(onReset = { _, _ -> }, onDone = {})
         "edit-rental" -> com.surensureshkumar.movemark.features.property.EditRentalScreen(onClose = {})
         "documents" -> com.surensureshkumar.movemark.features.documents.DocumentsScreen(onBack = {}, onEditRental = {})
@@ -210,9 +210,8 @@ private fun PopulatedMoveOut() {
 @Composable
 private fun PopulatedDispute() {
     val context = LocalContext.current
-    com.surensureshkumar.movemark.core.design.MMScreen(
-        title = "Dispute packet", lines = listOf("Build a record of the evidence related to this issue."), onBack = {},
-    ) {
+    // DisputePacketContent draws the whole screen (header included), as iOS.
+    run {
         com.surensureshkumar.movemark.features.dispute.DisputePacketContent(
             model = com.surensureshkumar.movemark.domain.DisputePacketModel.make(
                 qaProperty, qaMaintenance, emptyList(), qaRooms.take(2).map { it.id }.toSet(), hasPro = true,
@@ -222,6 +221,7 @@ private fun PopulatedDispute() {
             sign = { path -> fixturePhotoUri(context, path.filter { it.isDigit() }.toIntOrNull() ?: 0) },
             onQuestion = {}, onAmount = {}, onToggleRoom = {}, onOpenPhoto = { _, _ -> }, onCaptureMoveOut = {},
             onMissing = {}, onGenerate = {}, onView = {}, onShare = {}, onRetry = {},
+            onBack = {},
         )
     }
 }

@@ -10,6 +10,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -17,6 +18,7 @@ import com.surensureshkumar.movemark.core.startup.StartupDestination
 import com.surensureshkumar.movemark.core.startup.StartupOfflineScreen
 import com.surensureshkumar.movemark.core.startup.StartupRouter
 import com.surensureshkumar.movemark.core.startup.LegalRouting
+import com.surensureshkumar.movemark.core.startup.FirstRunStatus
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -36,15 +38,13 @@ import com.surensureshkumar.movemark.features.auth.AuthMode
 import com.surensureshkumar.movemark.features.auth.AuthScreen
 import com.surensureshkumar.movemark.features.documents.DocumentsScreen
 import com.surensureshkumar.movemark.features.firstrun.CreatePropertyScreen
-import com.surensureshkumar.movemark.features.firstrun.FirstRunRoomPickerScreen
+import com.surensureshkumar.movemark.features.firstrun.FirstRunFlowScreen
 import com.surensureshkumar.movemark.features.maintenance.MaintenanceIssueDetailScreen
 import com.surensureshkumar.movemark.features.maintenance.MaintenanceLogScreen
 import com.surensureshkumar.movemark.features.main.MainShellScreen
 import com.surensureshkumar.movemark.features.moveout.MoveOutRoomsScreen
 import com.surensureshkumar.movemark.features.dispute.DisputePacketScreen
-import com.surensureshkumar.movemark.features.property.EditRentalScreen
 import com.surensureshkumar.movemark.domain.DisputePacketModel
-import com.surensureshkumar.movemark.features.onboarding.OnboardingNameScreen
 import com.surensureshkumar.movemark.features.proof.RoomProofScreen
 import com.surensureshkumar.movemark.features.proof.SavedProofReceiptScreen
 import com.surensureshkumar.movemark.features.auth.PasswordResetLink
@@ -69,17 +69,31 @@ fun MoveMarkNavHost() {
     }
     val mainTabRequest = remember(entryPoints) { entryPoints.mainTabRequest() }
     val sessionManager = remember(entryPoints) { entryPoints.sessionManager() }
-    val resetToken by PasswordResetLink.token.collectAsState()
-    resetToken?.let { token ->
-        PasswordResetScreen(
-            onReset = { password, confirm -> sessionManager.completePasswordReset(token, password, confirm) },
-            onDone = PasswordResetLink::consume,
-        )
-    }
     val navController = rememberNavController()
+    // iOS PasswordResetView: a token sets a new password; an error= link (or a rejected token) shows "Link expired".
+    val resetLink by PasswordResetLink.payload.collectAsState()
+    val resetAuthState by sessionManager.authState.collectAsState()
+    resetLink?.let { link ->
+        val token = (link as? PasswordResetLink.Payload.Token)?.value
+        key(link) {
+            PasswordResetScreen(
+                onReset = { password, confirm -> sessionManager.completePasswordReset(token.orEmpty(), password, confirm) },
+                onDone = PasswordResetLink::consume,
+                linkExpired = token == null,
+                signedIn = resetAuthState == AuthState.SignedIn,
+                onSignIn = {
+                    PasswordResetLink.consume()
+                    navController.navigate(Routes.auth("signIn")) { launchSingleTop = true }
+                },
+                onRequestNewLink = {
+                    PasswordResetLink.consume()
+                    navController.navigate(Routes.auth("resetPassword")) { launchSingleTop = true }
+                },
+            )
+        }
+    }
     val welcomeVm: WelcomeViewModel = hiltViewModel()
     val authState by welcomeVm.authState.collectAsState()
-    val profileStatus by welcomeVm.profileStatus.collectAsState()
     val rentalStatus by welcomeVm.rentalStatus.collectAsState()
     val firstRun by welcomeVm.firstRun.collectAsState()
     val rechecking by welcomeVm.rechecking.collectAsState()
@@ -114,8 +128,9 @@ fun MoveMarkNavHost() {
     }
 
     // One decision for every launch gate (StartupRouter): a lookup that failed or hasn't answered never opens
-    // onboarding, rental setup or the first-room picker. Only a change of decision navigates, so a renter deep in
-    // the app isn't pulled back to the top when a re-check confirms what they already had.
+    // first run (moment picker, rental setup, first room). The name is not a gate (iOS 1.4: identity lives in
+    // Account). Only a change of decision navigates, so a renter deep in the app isn't pulled back to the top when a
+    // re-check confirms what they already had.
     val destination = StartupRouter.resolve(
         auth = authState,
         // The design line's verified legal phases: only a server-confirmed "needs acceptance" shows the agreement.
@@ -125,7 +140,6 @@ fun MoveMarkNavHost() {
             LegalGatePhase.NeedsAcceptance -> LegalRouting.Required
             LegalGatePhase.Accepted, LegalGatePhase.OpenOnCache -> LegalRouting.Clear
         },
-        profile = profileStatus,
         rental = rentalStatus,
         firstRun = firstRun,
     )
@@ -137,8 +151,6 @@ fun MoveMarkNavHost() {
             StartupDestination.LegalAcceptance -> Routes.LegalAcceptance
             StartupDestination.LegalStatusUnavailable -> Routes.LegalStatusUnavailable
             StartupDestination.Onboarding -> Routes.Onboarding
-            StartupDestination.CreateProperty -> Routes.CreateProperty
-            StartupDestination.FirstRunRoomPicker -> Routes.FirstRunRoomPicker
             StartupDestination.Main -> Routes.Main
             StartupDestination.Offline -> Routes.StartupOffline
         }
@@ -174,7 +186,7 @@ fun MoveMarkNavHost() {
         ) { entry ->
             val mode = entry.arguments?.getString("mode")
             AuthScreen(
-                initialMode = if (mode == "signUp") AuthMode.SignUp else AuthMode.SignIn,
+                initialMode = AuthMode.fromRoute(mode),
                 onDismiss = { navController.popBackStack() },
             )
         }
@@ -208,19 +220,14 @@ fun MoveMarkNavHost() {
             )
         }
         composable(Routes.Onboarding) {
-            OnboardingNameScreen(onContinue = {})
-        }
-        composable(Routes.CreateProperty) {
-            CreatePropertyScreen(
-                onCreated = { welcomeVm.refreshFirstRunState() },
-            )
-        }
-        composable(Routes.FirstRunRoomPicker) {
-            FirstRunRoomPickerScreen(
-                onStartProof = { roomId ->
-                    navController.navigate(Routes.roomProof(roomId.toString(), ProofPhase.MoveIn))
+            // iOS FirstRunProofFlowView: "What are you documenting?" → rental setup → first room, then its capture in
+            // the moment's phase (move-out evidence for "Moving out").
+            val accountVm: AccountViewModel = hiltViewModel()
+            FirstRunFlowScreen(
+                onStartProof = { roomId, phase ->
+                    navController.navigate(Routes.roomProof(roomId.toString(), phase))
                 },
-                onSkipToMain = { welcomeVm.markFirstRunComplete() },
+                onSignOut = { accountVm.signOut {} },
             )
         }
         composable(Routes.Main) {
@@ -246,13 +253,8 @@ fun MoveMarkNavHost() {
             )
         }
         composable(Routes.Documents) {
-            DocumentsScreen(
-                onBack = { navController.popBackStack() },
-                onEditRental = { navController.navigate(Routes.EditRental) },
-            )
-        }
-        composable(Routes.EditRental) {
-            EditRentalScreen(onClose = { navController.popBackStack() })
+            // Edit rental opens as a sheet over the records (iOS EditPropertyView in MMSheetScaffold).
+            DocumentsScreen(onBack = { navController.popBackStack() })
         }
         composable(Routes.MaintenanceLog) {
             MaintenanceLogScreen(
@@ -350,6 +352,13 @@ fun MoveMarkNavHost() {
             val roomId = entry.arguments?.getString(Routes.RoomProofArg)?.let { UUID.fromString(it) }
             val phase = ProofPhase.fromKey(entry.arguments?.getString(Routes.ProofPhaseArg))
             if (roomId != null) {
+                // First run (either moment): the first proof is saved, so leaving the receipt finishes first run and
+                // the router opens the app on the asked-for tab. Main and Move-out rooms aren't on the stack yet.
+                val inFirstRun = { welcomeVm.firstRun.value != FirstRunStatus.Complete }
+                val finishFirstRun = { tab: MainTab ->
+                    mainTabRequest.request(tab)
+                    welcomeVm.markFirstRunComplete()
+                }
                 SavedProofReceiptScreen(
                     roomId = roomId,
                     onContinueNextRoom = { nextRoomId ->
@@ -357,6 +366,8 @@ fun MoveMarkNavHost() {
                             navController.navigate(Routes.roomProof(nextRoomId.toString(), phase)) {
                                 popUpTo(Routes.SavedProofReceipt) { inclusive = true }
                             }
+                        } else if (inFirstRun()) {
+                            finishFirstRun(MainTab.Reports)
                         } else if (phase == ProofPhase.MoveOut) {
                             navController.popBackStack(Routes.MoveOutRooms, false)
                         } else {
@@ -366,7 +377,7 @@ fun MoveMarkNavHost() {
                         }
                     },
                     onViewVault = {
-                        if (phase == ProofPhase.MoveIn) welcomeVm.markFirstRunComplete()
+                        if (phase == ProofPhase.MoveIn || inFirstRun()) welcomeVm.markFirstRunComplete()
                         mainTabRequest.request(MainTab.Vault)
                         navController.popBackStack(Routes.Main, false)
                     },
@@ -376,7 +387,9 @@ fun MoveMarkNavHost() {
                         }
                     },
                     onBackSafe = {
-                        if (phase == ProofPhase.MoveOut) {
+                        if (inFirstRun()) {
+                            finishFirstRun(MainTab.Vault)
+                        } else if (phase == ProofPhase.MoveOut) {
                             navController.popBackStack(Routes.MoveOutRooms, false)
                         } else {
                             navController.popBackStack(Routes.Main, false)

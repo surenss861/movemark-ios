@@ -31,13 +31,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -54,6 +55,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -61,6 +63,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -94,6 +97,11 @@ private val EvidenceStroke = Color.White.copy(alpha = 0.12f)
 fun ProPaywallScreen(
     reason: PaywallReason,
     onClose: () -> Unit,
+    /**
+     * Whether the current rental already has move-in photos (iOS `moveInRecorded`). The presenter passes what it
+     * already knows; the paywall loads nothing for it, and unknown (the default) reads neutrally, never "Recorded".
+     */
+    moveInRecorded: Boolean = false,
     viewModel: SubscriptionViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -129,7 +137,7 @@ fun ProPaywallScreen(
             packages = packages, selected = selected, loading = loading, purchasing = purchasing, error = error,
             restoreMessage = restoreMessage, restoreNote = restoreNote, purchaseSuccess = purchaseSuccess,
             packWasBought = packWasBought, isMockMode = viewModel.isMockMode, comingSoon = viewModel.subscriptionsComingSoon,
-            canPurchase = activity != null,
+            canPurchase = activity != null, moveInRecorded = moveInRecorded,
         ),
         onClose = onClose,
         onSelect = viewModel::selectPlan,
@@ -154,6 +162,7 @@ internal data class PaywallUi(
     val isMockMode: Boolean = false,
     val comingSoon: Boolean = false,
     val canPurchase: Boolean = true,
+    val moveInRecorded: Boolean = false,
 )
 
 @Composable
@@ -240,7 +249,11 @@ internal fun ProPaywallContent(
 
                 // The rental timeline: Free keeps every step's record; the move-out report and the evidence packet are Pro.
                 Column(Modifier.padding(top = 30.dp).testTag("paywall.timeline")) {
-                    TimelineStep(phase = "Move-in", title = "Record every room")
+                    TimelineStep(
+                        phase = "Move-in",
+                        title = if (ui.moveInRecorded) "Recorded" else "Record every room",
+                        isRecorded = ui.moveInRecorded,
+                    )
                     TimelineStep(phase = "During rental", title = "Maintenance cases")
                     TimelineStep(phase = "Move-out", title = "Compare before and after", proPart = "Move-out report")
                     TimelineStep(phase = "If questioned", title = "Build the evidence packet", proPart = "Evidence packet", isLast = true)
@@ -265,7 +278,18 @@ internal fun ProPaywallContent(
                 if (!comingSoon && !plansUnavailable) {
                     Text("CHOOSE YOUR PLAN", style = MMEyebrowStyle, color = HeroSecondary, modifier = Modifier.padding(top = 30.dp, bottom = 12.dp))
                     if (plans.isEmpty()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Loading keeps the plan layout (iOS redacted rows); prices only ever come from Google Play.
+                        // Hidden from TalkBack (iOS accessibilityHidden); the progress line below speaks for it.
+                        Box(Modifier.testTag("paywall.plan.placeholders")) {
+                            Column(Modifier.clearAndSetSemantics {}, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                PlanRowPlaceholder(titleWidth = 52.dp, detailWidth = 84.dp, priceWidth = 96.dp)
+                                PlanRowPlaceholder(titleWidth = 64.dp, detailWidth = 96.dp, priceWidth = 88.dp)
+                            }
+                        }
+                        Row(
+                            Modifier.padding(top = 12.dp).semantics(mergeDescendants = true) {},
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             CircularProgressIndicator(color = HeroSecondary, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(8.dp))
                             Text("Getting prices from Google Play…", style = mmFont(13f), color = HeroSecondary)
@@ -321,9 +345,12 @@ internal fun ProPaywallContent(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Box(Modifier.fillMaxWidth().height(0.5.dp).background(EvidenceStroke))
+                // iOS purchaseFooter: the purchase error, then the restore outcome, as notices on the dark surface.
+                if (!comingSoon && !plansUnavailable && error != null && plans.isNotEmpty()) {
+                    PaywallNotice(error, PaywallNoticeTone.Error, tag = "paywall.notice.error")
+                }
                 (restoreNote ?: restoreMessage)?.takeIf { !comingSoon }?.let {
-                    Text(it, style = mmFont(14f), color = Color.White, textAlign = TextAlign.Center,
-                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                    PaywallNotice(it, PaywallNoticeTone.Info, tag = "paywall.notice.restore")
                 }
                 when {
                     comingSoon -> {
@@ -345,9 +372,6 @@ internal fun ProPaywallContent(
                         }
                     }
                     else -> {
-                        if (error != null && plans.isNotEmpty()) {
-                            Text(error, style = mmFont(14f), color = Color(0xFFFF8A80), textAlign = TextAlign.Center)
-                        }
                         selected?.let { plan ->
                             Text(planPriceWithPeriod(plan), style = mmFont(17f, FontWeight.SemiBold), color = Color.White, textAlign = TextAlign.Center)
                         }
@@ -397,13 +421,27 @@ internal fun ProPaywallContent(
 
 /** One step of the rental timeline on the dark surface (iOS `MMDarkTimelineStep`). */
 @Composable
-private fun TimelineStep(phase: String, title: String, proPart: String? = null, isLast: Boolean = false) {
+private fun TimelineStep(
+    phase: String,
+    title: String,
+    proPart: String? = null,
+    isRecorded: Boolean = false,
+    isLast: Boolean = false,
+) {
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).semantics(mergeDescendants = true) {}) {
         Column(Modifier.width(18.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+            // iOS: a lime mark with an ink check once recorded; otherwise the hollow evidence dot.
             Box(
-                Modifier.padding(top = 1.dp).size(18.dp).background(MMInk.Evidence, CircleShape)
-                    .border(1.5.dp, Color.White.copy(alpha = 0.45f), CircleShape),
-            )
+                Modifier.padding(top = 1.dp).size(18.dp)
+                    .background(if (isRecorded) MMInk.LimeMark else MMInk.Evidence, CircleShape)
+                    .then(if (isRecorded) Modifier else Modifier.border(1.5.dp, Color.White.copy(alpha = 0.45f), CircleShape))
+                    .then(if (isRecorded) Modifier.testTag("paywall.timeline.recorded") else Modifier),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (isRecorded) {
+                    Icon(Icons.Filled.Check, contentDescription = null, tint = MMInk.OnLime, modifier = Modifier.size(11.dp))
+                }
+            }
             if (!isLast) Box(Modifier.width(1.5.dp).weight(1f).background(Color.White.copy(alpha = 0.16f)))
         }
         Spacer(Modifier.width(14.dp))
@@ -442,11 +480,7 @@ private fun PlanRow(plan: PlanPackageUi, selected: Boolean, enabled: Boolean, on
             .testTag("paywall.plan.${if (plan.isYearly) "yearly" else "monthly"}"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RadioButton(
-            selected = selected,
-            onClick = null,
-            colors = RadioButtonDefaults.colors(selectedColor = Color.White, unselectedColor = Color.White.copy(alpha = 0.4f)),
-        )
+        PlanMarker(selected)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(if (plan.isYearly) "Yearly" else "Monthly", style = mmFont(16f, FontWeight.SemiBold), color = Color.White)
@@ -462,6 +496,77 @@ internal fun planPriceWithPeriod(plan: com.surensureshkumar.movemark.data.subscr
     plan.isReportPack -> plan.price
     plan.isYearly -> "${plan.price} / year"
     else -> "${plan.price} / month"
+}
+
+/** iOS `MMDarkPlanRow` marker: `checkmark.circle.fill` when chosen, a plain `circle` otherwise. */
+@Composable
+private fun PlanMarker(selected: Boolean) {
+    Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+        if (selected) {
+            Icon(
+                Icons.Filled.CheckCircle,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(24.dp).testTag("paywall.plan.marker.selected"),
+            )
+        } else {
+            Box(
+                Modifier.size(20.dp).border(1.5.dp, Color.White.copy(alpha = 0.4f), CircleShape)
+                    .testTag("paywall.plan.marker.unselected"),
+            )
+        }
+    }
+}
+
+/** A plan row's shape while prices load (iOS `.redacted(reason: .placeholder)`): same frame, quiet bars, no claim. */
+@Composable
+private fun PlanRowPlaceholder(titleWidth: Dp, detailWidth: Dp, priceWidth: Dp) {
+    val shape = RoundedCornerShape(14.dp)
+    val bar = Color.White.copy(alpha = 0.14f)
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(shape)
+            .background(EvidenceRaised, shape)
+            .border(0.75.dp, EvidenceStroke, shape)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(20.dp).background(bar, CircleShape))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.width(titleWidth).height(14.dp).background(bar, RoundedCornerShape(4.dp)))
+            Box(Modifier.width(detailWidth).height(11.dp).background(bar, RoundedCornerShape(4.dp)))
+        }
+        Spacer(Modifier.width(8.dp))
+        Box(Modifier.width(priceWidth).height(14.dp).background(bar, RoundedCornerShape(4.dp)))
+    }
+}
+
+internal enum class PaywallNoticeTone { Error, Info }
+
+/** iOS `MMEvidenceNotice` dark-surface colours: danger for a failed purchase, hero secondary for information. */
+private val NoticeDangerOnDark = Color(red = 1.0f, green = 0.478f, blue = 0.431f)
+
+/** A calm notice on the dark surface (iOS `MMEvidenceNotice`): a tone mark, then the message. Announced politely. */
+@Composable
+private fun PaywallNotice(message: String, tone: PaywallNoticeTone, tag: String) {
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        Modifier.fillMaxWidth().background(EvidenceRaised, shape).border(0.75.dp, EvidenceStroke, shape).padding(12.dp)
+            .testTag(tag)
+            .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+        verticalAlignment = Alignment.Top,
+    ) {
+        Icon(
+            if (tone == PaywallNoticeTone.Error) Icons.Filled.Error else Icons.Filled.Info,
+            contentDescription = null,
+            tint = if (tone == PaywallNoticeTone.Error) NoticeDangerOnDark else HeroSecondary,
+            modifier = Modifier.padding(top = 1.dp).size(16.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(message, style = mmFont(14f), color = Color.White, modifier = Modifier.weight(1f))
+    }
 }
 
 @Composable

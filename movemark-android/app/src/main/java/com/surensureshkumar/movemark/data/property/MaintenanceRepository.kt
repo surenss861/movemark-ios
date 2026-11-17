@@ -1,5 +1,6 @@
 package com.surensureshkumar.movemark.data.property
 
+import com.surensureshkumar.movemark.data.models.EvidencePhoto
 import com.surensureshkumar.movemark.data.models.MaintenanceIssueRow
 import com.surensureshkumar.movemark.data.backend.PostgrestClient
 import kotlinx.serialization.SerialName
@@ -17,6 +18,17 @@ private data class MaintenanceInsertRow(
     val category: String,
     val description: String,
     val status: String = "open",
+    /** `date` columns: the renter's local calendar day, as iOS (`MMCaseDate.dayString`). */
+    @SerialName("date_discovered") val dateDiscovered: String? = null,
+    @SerialName("date_reported") val dateReported: String? = null,
+)
+
+@Serializable
+private data class MaintenanceCoverRow(
+    val id: String,
+    @SerialName("maintenance_issue_id") val maintenanceIssueId: String,
+    @SerialName("file_path") val filePath: String,
+    @SerialName("thumbnail_path") val thumbnailPath: String? = null,
 )
 
 @Serializable
@@ -39,6 +51,38 @@ class MaintenanceRepository @Inject constructor(
 ) {
     companion object {
         private const val MAX_ISSUES = 200
+        private const val MAX_COVER_ROWS = 400
+    }
+
+    /** Single-row lookup by id (iOS `fetchIssue`): the case file reads every column the timeline needs. */
+    suspend fun fetchIssue(issueId: UUID): MaintenanceIssueRow? =
+        postgrest.select<MaintenanceIssueRow>("maintenance_issues") {
+            eq("id", issueId.toString())
+            order("id")
+            limit(1)
+        }.firstOrNull()
+
+    /**
+     * Newest photo per maintenance case of a property, for the log's row thumbnails (iOS
+     * `maintenanceCoverPhotos`). Best effort: callers treat a failure as "no thumbnails".
+     */
+    suspend fun fetchCoverPhotos(propertyId: UUID): Map<UUID, EvidencePhoto> {
+        val rows = postgrest.select<MaintenanceCoverRow>("evidence_files") {
+            select("id,maintenance_issue_id,file_path,thumbnail_path")
+            eq("property_id", propertyId.toString())
+            notNull("maintenance_issue_id")
+            order("created_at", ascending = false)
+            order("id", ascending = false)
+            limit(MAX_COVER_ROWS)
+        }
+        val covers = LinkedHashMap<UUID, EvidencePhoto>()
+        for (row in rows) {
+            val issueId = runCatching { UUID.fromString(row.maintenanceIssueId) }.getOrNull() ?: continue
+            if (covers.containsKey(issueId)) continue
+            val photoId = runCatching { UUID.fromString(row.id) }.getOrNull() ?: continue
+            covers[issueId] = EvidencePhoto(photoId, row.filePath, row.thumbnailPath)
+        }
+        return covers
     }
 
     suspend fun fetchIssues(propertyId: UUID): List<MaintenanceIssueRow> =
@@ -66,6 +110,8 @@ class MaintenanceRepository @Inject constructor(
             title = title.trim(),
             category = category.trim(),
             description = description.trim(),
+            dateDiscovered = java.time.LocalDate.now().toString(),
+            dateReported = java.time.LocalDate.now().toString(),
         )
         return postgrest.insertReturning<MaintenanceInsertRow, MaintenanceIssueRow>("maintenance_issues", row).single()
     }
@@ -98,6 +144,9 @@ class MaintenanceRepository @Inject constructor(
     }
 }
 
+/** iOS `MaintenanceFollowUpLog.Entry`: one follow-up paragraph, with its "Oct 27" day when it was dated. */
+data class MaintenanceFollowUpEntry(val day: String?, val text: String)
+
 /**
  * `landlord_response` as a log (iOS `MaintenanceFollowUpLog`): entries separated by a blank line, each new one
  * prefixed "Oct 27: ". Older free text reads as one undated entry.
@@ -114,5 +163,34 @@ object MaintenanceFollowUpLog {
         val entry = "${dayFormatter.format(at.atZone(zone))}: ${note.trim()}"
         val previous = existing?.trim().orEmpty()
         return if (previous.isEmpty()) entry else "$previous\n\n$entry"
+    }
+
+    private val dayPrefix = Regex("^([A-Z][a-z]{2} \\d{1,2}): ")
+
+    /**
+     * iOS `MaintenanceFollowUpLog.entries`: splits on blank lines; a paragraph without a day prefix belongs to the
+     * entry before it (or, first of all, is one undated entry).
+     */
+    fun entries(response: String?): List<MaintenanceFollowUpEntry> {
+        val raw = response?.trim().orEmpty()
+        if (raw.isEmpty()) return emptyList()
+        val result = mutableListOf<MaintenanceFollowUpEntry>()
+        for (block in raw.split("\n\n")) {
+            val trimmed = block.trim()
+            if (trimmed.isEmpty()) continue
+            val match = dayPrefix.find(trimmed)
+            if (match != null) {
+                result += MaintenanceFollowUpEntry(
+                    match.groupValues[1],
+                    trimmed.substring(match.range.last + 1),
+                )
+            } else if (result.isNotEmpty()) {
+                val last = result.removeAt(result.lastIndex)
+                result += last.copy(text = "${last.text}\n\n$trimmed")
+            } else {
+                result += MaintenanceFollowUpEntry(null, trimmed)
+            }
+        }
+        return result
     }
 }

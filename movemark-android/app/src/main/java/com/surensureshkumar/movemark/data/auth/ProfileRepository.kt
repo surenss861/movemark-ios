@@ -22,6 +22,11 @@ private data class ProfileInsert(
 )
 
 @Serializable
+private data class OnboardingCompletedUpdate(
+    @SerialName("onboarding_completed_at") val onboardingCompletedAt: String,
+)
+
+@Serializable
 private data class ProfileNameUpdate(
     @SerialName("full_name") val fullName: String,
 )
@@ -68,6 +73,14 @@ class ProfileRepository @Inject constructor(
         throw e
     } catch (e: Exception) {
         ProfileLookup.Failed(e)
+    }
+
+    /**
+     * Records first run as finished on the profile (iOS `recordOnboardingCompleted`), so the account doesn't see first
+     * run again on another device or on iOS. Leaves `full_name` alone.
+     */
+    suspend fun markOnboardingCompleted(userId: UUID) {
+        postgrest.update("profiles", OnboardingCompletedUpdate(java.time.Instant.now().toString())) { eq("id", userId.toString()) }
     }
 
     suspend fun updateFullName(userId: UUID, fullName: String) {

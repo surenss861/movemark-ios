@@ -44,6 +44,7 @@ class StartupCoordinator @Inject constructor(
     private val propertyStore: PropertyStore,
     private val firstRunPreferences: FirstRunProofPreferences,
     private val pendingEvidence: Lazy<PendingEvidenceCenter>,
+    private val profileRepository: com.surensureshkumar.movemark.data.auth.ProfileRepository,
     connectivity: ConnectivityMonitor,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -116,6 +117,9 @@ class StartupCoordinator @Inject constructor(
             val userId = sessionManager.userId.value ?: return@launch
             firstRunPreferences.markComplete(userId.toString())
             _firstRun.value = FirstRunStatus.Complete
+            // Cross-device / iOS: the profile carries it too. Best effort; this device's flag already holds.
+            runCatching { profileRepository.markOnboardingCompleted(userId) }
+                .onFailure { Log.i(TAG, "onboarding_completed_at not recorded: ${it.javaClass.simpleName}") }
         }
     }
 

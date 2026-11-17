@@ -26,6 +26,18 @@ enum class VaultDocumentKind(
         else -> setOf(raw)
     }
 
+    /** Why a missing record is worth adding (iOS `PropertyVaultContent.recordReason`). */
+    val reason: String
+        get() = when (this) {
+            Lease -> "Ties your proof to this rental"
+            DepositReceipt -> "Shows what you paid, and when"
+            ListingScreenshot -> "How the rental was advertised"
+            CleaningReceipt -> "Shows the unit was cleaned"
+            UtilityProof -> "Dates when you lived here"
+            MoveOutInvoice -> "Any charges at move-out"
+            Other -> "Anything else worth keeping"
+        }
+
     fun storageBucket(): String = when (this) {
         Lease -> "leases"
         DepositReceipt -> "deposit-receipts"

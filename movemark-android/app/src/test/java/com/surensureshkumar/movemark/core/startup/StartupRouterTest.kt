@@ -10,27 +10,25 @@ import org.junit.Test
 /**
  * UNKNOWN ≠ INCOMPLETE. Galaxy A14, build 2026111302: signed in, legal accepted, name done, a save interrupted, then
  * an offline launch landed on "What should we call you?" because a failed name lookup read as "no name".
+ *
+ * iOS 1.4 has no name step: first run ("What are you documenting?") is the only onboarding, and the name no longer
+ * routes anywhere. First run opens only on a confirmed answer: the server's empty rental listing, or a loaded rental
+ * whose first room is confirmed not done.
  */
 class StartupRouterTest {
     private fun route(
         legal: LegalRouting = LegalRouting.Clear,
-        profile: ProfileStatus = ProfileStatus.HasName,
         rental: RentalStatus = RentalStatus.HasRental,
         firstRun: FirstRunStatus = FirstRunStatus.Complete,
         auth: AuthState = AuthState.SignedIn,
-    ) = StartupRouter.resolve(auth, legal, profile, rental, firstRun)
+    ) = StartupRouter.resolve(auth, legal, rental, firstRun)
 
     // --- Offline launch, per gate ---
 
     @Test
-    fun a14ReproOfflineLaunchWithNoCachedNameOpensTheVaultNotOnboarding() {
-        // Name lookup failed (UnknownHostException) and this build had no cached name; the rental came from the cache.
-        assertEquals(D.Main, route(profile = ProfileStatus.Unavailable, rental = RentalStatus.HasRental))
-    }
-
-    @Test
-    fun offlineLaunchWithCachedNameAndRentalOpensTheVault() {
-        assertEquals(D.Main, route(profile = ProfileStatus.HasName, rental = RentalStatus.HasRental))
+    fun a14ReproOfflineLaunchWithARentalOnThisDeviceOpensTheVaultNotFirstRun() {
+        // Whatever the name lookup did, the rental came from the cache and its first room is done.
+        assertEquals(D.Main, route(rental = RentalStatus.HasRental, firstRun = FirstRunStatus.Complete))
     }
 
     @Test
@@ -41,35 +39,32 @@ class StartupRouterTest {
     }
 
     @Test
-    fun failedRentalListingIsTheOfflineStateNotRentalSetup() {
+    fun failedRentalListingIsTheOfflineStateNeverFirstRun() {
         assertEquals(D.Offline, route(rental = RentalStatus.Unavailable))
-        assertEquals(D.Offline, route(profile = ProfileStatus.Unavailable, rental = RentalStatus.Unavailable))
+        for (firstRun in FirstRunStatus.entries) {
+            assertEquals(D.Offline, route(rental = RentalStatus.Unavailable, firstRun = firstRun))
+        }
     }
 
     @Test
-    fun nameUnknownAndNoRentalOnThisDeviceIsTheOfflineStateNotOnboardingOrSetup() {
-        assertEquals(D.Offline, route(profile = ProfileStatus.Unavailable, rental = RentalStatus.NoRental))
-    }
-
-    @Test
-    fun firstRoomStepUnknownHoldsInsteadOfOpeningThePicker() {
+    fun firstRoomStepUnknownHoldsInsteadOfOpeningFirstRun() {
         assertEquals(D.Hold, route(firstRun = FirstRunStatus.Unknown))
     }
 
     // --- Slow lookups ---
 
     @Test
-    fun slowLookupsHoldAndNeverRouteToAnIncompleteStep() {
-        assertEquals(D.Hold, route(legal = LegalRouting.Pending, profile = ProfileStatus.Unknown, rental = RentalStatus.Unknown))
-        assertEquals(D.Hold, route(profile = ProfileStatus.Unknown))
-        assertEquals(D.Hold, route(profile = ProfileStatus.Unknown, rental = RentalStatus.NoRental))
+    fun slowLookupsHoldAndNeverRouteToFirstRun() {
+        assertEquals(D.Hold, route(legal = LegalRouting.Pending, rental = RentalStatus.Unknown))
         assertEquals(D.Hold, route(rental = RentalStatus.Unknown))
-        assertEquals(D.Hold, route(profile = ProfileStatus.Unavailable, rental = RentalStatus.Unknown))
+        for (firstRun in FirstRunStatus.entries) {
+            assertEquals(D.Hold, route(rental = RentalStatus.Unknown, firstRun = firstRun))
+        }
     }
 
     @Test
     fun restoringAuthHolds() {
-        assertEquals(D.Hold, route(auth = AuthState.Loading, profile = ProfileStatus.NeedsName, rental = RentalStatus.NoRental))
+        assertEquals(D.Hold, route(auth = AuthState.Loading, rental = RentalStatus.NoRental))
     }
 
     @Test
@@ -81,15 +76,15 @@ class StartupRouterTest {
 
     @Test
     fun reconnectTakesTheOfflineStateToTheVault() {
-        assertEquals(D.Offline, route(profile = ProfileStatus.Unavailable, rental = RentalStatus.Unavailable, firstRun = FirstRunStatus.Unknown))
-        // Back online: the name and the rental confirm, and the first-room step follows from the loaded rental.
-        assertEquals(D.Main, route(profile = ProfileStatus.HasName, rental = RentalStatus.HasRental, firstRun = FirstRunStatus.Complete))
+        assertEquals(D.Offline, route(rental = RentalStatus.Unavailable, firstRun = FirstRunStatus.Unknown))
+        // Back online: the rental confirms, and the first-room step follows from the loaded rental.
+        assertEquals(D.Main, route(rental = RentalStatus.HasRental, firstRun = FirstRunStatus.Complete))
     }
 
     @Test
-    fun reconnectRevealsAGenuinelyNewAccountAndThenOnboardingShows() {
-        assertEquals(D.Offline, route(profile = ProfileStatus.Unavailable, rental = RentalStatus.Unavailable))
-        assertEquals(D.Onboarding, route(profile = ProfileStatus.NeedsName, rental = RentalStatus.NoRental))
+    fun reconnectRevealsAGenuinelyNewAccountAndThenFirstRunShows() {
+        assertEquals(D.Offline, route(rental = RentalStatus.Unavailable))
+        assertEquals(D.Onboarding, route(rental = RentalStatus.NoRental, firstRun = FirstRunStatus.Unknown))
     }
 
     @Test
@@ -101,61 +96,65 @@ class StartupRouterTest {
     // --- Genuine requirements are never skipped ---
 
     @Test
-    fun genuinelyNewAccountWithoutANameSeesTheNameScreen() {
-        assertEquals(D.Onboarding, route(profile = ProfileStatus.NeedsName, rental = RentalStatus.Unknown, firstRun = FirstRunStatus.Unknown))
-        assertEquals(D.Onboarding, route(profile = ProfileStatus.NeedsName, rental = RentalStatus.NoRental))
-        // Even with a rental (name cleared elsewhere): the server said so this session.
-        assertEquals(D.Onboarding, route(profile = ProfileStatus.NeedsName, rental = RentalStatus.HasRental))
+    fun genuinelyNewAccountSeesTheMomentPicker() {
+        // The server listed no rentals: "What are you documenting?". The first-room status is Unknown without a rental.
+        assertEquals(D.Onboarding, route(rental = RentalStatus.NoRental, firstRun = FirstRunStatus.Unknown))
+        for (firstRun in FirstRunStatus.entries) {
+            assertEquals(D.Onboarding, route(rental = RentalStatus.NoRental, firstRun = firstRun))
+        }
+    }
+
+    @Test
+    fun rentalWithTheFirstRoomNotDoneReopensFirstRun() {
+        // iOS keeps first run up until the first proof is saved; the moment then goes straight to the room pick.
+        assertEquals(D.Onboarding, route(rental = RentalStatus.HasRental, firstRun = FirstRunStatus.Incomplete))
+    }
+
+    @Test
+    fun existingRentalWithProofNeverSeesFirstRun() {
+        assertEquals(D.Main, route(rental = RentalStatus.HasRental, firstRun = FirstRunStatus.Complete))
+        assertNotEquals(D.Onboarding, route(rental = RentalStatus.HasRental, firstRun = FirstRunStatus.Complete))
     }
 
     @Test
     fun unacceptedAccountSeesTheAgreementBeforeAnythingElse() {
         assertEquals(LegalRouting.Required, StartupRouter.legal(required = true, statusUnavailable = false))
-        for (profile in ProfileStatus.entries) for (rental in RentalStatus.entries) {
-            assertEquals(D.LegalAcceptance, route(legal = LegalRouting.Required, profile = profile, rental = rental))
+        for (rental in RentalStatus.entries) for (firstRun in FirstRunStatus.entries) {
+            assertEquals(D.LegalAcceptance, route(legal = LegalRouting.Required, rental = rental, firstRun = firstRun))
         }
-    }
-
-    @Test
-    fun namedAccountWithNoRentalSetsOneUp() {
-        assertEquals(D.CreateProperty, route(profile = ProfileStatus.HasName, rental = RentalStatus.NoRental))
-    }
-
-    @Test
-    fun rentalWithNoFirstRoomOpensThePicker() {
-        assertEquals(D.FirstRunRoomPicker, route(firstRun = FirstRunStatus.Incomplete))
     }
 
     @Test
     fun legalPendingHolds() {
         assertEquals(LegalRouting.Pending, StartupRouter.legal(required = null, statusUnavailable = false))
         assertEquals(D.Hold, route(legal = LegalRouting.Pending))
+        assertEquals(D.Hold, route(legal = LegalRouting.Pending, rental = RentalStatus.NoRental))
     }
 
     // --- The rule, over every combination ---
 
     @Test
     fun incompleteStepsOpenOnlyOnAConfirmedAnswer() {
-        for (legal in LegalRouting.entries) for (profile in ProfileStatus.entries)
+        for (auth in AuthState.entries) for (legal in LegalRouting.entries)
             for (rental in RentalStatus.entries) for (firstRun in FirstRunStatus.entries) {
-                val d = route(legal, profile, rental, firstRun)
-                val label = "$legal/$profile/$rental/$firstRun -> $d"
+                val d = route(legal, rental, firstRun, auth)
+                val label = "$auth/$legal/$rental/$firstRun -> $d"
                 if (d == D.LegalAcceptance) assertEquals(label, LegalRouting.Required, legal)
-                if (d == D.Onboarding) assertEquals(label, ProfileStatus.NeedsName, profile)
-                if (d == D.CreateProperty) {
-                    assertEquals(label, RentalStatus.NoRental, rental)
-                    assertEquals(label, ProfileStatus.HasName, profile)
+                if (d == D.Onboarding) {
+                    assertEquals(label, AuthState.SignedIn, auth)
+                    assertEquals(label, LegalRouting.Clear, legal)
+                    // Only a confirmed empty listing, or a loaded rental with the first room confirmed not done.
+                    assertTrue(
+                        label,
+                        rental == RentalStatus.NoRental ||
+                            (rental == RentalStatus.HasRental && firstRun == FirstRunStatus.Incomplete),
+                    )
                 }
-                if (d == D.FirstRunRoomPicker) {
-                    assertEquals(label, FirstRunStatus.Incomplete, firstRun)
-                    assertEquals(label, RentalStatus.HasRental, rental)
-                    assertTrue(label, profile == ProfileStatus.HasName || profile == ProfileStatus.Unavailable)
-                }
-                // A rental on this device never lands on onboarding or setup unless the server said the name is missing.
-                if (rental == RentalStatus.HasRental && profile != ProfileStatus.NeedsName) {
-                    assertNotEquals(label, D.Onboarding, d)
-                    assertNotEquals(label, D.CreateProperty, d)
-                }
+                // An unknown or failed lookup never lands on first run.
+                if (rental == RentalStatus.Unknown || rental == RentalStatus.Unavailable) assertNotEquals(label, D.Onboarding, d)
+                if (firstRun == FirstRunStatus.Unknown && rental != RentalStatus.NoRental) assertNotEquals(label, D.Onboarding, d)
+                // A rental with its first room done never lands on first run.
+                if (rental == RentalStatus.HasRental && firstRun == FirstRunStatus.Complete) assertNotEquals(label, D.Onboarding, d)
             }
     }
 

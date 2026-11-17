@@ -10,6 +10,8 @@ import androidx.camera.core.ImageCapture
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,13 +28,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -46,10 +44,21 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.Color
 import android.content.Context
 import androidx.compose.ui.platform.LocalContext
@@ -62,10 +71,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImage
 import com.surensureshkumar.movemark.core.design.MMColors
+import com.surensureshkumar.movemark.features.proof.RoomCapturePrompts
 import com.google.common.util.concurrent.ListenableFuture
 import java.util.concurrent.Executor
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 
 @Composable
@@ -80,7 +91,8 @@ fun CameraCaptureScreen(
     val capturedUris by viewModel.capturedUris.collectAsState()
     val capturedCount by viewModel.capturedCount.collectAsState()
     val isCapturing by viewModel.isCapturing.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
+    val notice by viewModel.notice.collectAsState()
+    val cameraUnavailable by viewModel.isCameraUnavailable.collectAsState()
     var showExitDialog by remember { mutableStateOf(false) }
 
     val imageCapture = remember {
@@ -88,7 +100,7 @@ fun CameraCaptureScreen(
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
             .build()
     }
-    val previewView = remember { PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER } }
+    val previewView = remember { PreviewView(context).apply { scaleType = PreviewView.ScaleType.FIT_CENTER } }
     var cameraBound by remember { mutableStateOf(false) }
 
     LaunchedEffect(lifecycleOwner) {
@@ -156,134 +168,185 @@ fun CameraCaptureScreen(
         )
     }
 
-    Box(
+    // iOS EvidenceCameraViewController: header band (room, count, next suggestion), the whole frame between it and
+    // the shutter (resizeAspect), then Cancel or the latest-photo thumbnail · shutter · Done.
+    val latest = CameraCaptureUi.latestThumbnail(capturedUris)
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(Color.Black)
+            .statusBarsPadding()
+            .navigationBarsPadding(),
     ) {
-        AndroidView(
-            factory = { previewView },
-            modifier = Modifier.fillMaxSize(),
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 8.dp, top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    roomName,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 17.sp,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Text(
+                    when (capturedCount) {
+                        0 -> "No photos yet"
+                        1 -> "1 photo captured"
+                        else -> "$capturedCount photos captured"
+                    },
+                    color = Color.White.copy(alpha = 0.65f),
+                    fontSize = 13.sp,
+                    modifier = Modifier.testTag("camera.count"),
+                )
+            }
+            IconButton(
+                onClick = {
+                    galleryPicker.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                    )
+                },
+            ) {
+                Icon(Icons.Filled.PhotoLibrary, contentDescription = "Gallery", tint = Color.White)
+            }
+        }
+
+        // The room's suggested shots (same list iOS passes: RoomCapturePrompts), indexed by the photos taken here.
+        Text(
+            CameraCaptureUi.suggestion(capturedCount, RoomCapturePrompts),
+            color = Color.White,
+            fontSize = 15.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, top = 10.dp)
+                .testTag("camera.suggestion"),
         )
 
-        Column(
+        Box(
             Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding(),
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(top = 12.dp, bottom = 16.dp),
         ) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = { tryClose() }) {
-                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White)
-                }
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        roomName,
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 17.sp,
-                    )
-                    Text(
-                        when (capturedCount) {
-                            0 -> "No photos yet"
-                            1 -> "1 photo captured"
-                            else -> "$capturedCount photos captured"
-                        },
-                        color = Color.White.copy(alpha = 0.75f),
-                        fontSize = 13.sp,
-                    )
-                }
-                IconButton(
-                    onClick = {
-                        galleryPicker.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                        )
-                    },
-                ) {
-                    Icon(Icons.Filled.PhotoLibrary, contentDescription = "Gallery", tint = Color.White)
-                }
-            }
+            AndroidView(
+                factory = { previewView },
+                modifier = Modifier.fillMaxSize(),
+            )
 
-            Spacer(Modifier.weight(1f))
-
-            errorMessage?.let { msg ->
+            if (cameraUnavailable) {
                 Text(
-                    msg,
-                    color = MMColors.SemanticDanger,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 8.dp),
-                    fontSize = 14.sp,
+                    CameraCaptureUi.CAMERA_UNAVAILABLE,
+                    color = Color.White,
+                    fontSize = 17.sp,
+                    modifier = Modifier.align(Alignment.Center).testTag("camera.unavailable"),
                 )
             }
 
-            if (capturedUris.isNotEmpty()) {
-                LazyRow(
+            // "Photo added" (or the failure) for a moment over the bottom of the preview; TalkBack hears it too.
+            val noticeAlpha = remember { Animatable(0f) }
+            var noticeText by remember { mutableStateOf("") }
+            // Survives rotation so a notice already shown doesn't flash again when the screen is recreated.
+            var shownSerial by rememberSaveable { mutableStateOf(0L) }
+            LaunchedEffect(notice?.serial) {
+                val current = notice ?: return@LaunchedEffect
+                if (current.serial == shownSerial) return@LaunchedEffect
+                shownSerial = current.serial
+                noticeText = current.message
+                noticeAlpha.snapTo(1f)
+                delay(CameraCaptureUi.NOTICE_HOLD_MILLIS)
+                noticeAlpha.animateTo(0f, tween(CameraCaptureUi.NOTICE_FADE_MILLIS))
+            }
+            if (noticeText.isNotEmpty() && noticeAlpha.value > 0f) {
+                Text(
+                    noticeText,
+                    color = Color.White,
+                    fontSize = 15.sp,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 16.dp)
+                        .alpha(noticeAlpha.value)
+                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                        .padding(horizontal = 14.dp, vertical = 7.dp)
+                        .semantics { liveRegion = LiveRegionMode.Polite }
+                        .testTag("camera.notice"),
+                )
+            }
+        }
+
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (CameraCaptureUi.showsCancel(capturedUris.size) || latest == null) {
+                // Cancel is the same way out as Back: with photos it asks "Keep these photos?".
+                TextButton(
+                    onClick = { tryClose() },
+                    modifier = Modifier.align(Alignment.CenterStart).testTag("camera.cancel"),
                 ) {
-                    itemsIndexed(capturedUris, key = { _, uri -> uri.toString() }) { index, uri ->
-                        AsyncImage(
-                            model = uri,
-                            contentDescription = "Captured photo ${index + 1}",
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(1.dp, Color.White.copy(0.3f), RoundedCornerShape(8.dp)),
-                        )
-                    }
+                    Text("Cancel", color = Color.White, fontSize = 17.sp)
                 }
+            } else {
+                // The latest photo; like iOS it goes back to the room, where review, removal and retakes happen.
+                AsyncImage(
+                    model = latest,
+                    contentDescription = "Review photos",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .border(1.5.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(10.dp))
+                        .clickable(enabled = !isCapturing, role = Role.Button) {
+                            viewModel.finishAndDeliver { delivered -> if (delivered) onDone() }
+                        }
+                        .testTag("camera.thumbnail"),
+                )
             }
 
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            val shutterEnabled = !isCapturing && !cameraUnavailable
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(if (shutterEnabled) Color.White else Color.White.copy(0.35f))
+                    .clickable(enabled = shutterEnabled, role = Role.Button, onClickLabel = "Take Photo") {
+                        viewModel.capture(imageCapture)
+                    }
+                    .semantics { contentDescription = "Take Photo" }
+                    .testTag("camera.shutter"),
+                contentAlignment = Alignment.Center,
             ) {
-                Spacer(Modifier.size(72.dp))
                 Box(
-                    modifier = Modifier
-                        .size(72.dp)
+                    Modifier
+                        .size(62.dp)
                         .clip(CircleShape)
-                        .background(if (isCapturing) Color.White.copy(0.35f) else Color.White)
-                        .clickable(enabled = !isCapturing) {
-                            viewModel.capture(imageCapture)
-                        },
+                        .background(Color.Black.copy(0.15f)),
+                )
+            }
+
+            if (capturedCount > 0) {
+                // iOS: a filled lime capsule with ink text, not a text action.
+                Box(
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .heightIn(min = 48.dp)
+                        .clip(CircleShape)
+                        .background(if (isCapturing) MMColors.Primary.copy(alpha = 0.5f) else MMColors.Primary)
+                        .clickable(enabled = !isCapturing, role = Role.Button) {
+                            viewModel.finishAndDeliver { delivered -> if (delivered) onDone() }
+                        }
+                        .padding(horizontal = 20.dp, vertical = 10.dp)
+                        .testTag("camera.done"),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Box(
-                        Modifier
-                            .size(62.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(0.15f)),
-                    )
-                }
-                if (capturedCount > 0) {
-                    // iOS: a filled lime capsule with ink text, not a text action.
-                    Box(
-                        Modifier
-                            .heightIn(min = 48.dp)
-                            .clip(CircleShape)
-                            .background(if (isCapturing) MMColors.Primary.copy(alpha = 0.5f) else MMColors.Primary)
-                            .clickable(enabled = !isCapturing, role = androidx.compose.ui.semantics.Role.Button) {
-                                viewModel.finishAndDeliver { delivered -> if (delivered) onDone() }
-                            }
-                            .padding(horizontal = 20.dp, vertical = 10.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("Done", color = com.surensureshkumar.movemark.core.design.MMInk.OnLime, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                    }
-                } else {
-                    Spacer(Modifier.size(48.dp))
+                    Text("Done", color = com.surensureshkumar.movemark.core.design.MMInk.OnLime, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 }
             }
         }

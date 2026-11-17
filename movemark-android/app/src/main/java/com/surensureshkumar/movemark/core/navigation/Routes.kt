@@ -11,9 +11,8 @@ object Routes {
     const val LegalAcceptance = "legal_acceptance"
     const val LegalStatusUnavailable = "legal_status_unavailable"
     const val StartupOffline = "startup_offline"
+    /** First run (moment → rental setup → first room), one route: iOS FirstRunProofFlowView. */
     const val Onboarding = "onboarding"
-    const val CreateProperty = "create_property"
-    const val FirstRunRoomPicker = "first_run_room_picker"
     const val AddProperty = "add_property"
 
     const val MaintenanceLog = "maintenance_log"
