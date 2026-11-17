@@ -57,6 +57,17 @@ class PropertyHydrator @Inject constructor(
             ?.let { build(propertyId, row, it) }
     }
 
+    /**
+     * Offline launch with no cached listing: the cached snapshot of [propertyId] carries its own property row. Null if
+     * nothing is cached, it can't be read, or it belongs to someone other than [userId]. Never throws.
+     */
+    suspend fun hydrateFromCache(propertyId: UUID, userId: UUID): Pair<PropertyRow, Hydrated>? {
+        val cachedJson = snapshotCache.read(propertyId) ?: return null
+        val snapshot = runCatching { propertyRepository.decodeSnapshot(cachedJson) }.getOrNull() ?: return null
+        val row = snapshot.property?.takeIf { it.userId.equals(userId.toString(), ignoreCase = true) } ?: return null
+        return runCatching { row to build(propertyId, row, snapshot) }.getOrNull()
+    }
+
     /** Wipes the offline snapshot cache. Call on sign-out — see [PropertySnapshotCache.clearAll]. */
     suspend fun clearCache() {
         snapshotCache.clearAll()
