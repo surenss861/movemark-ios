@@ -133,8 +133,11 @@ class StartupCoordinator @Inject constructor(
 
     private suspend fun recomputeFirstRunLocked(userId: UUID) {
         if (sessionManager.userId.value != userId) return
-        // Never step back: once the first room is behind the renter this session, it stays behind.
-        if (_firstRun.value == FirstRunStatus.Complete) return
+        // Settled once per session: Complete never steps back, and Incomplete moves on only through
+        // markFirstRunComplete (the receipt / skip). Re-deriving it mid-session (a refreshed rental with the
+        // just-saved proof, or photos admitted during capture) would route to Main and pull the renter off the
+        // room or the saved-proof receipt.
+        if (_firstRun.value != FirstRunStatus.Unknown) return
         val local = firstRunPreferences.isComplete(userId.toString())
         val pending = runCatching { pendingEvidence.get().pendingCount(userId.toString()) }.getOrDefault(0)
         val property = propertyStore.currentProperty.value
