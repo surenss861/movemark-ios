@@ -80,7 +80,8 @@ import kotlinx.coroutines.delay
 /**
  * The rental's records (iOS `PropertyVaultContent.recordsSection`): "N of 3 added" for lease, deposit receipt and
  * listing proof; those three always listed (Added / Needed, one action each), other records once added or while
- * expanded; Replace and Delete on a long press (and as TalkBack actions).
+ * expanded; Replace and Delete on a long press (and as TalkBack actions). Adding or replacing listing proof opens
+ * [ListingProofSheet] first (iOS `startUpload` → `ReplacePhotoSheet`); View opens the file itself, as iOS does.
  *
  * [onEditRental] null presents Edit rental as a sheet over this screen (iOS presents `EditPropertyView` as a sheet).
  */
@@ -100,6 +101,7 @@ fun DocumentsScreen(
     var showAll by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
     var pendingKind by remember { mutableStateOf<VaultDocumentKind?>(null) }
+    var showListingProof by remember { mutableStateOf(false) }
     // The system file picker delivers its result together with a back event. Without this,
     // that back pops Documents and cancels the upload before the row is saved.
     var holdBack by remember { mutableStateOf(false) }
@@ -126,6 +128,11 @@ fun DocumentsScreen(
         holdBack = true
         val mime = if (kind.acceptsImage) arrayOf("image/*") else arrayOf("*/*")
         picker.launch(mime)
+    }
+    // iOS `startUpload`: an image record (listing proof) opens the listing-proof sheet first, which picks the
+    // screenshot; other records go straight to the file picker. Add, Replace and the TalkBack Replace all land here.
+    fun startUpload(kind: VaultDocumentKind) {
+        if (kind.acceptsImage) showListingProof = true else pick(kind)
     }
 
     LaunchedEffect(Unit) { viewModel.refresh() }
@@ -161,7 +168,7 @@ fun DocumentsScreen(
             onRetry = { failedUpload?.let(::pick) ?: viewModel.refresh() },
             onToggle = { showAll = !showAll },
             onView = viewModel::view,
-            onAdd = ::pick,
+            onAdd = ::startUpload,
             onDelete = { confirmDelete = it },
         )
     }
@@ -184,6 +191,15 @@ fun DocumentsScreen(
     }
 
     if (editing) EditRentalSheet(onDismiss = { editing = false })
+
+    if (showListingProof) {
+        ListingProofSheet(
+            current = ListingProof.current(documents),
+            signUrl = viewModel::signedImageUrl,
+            onReplace = { pick(VaultDocumentKind.ListingScreenshot) },
+            onDismiss = { showListingProof = false },
+        )
+    }
 }
 
 /** Presentational: the error notice, then the records group with its toggle row and long-press footer. */

@@ -139,6 +139,13 @@ class DocumentsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * A signed URL for a stored record image, shown in place (the listing-proof sheet); the same signing [view] uses.
+     * Null when it can't be signed, so the sheet shows its failure frame.
+     */
+    suspend fun signedImageUrl(path: String): String? =
+        runCatching { documentRepository.signedUrl(path) }.getOrNull()
+
     private fun mimeType(name: String): String = when {
         name.endsWith(".pdf", ignoreCase = true) -> "application/pdf"
         name.endsWith(".png", ignoreCase = true) -> "image/png"
