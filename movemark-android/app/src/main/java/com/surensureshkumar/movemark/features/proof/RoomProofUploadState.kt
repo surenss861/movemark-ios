@@ -61,6 +61,25 @@ object RoomProofUploadMessages {
 
     fun partial(uploaded: Int, total: Int) = "$uploaded of $total photos saved."
 
+    /** Restored photos a save asked for: the background upload (PendingUploadWorker) will finish them. */
+    const val WAITING_FOR_NETWORK =
+        "These photos are on this phone, not uploaded yet. MoveMark uploads them automatically when you’re online."
+    const val AUTO_UPLOAD_NOTE = "They’re kept on this phone and upload automatically when you’re online."
+    const val REST_AUTO_UPLOAD_NOTE = "The rest are kept on this phone and upload automatically when you’re online."
+
+    /**
+     * Whether the background retry can fix [error]: a connection or server problem can; a photo the service
+     * refused (too large, unsupported) or couldn't read can't, so its message never promises an automatic upload.
+     */
+    fun retriesAutomatically(error: Throwable?): Boolean {
+        val cause = (error as? MoveMarkUploadFailure)?.underlying ?: error
+        return cause !is MoveMarkStorageException.Rejected && cause !is EvidenceImportException
+    }
+
+    /** [message] plus the automatic-upload note when the background retry will pick these photos up. */
+    fun withAutoUpload(message: String, error: Throwable?): String =
+        if (retriesAutomatically(error)) "$message $AUTO_UPLOAD_NOTE" else message
+
     /** A failure the user can act on (too large, unsupported, rate limited) keeps its own words. */
     fun failure(error: Throwable?): String {
         val cause = (error as? MoveMarkUploadFailure)?.underlying ?: error

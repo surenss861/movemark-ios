@@ -138,6 +138,7 @@ object AppModule {
     ): PendingEvidenceCenter = PendingEvidenceCenter(
         store = PendingEvidenceStore(PendingEvidenceStore.defaultRoot(context.filesDir)),
         backend = LivePendingEvidenceBackend(inspectionRepository, storage),
+        scheduler = com.surensureshkumar.movemark.data.evidence.pending.WorkManagerUploadScheduler(context),
     )
 
     @Provides

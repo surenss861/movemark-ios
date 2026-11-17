@@ -17,13 +17,13 @@ import java.io.IOException
 import java.util.UUID
 
 /** Thrown by the fake to stop a sync dead, the way a process kill would (not an Exception: nothing catches it). */
-private class Killed : Error("process killed")
+internal class Killed : Error("process killed")
 
 /**
  * The server, modelled: entries by id, `evidence_files` rows by id, upload tickets with their state. Every
  * backend step is a numbered "tick"; [killAtTick] stops the run there.
  */
-private class FakeServer {
+internal class FakeServer {
     enum class TicketState { Issued, Finalized, Abandoned }
 
     data class Row(val entryId: UUID, val ticketId: String, val sha: String)
