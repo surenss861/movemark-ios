@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.surensureshkumar.movemark.core.startup.ProfileStatus
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -48,6 +49,7 @@ class SessionManager @Inject constructor(
     private val localFiles: LocalUserFiles,
     private val reportCredits: Lazy<ReportCreditsManager>,
     private val pendingRevocation: PendingSessionRevocation,
+    private val profileCache: VerifiedProfileCache,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -63,8 +65,9 @@ class SessionManager @Inject constructor(
     private val _userFullName = MutableStateFlow<String?>(null)
     val userFullName: StateFlow<String?> = _userFullName.asStateFlow()
 
-    private val _hasFetchedProfile = MutableStateFlow(false)
-    val hasFetchedProfile: StateFlow<Boolean> = _hasFetchedProfile.asStateFlow()
+    private val _profile = MutableStateFlow(ProfileState())
+    /** The name gate (see [ProfileGate]): a failed lookup is never "needs a name". */
+    val profile: StateFlow<ProfileState> = _profile.asStateFlow()
 
     init {
         scope.launch {
@@ -140,16 +143,39 @@ class SessionManager @Inject constructor(
         auth.requestPasswordReset(trimmed)
     }
 
+    /**
+     * Reads the name from the server. A failure or a slow answer keeps the last confirmed state (this session's, or
+     * this device's cache) and otherwise reports [com.surensureshkumar.movemark.core.startup.ProfileStatus.Unavailable].
+     */
     suspend fun refreshProfile() {
         val uid = _userId.value ?: return
-        _userFullName.value = profileRepository.fetchFullName(uid)
-        _hasFetchedProfile.value = true
+        val lookup = ProfileGate.lookupWithin { profileRepository.lookupFullName(uid) }
+        if (_userId.value != uid) return
+        if (lookup is ProfileLookup.Failed) Log.i(TAG, "profile lookup failed: ${lookup.cause?.javaClass?.simpleName ?: "timeout"}")
+        setProfile(ProfileGate.apply(_profile.value, lookup))
+        when (lookup) {
+            is ProfileLookup.Found -> profileCache.write(uid.toString(), lookup.fullName)
+            ProfileLookup.Missing -> profileCache.remove(uid.toString())
+            is ProfileLookup.Failed -> Unit
+        }
+    }
+
+    /** Re-reads the name only while it hasn't been confirmed by the server this session (reconnect, return). */
+    suspend fun refreshProfileIfUnverified() {
+        if (_userId.value != null && !_profile.value.verified) refreshProfile()
+    }
+
+    private fun setProfile(state: ProfileState) {
+        _profile.value = state
+        _userFullName.value = state.fullName
     }
 
     suspend fun updateProfileFullName(fullName: String) {
         val uid = _userId.value ?: throw AuthException("Sign in to update your profile.")
         profileRepository.updateFullName(uid, fullName)
-        _userFullName.value = fullName.trim()
+        val trimmed = fullName.trim()
+        setProfile(ProfileState(ProfileStatus.HasName, trimmed, verified = true))
+        profileCache.write(uid.toString(), trimmed)
     }
 
     /**
@@ -214,11 +240,19 @@ class SessionManager @Inject constructor(
             // Settle what an interrupted save left (empty entries, uploads to release, photos already saved).
             pendingEvidence.get().reconcileAll(id.toString())
             scope.launch {
+                // The name gate first and on its own: billing calls below can be slow offline. This account's last
+                // confirmed name opens the app at once; the server read then confirms or updates it.
+                if (!_profile.value.verified) {
+                    val cached = profileCache.read(id.toString())
+                    if (_userId.value == id && !_profile.value.verified) setProfile(ProfileGate.restore(cached))
+                }
+                refreshProfile()
+            }
+            scope.launch {
                 // RevenueCat's app user id is the Neon Auth user id (lowercase uuid), as on iOS.
                 subscriptionRepository.logIn(id.toString().lowercase())
                 subscriptionRepository.refreshCustomerInfo()
                 runCatching { reportCredits.get().refresh(id) }
-                refreshProfile()
             }
         }
     }
@@ -226,10 +260,11 @@ class SessionManager @Inject constructor(
     private fun clearUser() {
         // Nothing cached about one account's report credits may leak into the next.
         scope.launch { reportCredits.get().refresh(null) }
+        // The leaving account's cached name doesn't stay on the device.
+        _userId.value?.let { leaving -> scope.launch { profileCache.remove(leaving.toString()) } }
         _userId.value = null
         _userEmail.value = null
-        _userFullName.value = null
-        _hasFetchedProfile.value = false
+        setProfile(ProfileState())
         _authState.value = AuthState.SignedOut
     }
 

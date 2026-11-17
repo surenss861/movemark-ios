@@ -10,6 +10,13 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.surensureshkumar.movemark.core.startup.StartupDestination
+import com.surensureshkumar.movemark.core.startup.StartupOfflineScreen
+import com.surensureshkumar.movemark.core.startup.StartupRouter
+import com.surensureshkumar.movemark.core.startup.LegalRouting
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -72,9 +79,10 @@ fun MoveMarkNavHost() {
     val navController = rememberNavController()
     val welcomeVm: WelcomeViewModel = hiltViewModel()
     val authState by welcomeVm.authState.collectAsState()
-    val hasProperty by welcomeVm.hasProperty.collectAsState()
-    val firstRunComplete by welcomeVm.firstRunComplete.collectAsState()
-    val needsOnboarding by welcomeVm.needsOnboarding.collectAsState()
+    val profileStatus by welcomeVm.profileStatus.collectAsState()
+    val rentalStatus by welcomeVm.rentalStatus.collectAsState()
+    val firstRun by welcomeVm.firstRun.collectAsState()
+    val rechecking by welcomeVm.rechecking.collectAsState()
     val legalVm: LegalGateViewModel = hiltViewModel()
     val legal by legalVm.state.collectAsState()
 
@@ -86,44 +94,65 @@ fun MoveMarkNavHost() {
     LaunchedEffect(authState) {
         if (authState == AuthState.SignedIn) LegalAcceptanceRequiredSignal.signals.collect { legalVm.recheck() }
     }
+    // Connection back, foreground, or "Try again": the coordinator re-checks what it couldn't confirm, and asks for the
+    // legal status again here (an unavailable status retries; an answered one re-checks).
+    LaunchedEffect(authState) {
+        if (authState == AuthState.SignedIn) welcomeVm.legalRecheck.collect {
+            if (legalVm.state.value.statusUnavailable) legalVm.retryStatus() else legalVm.recheck()
+        }
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, authState) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_START && authState == AuthState.SignedIn) legalVm.recheck()
+            if (event == Lifecycle.Event.ON_START && authState == AuthState.SignedIn) {
+                legalVm.recheck()
+                welcomeVm.recheck()
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(authState, hasProperty, firstRunComplete, needsOnboarding, legal.phase) {
-        when (authState) {
-            AuthState.Loading -> Unit
-            AuthState.SignedOut -> {
-                if (navController.currentDestination?.route != Routes.Welcome) {
-                    navController.navigate(Routes.Welcome) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                }
-            }
-            AuthState.SignedIn -> {
-                val dest = when (legal.phase) {
-                    LegalGatePhase.Unavailable -> Routes.LegalStatusUnavailable
-                    LegalGatePhase.Loading -> return@LaunchedEffect
-                    LegalGatePhase.NeedsAcceptance -> Routes.LegalAcceptance
-                    LegalGatePhase.Accepted, LegalGatePhase.OpenOnCache -> when {
-                    needsOnboarding == null -> return@LaunchedEffect
-                    needsOnboarding == true -> Routes.Onboarding
-                    hasProperty == false -> Routes.CreateProperty
-                    hasProperty == true && firstRunComplete == false -> Routes.FirstRunRoomPicker
-                    hasProperty == true -> Routes.Main
-                    else -> return@LaunchedEffect
-                    }
-                }
-                if (navController.currentDestination?.route != dest) {
-                    navController.navigate(dest) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                }
+    // One decision for every launch gate (StartupRouter): a lookup that failed or hasn't answered never opens
+    // onboarding, rental setup or the first-room picker. Only a change of decision navigates, so a renter deep in
+    // the app isn't pulled back to the top when a re-check confirms what they already had.
+    val destination = StartupRouter.resolve(
+        auth = authState,
+        // The design line's verified legal phases: only a server-confirmed "needs acceptance" shows the agreement.
+        legal = when (legal.phase) {
+            LegalGatePhase.Unavailable -> LegalRouting.StatusUnavailable
+            LegalGatePhase.Loading -> LegalRouting.Pending
+            LegalGatePhase.NeedsAcceptance -> LegalRouting.Required
+            LegalGatePhase.Accepted, LegalGatePhase.OpenOnCache -> LegalRouting.Clear
+        },
+        profile = profileStatus,
+        rental = rentalStatus,
+        firstRun = firstRun,
+    )
+    var lastRouted by rememberSaveable { mutableStateOf<StartupDestination?>(null) }
+    LaunchedEffect(destination) {
+        val route = when (destination) {
+            StartupDestination.Hold -> return@LaunchedEffect
+            StartupDestination.SignIn -> Routes.Welcome
+            StartupDestination.LegalAcceptance -> Routes.LegalAcceptance
+            StartupDestination.LegalStatusUnavailable -> Routes.LegalStatusUnavailable
+            StartupDestination.Onboarding -> Routes.Onboarding
+            StartupDestination.CreateProperty -> Routes.CreateProperty
+            StartupDestination.FirstRunRoomPicker -> Routes.FirstRunRoomPicker
+            StartupDestination.Main -> Routes.Main
+            StartupDestination.Offline -> Routes.StartupOffline
+        }
+        val current = navController.currentDestination?.route
+        // Signed out: anywhere but Welcome and its sign-in screen goes back to Welcome.
+        if (destination == StartupDestination.SignIn && (current == Routes.Welcome || current == Routes.Auth)) {
+            lastRouted = destination
+            return@LaunchedEffect
+        }
+        if (destination == lastRouted && current != null && current != Routes.Welcome) return@LaunchedEffect
+        lastRouted = destination
+        if (current != route) {
+            navController.navigate(route) {
+                popUpTo(0) { inclusive = true }
             }
         }
     }
@@ -167,6 +196,14 @@ fun MoveMarkNavHost() {
             LegalStatusUnavailableScreen(
                 isRetrying = legal.isRetrying,
                 onRetry = { legalVm.retryStatus() },
+                onSignOut = { accountVm.signOut {} },
+            )
+        }
+        composable(Routes.StartupOffline) {
+            val accountVm: AccountViewModel = hiltViewModel()
+            StartupOfflineScreen(
+                isRetrying = rechecking,
+                onRetry = { welcomeVm.recheck() },
                 onSignOut = { accountVm.signOut {} },
             )
         }

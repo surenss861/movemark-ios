@@ -122,6 +122,12 @@ data class PendingEvidenceManifest(
     val updatedAt: Long = 0,
     /** Uploads of photos dropped while their outcome was unknown: released by the next reconcile. */
     val cleanup: List<PendingEvidenceUpload> = emptyList(),
+    /**
+     * The renter asked for these photos to be saved (Save proof, Retry upload, Add photos), so the app may finish the
+     * upload by itself when the network returns. False for photos only taken, or moved here needing a new Save.
+     * Null in manifests written before this field (see [PendingUploadPolicy.awaitingUpload]).
+     */
+    val saveRequested: Boolean? = null,
 ) {
     val failedCount: Int get() = items.count { it.status != PendingEvidenceItem.Status.Pending }
 

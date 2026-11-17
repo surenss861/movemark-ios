@@ -26,6 +26,15 @@ private data class ProfileNameUpdate(
     @SerialName("full_name") val fullName: String,
 )
 
+/** One read of the renter's name. */
+sealed interface ProfileLookup {
+    data class Found(val fullName: String) : ProfileLookup
+    /** The server answered: no row, or a blank name. */
+    data object Missing : ProfileLookup
+    /** No answer (offline, timeout, server error). Says nothing about the name. */
+    data class Failed(val cause: Throwable?) : ProfileLookup
+}
+
 @Singleton
 class ProfileRepository @Inject constructor(
     private val postgrest: PostgrestClient,
@@ -42,17 +51,24 @@ class ProfileRepository @Inject constructor(
         )
     }
 
-    suspend fun fetchFullName(userId: UUID): String? = runCatching {
-        postgrest.select<ProfileRow>("profiles") {
+    /**
+     * The renter's name, keeping a failed read apart from "no name yet": only [ProfileLookup.Missing] means the
+     * server answered without one. A network or server failure is [ProfileLookup.Failed], never a missing name.
+     */
+    suspend fun lookupFullName(userId: UUID): ProfileLookup = try {
+        val rows = postgrest.select<ProfileRow>("profiles") {
             eq("id", userId.toString())
             order("id")
             limit(1)
         }
-            .firstOrNull()
-            ?.fullName
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-    }.getOrNull()
+        rows.firstOrNull()?.fullName?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let { ProfileLookup.Found(it) }
+            ?: ProfileLookup.Missing
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        ProfileLookup.Failed(e)
+    }
 
     suspend fun updateFullName(userId: UUID, fullName: String) {
         val trimmed = fullName.trim()

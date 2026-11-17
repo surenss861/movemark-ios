@@ -18,6 +18,7 @@ import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceItem
 import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceKey
 import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceSync
 import com.surensureshkumar.movemark.data.evidence.pending.PendingEvidenceSyncResult
+import com.surensureshkumar.movemark.data.evidence.pending.PendingUploadPolicy
 import com.surensureshkumar.movemark.data.models.RoomRecord
 import com.surensureshkumar.movemark.data.property.InspectionRepository
 import com.surensureshkumar.movemark.data.property.PropertyStore
@@ -212,7 +213,11 @@ class RoomProofViewModel @Inject constructor(
             _draft.value = EntryDraft(d.title, d.notes, d.conditionRating, d.tags.toSet())
             if (photos.any { it.status == PhotoUploadStatus.Failed }) {
                 _saveState.value = RoomProofSaveState.Failed(RoomProofUploadMessages.FULL_FAILURE)
-                _message.value = RoomProofUploadMessages.NOT_UPLOADED_YET
+                _message.value = if (PendingUploadPolicy.awaitingUpload(manifest)) {
+                    RoomProofUploadMessages.WAITING_FOR_NETWORK
+                } else {
+                    RoomProofUploadMessages.NOT_UPLOADED_YET
+                }
             } else {
                 _saveState.value = RoomProofSaveState.Idle
                 _message.value = null
@@ -349,11 +354,10 @@ class RoomProofViewModel @Inject constructor(
                 if (result.nothingLinked && result.pending.isNotEmpty()) {
                     // Nothing saved and no entry holds anything of it: the photos stay in the form as they were.
                     _photos.value = stillPending
-                    val failure = RoomProofUploadMessages.failure(
-                        (result.failure as? PendingEvidenceSyncResult.Failure.Unreachable)?.error ?: result.lastError,
-                    )
+                    val cause = (result.failure as? PendingEvidenceSyncResult.Failure.Unreachable)?.error ?: result.lastError
+                    val failure = RoomProofUploadMessages.failure(cause)
                     _saveState.value = RoomProofSaveState.Failed(failure)
-                    _message.value = failure
+                    _message.value = RoomProofUploadMessages.withAutoUpload(failure, cause)
                     return@launch
                 }
 
@@ -364,7 +368,8 @@ class RoomProofViewModel @Inject constructor(
                     _photos.value = stillPending
                     pendingReceipt = buildReceiptPayload(room, property.id, result.savedTotal, result.requestedTotal, issueCount, result.entryId, result.confirmedAt)
                     _saveState.value = RoomProofSaveState.PartialSuccess(result.savedTotal, stillPending.size)
-                    _message.value = RoomProofUploadMessages.partial(result.savedTotal, result.requestedTotal)
+                    _message.value = RoomProofUploadMessages.partial(result.savedTotal, result.requestedTotal) +
+                        if (RoomProofUploadMessages.retriesAutomatically(result.lastError)) " ${RoomProofUploadMessages.REST_AUTO_UPLOAD_NOTE}" else ""
                     return@launch
                 }
                 val payload = buildReceiptPayload(room, property.id, result.savedTotal, result.requestedTotal, issueCount, result.entryId, result.confirmedAt)
@@ -469,9 +474,10 @@ class RoomProofViewModel @Inject constructor(
                 "That entry was deleted, so its photos moved to a new entry here. Save to upload them."
             }
             result.pending.isNotEmpty() && result.confirmed == 0 ->
-                RoomProofUploadMessages.FULL_FAILURE
+                RoomProofUploadMessages.withAutoUpload(RoomProofUploadMessages.FULL_FAILURE, result.lastError)
             result.pending.isNotEmpty() ->
-                "${RoomProofUploadMessages.partial(result.savedTotal, result.requestedTotal)} They’re kept on this phone."
+                RoomProofUploadMessages.partial(result.savedTotal, result.requestedTotal) +
+                    if (RoomProofUploadMessages.retriesAutomatically(result.lastError)) " ${RoomProofUploadMessages.REST_AUTO_UPLOAD_NOTE}" else ""
             result.confirmed == 1 -> "1 photo added"
             result.confirmed > 1 -> "${result.confirmed} photos added"
             else -> null

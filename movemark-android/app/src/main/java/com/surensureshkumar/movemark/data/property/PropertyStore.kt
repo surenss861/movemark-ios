@@ -19,6 +19,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import com.surensureshkumar.movemark.core.startup.RentalStatus
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -53,7 +56,18 @@ class PropertyStore @Inject constructor(
     private val _maintenanceLog = MutableStateFlow<List<MaintenanceRecord>>(emptyList())
     val maintenanceLog: StateFlow<List<MaintenanceRecord>> = _maintenanceLog.asStateFlow()
 
+    private val _rentalStatus = MutableStateFlow(RentalStatus.Unknown)
+    /** The rental gate (see [RentalGate]): a failed listing is never "no rental". */
+    val rentalStatus: StateFlow<RentalStatus> = _rentalStatus.asStateFlow()
+
+    private val _listingVerified = MutableStateFlow(false)
+    /** True once this session's listing came from the server (a cached one is re-read on reconnect). */
+    val listingVerified: StateFlow<Boolean> = _listingVerified.asStateFlow()
+
+    private val fetchLock = Mutex()
+
     private fun activeKey(userId: UUID) = stringPreferencesKey("active_property_${userId}")
+    private val listingKey = stringPreferencesKey("cached_property_listing")
 
     private var vaultSummaries: Pair<Long, Map<String, VaultSummary>>? = null
 
@@ -70,28 +84,39 @@ class PropertyStore @Inject constructor(
         _errorMessage.value = null
         _hasCompletedInitialFetch.value = false
         _maintenanceLog.value = emptyList()
+        _rentalStatus.value = RentalStatus.Unknown
+        _listingVerified.value = false
         vaultSummaries = null
+        runCatching { dataStore.edit { it.remove(listingKey) } }
         hydrator.clearCache()
     }
 
     suspend fun fetchAll(userId: UUID) {
+        fetchLock.withLock { fetchAllLocked(userId) }
+    }
+
+    /** Reconnect / return: loads again only if this session's listing hasn't come from the server yet. */
+    suspend fun fetchAllIfUnverified(userId: UUID) {
+        fetchLock.withLock {
+            if (!_listingVerified.value) fetchAllLocked(userId)
+        }
+    }
+
+    private suspend fun fetchAllLocked(userId: UUID) {
         _errorMessage.value = null
         _isLoading.value = true
         try {
             val fetched = propertyRepository.fetchProperties(userId)
             _properties.value = fetched
+            _listingVerified.value = true
+            runCatching { dataStore.edit { it[listingKey] = RentalGate.encodeListing(userId.toString(), fetched) } }
             if (fetched.isEmpty()) {
                 _currentProperty.value = null
                 _activePropertyId.value = null
+                _rentalStatus.value = RentalGate.status(listedEmpty = true, hasProperty = false)
                 return
             }
-            val prefs = dataStore.data.first()
-            val saved = prefs[activeKey(userId)]?.let { runCatching { UUID.fromString(it) }.getOrNull() }
-            val targetId = saved?.takeIf { id -> fetched.any { it.id == id.toString() } }
-                ?: UUID.fromString(fetched.first().id)
-            _activePropertyId.value = targetId
-            dataStore.edit { it[activeKey(userId)] = targetId.toString() }
-            val row = fetched.first { it.id == targetId.toString() }
+            val row = selectActive(userId, fetched)
 
             // Instant local read so the UI isn't blank while the network hydrate below is in
             // flight -- see PropertySnapshotCache. No-op (returns null) if nothing's cached yet.
@@ -103,17 +128,53 @@ class PropertyStore @Inject constructor(
             } catch (e: Exception) {
                 Log.e("PropertyStore", "fetchAll hydrate failed", e)
                 _errorMessage.value = MMUserMessages.loadRentals(e)
-                // Keep showing the cached/previous property rather than blanking the screen over
-                // a failed refresh -- only a listing failure (outer catch) clears it.
+                // Keep showing the cached/previous property rather than blanking the screen over a failed refresh.
             }
+            _rentalStatus.value = RentalGate.status(listedEmpty = false, hasProperty = _currentProperty.value != null)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("PropertyStore", "fetchAll failed", e)
             _errorMessage.value = MMUserMessages.loadRentals(e)
-            _currentProperty.value = null
+            // A failed listing is not an empty one (Galaxy A14, offline launch): keep what is shown, or open on this
+            // device's copy of the last listing and snapshot. Never clear the rental here.
+            if (_currentProperty.value == null) restoreFromCache(userId)
+            _rentalStatus.value = RentalGate.status(listedEmpty = false, hasProperty = _currentProperty.value != null)
         } finally {
             _isLoading.value = false
             _hasCompletedInitialFetch.value = true
         }
+    }
+
+    private suspend fun selectActive(userId: UUID, rows: List<PropertyRow>): PropertyRow {
+        val prefs = dataStore.data.first()
+        val saved = prefs[activeKey(userId)]?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+        val targetId = saved?.takeIf { id -> rows.any { it.id == id.toString() } }
+            ?: UUID.fromString(rows.first().id)
+        _activePropertyId.value = targetId
+        dataStore.edit { it[activeKey(userId)] = targetId.toString() }
+        return rows.first { it.id == targetId.toString() }
+    }
+
+    /** Offline: the last listing saved for [userId] and the active rental's cached snapshot, if both exist. */
+    private suspend fun restoreFromCache(userId: UUID) {
+        val prefs = runCatching { dataStore.data.first() }.getOrNull() ?: return
+        val rows = RentalGate.decodeListing(userId.toString(), prefs[listingKey])?.takeIf { it.isNotEmpty() }
+        if (rows == null) {
+            // No listing saved yet (first launch of a build that keeps one): the active rental's own snapshot.
+            val activeId = prefs[activeKey(userId)]?.let { runCatching { UUID.fromString(it) }.getOrNull() } ?: return
+            val (row, cached) = hydrator.hydrateFromCache(activeId, userId) ?: return
+            _activePropertyId.value = activeId
+            _properties.value = listOf(row)
+            apply(cached)
+            return
+        }
+        runCatching {
+            val row = selectActive(userId, rows)
+            val cached = hydrator.hydrateFromCache(row) ?: return
+            _properties.value = rows
+            apply(cached)
+        }.onFailure { Log.e("PropertyStore", "offline restore failed", it) }
     }
 
     suspend fun createProperty(input: CreatePropertyInput, userId: UUID) {

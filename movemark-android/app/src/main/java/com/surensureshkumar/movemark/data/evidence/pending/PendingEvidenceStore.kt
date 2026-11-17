@@ -161,9 +161,13 @@ class PendingEvidenceStore(
      */
     suspend fun beginEntry(key: PendingEvidenceKey, newId: () -> String): String? = locked {
         val manifest = readManifest(key) ?: return@locked null
-        manifest.entryId?.let { return@locked it }
+        // A save is under way: if it can't finish, the app may finish it when the network returns.
+        manifest.entryId?.let { existing ->
+            if (manifest.saveRequested != true) writeManifest(manifest.copy(saveRequested = true))
+            return@locked existing
+        }
         val id = key.appendTo ?: newId().lowercase()
-        writeManifest(manifest.copy(entryId = id))
+        writeManifest(manifest.copy(entryId = id, saveRequested = true))
         id
     }
 
@@ -202,6 +206,8 @@ class PendingEvidenceStore(
         }
         destination = destination.copy(
             items = destination.items + moved,
+            // Their entry is gone: these wait for the renter's own Save, never an automatic upload.
+            saveRequested = false,
             cleanup = destination.cleanup + manifest.cleanup + manifest.items.mapNotNull { it.unresolved },
         )
         writeManifest(destination)

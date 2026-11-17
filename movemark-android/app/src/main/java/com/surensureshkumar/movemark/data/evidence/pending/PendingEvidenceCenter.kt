@@ -23,11 +23,26 @@ import kotlinx.coroutines.withContext
  * the save; if the process dies anyway, the photos are still on disk (marked uploading → failed on the next
  * open) and retryable.
  */
+/** Schedules the background upload of photos a save couldn't finish (WorkManager in the app; a fake in tests). */
+interface PendingUploadScheduler {
+    fun schedule(userId: String)
+    fun cancel(userId: String)
+
+    object None : PendingUploadScheduler {
+        override fun schedule(userId: String) = Unit
+        override fun cancel(userId: String) = Unit
+    }
+}
+
+/** What one background pass left. */
+data class PendingUploadReport(val attemptedRooms: Int, val confirmed: Int, val remaining: Int)
+
 class PendingEvidenceCenter(
     val store: PendingEvidenceStore,
     backend: PendingEvidenceBackend,
     private val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    private val scheduler: PendingUploadScheduler = PendingUploadScheduler.None,
 ) {
     val sync = PendingEvidenceSync(store, backend)
 
@@ -85,8 +100,35 @@ class PendingEvidenceCenter(
         onProgress: suspend (index: Int, total: Int) -> Unit = { _, _ -> },
     ): PendingEvidenceSyncResult {
         return appScope.async {
-            syncLock.withLock { withContext(io) { sync.sync(key, onProgress) } }.also { refresh(key.userId) }
+            syncLock.withLock { withContext(io) { sync.sync(key, onProgress) } }.also {
+                refresh(key.userId)
+                scheduleIfAwaiting(key.userId)
+            }
         }.await()
+    }
+
+    /**
+     * The background pass (PendingUploadWorker): sends every room of [userId] whose save couldn't finish, one at a
+     * time under the same lock as on-screen saves. Each send is idempotent (see PendingEvidenceSync), so a pass
+     * repeated after a kill or overlapping a screen's retry can't save a photo twice.
+     */
+    suspend fun sendAwaiting(userId: String): PendingUploadReport {
+        val keys = store.manifests(userId).filter(PendingUploadPolicy::awaitingUpload).map { it.key }
+        var confirmed = 0
+        for (key in keys) {
+            val result = syncLock.withLock { withContext(io) { sync.sync(key) } }
+            confirmed += result.confirmed
+        }
+        refresh(userId)
+        return PendingUploadReport(attemptedRooms = keys.size, confirmed = confirmed, remaining = awaitingCount(userId))
+    }
+
+    /** Photos of [userId] a save asked for that are still only on this phone. */
+    suspend fun awaitingCount(userId: String): Int =
+        store.manifests(userId).filter(PendingUploadPolicy::awaitingUpload).sumOf { it.items.size }
+
+    private suspend fun scheduleIfAwaiting(userId: String) {
+        if (awaitingCount(userId) > 0) scheduler.schedule(userId.lowercase())
     }
 
     suspend fun reconcile(key: PendingEvidenceKey): PendingEvidenceSync.ReconcileOutcome {
@@ -101,6 +143,8 @@ class PendingEvidenceCenter(
             if (userId == null) return@launch refresh(null)
             syncLock.withLock { withContext(io) { sync.reconcileAll(userId) } }
             refresh(userId)
+            // A save interrupted earlier (offline, or the app stopped mid-upload) finishes in the background.
+            scheduleIfAwaiting(userId)
         }
     }
 
@@ -108,6 +152,7 @@ class PendingEvidenceCenter(
 
     /** Sign-out (after its warning) and account deletion. */
     suspend fun clearUser(userId: String) = withContext(NonCancellable) {
+        scheduler.cancel(userId.lowercase())
         syncLock.withLock { store.clearUser(userId) }
         refresh(null)
     }
