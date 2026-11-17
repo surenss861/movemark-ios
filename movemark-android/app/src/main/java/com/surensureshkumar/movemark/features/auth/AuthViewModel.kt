@@ -74,13 +74,14 @@ class AuthViewModel @Inject constructor(
 
     companion object {
         const val PASSWORDS_DO_NOT_MATCH = "Passwords do not match."
+        const val RESET_LINK_SENT = "Check your email for a reset link."
     }
 
     fun resetPassword() {
         viewModelScope.launch {
             try {
                 sessionManager.resetPassword(_email.value)
-                _message.value = "Check your email for a reset link."
+                _message.value = RESET_LINK_SENT
             } catch (e: Exception) {
                 _message.value = MMUserMessages.passwordReset(e)
             }

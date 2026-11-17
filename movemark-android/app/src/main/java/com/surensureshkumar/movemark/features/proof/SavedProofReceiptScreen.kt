@@ -162,8 +162,13 @@ internal fun SavedProofReceiptContent(
                     Fact("Photos", "${state.savedCount} saved", "${receiptCount(state.savedCount, "photo")} saved", m)
                     if (state.issueCount > 0) Fact("Issues", "${state.issueCount} recorded", "${receiptCount(state.issueCount, "issue")} recorded", m)
                     // Server time once the save's entry is read back; until then it is honestly this phone's clock.
-                    val saved = if (state.savedTimeFromServer) state.savedTimeLabel else "Confirmed ${state.savedTimeLabel} on this device"
-                    Fact("Saved", saved, "Saved $saved", m)
+                    // Polished iOS: "Saved" only for the server's time; this phone's clock reads "Confirmed … on this device".
+                    if (state.savedTimeFromServer) {
+                        Fact("Saved", state.savedTimeLabel, "Saved ${state.savedTimeLabel}", m)
+                    } else {
+                        val local = "${state.savedTimeLabel} on this device"
+                        Fact("Confirmed", local, "Confirmed $local", m)
+                    }
                 }
                 if (large) {
                     Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { cells(Modifier) }
@@ -177,7 +182,7 @@ internal fun SavedProofReceiptContent(
                     Icon(Icons.Filled.Refresh, contentDescription = null, tint = SlipInk.Warning, modifier = Modifier.size(15.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        "${receiptCount(pending, "photo")} ${if (pending == 1) "needs" else "need"} a retry",
+                        "${receiptCount(pending, "photo")} only on this phone · ${if (pending == 1) "needs" else "need"} a retry",
                         style = mmFont(14.5f, FontWeight.Medium),
                         color = SlipInk.Warning,
                     )

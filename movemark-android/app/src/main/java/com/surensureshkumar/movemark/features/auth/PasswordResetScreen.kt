@@ -85,9 +85,9 @@ fun PasswordResetScreen(
                 Spacer(Modifier.height(14.dp))
                 MMTextField(value = confirm, onValueChange = { confirm = it }, label = "Confirm password", isPassword = true, onLight = true)
                 error?.let {
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(18.dp))
                     Box(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
-                        Text(it, color = MMInk.Danger, fontSize = 14.sp)
+                        com.surensureshkumar.movemark.core.design.MMNotice(it)
                     }
                 }
                 Spacer(Modifier.height(22.dp))

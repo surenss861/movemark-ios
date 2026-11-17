@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyRow
@@ -182,13 +183,17 @@ fun CameraCaptureScreen(
                 }
                 Column(Modifier.weight(1f)) {
                     Text(
-                        "$roomName proof",
+                        roomName,
                         color = Color.White,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 17.sp,
                     )
                     Text(
-                        if (capturedCount == 1) "1 photo captured" else "$capturedCount photos captured",
+                        when (capturedCount) {
+                            0 -> "No photos yet"
+                            1 -> "1 photo captured"
+                            else -> "$capturedCount photos captured"
+                        },
                         color = Color.White.copy(alpha = 0.75f),
                         fontSize = 13.sp,
                     )
@@ -263,13 +268,19 @@ fun CameraCaptureScreen(
                     )
                 }
                 if (capturedCount > 0) {
-                    TextButton(
-                        onClick = {
-                            viewModel.finishAndDeliver { delivered -> if (delivered) onDone() }
-                        },
-                        enabled = !isCapturing,
+                    // iOS: a filled lime capsule with ink text, not a text action.
+                    Box(
+                        Modifier
+                            .heightIn(min = 48.dp)
+                            .clip(CircleShape)
+                            .background(if (isCapturing) MMColors.Primary.copy(alpha = 0.5f) else MMColors.Primary)
+                            .clickable(enabled = !isCapturing, role = androidx.compose.ui.semantics.Role.Button) {
+                                viewModel.finishAndDeliver { delivered -> if (delivered) onDone() }
+                            }
+                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Text("Done", color = MMColors.Primary, fontWeight = FontWeight.Bold)
+                        Text("Done", color = com.surensureshkumar.movemark.core.design.MMInk.OnLime, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                     }
                 } else {
                     Spacer(Modifier.size(48.dp))

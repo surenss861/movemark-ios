@@ -51,7 +51,9 @@ class SubscriptionViewModel @Inject constructor(
         viewModelScope.launch {
             repository.fetchOfferings()
             if (_selectedPlan.value == null) {
-                _selectedPlan.value = repository.packages.value.firstOrNull { !it.isReportPack }
+                // iOS selects Yearly first; Monthly only when no yearly plan is offered.
+                val plans = repository.packages.value.filterNot { it.isReportPack }
+                _selectedPlan.value = plans.firstOrNull { it.isYearly } ?: plans.firstOrNull()
             }
             credits.refresh(sessionManager.userId.value)
         }

@@ -1,6 +1,7 @@
 package com.surensureshkumar.movemark.features.proof
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
@@ -27,11 +28,17 @@ class ReceiptSavedTimeTest {
     @Test fun aServerTimeIsShownAsIs() {
         show(fromServer = true)
         compose.onNodeWithText("Nov 14, 5:13 AM").assertExists()
-        compose.onNodeWithText("Confirmed Nov 14, 5:13 AM on this device").assertDoesNotExist()
+        compose.onNodeWithText("SAVED").assertExists()
+        compose.onNodeWithText("CONFIRMED").assertDoesNotExist()
+        compose.onNodeWithText("Nov 14, 5:13 AM on this device").assertDoesNotExist()
     }
 
     @Test fun aDeviceTimeIsLabelledOnThisDevice() {
         show(fromServer = false)
-        compose.onNodeWithText("Confirmed Nov 14, 5:13 AM on this device").assertExists()
+        // Never labelled "Saved": the server hasn't confirmed this time.
+        compose.onNodeWithText("CONFIRMED").assertExists()
+        compose.onNodeWithText("Nov 14, 5:13 AM on this device").assertExists()
+        compose.onNodeWithText("SAVED").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Confirmed Nov 14, 5:13 AM on this device").assertExists()
     }
 }

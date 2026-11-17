@@ -102,6 +102,13 @@ fun MoveOutRoomsScreen(
         photos.firstOrNull()?.let { viewer = photos to it }
     }
 
+    // iOS draws move-out progress in the dark header (headerAccessory), lime on the track.
+    val progressFor = overview?.takeIf { it.rooms.isNotEmpty() && it.hasBaseline }
+    val headerProgress: (@Composable ColumnScope.() -> Unit)? = if (progressFor != null) {
+        { MoveOutHeaderProgress(done = progressFor.roomsWithMoveOutPhotos, total = progressFor.rooms.size) }
+    } else {
+        null
+    }
     Box(Modifier.fillMaxSize()) {
         // 1.4 grammar (iOS MoveOutFoundationView in MMScreen): rental and purpose in the header, the comparison on the sheet.
         MMScreen(
@@ -109,6 +116,7 @@ fun MoveOutRoomsScreen(
             eyebrow = "Move-out",
             lines = listOf("Compare what changed since move-in."),
             onBack = onBack,
+            headerAccessory = headerProgress,
         ) {
                 val o = overview
                 when {
@@ -168,10 +176,6 @@ internal fun ColumnScope.MoveOutContent(
     val scope = rememberCoroutineScope()
     val jumpTargets = remember { List(3) { BringIntoViewRequester() } }
 
-    if (o.rooms.isNotEmpty() && o.hasBaseline) {
-        Spacer(Modifier.height(18.dp))
-        MoveOutHeaderProgress(done = o.roomsWithMoveOutPhotos, total = o.rooms.size)
-    }
     Spacer(Modifier.height(22.dp))
 
     o.justComparedLine(justCompared)?.let { MoveOutNotice(it, success = true); Spacer(Modifier.height(18.dp)) }
@@ -334,10 +338,10 @@ internal fun ChecklistItemRow(title: String, done: Boolean, onToggle: () -> Unit
         Box(
             Modifier
                 .size(22.dp)
-                .then(if (done) Modifier.background(MMInk.Text, CircleShape) else Modifier.border(1.25.dp, MMInk.Secondary.copy(alpha = 0.5f), CircleShape)),
+                .then(if (done) Modifier.background(MMInk.LimeMark, CircleShape) else Modifier.border(1.25.dp, MMInk.Secondary.copy(alpha = 0.5f), CircleShape)),
             contentAlignment = Alignment.Center,
         ) {
-            if (done) Icon(Icons.Filled.Check, contentDescription = null, tint = MMInk.Sheet, modifier = Modifier.size(13.dp))
+            if (done) Icon(Icons.Filled.Check, contentDescription = null, tint = MMInk.OnLime, modifier = Modifier.size(13.dp))
         }
         Spacer(Modifier.width(12.dp))
         Text(title, fontSize = 16.sp, color = MMInk.Text)

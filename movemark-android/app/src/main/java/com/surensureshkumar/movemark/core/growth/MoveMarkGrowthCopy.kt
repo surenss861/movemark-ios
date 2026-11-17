@@ -34,12 +34,13 @@ object MoveMarkGrowthCopy {
         ),
     )
 
-    const val FIRST_RUN_SETUP_TITLE = "Protect this rental."
-    const val FIRST_RUN_SETUP_SUBTITLE =
-        "Add your apartment, then document each room before you unpack."
+    // iOS 1.4 MoveMarkGrowthCopy (firstRunSetup*, firstRunRoom*), word for word.
+    const val FIRST_RUN_SETUP_TITLE = "Where are you documenting?"
+    const val FIRST_RUN_SETUP_SUBTITLE = "This address appears on your proof record and reports."
+    const val FIRST_RUN_SETUP_CTA = "Create rental record"
 
-    const val FIRST_RUN_ROOM_TITLE = "Start with one room."
-    const val FIRST_RUN_ROOM_SUBTITLE = "Kitchen works well — save what was already there."
+    const val FIRST_RUN_ROOM_TITLE = "Start with the first room"
+    const val FIRST_RUN_ROOM_SUBTITLE = "Photograph each room before boxes and furniture cover anything."
 
     // Pro is sold by its outcome; the benefits list underneath is evidence for it.
     const val PRO_OUTCOME_LINE = "Keep a complete rental record from move-in to move-out."

@@ -57,8 +57,8 @@ fun OnboardingNameScreen(
             onLight = true,
         )
         errorMessage?.let { msg ->
-            Spacer(Modifier.height(8.dp))
-            Text(text = msg, color = MMInk.Danger, fontSize = 13.sp)
+            Spacer(Modifier.height(18.dp))
+            com.surensureshkumar.movemark.core.design.MMNotice(msg)
         }
         Spacer(Modifier.height(20.dp))
         MMPrimaryButton(

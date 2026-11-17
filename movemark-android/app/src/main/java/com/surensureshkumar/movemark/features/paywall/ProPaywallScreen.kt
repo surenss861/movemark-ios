@@ -349,7 +349,7 @@ internal fun ProPaywallContent(
                             Text(error, style = mmFont(14f), color = Color(0xFFFF8A80), textAlign = TextAlign.Center)
                         }
                         selected?.let { plan ->
-                            Text(plan.price, style = mmFont(17f, FontWeight.SemiBold), color = Color.White, textAlign = TextAlign.Center)
+                            Text(planPriceWithPeriod(plan), style = mmFont(17f, FontWeight.SemiBold), color = Color.White, textAlign = TextAlign.Center)
                         }
                         MMPrimaryButton(
                             title = when {
@@ -453,8 +453,15 @@ private fun PlanRow(plan: PlanPackageUi, selected: Boolean, enabled: Boolean, on
             Text(plan.periodLabel, style = mmFont(13f), color = HeroSecondary)
         }
         Spacer(Modifier.width(8.dp))
-        Text(plan.price, style = mmFont(16f, FontWeight.SemiBold), color = Color.White)
+        Text(planPriceWithPeriod(plan), style = mmFont(16f, FontWeight.SemiBold), color = Color.White)
     }
+}
+
+/** iOS "$49.99 / year": a subscription price always says what period it buys; a one-time pack shows the price alone. */
+internal fun planPriceWithPeriod(plan: com.surensureshkumar.movemark.data.subscription.PlanPackageUi): String = when {
+    plan.isReportPack -> plan.price
+    plan.isYearly -> "${plan.price} / year"
+    else -> "${plan.price} / month"
 }
 
 @Composable

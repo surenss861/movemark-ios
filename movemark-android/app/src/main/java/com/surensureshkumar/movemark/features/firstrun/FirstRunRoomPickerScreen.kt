@@ -43,7 +43,7 @@ import java.util.UUID
 private enum class FirstRunRoomOption(val label: String, val defaultRoomName: String?) {
     Kitchen("Kitchen", "Kitchen"),
     LivingRoom("Living room", "Living Room"),
-    Bedroom("Bedroom", "Primary Bedroom"),
+    Bedroom("Primary bedroom", "Primary Bedroom"),
     Bathroom("Bathroom", "Bathroom"),
     Hallway("Hallway", "Hallway"),
 }
@@ -82,12 +82,12 @@ fun FirstRunRoomPickerScreen(
             }
         }
         error?.let {
-            Spacer(Modifier.height(8.dp))
-            Text(it, color = MMInk.Danger, fontSize = 14.sp)
+            Spacer(Modifier.height(22.dp))
+            com.surensureshkumar.movemark.core.design.MMNotice(it)
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(26.dp))
         MMPrimaryButton(
-            title = if (loading) "Opening room…" else "Start room proof",
+            title = "Start room proof",
             onClick = {
                 val p = property ?: return@MMPrimaryButton
                 val roomName = selected.defaultRoomName ?: selected.label

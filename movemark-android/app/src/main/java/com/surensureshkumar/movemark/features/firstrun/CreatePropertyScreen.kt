@@ -62,13 +62,13 @@ fun CreatePropertyScreen(
     ) {
         Column(Modifier.mmAppearRise(appeared, reduceMotion, label = "createForm")) {
             MMTextField(title, viewModel::setTitle, "Rental name", onLight = true)
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
             MMTextField(address, viewModel::setAddress, "Street address", onLight = true)
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
             MMTextField(city, viewModel::setCity, "City", onLight = true)
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
             MMTextField(region, viewModel::setRegion, "Province / State", onLight = true)
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(22.dp))
             MMGroup {
                 MMDateField("Move-in date", moveIn, viewModel::setMoveIn, onLight = true)
                 if (askLease) {
@@ -78,22 +78,17 @@ fun CreatePropertyScreen(
                     MMDateField("Lease end", leaseEnd, viewModel::setLeaseEnd, onLight = true)
                 }
             }
-            Text(
-                "Your move-in date anchors the record: proof captured around it shows the condition you moved into.",
-                style = mmFont(13f),
-                color = MMInk.Secondary,
-                modifier = Modifier.padding(start = 4.dp, top = 8.dp),
-            )
             error?.let {
-                Spacer(Modifier.height(12.dp))
-                Text(it, color = MMInk.Danger, fontSize = 14.sp)
+                Spacer(Modifier.height(22.dp))
+                com.surensureshkumar.movemark.core.design.MMNotice(it)
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(26.dp))
+            // iOS keeps the title and shows the spinner; the CTA waits for a street address.
             MMPrimaryButton(
-                title = if (loading) "Creating rental…" else "Create rental",
+                title = com.surensureshkumar.movemark.core.growth.MoveMarkGrowthCopy.FIRST_RUN_SETUP_CTA,
                 onClick = { viewModel.create(askLease, onCreated) },
                 isLoading = loading,
-                enabled = !loading,
+                enabled = !loading && address.isNotBlank(),
             )
         }
     }

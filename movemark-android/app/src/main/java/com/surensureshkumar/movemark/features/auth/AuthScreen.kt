@@ -93,7 +93,16 @@ fun AuthScreen(
             }
         }
         message?.let {
-            Text(it, color = MMInk.Danger, style = mmFont(13.5f), modifier = Modifier.padding(top = 10.dp))
+            // iOS MMNotice: a sent reset link is information, not an error.
+            com.surensureshkumar.movemark.core.design.MMNotice(
+                it,
+                modifier = Modifier.padding(top = 18.dp),
+                tone = if (it == AuthViewModel.RESET_LINK_SENT) {
+                    com.surensureshkumar.movemark.core.design.MMNoticeTone.Info
+                } else {
+                    com.surensureshkumar.movemark.core.design.MMNoticeTone.Error
+                },
+            )
         }
         Spacer(Modifier.height(if (isSignUp) 22.dp else 12.dp))
         MMPrimaryButton(

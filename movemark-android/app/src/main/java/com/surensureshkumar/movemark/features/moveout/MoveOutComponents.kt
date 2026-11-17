@@ -417,24 +417,24 @@ fun MoveOutHeaderProgress(done: Int, total: Int) {
         verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         Row {
-            Text("Move-out proof", fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = MMInk.Text, modifier = Modifier.weight(1f))
-            Text("${(fraction * 100).toInt()}%", fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = MMInk.Secondary)
+            Text("Move-out proof", fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = Color.White, modifier = Modifier.weight(1f))
+            Text("${(fraction * 100).toInt()}%", fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = MMInk.HeroSecondary)
         }
         Box(
             Modifier
                 .fillMaxWidth()
                 .height(4.dp)
-                .background(Color.White.copy(alpha = 0.16f), CircleShape),
+                .background(MMInk.Track, CircleShape),
         ) {
             if (done > 0) {
                 Box(
                     Modifier
                         .fillMaxWidth(fraction.coerceAtLeast(0.02f))
                         .height(4.dp)
-                        .background(MMInk.Text, CircleShape),
+                        .background(MMInk.LimeMark, CircleShape),
                 )
             }
         }
-        Text("$done of $total rooms captured", fontSize = 12.5.sp, color = MMInk.Secondary)
+        Text("$done of $total rooms captured", fontSize = 12.5.sp, color = MMInk.HeroSecondary)
     }
 }
