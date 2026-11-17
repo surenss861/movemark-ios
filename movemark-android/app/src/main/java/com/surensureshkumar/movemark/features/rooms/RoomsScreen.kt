@@ -99,6 +99,7 @@ fun RoomsScreen(
                         value = newRoomName,
                         onValueChange = { newRoomName = it },
                         label = { Text("Room name") },
+                        placeholder = { Text("e.g. Primary Bedroom", color = MMInk.Secondary) },
                         singleLine = true,
                     )
                     addRoomError?.let { msg ->

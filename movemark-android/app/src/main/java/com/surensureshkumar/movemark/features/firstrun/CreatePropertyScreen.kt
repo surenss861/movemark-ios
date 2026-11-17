@@ -70,15 +70,15 @@ fun CreatePropertyScreen(
         Column(Modifier.mmAppearRise(appeared, reduceMotion, label = "createForm")) {
             if (askLease) {
                 // Add rental (iOS NewPropertyView) keeps its nickname field.
-                MMTextField(title, viewModel::setTitle, "Rental name", onLight = true)
+                MMTextField(title, viewModel::setTitle, "Rental name", onLight = true, placeholder = "Leave blank to use the street address")
                 Spacer(Modifier.height(14.dp))
-                MMTextField(address, viewModel::setAddress, "Street address", onLight = true)
+                MMTextField(address, viewModel::setAddress, "Street address", onLight = true, placeholder = "88 Harbour St")
                 Spacer(Modifier.height(14.dp))
-                MMTextField(unit, viewModel::setUnit, "Unit", onLight = true)
+                MMTextField(unit, viewModel::setUnit, "Unit", onLight = true, placeholder = "Optional")
                 Spacer(Modifier.height(14.dp))
-                MMTextField(city, viewModel::setCity, "City", onLight = true)
+                MMTextField(city, viewModel::setCity, "City", onLight = true, placeholder = "Toronto")
                 Spacer(Modifier.height(14.dp))
-                MMTextField(region, viewModel::setRegion, "Province / State", onLight = true)
+                MMTextField(region, viewModel::setRegion, "Province / State", onLight = true, placeholder = "ON")
             } else {
                 // iOS FirstRunPropertySetupView: street, unit, then city and province on one row (as on an envelope)
                 // until large text needs the width. No rental name: the title comes from the address.

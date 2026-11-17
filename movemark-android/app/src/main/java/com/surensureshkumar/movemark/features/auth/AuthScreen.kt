@@ -204,6 +204,7 @@ private fun ColumnScope.AuthForm(
             modifier = Modifier.testTag("auth.email"),
             keyboardType = KeyboardType.Email,
             onLight = true,
+            placeholder = "you@example.com",
         )
         if (mode != AuthMode.ResetPassword) {
             MMTextField(
@@ -213,6 +214,7 @@ private fun ColumnScope.AuthForm(
                 modifier = Modifier.testTag("auth.password"),
                 isPassword = true,
                 onLight = true,
+                placeholder = if (mode == AuthMode.SignIn) "Your password" else "At least 8 characters",
             )
         }
         if (mode == AuthMode.SignUp) {
@@ -223,6 +225,7 @@ private fun ColumnScope.AuthForm(
                 modifier = Modifier.testTag("auth.confirmPassword"),
                 isPassword = true,
                 onLight = true,
+                placeholder = "Same as above",
             )
         }
     }

@@ -147,6 +147,7 @@ internal fun PasswordResetContent(
                     modifier = Modifier.testTag("passwordReset.password"),
                     isPassword = true,
                     onLight = true,
+                    placeholder = "At least 8 characters",
                 )
                 Spacer(Modifier.height(14.dp))
                 MMTextField(
@@ -156,6 +157,7 @@ internal fun PasswordResetContent(
                     modifier = Modifier.testTag("passwordReset.confirm"),
                     isPassword = true,
                     onLight = true,
+                    placeholder = "Same as above",
                 )
                 error?.let {
                     Spacer(Modifier.height(18.dp))

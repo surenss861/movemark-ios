@@ -36,6 +36,7 @@ fun EditNameDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = "Full name",
+                    placeholder = "Full name",
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(

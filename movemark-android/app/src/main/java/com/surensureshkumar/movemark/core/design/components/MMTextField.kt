@@ -27,12 +27,17 @@ fun MMTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     /** On the 1.4 light sheet (MMScreen): ink text on the field fill, as the iOS forms. */
     onLight: Boolean = false,
+    /** iOS `MMField(placeholder:)`: shown inside the field, in the secondary colour, while it is empty. */
+    placeholder: String? = null,
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         // The app typography carries a light text colour; on the light sheet the label must be ink-secondary.
         label = { Text(label, color = if (onLight) MMInk.Secondary else Color.Unspecified) },
+        placeholder = placeholder?.let {
+            { Text(it, color = if (onLight) MMInk.Secondary else MMColors.TextSecondary) }
+        },
         textStyle = if (onLight) LocalTextStyle.current.copy(color = MMInk.Text) else LocalTextStyle.current,
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
