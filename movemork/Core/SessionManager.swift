@@ -193,6 +193,10 @@ final class SessionManager {
         if SocialSignInConfig.mode == .live { print("[social-qa] signed in user=\(user.id.uuidString.lowercased())") }
         #endif
 
+        // Where the renter lands comes from definitive answers only (``LaunchGate``): a failed read is unknown,
+        // and unknown never sends anyone into onboarding. Onboarding *writes* (it overwrites full_name), so
+        // guessing wrong there damages an existing account, while opening the app self-corrects on a retry.
+        var profile = LaunchGate.Profile.unknown
         do {
             try await ensureProfileExists(user)
 
@@ -206,20 +210,42 @@ final class SessionManager {
                 .execute()
                 .value
 
-            if let profile = profiles.first {
-                firstName = profile.fullName ?? ""
-                await enter(profile.onboardingCompletedAt != nil ? .signedIn : .needsOnboarding)
+            if let row = profiles.first {
+                firstName = row.fullName ?? ""
+                profile = row.onboardingCompletedAt != nil ? .onboarded : .notOnboarded
             } else {
-                // Definitively no profile row — a genuinely new account.
                 firstName = ""
-                await enter(.needsOnboarding)
+                profile = .missing
             }
         } catch {
-            // Indeterminate: the profile could not be read. Stay signed in and let the property layer
-            // offer a retry. Preferring `.signedIn` over `.needsOnboarding` is deliberate — onboarding
-            // *writes* (it overwrites full_name), so guessing wrong there damages an existing account,
-            // while guessing wrong here self-corrects on the next launch.
-            await enter(.signedIn)
+            profile = .unknown
+        }
+
+        // "Not onboarded" is believed only with a definitive "no rental": a renter whose onboarding write was
+        // lost (offline on the first receipt) still has their rental and must not see first run again.
+        let rentals: LaunchGate.Rentals = (profile == .notOnboarded || profile == .missing)
+            ? await rentalsAnswer(userId: user.id)
+            : .unknown
+        if LaunchGate.shouldBackfillOnboarding(profile: profile, rentals: rentals) {
+            Task { try? await recordOnboardingCompleted() }
+        }
+        await enter(LaunchGate.sessionPhase(profile: profile, rentals: rentals))
+    }
+
+    /// Whether the account has any rental: a definitive yes/no, or unknown when the read failed.
+    private func rentalsAnswer(userId: UUID) async -> LaunchGate.Rentals {
+        struct Row: Decodable { let id: UUID }
+        do {
+            let rows: [Row] = try await dataAPI
+                .from("properties")
+                .select("id")
+                .eq("user_id", value: userId)
+                .limit(1)
+                .execute()
+                .value
+            return rows.isEmpty ? .none : .some
+        } catch {
+            return .unknown
         }
     }
 
