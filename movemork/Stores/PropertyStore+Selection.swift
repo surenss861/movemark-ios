@@ -34,16 +34,17 @@ extension PropertyStore {
     }
 
     /// Most recent evidence image URL for a property (inspection or maintenance). Use for vault card hero.
-    func previewImageURL(for propertyId: UUID) async -> URL? {
-        await previewImage(for: propertyId)?.url
+    /// `original`: sign the full photo instead of the ~320 px thumbnail (for a screen-wide image, e.g. the receipt).
+    func previewImageURL(for propertyId: UUID, original: Bool = false) async -> URL? {
+        await previewImage(for: propertyId, original: original)?.url
     }
 
     /// Same as ``previewImageURL(for:)`` but also returns the stable storage path, so callers can key
     /// ``MMCachedAsyncImage`` by path instead of by the (re-mintable) signed URL. Signed by the evidence row id.
-    func previewImage(for propertyId: UUID) async -> (path: String, url: URL)? {
+    func previewImage(for propertyId: UUID, original: Bool = false) async -> (path: String, url: URL)? {
         guard let latest = await vaultSummary(for: propertyId)?.latestEvidence else { return nil }
         let bucket = latest.maintenanceIssueId != nil ? "maintenance-media" : "inspection-media"
-        let thumbPath = latest.thumbnailPath ?? latest.filePath
+        let thumbPath = original ? latest.filePath : (latest.thumbnailPath ?? latest.filePath)
         MoveMarkStoredFileURLs.remember(rowId: latest.id, filePath: latest.filePath, thumbnailPath: latest.thumbnailPath)
         guard let url = try? await inspectionRepo.signedURL(bucket: bucket, path: thumbPath) else { return nil }
         return (thumbPath, url)

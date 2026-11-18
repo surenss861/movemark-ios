@@ -11,4 +11,6 @@ struct FirstRunSavedSummary: Equatable, Hashable {
     let photoCount: Int
     let issueCount: Int
     let savedAt: Date
+    /// See ``ProofSavedReceiptModel/savedAtFromServer``.
+    let savedAtFromServer: Bool
 }

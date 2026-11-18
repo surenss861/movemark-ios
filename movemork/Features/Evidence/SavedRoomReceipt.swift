@@ -25,10 +25,24 @@ struct SavedRoomReceipt: Identifiable {
     let pendingCount: Int
     let issueCount: Int
     let savedAt: Date
+    /// See ``ProofSavedReceiptModel/savedAtFromServer``.
+    let savedAtFromServer: Bool
     let next: Next
-    /// Storage path (thumbnail when there is one) of a photo this save confirmed — the receipt's image.
+    /// Storage path of the original of a photo this save confirmed — the receipt's image (shown screen-wide, so
+    /// never the ~320 px thumbnail).
     /// Never another room's or a maintenance photo: with no path, the receipt shows no image.
     var photoPath: String? = nil
+
+    /// The receipt's server time: the latest `created_at` among photos the server confirmed in this save. Nil
+    /// when none carries one (nothing confirmed, or only an earlier attempt's photos found), and the receipt
+    /// then labels its time as this device's. Photos still queued on this iPhone are never in `confirmed`.
+    static func serverSavedAt(of confirmed: [EvidencePhoto]) -> Date? {
+        confirmed
+            .compactMap { MMCaseDate.parse($0.serverCreatedAt) }
+            .filter(\.hasTime)
+            .map(\.date)
+            .max()
+    }
 
     var primaryActionLabel: String {
         switch next {
@@ -43,7 +57,8 @@ struct SavedRoomReceipt: Identifiable {
     func model(imageURL: URL?) -> ProofSavedReceiptModel {
         ProofSavedReceiptModel(
             roomName: roomName, phaseLabel: phaseLabel, photoCount: photoCount, pendingCount: pendingCount,
-            issueCount: issueCount, savedAt: savedAt, imageURL: imageURL, primaryActionLabel: primaryActionLabel
+            issueCount: issueCount, savedAt: savedAt, savedAtFromServer: savedAtFromServer, imageURL: imageURL,
+            primaryActionLabel: primaryActionLabel
         )
     }
 }

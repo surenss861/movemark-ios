@@ -84,7 +84,8 @@ struct FirstRunProofFlowView: View {
                                 roomName: summary.roomName,
                                 photoCount: summary.photoCount,
                                 issueCount: summary.issueCount,
-                                savedAt: summary.savedAt
+                                savedAt: summary.savedAt,
+                                savedAtFromServer: summary.savedAtFromServer
                             )
                             step = .saved(saved)
                         },

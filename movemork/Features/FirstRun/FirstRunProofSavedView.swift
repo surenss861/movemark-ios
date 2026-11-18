@@ -42,6 +42,7 @@ struct FirstRunProofSavedView: View {
                 photoCount: summary.photoCount,
                 issueCount: summary.issueCount,
                 savedAt: summary.savedAt,
+                savedAtFromServer: summary.savedAtFromServer,
                 imageURL: previewURL,
                 primaryActionLabel: "Continue to next room",
                 secondaryActionLabel: "View proof vault"
@@ -60,7 +61,8 @@ struct FirstRunProofSavedView: View {
             }
         }
         .task {
-            previewURL = await propertyStore.previewImageURL(for: summary.propertyId)
+            // The original: the receipt shows it screen-wide, where the thumbnail was soft.
+            previewURL = await propertyStore.previewImageURL(for: summary.propertyId, original: true)
         }
     }
 }
