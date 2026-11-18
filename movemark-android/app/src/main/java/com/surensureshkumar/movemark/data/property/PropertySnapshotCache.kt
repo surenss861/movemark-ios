@@ -8,7 +8,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Local (Room-backed) cache of the raw `get_property_snapshot` RPC response, keyed by property id.
+ * Local (Room-backed) cache of the raw `get_property_snapshot_v2` RPC response, keyed by property id.
  * Lets [PropertyHydrator] serve an instant, no-network read on property switch/launch while the
  * fresh network fetch runs in the background. Read/write failures are swallowed (logged only) --
  * this is a best-effort local cache, not a source of truth, so it should never be the reason

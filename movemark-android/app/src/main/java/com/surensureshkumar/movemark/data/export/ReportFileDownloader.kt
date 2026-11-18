@@ -37,17 +37,25 @@ object ReportFileDownloader {
         else -> "Report"
     }
 
+    /**
+     * Downloads the PDF into app-private cache; screens share that file through FileProvider. The short-lived
+     * signed URL itself never leaves the app.
+     */
     suspend fun download(context: Context, signedUrl: String, exportType: String, exportId: String): File =
+        downloadTo(context, signedUrl, "movemark_reports", fileNameFor(exportType, exportId))
+
+    /** Fetches a presigned URL (no auth header: it carries its own signature) into `cacheDir/[folder]/[fileName]`. */
+    suspend fun downloadTo(context: Context, signedUrl: String, folder: String, fileName: String): File =
         withContext(Dispatchers.IO) {
             val request = Request.Builder().url(signedUrl).get().build()
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    throw IOException("Couldn't download report.")
+                    throw IOException("Couldn't download file.")
                 }
                 val bytes = response.body?.bytes()
-                    ?: throw IOException("Report file was empty.")
-                val directory = File(context.cacheDir, "movemark_reports").apply { mkdirs() }
-                val file = File(directory, fileNameFor(exportType, exportId))
+                    ?: throw IOException("Downloaded file was empty.")
+                val directory = File(context.cacheDir, folder).apply { mkdirs() }
+                val file = File(directory, fileName.substringAfterLast('/').ifBlank { "file" })
                 file.writeBytes(bytes)
                 file
             }

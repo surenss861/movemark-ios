@@ -104,9 +104,10 @@ fun RoomsScreen(
             .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
             .padding(top = 24.dp, bottom = MMSpacing.TabScrollBottom.dp),
     ) {
+        val propertyTitle = property?.title?.trim().orEmpty()
         MMProofSectionHeader(
-            title = "Room proof",
-            subtitle = "Mark old damage before move-in.",
+            title = propertyTitle.ifEmpty { "Proof Sprint" },
+            subtitle = if (propertyTitle.isEmpty()) "Photograph each room before you settle in." else "Proof Sprint",
             modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "roomsHeader"),
         )
         Spacer(Modifier.height(16.dp))
@@ -145,6 +146,8 @@ fun RoomsScreen(
                         (next ?: p.rooms.firstOrNull())?.let { onOpenRoom(it.id) }
                     },
                     reduceMotion = reduceMotion,
+                    documentedCount = documented,
+                    totalCount = total,
                     modifier = Modifier.mmAppearRise(hasAnimatedIn, reduceMotion, label = "roomsProgress"),
                 )
 

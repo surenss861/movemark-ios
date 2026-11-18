@@ -17,7 +17,9 @@ enum MoveMarkGrowthCopy {
     /// `welcomeHeadline` stays the spoken form for VoiceOver.
     static let welcomeHeadlineLead = "Prove what was"
     static let welcomeHeadlineTail = "already there."
-    static let welcomeBody = "Document move-in condition before you unpack. Turn photos into a shareable report when you need proof."
+    static let welcomeBody = "Photograph your rental before you unpack. Keep every photo, date and record together."
+    static let welcomeSecondaryCTA = "I already have a vault"
+    static let welcomeTrustLine = "Private evidence"
     static let welcomePainLine = "Don’t get blamed for damage you didn’t cause."
     static let welcomeCTA = "Start move-in proof"
 
@@ -46,25 +48,28 @@ enum MoveMarkGrowthCopy {
         ),
     ]
 
-    static let firstRunMomentTitle = "What are you documenting today?"
-    static let firstRunMomentSubtitle = "MoveMark will guide you based on what’s happening with your rental."
-    static let firstRunMomentFootnote = "Takes about 5 minutes for your first room."
+    static let firstRunMomentTitle = "What are you documenting?"
+    static let firstRunMomentSubtitle = "We’ll start you in the right proof flow."
 
-    static let firstRunSetupTitle = "Protect this rental."
-    static let firstRunSetupSubtitle = "Add your apartment, then document each room before you unpack."
+    static let firstRunSetupTitle = "Where are you documenting?"
+    static let firstRunSetupSubtitle = "This address appears on your proof record and reports."
+    static let firstRunSetupCTA = "Create rental record"
 
-    static let firstRunRoomTitle = "Start with one room."
-    static let firstRunRoomSubtitle = "Kitchen works well — save what was already there."
+    static let firstRunRoomTitle = "Start with the first room"
+    static let firstRunRoomSubtitle = "Photograph each room before boxes and furniture cover anything."
 
-    static let paywallValueLine =
-        "Turn rental photos, notes, and receipts into shareable proof — before deposits get questioned."
+    /// Pro is sold by its outcome; the benefits list underneath is evidence for it.
+    static let proOutcomeLine = "Keep a complete rental record from move-in to move-out."
+    static let paywallValueLine = proOutcomeLine
+    static let paywallSupportLine = "MoveMark Pro keeps your proof organized across the full rental lifecycle."
+    static let proActiveSummary = "Complete rental record, move-in to move-out."
 
-    static let paywallBenefits: [(title: String, subtitle: String)] = [
-        ("Unlimited proof vaults", "Protect more than one rental over time."),
-        ("Move-in & move-out reports", "PDF proof when your deposit is questioned."),
-        ("Move-out room re-capture", "Before-and-after record when you return keys."),
-        ("Dispute-ready packet", "Organize photos and docs for a stronger case."),
-    ]
+    static let moveInRecordReady = "Your move-in record is ready."
+    static let moveInRecordReadyDetail = "A dated record of the condition you documented at move-in."
+    static let moveOutRecordReady = "Your move-out record is ready."
+    static let moveOutRecordReadyDetail = "A dated record of the condition you documented before returning the keys."
+    static let disputePacketReady = "Your evidence packet is ready."
+    static let disputePacketReadyDetail = "Your saved rental evidence organized into one shareable record."
 
     static let reportPackBenefits: [(title: String, subtitle: String)] = [
         ("One polished move-in report", "Export a timestamped PDF when you need it."),

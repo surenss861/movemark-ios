@@ -32,6 +32,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.IconButton
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -44,6 +47,8 @@ fun RoomProofPhotoGrid(
     photos: List<PendingPhoto>,
     modifier: Modifier = Modifier,
     reduceMotion: Boolean = false,
+    /** Removes an unsaved photo; null while a save is running. */
+    onRemove: ((String) -> Unit)? = null,
 ) {
     if (photos.isEmpty()) {
         RoomProofPhotoEmptyState(modifier = modifier)
@@ -67,6 +72,8 @@ fun RoomProofPhotoGrid(
                     )
                     RoomProofPhotoCell(
                         photo = photo,
+                        index = photos.indexOf(photo) + 1,
+                        onRemove = onRemove,
                         modifier = Modifier
                             .weight(1f)
                             .aspectRatio(1f)
@@ -84,6 +91,8 @@ fun RoomProofPhotoGrid(
 @Composable
 private fun RoomProofPhotoCell(
     photo: PendingPhoto,
+    index: Int,
+    onRemove: ((String) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val bitmap = remember(photo.id, photo.bytes) {
@@ -104,7 +113,7 @@ private fun RoomProofPhotoCell(
         bitmap?.let {
             Image(
                 bitmap = it.asImageBitmap(),
-                contentDescription = null,
+                contentDescription = "Photo $index, not uploaded yet",
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
@@ -147,6 +156,24 @@ private fun RoomProofPhotoCell(
                 )
             }
             PhotoUploadStatus.Pending -> Unit
+        }
+        if (onRemove != null && (photo.status == PhotoUploadStatus.Pending || photo.status == PhotoUploadStatus.Failed)) {
+            IconButton(
+                onClick = { onRemove(photo.id) },
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .size(48.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Remove photo $index",
+                    tint = MMColors.TextPrimary,
+                    modifier = Modifier
+                        .size(22.dp)
+                        .background(MMColors.EvidenceCard.copy(alpha = 0.7f), CircleShape)
+                        .padding(3.dp),
+                )
+            }
         }
     }
 }

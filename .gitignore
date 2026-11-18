@@ -3,6 +3,7 @@
 
 # Credentials — never commit these
 Config/Secrets.xcconfig
+Config/NavLab.local.xcconfig
 .sentryclirc
 movemark-api/.env
 movemark-api/.env.local
@@ -18,3 +19,4 @@ build.log
 movemark-api/node_modules/
 movemark-api/dist/
 movemark-api/tmp/
+__pycache__/
