@@ -118,7 +118,7 @@ enum PDFGenerator {
                     trailingSpacing: 8
                 )
                 Self.pdfDrawWrappedLine(
-                    "Evidence entries: \(room.evidence.count)",
+                    "Evidence entries: \(room.moveInEntryTotal)",
                     x: margin,
                     y: &y,
                     width: contentWidth,

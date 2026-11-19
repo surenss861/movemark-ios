@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and lower Auto Backup. See data_extraction_rules.xml for why these are excluded. -->
+<full-backup-content>
+    <exclude domain="file" path="PendingEvidence/" />
+    <exclude domain="sharedpref" path="." />
+</full-backup-content>

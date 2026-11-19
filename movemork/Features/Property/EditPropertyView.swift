@@ -2,7 +2,7 @@
 //  EditPropertyView.swift
 //  movemork
 //
-//  MoveMark — Edit active property. Sheet from Vault; save to DB and refresh.
+//  MoveMark — Edit rental: a plain utility form (same fields as setup), Save. Sheet from the rental record.
 //
 
 import SwiftUI
@@ -32,39 +32,101 @@ struct EditPropertyView: View {
 
     @State private var errorMessage = ""
     @State private var isLoading = false
+    @State private var confirmDiscard = false
+    /// Closes the sheet (the presenter's binding); `nil` uses the environment's dismiss.
+    private let onClose: (() -> Void)?
 
-    init(property: PropertyRecord) {
+    /// The rental had lease dates when the sheet opened (an epoch end means none was entered).
+    private let hadLease: Bool
+    /// The form as it opened, to tell whether anything was edited.
+    private let initialFieldValues: [String]
+    private let initialDateValues: [Date]
+
+    init(property: PropertyRecord, onClose: (() -> Void)? = nil) {
         self.property = property
-        _name = State(initialValue: property.title.isEmpty ? property.addressLine1 : property.title)
-        _addressLine1 = State(initialValue: property.addressLine1)
-        _unit = State(initialValue: property.addressLine2)
-        _city = State(initialValue: property.city)
-        _region = State(initialValue: property.provinceState)
-        _postalCode = State(initialValue: property.postalCode)
+        self.onClose = onClose
+        // A title that is just the street address stays blank here, so it keeps following the address if the
+        // street is edited (blank saves as the address).
+        let title = property.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let street = property.addressLine1.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = title == street ? "" : property.title
+        let city = RentalLocation.meaningful(property.city) ?? ""
+        let region = RentalLocation.meaningful(property.provinceState) ?? ""
+        let postalCode = RentalLocation.meaningful(property.postalCode) ?? ""
         let storedCountry = property.country.isEmpty ? "CA" : property.country
         let fixedOptions = ["CA", "US", "GB", "AU", "NZ"]
-        if fixedOptions.contains(storedCountry) {
-            _selectedCountryOption = State(initialValue: storedCountry)
-            _customCountry = State(initialValue: "")
-        } else {
-            _selectedCountryOption = State(initialValue: "Other")
-            _customCountry = State(initialValue: storedCountry)
-        }
+        let countryOption = fixedOptions.contains(storedCountry) ? storedCountry : "Other"
+        let customCountry = fixedOptions.contains(storedCountry) ? "" : storedCountry
+        let hadLease = property.leaseEndDate.timeIntervalSince1970 > 0 || property.leaseStartDate != nil
+        let leaseStart = property.leaseStartDate ?? property.moveInDate
+        // No lease yet: the pickers still need a value, but it's only saved if the renter sets one.
+        let leaseEnd = property.leaseEndDate.timeIntervalSince1970 > 0
+            ? property.leaseEndDate
+            : (Calendar.current.date(byAdding: .year, value: 1, to: leaseStart) ?? leaseStart)
+        let deposit = property.depositAmount.filter { $0.isNumber || $0 == "." }
+        let rent = property.rentAmount.filter { $0.isNumber || $0 == "." }
+
+        _name = State(initialValue: name)
+        _addressLine1 = State(initialValue: property.addressLine1)
+        _unit = State(initialValue: property.addressLine2)
+        _city = State(initialValue: city)
+        _region = State(initialValue: region)
+        _postalCode = State(initialValue: postalCode)
+        _selectedCountryOption = State(initialValue: countryOption)
+        _customCountry = State(initialValue: customCountry)
         _moveInDate = State(initialValue: property.moveInDate)
-        _leaseStartDate = State(initialValue: property.leaseStartDate ?? property.moveInDate)
-        _leaseEndDate = State(initialValue: property.leaseEndDate)
+        _leaseStartDate = State(initialValue: leaseStart)
+        _leaseEndDate = State(initialValue: leaseEnd)
         _landlordName = State(initialValue: property.landlordName)
         _landlordEmail = State(initialValue: property.landlordEmail)
         _landlordPhone = State(initialValue: property.landlordPhone)
-        _depositAmount = State(initialValue: property.depositAmount.filter { $0.isNumber || $0 == "." })
-        _rentAmount = State(initialValue: property.rentAmount.filter { $0.isNumber || $0 == "." })
+        _depositAmount = State(initialValue: deposit)
+        _rentAmount = State(initialValue: rent)
+
+        self.hadLease = hadLease
+        initialFieldValues = [name, property.addressLine1, property.addressLine2, city, region, postalCode,
+                              countryOption, customCountry, property.landlordName, property.landlordEmail,
+                              property.landlordPhone, deposit, rent]
+        initialDateValues = [property.moveInDate, leaseStart, leaseEnd]
+    }
+
+    private var fieldValues: [String] {
+        [name, addressLine1, unit, city, region, postalCode, selectedCountryOption, customCountry,
+         landlordName, landlordEmail, landlordPhone, depositAmount, rentAmount]
+    }
+
+    private var dateValues: [Date] { [moveInDate, leaseStartDate, leaseEndDate] }
+
+    /// Optional details that can't be saved as typed. A value left as it was isn't held against the save.
+    private var detailsIssue: String? {
+        RentalFormFields.detailsIssue(
+            email: landlordEmail == initialFieldValues[9] ? "" : landlordEmail,
+            deposit: depositAmount == initialFieldValues[11] ? "" : depositAmount,
+            rent: rentAmount == initialFieldValues[12] ? "" : rentAmount
+        )
+    }
+
+    private var isSaveDisabled: Bool {
+        input.validationError != nil || detailsIssue != nil || isLoading
+    }
+
+    private func close() {
+        if let onClose { onClose() } else { dismiss() }
+    }
+
+    /// Unsaved edits: the sheet can't be swiped away while there are any.
+    private var hasChanges: Bool {
+        fieldValues != initialFieldValues || dateValues != initialDateValues
+    }
+
+    /// Lease dates are saved when the rental had a lease or the renter changed either date.
+    private var savesLease: Bool {
+        hadLease || leaseStartDate != initialDateValues[1] || leaseEndDate != initialDateValues[2]
     }
 
     private var countryValue: String {
         selectedCountryOption == "Other" ? customCountry : selectedCountryOption
     }
-
-    private let supportedCountries = ["CA", "US", "GB", "AU", "NZ"]
 
     private var input: CreatePropertyInput {
         CreatePropertyInput(
@@ -76,8 +138,8 @@ struct EditPropertyView: View {
             postalCode: postalCode,
             country: countryValue,
             moveInDate: moveInDate,
-            leaseStartDate: leaseStartDate,
-            leaseEndDate: leaseEndDate,
+            leaseStartDate: savesLease ? leaseStartDate : nil,
+            leaseEndDate: savesLease ? leaseEndDate : nil,
             landlordName: landlordName,
             landlordEmail: landlordEmail,
             landlordPhone: landlordPhone,
@@ -87,135 +149,47 @@ struct EditPropertyView: View {
     }
 
     var body: some View {
-        ZStack {
-            MoveMarkTheme.Colors.appBackground.ignoresSafeArea()
+        MMSheetScaffold(title: "Edit rental") {
+            Text("Rooms, photos and records stay exactly as they are.")
+                .mmFont(15)
+                .foregroundStyle(MMInk.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Edit property")
-                                .font(MoveMarkTheme.Typography.subtitleLarge)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            Text("Changes are saved to this property. Rooms and evidence are unchanged.")
-                                .font(MoveMarkTheme.Typography.detail)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        }
-                    }
+            RentalFormFields(
+                name: $name, addressLine1: $addressLine1, unit: $unit, city: $city, region: $region,
+                postalCode: $postalCode, selectedCountryOption: $selectedCountryOption, customCountry: $customCountry,
+                moveInDate: $moveInDate, leaseStartDate: $leaseStartDate, leaseEndDate: $leaseEndDate,
+                landlordName: $landlordName, landlordEmail: $landlordEmail, landlordPhone: $landlordPhone,
+                depositAmount: $depositAmount, rentAmount: $rentAmount, optionalStartsExpanded: true
+            )
 
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Property")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(
-                                title: "Nickname or label",
-                                placeholder: "e.g. Downtown Condo or 123 Main St",
-                                text: $name
-                            )
-                        }
-                    }
-
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Address")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(title: "Address line 1", placeholder: "123 Main St", text: $addressLine1)
-                            MMTextField(title: "Unit / apartment", placeholder: "Optional", text: $unit)
-                            MMTextField(title: "City", placeholder: "San Francisco", text: $city)
-                            MMTextField(title: "Province / state", placeholder: "CA", text: $region)
-                            MMTextField(title: "Postal / ZIP code", placeholder: "94102", text: $postalCode)
-                        }
-                    }
-
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Move-in & lease")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            DatePicker("Move-in date", selection: $moveInDate, displayedComponents: .date)
-                                .colorScheme(.light)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            DatePicker("Lease start", selection: $leaseStartDate, displayedComponents: .date)
-                                .colorScheme(.light)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            DatePicker("Lease end", selection: $leaseEndDate, displayedComponents: .date)
-                                .colorScheme(.light)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                        }
-                    }
-
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Landlord")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(title: "Name", placeholder: "Property manager or landlord", text: $landlordName)
-                            MMTextField(title: "Email", placeholder: "Optional", text: $landlordEmail, keyboardType: .emailAddress)
-                            MMTextField(title: "Phone", placeholder: "Optional", text: $landlordPhone, keyboardType: .phonePad)
-                        }
-                    }
-
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Financials")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(title: "Deposit amount", placeholder: "e.g. 1500", text: $depositAmount, keyboardType: .decimalPad)
-                            MMTextField(title: "Rent amount (optional)", placeholder: "e.g. 2200", text: $rentAmount, keyboardType: .decimalPad)
-                        }
-                    }
-
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Location")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            Picker("Country", selection: $selectedCountryOption) {
-                                ForEach(supportedCountries + ["Other"], id: \.self) { option in
-                                    Text(option).tag(option)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            if selectedCountryOption == "Other" {
-                                MMTextField(title: "Country code", placeholder: "e.g. FR, DE", text: $customCountry)
-                                    .textInputAutocapitalization(.characters)
-                            }
-                        }
-                    }
-
-                    if !errorMessage.isEmpty {
-                        MMErrorBanner(message: errorMessage)
-                    }
-
-                    ZStack {
-                        MMButton(
-                            title: "Save changes",
-                            action: { submit() },
-                            isDisabled: input.validationError != nil || isLoading
-                        )
-                        .opacity(isLoading ? 0.6 : 1.0)
-                        .disabled(isLoading)
-
-                        if isLoading {
-                            ProgressView()
-                                .tint(MoveMarkTheme.Colors.primary)
-                        }
-                    }
+            if !errorMessage.isEmpty {
+                MMNotice(message: errorMessage).padding(.top, 22)
+            } else if let leaseError = input.leaseDatesError {
+                MMNotice(message: leaseError).padding(.top, 22)
+            }
+            MMPrimaryButton(title: "Save changes", isLoading: isLoading, isDisabled: isSaveDisabled) { submit() }
+                .padding(.top, 26)
+        }
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Close") {
+                    MMDiscardChanges.cancel(hasChanges: hasChanges, isConfirming: $confirmDiscard, dismiss: close)
                 }
-                .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.top, 24)
-                .padding(.bottom, 32)
+                .disabled(isLoading)
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") { submit() }
+                    .fontWeight(.semibold)
+                    .disabled(isSaveDisabled)
             }
         }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
+        // Unsaved edits: no swipe-away, and Close or a swipe asks before dropping them.
+        .mmDiscardChangesGuard(hasChanges: hasChanges, isBusy: isLoading, isConfirming: $confirmDiscard, onDiscard: close)
     }
 
     private func submit() {
-        if let msg = input.validationError {
+        if let msg = input.validationError ?? detailsIssue {
             errorMessage = msg
             return
         }
@@ -232,7 +206,7 @@ struct EditPropertyView: View {
             defer { isLoading = false }
             do {
                 try await propertyStore.updateProperty(propertyId: property.id, input: input, userId: userId)
-                dismiss()
+                close()
             } catch {
                 errorMessage = MoveMarkFlowMessage.propertyUpdateFailed(error)
             }

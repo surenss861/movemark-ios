@@ -16,6 +16,7 @@
 
 import SwiftUI
 import CryptoKit
+import ImageIO
 
 /// Mirrors `AsyncImagePhase` so call sites can swap `AsyncImage(url:)` for this with the same `{ phase in }` body.
 enum MMCachedImagePhase {
@@ -24,8 +25,9 @@ enum MMCachedImagePhase {
     case failure
 }
 
-/// On-disk cache of decoded photo bytes, keyed by a stable storage path (not by signed URL).
-enum MMImageDiskCache {
+/// On-disk cache of decoded photo bytes, keyed by a stable storage path (not by signed URL). Nonisolated:
+/// reads, writes and decoding run off the main thread.
+nonisolated enum MMImageDiskCache {
     private static let folder: URL = {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         let dir = base.appendingPathComponent("MMImageCache", isDirectory: true)
@@ -52,6 +54,23 @@ enum MMImageDiskCache {
     /// Removes one cached entry (e.g. when a caller knows a given path's bytes changed — re-capture, replace).
     static func remove(forKey key: String) {
         try? FileManager.default.removeItem(at: fileURL(forKey: key))
+    }
+
+    /// Long side cap for display: the cards using this are at most screen-wide (≈1300 px on a 3x phone).
+    static let maxDisplayPixels = 1600
+
+    /// Decodes `data` now (not lazily at first draw on the main thread), downsampled to `maxDisplayPixels`
+    /// and oriented. A 4096 px evidence photo becomes ~10 MB in memory instead of ~50 MB.
+    static func displayImage(from data: Data) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxDisplayPixels,
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        return UIImage(cgImage: image)
     }
 }
 
@@ -112,21 +131,31 @@ struct MMCachedAsyncImage<Content: View>: View {
     private func load() async {
         guard let cacheKey else { return }
 
-        if let cached = MMImageDiskCache.data(forKey: cacheKey), let cachedImage = UIImage(data: cached) {
+        // Disk read and decode off the main thread.
+        let cachedImage = await Task.detached(priority: .userInitiated) {
+            MMImageDiskCache.data(forKey: cacheKey).flatMap(MMImageDiskCache.displayImage(from:))
+        }.value
+        if let cachedImage {
             image = cachedImage
             didFail = false
             return
         }
 
         guard let signedURL else { return }
+        // Keyed only by a one-off signed URL, the bytes would never be read again: don't fill the disk with them.
+        let persist = path.map { !$0.isEmpty } ?? false
 
         do {
             let (data, _) = try await URLSession.shared.data(from: signedURL)
-            guard let downloaded = UIImage(data: data) else {
+            let downloaded = await Task.detached(priority: .userInitiated) {
+                let decoded = MMImageDiskCache.displayImage(from: data)
+                if decoded != nil, persist { MMImageDiskCache.store(data, forKey: cacheKey) }
+                return decoded
+            }.value
+            guard let downloaded else {
                 didFail = true
                 return
             }
-            MMImageDiskCache.store(data, forKey: cacheKey)
             image = downloaded
             didFail = false
         } catch {

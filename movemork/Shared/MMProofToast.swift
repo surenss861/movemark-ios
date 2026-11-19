@@ -31,7 +31,7 @@ struct MMProofToastMessage: Equatable, Identifiable {
 
         var iconColor: Color {
             switch self {
-            case .success: return MoveMarkTheme.Colors.primary
+            case .success: return MMInk.limeMark
             case .warning: return MoveMarkTheme.Colors.semanticWarning
             case .danger: return MoveMarkTheme.Colors.semanticDanger
             case .info: return MoveMarkTheme.Colors.textDarkGreen
@@ -40,7 +40,7 @@ struct MMProofToastMessage: Equatable, Identifiable {
 
         var borderColor: Color {
             switch self {
-            case .success: return MoveMarkTheme.Colors.primary.opacity(0.35)
+            case .success: return MoveMarkTheme.Colors.cardStroke
             case .warning: return MoveMarkTheme.Colors.semanticWarning.opacity(0.45)
             case .danger: return MoveMarkTheme.Colors.semanticDanger.opacity(0.4)
             case .info: return MoveMarkTheme.Colors.cardStroke
@@ -49,7 +49,7 @@ struct MMProofToastMessage: Equatable, Identifiable {
 
         var backgroundTint: Color {
             switch self {
-            case .success: return MoveMarkTheme.Colors.cardRaised.opacity(0.75)
+            case .success: return MoveMarkTheme.Colors.card
             case .warning: return MoveMarkTheme.Colors.semanticWarning.opacity(0.14)
             case .danger: return MoveMarkTheme.Colors.semanticDanger.opacity(0.1)
             case .info: return MoveMarkTheme.Colors.card
@@ -169,9 +169,18 @@ struct MMProofToast: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            Image(systemName: message.kind.iconName)
-                .font(MoveMarkTheme.Typography.sectionTitle)
-                .foregroundStyle(message.kind.iconColor)
+            if message.kind == .success {
+                // Success is neutral ink with the status mark, never a green check.
+                Circle()
+                    .fill(MMInk.limeMark)
+                    .frame(width: 9, height: 9)
+                    .frame(width: 22)
+                    .accessibilityHidden(true)
+            } else {
+                Image(systemName: message.kind.iconName)
+                    .font(MoveMarkTheme.Typography.sectionTitle)
+                    .foregroundStyle(message.kind.iconColor)
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(message.title)

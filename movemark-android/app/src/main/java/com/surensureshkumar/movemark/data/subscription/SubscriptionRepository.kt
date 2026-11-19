@@ -40,6 +40,7 @@ class SubscriptionRepository @Inject constructor(
     val purchasing: StateFlow<Boolean> get() = impl.purchasing
     val errorMessage: StateFlow<String?> get() = impl.errorMessage
     val restoreMessage: StateFlow<String?> get() = impl.restoreMessage
+    val reportPackPurchases: StateFlow<Int> get() = impl.reportPackPurchases
 
     suspend fun logIn(appUserId: String) = impl.logIn(appUserId)
 
