@@ -77,7 +77,7 @@ private fun DocumentSheet(
 ) {
     val shape = RoundedCornerShape(6.dp)
     val edge = when {
-        isBright -> MMColors.Primary
+        isBright -> com.surensureshkumar.movemark.core.design.MMInk.LimeMark
         isProcessing -> MMColors.SemanticWarning
         else -> Color.Black.copy(alpha = 0.28f)
     }

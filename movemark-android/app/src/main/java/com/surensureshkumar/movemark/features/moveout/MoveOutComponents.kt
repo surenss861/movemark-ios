@@ -39,7 +39,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -69,7 +68,7 @@ enum class MoveOutSide { MoveIn, MoveOut }
 
 internal typealias SignPhoto = suspend (String) -> String?
 
-private val CardShape = RoundedCornerShape(18.dp)
+private val CardShape = RoundedCornerShape(16.dp)
 
 /** True when the system font is scaled to an accessibility size (iOS `isAccessibilitySize`). */
 @Composable
@@ -126,7 +125,7 @@ private fun MoveOutPhoto(
         .fillMaxWidth()
         .height(height)
         .clip(RoundedCornerShape(12.dp))
-        .background(Color.White)
+        .background(MMInk.ThumbFill)
     if (photo == null) {
         Box(frame.border(1.dp, MMInk.CardStroke, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
             Text(if (count > 0) "$count photos" else "No photo", fontSize = 13.sp, color = MMInk.Secondary)
@@ -149,11 +148,11 @@ private fun MoveOutPhoto(
                 "$count",
                 fontSize = 11.5.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White,
+                color = MMInk.Text,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(8.dp)
-                    .background(Color.Black.copy(alpha = 0.55f), CircleShape)
+                    .background(MMInk.Card, CircleShape)
                     .padding(horizontal = 7.dp, vertical = 3.dp),
             )
         }
@@ -214,7 +213,7 @@ fun MoveOutSpreadCard(item: MoveOutComparison, sign: SignPhoto, justCompared: Bo
     Column(
         Modifier
             .fillMaxWidth()
-            .background(MMInk.Paper, CardShape)
+            .background(MMInk.Card, CardShape)
             .border(0.75.dp, MMInk.CardStroke, CardShape)
             .semantics { customActions = viewerActions(item, onOpen) }
             .padding(16.dp),
@@ -241,7 +240,7 @@ fun MoveOutSpreadCard(item: MoveOutComparison, sign: SignPhoto, justCompared: Bo
                 Modifier
                     .padding(top = 14.dp)
                     .fillMaxWidth()
-                    .background(Color.White, RoundedCornerShape(10.dp))
+                    .background(MMInk.Field, RoundedCornerShape(10.dp))
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -257,7 +256,7 @@ fun MoveOutMissingCard(item: MoveOutComparison, sign: SignPhoto, isPrimary: Bool
     Column(
         Modifier
             .fillMaxWidth()
-            .background(MMInk.Paper, CardShape)
+            .background(MMInk.Card, CardShape)
             .border(BorderStroke(1.dp, MMInk.CardStroke), CardShape)
             .semantics { customActions = viewerActions(item, onOpen) }
             .padding(14.dp),
@@ -417,7 +416,7 @@ fun MoveOutHeaderProgress(done: Int, total: Int) {
         verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         Row {
-            Text("Move-out proof", fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = Color.White, modifier = Modifier.weight(1f))
+            Text("Move-out proof", fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = MMInk.HeroText, modifier = Modifier.weight(1f))
             Text("${(fraction * 100).toInt()}%", fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = MMInk.HeroSecondary)
         }
         Box(
@@ -431,7 +430,7 @@ fun MoveOutHeaderProgress(done: Int, total: Int) {
                     Modifier
                         .fillMaxWidth(fraction.coerceAtLeast(0.02f))
                         .height(4.dp)
-                        .background(MMInk.LimeMark, CircleShape),
+                        .background(MMInk.Lime, CircleShape),
                 )
             }
         }

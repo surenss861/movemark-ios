@@ -45,7 +45,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -64,16 +63,17 @@ import com.surensureshkumar.movemark.data.evidence.PhotoPrivacy
 import com.surensureshkumar.movemark.data.evidence.PhotoPrivacyPolicy
 import java.util.UUID
 
-/** The room screen's dark field and the receipt's own ink (polished iOS `ProofSavedReceiptView.Ink`). */
+/** The receipt's ink on the light page (owner's one light system, 2026-11-18): ink headings, #6D6E6F secondary. */
 private object SlipInk {
-    val Field = MMInk.Evidence
-    val Text = Color.White
-    val Secondary = Color.White.copy(alpha = 0.62f)
-    val Tertiary = Color.White.copy(alpha = 0.5f)
-    val Rule = Color.White.copy(alpha = 0.12f)
-    val Warning = Color(0xFFF2BC57)
-    val PhotoFill = Color.White.copy(alpha = 0.06f)
-    val Outline = Color.White.copy(alpha = 0.22f)
+    val Field = MMInk.Sheet
+    val Text = MMInk.Text
+    val Secondary = MMInk.Secondary
+    val Tertiary = MMInk.Secondary
+    val Rule = MMInk.Separator
+    val Warning = MMInk.Warning
+    val PhotoFill = MMInk.ThumbFill
+    val Outline = MMInk.CardStroke
+    val Check = MMInk.Text
 }
 
 /**
@@ -116,7 +116,7 @@ internal fun SavedProofReceiptContent(
     onViewEvidence: () -> Unit,
     onAddMorePhotos: () -> Unit,
 ) {
-    MMLightSystemBars(lightNavigationBar = false, lightStatusBar = false)
+    MMLightSystemBars(lightNavigationBar = true, lightStatusBar = true)
     val pending = (state.attemptedCount - state.savedCount).coerceAtLeast(0)
     val isPartial = state.hadPartialFailure && pending > 0
     val large = mmIsLargeFont()
@@ -135,7 +135,7 @@ internal fun SavedProofReceiptContent(
                 Icon(
                     if (isPartial) Icons.Filled.Error else Icons.Filled.CheckCircle,
                     contentDescription = null,
-                    tint = if (isPartial) SlipInk.Warning else MMInk.Lime,
+                    tint = if (isPartial) SlipInk.Warning else SlipInk.Check,
                     modifier = Modifier.size(17.dp),
                 )
                 Spacer(Modifier.width(7.dp))
@@ -151,7 +151,6 @@ internal fun SavedProofReceiptContent(
                 state.roomName,
                 style = mmFont(32f, FontWeight.SemiBold),
                 color = SlipInk.Text,
-                maxLines = if (large) 3 else 2,
                 modifier = Modifier.padding(top = 10.dp).semantics { heading() },
             )
 
@@ -195,7 +194,7 @@ internal fun SavedProofReceiptContent(
                 Modifier.padding(top = 22.dp).fillMaxWidth()
                     .height(photoHeight)
                     .clip(RoundedCornerShape(16.dp)).background(SlipInk.PhotoFill)
-                    .border(0.5.dp, SlipInk.Rule, RoundedCornerShape(16.dp)),
+                    .border(0.75.dp, SlipInk.Outline, RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center,
             ) {
                 if (bitmap != null) {
@@ -226,8 +225,8 @@ internal fun SavedProofReceiptContent(
                     onClick = onViewEvidence,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("receipt.viewEvidence"),
                     shape = RoundedCornerShape(50),
-                    border = BorderStroke(1.dp, SlipInk.Outline),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = SlipInk.Text),
+                    border = BorderStroke(1.dp, MMInk.Separator),
+                    colors = ButtonDefaults.outlinedButtonColors(containerColor = MMInk.Card, contentColor = SlipInk.Text),
                 ) { Text("View evidence", style = mmFont(15.5f, FontWeight.SemiBold), color = SlipInk.Text) }
                 if (!isPartial) {
                     TextButton(onClick = onAddMorePhotos, modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)) {
@@ -243,7 +242,7 @@ internal fun SavedProofReceiptContent(
 private fun Fact(label: String, value: String, spoken: String, modifier: Modifier) {
     Column(modifier.semantics(mergeDescendants = true) { contentDescription = spoken }, verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Text(label.uppercase(), style = mmFont(11f, FontWeight.SemiBold, tracking = 0.6f), color = SlipInk.Tertiary)
-        Text(value, style = mmFont(15.5f, FontWeight.Medium), color = SlipInk.Text, maxLines = 2)
+        Text(value, style = mmFont(15.5f, FontWeight.Medium), color = SlipInk.Text)
     }
 }
 

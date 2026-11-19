@@ -17,7 +17,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import com.surensureshkumar.movemark.core.design.MMGroup
 import com.surensureshkumar.movemark.core.design.MMInk
 import com.surensureshkumar.movemark.core.design.MMMetrics
@@ -28,11 +27,15 @@ import com.surensureshkumar.movemark.core.design.MMRowAccessory
 import com.surensureshkumar.movemark.core.design.MMRowDivider
 import com.surensureshkumar.movemark.core.design.MMScreen
 import com.surensureshkumar.movemark.core.design.mmFont
-import com.surensureshkumar.movemark.core.design.mmLines
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -114,8 +117,6 @@ fun AccountScreen(
                 email?.takeIf { it.isNotBlank() } ?: "Signed in",
                 style = mmFont(19f, FontWeight.SemiBold),
                 color = MMInk.Text,
-                maxLines = mmLines(1),
-                overflow = TextOverflow.Ellipsis,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (hasPro) {
@@ -253,6 +254,10 @@ fun AccountScreen(
         val count = unsavedOnSignOut
         AlertDialog(
             onDismissRequest = { unsavedOnSignOut = 0 },
+            containerColor = MMInk.Card,
+            titleContentColor = MMInk.Text,
+            textContentColor = MMInk.Text,
+            shape = RoundedCornerShape(MMMetrics.SheetRadius),
             title = {
                 Text(
                     if (count == 1) "1 photo hasn’t been saved yet. Signing out removes it from this phone."
@@ -263,7 +268,7 @@ fun AccountScreen(
                 TextButton(onClick = {
                     unsavedOnSignOut = 0
                     viewModel.signOut(onSignOut)
-                }) { Text("Sign out", color = MMInk.Danger) }
+                }) { Text("Sign out", color = MMInk.Danger, fontWeight = FontWeight.SemiBold) }
             },
             dismissButton = {
                 TextButton(onClick = { unsavedOnSignOut = 0 }) { Text("Cancel", color = MMInk.Secondary) }
@@ -272,28 +277,45 @@ fun AccountScreen(
     }
 
     if (confirmDelete) {
+        // A themed light dialog (one light system): white surface, ink title and body, the destructive action in Danger.
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Delete your account?") },
+            containerColor = MMInk.Card,
+            titleContentColor = MMInk.Text,
+            textContentColor = MMInk.Text,
+            shape = RoundedCornerShape(MMMetrics.SheetRadius),
+            title = { Text("Delete your account?", style = mmFont(20f, FontWeight.SemiBold), color = MMInk.Text) },
             text = {
                 Column {
                     Text(
-                        "This deletes your account, rentals, photos, records and reports. Encrypted backup copies last longer. An active subscription keeps billing until you cancel it in Google Play. It can’t be undone.",
+                        style = mmFont(15f),
+                        color = MMInk.Text,
+                        text = "This deletes your account, rentals, photos, records and reports. Encrypted backup copies last longer. An active subscription keeps billing until you cancel it in Google Play. It can’t be undone.",
                     )
                     // As iOS's delete screen: a way to cancel the store subscription before the account goes.
-                    TextButton(onClick = { PlaySubscriptionIntents.openManageSubscriptions(context) }) {
-                        Text("Manage Google Play subscription", color = MMInk.Secondary)
+                    TextButton(
+                        onClick = { PlaySubscriptionIntents.openManageSubscriptions(context) },
+                        modifier = Modifier.padding(top = 4.dp).heightIn(min = 48.dp),
+                    ) {
+                        Text("Manage Google Play subscription", color = MMInk.Text, fontWeight = FontWeight.Medium)
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    confirmDelete = false
-                    viewModel.deleteAccount(onSignOut)
-                }) { Text("Delete", color = MMInk.Danger) }
+                Button(
+                    onClick = {
+                        confirmDelete = false
+                        viewModel.deleteAccount(onSignOut)
+                    },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = MMInk.Danger, contentColor = Color.White),
+                ) { Text("Delete", fontWeight = FontWeight.SemiBold) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("Cancel", color = MMInk.Secondary) }
+                TextButton(onClick = { confirmDelete = false }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text("Cancel", color = MMInk.Text, fontWeight = FontWeight.Medium)
+                }
             },
         )
     }

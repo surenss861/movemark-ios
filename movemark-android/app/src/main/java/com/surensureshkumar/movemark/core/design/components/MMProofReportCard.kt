@@ -128,7 +128,7 @@ fun MMProofReportCard(
 }
 
 private fun statusColor(tone: MMProofStatusTone): Color = when (tone) {
-    MMProofStatusTone.Success -> MMColors.Primary
+    MMProofStatusTone.Success -> MMColors.TextPrimary
     MMProofStatusTone.Warning -> MMColors.SemanticWarning
     MMProofStatusTone.Danger -> MMColors.SemanticDanger
     MMProofStatusTone.Info -> MMColors.SemanticInfo

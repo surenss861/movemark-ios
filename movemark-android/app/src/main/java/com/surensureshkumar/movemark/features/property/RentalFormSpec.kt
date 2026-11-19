@@ -19,6 +19,16 @@ object RentalFormSpec {
     const val OTHER = "Other"
     val countryOptions = supportedCountries + OTHER
 
+    /** What a picker row reads as: the country's name, never its raw code ("CA" reads "Canada"). */
+    fun countryName(option: String): String = when (option) {
+        "CA" -> "Canada"
+        "US" -> "United States"
+        "GB" -> "United Kingdom"
+        "AU" -> "Australia"
+        "NZ" -> "New Zealand"
+        else -> option
+    }
+
     /** The picker row for a stored country: a fixed code, else "Other" (iOS `EditPropertyView.init`). */
     fun countryOption(country: String): String {
         val stored = country.trim().ifEmpty { "CA" }

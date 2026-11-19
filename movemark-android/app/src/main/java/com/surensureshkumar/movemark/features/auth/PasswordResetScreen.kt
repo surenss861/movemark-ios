@@ -16,7 +16,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import com.surensureshkumar.movemark.core.design.MMInk
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -113,7 +113,7 @@ internal fun PasswordResetContent(
                     enabled = !saving,
                     modifier = Modifier.testTag("passwordReset.cancel"),
                 ) {
-                    Icon(Icons.Filled.Close, contentDescription = "Cancel", tint = Color.White)
+                    Icon(Icons.Filled.Close, contentDescription = "Cancel", tint = MMInk.HeroText)
                 }
             }
         },

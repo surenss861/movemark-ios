@@ -21,7 +21,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -29,7 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.surensureshkumar.movemark.core.design.MMColors
+import com.surensureshkumar.movemark.core.design.MMInk
 import com.surensureshkumar.movemark.core.design.MMPrimaryButton
 
 @Composable
@@ -50,14 +49,14 @@ fun RoomProofBottomSaveBar(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            // Floats over the evidence (translucent, hairline on top), like the iOS material bar.
-            .background(MMColors.AppBackgroundRaised.copy(alpha = 0.94f))
+            // A white bar on the light page with a grey hairline on top, like the iOS material bar.
+            .background(MMInk.Card)
             .drawBehind {
                 drawLine(
-                    color = Color.White.copy(alpha = 0.08f),
+                    color = MMInk.CardStroke,
                     start = androidx.compose.ui.geometry.Offset(0f, 0f),
                     end = androidx.compose.ui.geometry.Offset(size.width, 0f),
-                    strokeWidth = 1f,
+                    strokeWidth = 0.75.dp.toPx(),
                 )
             }
             .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -68,7 +67,7 @@ fun RoomProofBottomSaveBar(
             // One calm notice (iOS partial-save notice): what saved, what needs a retry; the retry sits inside it.
             UploadNotice(message = line, onRetry = if (isPartial) onRetry else null)
         } else if (line != null) {
-            Text(line, color = MMColors.TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(line, color = MMInk.Secondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         }
 
         // Exactly one lime action.
@@ -94,19 +93,19 @@ fun RoomProofBottomSaveBar(
 private fun UploadNotice(message: String, onRetry: (() -> Unit)?) {
     val shape = RoundedCornerShape(14.dp)
     Row(
-        Modifier.fillMaxWidth().background(Color.White.copy(alpha = 0.06f), shape)
-            .border(0.75.dp, Color.White.copy(alpha = 0.12f), shape)
+        Modifier.fillMaxWidth().background(MMInk.Field, shape)
+            .border(0.75.dp, MMInk.CardStroke, shape)
             .padding(horizontal = 14.dp, vertical = 10.dp)
             .semantics(mergeDescendants = onRetry == null) { liveRegion = LiveRegionMode.Polite }
             .testTag("room.uploadNotice"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.Error, contentDescription = null, tint = Color(0xFFFF8A80), modifier = Modifier.size(16.dp))
+        Icon(Icons.Filled.Error, contentDescription = null, tint = MMInk.Danger, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(10.dp))
-        Text(message, color = Color.White, fontSize = 13.5.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+        Text(message, color = MMInk.Text, fontSize = 13.5.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
         if (onRetry != null) {
             TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(RoomProofUploadMessages.RETRY_LABEL, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(RoomProofUploadMessages.RETRY_LABEL, color = MMInk.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }

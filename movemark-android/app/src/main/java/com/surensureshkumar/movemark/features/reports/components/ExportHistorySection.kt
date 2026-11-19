@@ -21,7 +21,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.surensureshkumar.movemark.core.design.MMColors
@@ -153,8 +152,6 @@ private fun ExportHistoryRow(
                 exportTypeLabel(row.type),
                 style = mmFont(14.5f),
                 color = MMInk.Text,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 if (date.isBlank()) status else "$date · $status",

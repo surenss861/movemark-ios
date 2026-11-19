@@ -198,17 +198,6 @@ private fun MMProofArtifactSurface(
                             )
                         }
                     }
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(64.dp)
-                            .align(Alignment.BottomCenter)
-                            .background(
-                                androidx.compose.ui.graphics.Brush.verticalGradient(
-                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.45f)),
-                                ),
-                            ),
-                    )
                 }
                 if (tagsVisible && model.issueTags.isNotEmpty()) {
                     Row(
@@ -227,11 +216,11 @@ private fun MMProofArtifactSurface(
                                 tag,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color.White.copy(alpha = 0.95f),
+                                color = com.surensureshkumar.movemark.core.design.MMInk.Text,
                                 maxLines = 1,
                                 modifier = Modifier
                                     .scale(tagScale)
-                                    .background(Color.Black.copy(alpha = 0.72f), RoundedCornerShape(8.dp))
+                                    .background(com.surensureshkumar.movemark.core.design.MMInk.Card, RoundedCornerShape(8.dp))
                                     .padding(horizontal = 8.dp, vertical = 4.dp),
                             )
                         }
@@ -311,7 +300,7 @@ private fun MMProofArtifactFooter(model: MMProofArtifactModel) {
                 model.savedLabel,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = MMColors.Primary.copy(alpha = 0.98f),
+                color = MMColors.TextPrimary,
             )
         }
         Text(

@@ -13,6 +13,15 @@ class RentalFormSpecTest {
     }
 
     @Test
+    fun countryPickerShowsNamesNotCodes() {
+        assertEquals("Canada", RentalFormSpec.countryName("CA"))
+        assertEquals("United States", RentalFormSpec.countryName("US"))
+        assertEquals("United Kingdom", RentalFormSpec.countryName("GB"))
+        assertEquals("Other", RentalFormSpec.countryName("Other"))
+        RentalFormSpec.countryOptions.forEach { assert(RentalFormSpec.countryName(it).length > 2) { it } }
+    }
+
+    @Test
     fun countryPickerKeepsStoredValuesCompatible() {
         assertEquals("CA", RentalFormSpec.countryOption("CA"))
         assertEquals("CA", RentalFormSpec.countryOption(""))

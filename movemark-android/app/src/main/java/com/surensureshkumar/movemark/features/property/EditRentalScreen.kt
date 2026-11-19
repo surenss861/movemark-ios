@@ -338,15 +338,15 @@ private fun CountryPicker(selected: String, onSelect: (String) -> Unit) {
                 Text("Country", style = mmFont(16f), color = MMInk.Text, modifier = Modifier.weight(1f))
                 TextButton(
                     onClick = { open = true },
-                    modifier = Modifier.semantics { contentDescription = "Country, $selected" },
+                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Country, ${RentalFormSpec.countryName(selected)}" },
                 ) {
-                    Text(selected, style = mmFont(16f), color = MMInk.Text)
+                    Text(RentalFormSpec.countryName(selected), style = mmFont(16f), color = MMInk.Text)
                     Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = MMInk.Secondary, modifier = Modifier.size(20.dp))
                 }
             }
             DropdownMenu(expanded = open, onDismissRequest = { open = false }, modifier = Modifier.align(Alignment.CenterEnd)) {
                 RentalFormSpec.countryOptions.forEach { option ->
-                    DropdownMenuItem(text = { Text(option) }, onClick = { open = false; onSelect(option) })
+                    DropdownMenuItem(text = { Text(RentalFormSpec.countryName(option)) }, onClick = { open = false; onSelect(option) })
                 }
             }
         }

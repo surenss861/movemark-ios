@@ -72,7 +72,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
@@ -88,7 +87,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.SubcomposeAsyncImage
 import com.surensureshkumar.movemark.core.design.MMBackground
-import com.surensureshkumar.movemark.core.design.MMColors
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMLightSystemBars
 import com.surensureshkumar.movemark.core.design.MMMotion
 import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.components.MMButton
@@ -201,11 +201,11 @@ fun RoomProofScreen(
                 TextButton(onClick = {
                     showLeaveUploadDialog = false
                     onBack()
-                }) { Text("Leave", color = MMColors.SemanticDanger) }
+                }) { Text("Leave", color = MMInk.Danger) }
             },
             dismissButton = {
                 TextButton(onClick = { showLeaveUploadDialog = false }) {
-                    Text("Stay", color = MMColors.Primary)
+                    Text("Stay", color = MMInk.Text)
                 }
             },
         )
@@ -242,13 +242,12 @@ fun RoomProofScreen(
     }
     val scroll = rememberScrollState()
     val density = LocalDensity.current
-    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-    // The title settles into the bar once the hero (or the empty-state heading) has scrolled away.
-    val scrolledAwayPx = with(density) {
-        (if (entries.isEmpty()) 140.dp else roomHeroHeight(screenWidth, screenHeight) - 90.dp).toPx()
-    }
+    // The title settles into the bar once the page heading has scrolled away (same for a saved and an empty room).
+    val scrolledAwayPx = with(density) { RoomHeroTitleScrollAway.toPx() }
     fun chooseGallery() = picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+
+    // Light page, light bars: dark status- and navigation-bar icons (no photo under the status bar any more).
+    MMLightSystemBars(lightNavigationBar = true, lightStatusBar = true)
 
     MMBackground {
         Scaffold(
@@ -305,7 +304,7 @@ fun RoomProofScreen(
                 Column(Modifier.padding(horizontal = MMSpacing.ScreenHorizontal.dp)) {
                     if (cameraDenied) {
                         Spacer(Modifier.height(16.dp))
-                        Text("Camera access is needed to take proof photos.", color = MMColors.TextSecondary)
+                        Text("Camera access is needed to take proof photos.", color = MMInk.Secondary)
                         Spacer(Modifier.height(10.dp))
                         MMButton(text = "Open Settings", onClick = ::openAppSettings, style = MMButtonStyle.Secondary)
                     }
@@ -332,15 +331,15 @@ fun RoomProofScreen(
 
                     AnimatedVisibility(visible = hasPending, enter = fadeIn(), exit = fadeOut()) {
                         Column(Modifier.padding(vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            if (entries.isNotEmpty()) HorizontalDivider(thickness = 0.5.dp, color = MMColors.CardStroke)
+                            if (entries.isNotEmpty()) HorizontalDivider(thickness = 0.75.dp, color = MMInk.CardStroke)
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Kicker(if (proofPhase == ProofPhase.MoveOut) "NEW MOVE-OUT ENTRY" else "NEW ENTRY", MMColors.TextMuted)
+                                Kicker(if (proofPhase == ProofPhase.MoveOut) "NEW MOVE-OUT ENTRY" else "NEW ENTRY", MMInk.Secondary)
                                 Spacer(Modifier.weight(1f))
                                 Text(
                                     if (photos.size == 1) "1 photo" else "${photos.size} photos",
                                     fontFamily = FontFamily.Monospace,
                                     fontSize = 12.sp,
-                                    color = MMColors.TextMuted,
+                                    color = MMInk.Secondary,
                                 )
                             }
                             RoomProofPhotoGrid(
@@ -385,10 +384,10 @@ fun RoomProofScreen(
                 TextButton(onClick = {
                     deletingEntry = null
                     viewModel.deleteEntry(entry.id)
-                }) { Text("Delete", color = MMColors.SemanticDanger) }
+                }) { Text("Delete", color = MMInk.Danger) }
             },
             dismissButton = {
-                TextButton(onClick = { deletingEntry = null }) { Text("Cancel", color = MMColors.TextSecondary) }
+                TextButton(onClick = { deletingEntry = null }) { Text("Cancel", color = MMInk.Text) }
             },
         )
     }
@@ -425,7 +424,7 @@ private fun EditEntrySheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MMColors.AppBackgroundRaised,
+        containerColor = MMInk.Card,
     ) {
         Column(
             Modifier
@@ -435,7 +434,7 @@ private fun EditEntrySheet(
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Edit proof", color = MMColors.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text("Edit proof", color = MMInk.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             EntryDetailsForm(draft = edit, onChange = { edit = it }, enabled = !isSaving)
             MMButton(text = if (isSaving) "Saving…" else "Save changes", onClick = { onSave(edit) }, loading = isSaving, enabled = !isSaving)
         }
@@ -457,7 +456,8 @@ fun RoomPhotoViewer(
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
+        // The one dark surface left in the app: the full-screen photo viewer backdrop.
+        Box(Modifier.fillMaxSize().background(MMInk.Evidence)) {
             HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
                 val photo = photos[page]
                 val url by rememberSignedUrl(photo.filePath) { signPhotoUrl(photo.filePath) }

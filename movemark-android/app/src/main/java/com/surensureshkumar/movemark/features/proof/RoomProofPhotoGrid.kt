@@ -40,6 +40,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.surensureshkumar.movemark.core.design.MMColors
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMMetrics
 import com.surensureshkumar.movemark.core.design.MMMotion
 
 @Composable
@@ -100,16 +102,25 @@ private fun RoomProofPhotoCell(
     }
     val borderColor = when (photo.status) {
         PhotoUploadStatus.Failed -> MMColors.SemanticWarning.copy(alpha = 0.85f)
-        PhotoUploadStatus.Uploaded -> MMColors.Primary.copy(alpha = 0.55f)
+        PhotoUploadStatus.Uploaded -> MMInk.Text.copy(alpha = 0.35f)
         PhotoUploadStatus.Uploading -> MMColors.SemanticWarning.copy(alpha = 0.65f)
-        PhotoUploadStatus.Pending -> MMColors.CardStroke
+        PhotoUploadStatus.Pending -> MMInk.CardStroke
     }
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .border(1.dp, borderColor, RoundedCornerShape(12.dp))
-            .background(MMColors.FieldFill.copy(alpha = 0.45f)),
+            .background(MMInk.ThumbFill)
+            .border(1.dp, borderColor, RoundedCornerShape(12.dp)),
     ) {
+        // A photo that can't be decoded shows the explicit neutral placeholder, never a brand mark.
+        if (bitmap == null) {
+            Icon(
+                imageVector = Icons.Filled.PhotoCamera,
+                contentDescription = null,
+                tint = MMInk.Secondary,
+                modifier = Modifier.align(Alignment.Center).size(22.dp),
+            )
+        }
         bitmap?.let {
             Image(
                 bitmap = it.asImageBitmap(),
@@ -123,7 +134,7 @@ private fun RoomProofPhotoCell(
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .background(MMColors.EvidenceCard.copy(alpha = 0.45f)),
+                        .background(MMInk.Card.copy(alpha = 0.55f)),
                     contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator(
@@ -137,11 +148,12 @@ private fun RoomProofPhotoCell(
                 Icon(
                     imageVector = Icons.Filled.CheckCircle,
                     contentDescription = "Uploaded",
-                    tint = MMColors.Primary,
+                    tint = MMInk.Text,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(5.dp)
-                        .size(18.dp),
+                        .size(18.dp)
+                        .background(MMInk.Card, CircleShape),
                 )
             }
             PhotoUploadStatus.Failed -> {
@@ -152,7 +164,8 @@ private fun RoomProofPhotoCell(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(5.dp)
-                        .size(18.dp),
+                        .size(18.dp)
+                        .background(MMInk.Card, CircleShape),
                 )
             }
             PhotoUploadStatus.Pending -> Unit
@@ -167,10 +180,10 @@ private fun RoomProofPhotoCell(
                 Icon(
                     imageVector = Icons.Filled.Close,
                     contentDescription = "Remove photo $index",
-                    tint = MMColors.TextPrimary,
+                    tint = MMInk.Text,
                     modifier = Modifier
                         .size(22.dp)
-                        .background(MMColors.EvidenceCard.copy(alpha = 0.7f), CircleShape)
+                        .background(MMInk.Card.copy(alpha = 0.92f), CircleShape)
                         .padding(3.dp),
                 )
             }
@@ -183,21 +196,22 @@ fun RoomProofPhotoEmptyState(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(MMColors.FieldFill.copy(alpha = 0.35f))
+            .clip(RoundedCornerShape(MMMetrics.GroupRadius))
+            .background(MMInk.Card)
+            .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(MMMetrics.GroupRadius))
             .padding(vertical = 28.dp, horizontal = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
             imageVector = Icons.Filled.PhotoCamera,
             contentDescription = null,
-            tint = MMColors.TextMuted.copy(alpha = 0.7f),
+            tint = MMInk.Secondary,
             modifier = Modifier.size(28.dp),
         )
         Spacer(Modifier.height(10.dp))
         Text(
             "Add photos to create proof for this room.",
-            color = MMColors.TextSecondary,
+            color = MMInk.Secondary,
             fontSize = 14.sp,
             textAlign = TextAlign.Center,
         )

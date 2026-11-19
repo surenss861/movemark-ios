@@ -38,7 +38,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material3.Icon
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -68,7 +69,7 @@ import com.surensureshkumar.movemark.features.proof.rememberSignedUrl
 import java.util.UUID
 
 /*
- * Maintenance case file (iOS `MaintenanceIssueDetailView` in `MMCaseScreen`): the dark case header (MAINTENANCE
+ * Maintenance case file (iOS `MaintenanceIssueDetailView` in `MMCaseScreen`): the light case header (MAINTENANCE
  * CASE, status, title, category, REPORTED), then the lead evidence photo + strip (tap → viewer), the case
  * timeline from the record, details, the follow-up composer and Mark resolved.
  */
@@ -148,7 +149,7 @@ fun MaintenanceIssueDetailScreen(
         lines = listOf(case.categoryLabel),
         onBack = onBack,
         modifier = Modifier.imePadding(),
-        trailing = { MaintenanceStatusMark(status, onDark = true) },
+        trailing = { MaintenanceStatusMark(status) },
         headerAccessory = if (reported != null) {
             { MaintenanceReportedLabel(reported) }
         } else {
@@ -239,7 +240,7 @@ private fun MaintenanceReportedLabel(reported: String) {
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         Text("REPORTED", style = MMEyebrowStyle, color = MMInk.HeroSecondary)
-        Text(reported, style = mmFont(14.5f, FontWeight.Medium), color = Color.White)
+        Text(reported, style = mmFont(14.5f, FontWeight.Medium), color = MMInk.HeroText)
     }
 }
 
@@ -266,8 +267,8 @@ internal fun MaintenanceEvidenceSection(
                     .fillMaxWidth()
                     .aspectRatio(4f / 3f)
                     .clip(tileShape)
-                    .background(MMInk.Field)
-                    .border(0.75.dp, Color.Black.copy(alpha = 0.06f), tileShape)
+                    .background(MMInk.ThumbFill)
+                    .border(0.75.dp, MMInk.CardStroke, tileShape)
                     .mmPressable(onClickLabel = "Open the photo viewer") { onOpen(lead) }
                     .semantics { contentDescription = "Lead evidence photo, $countText" },
             ) {
@@ -279,6 +280,8 @@ internal fun MaintenanceEvidenceSection(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
                     )
+                } else {
+                    Icon(Icons.Outlined.Image, contentDescription = null, tint = MMInk.Secondary, modifier = Modifier.size(28.dp).align(Alignment.Center))
                 }
             }
             Text(

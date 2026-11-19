@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -63,9 +64,9 @@ fun MMSettingsGroup(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        color = MMColors.EvidenceCard,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MMColors.CardStroke),
+        shape = RoundedCornerShape(16.dp),
+        color = MMColors.Card,
+        border = androidx.compose.foundation.BorderStroke(0.75.dp, MMColors.CardStroke),
     ) {
         Column { content() }
     }
@@ -75,7 +76,7 @@ fun MMSettingsGroup(
 fun MMSettingsDivider() {
     HorizontalDivider(
         modifier = Modifier.padding(start = 14.dp),
-        color = Color.White.copy(alpha = 0.06f),
+        color = com.surensureshkumar.movemark.core.design.MMInk.Separator,
     )
 }
 
@@ -124,6 +125,7 @@ fun MMSettingsRow(
             .fillMaxWidth()
             .scale(scale)
             .alpha(if (enabled) 1f else 0.5f)
+            .heightIn(min = 48.dp)
             .then(clickableModifier)
             .padding(horizontal = 14.dp, vertical = if (subtitle.isNullOrBlank()) 12.dp else 11.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -172,6 +174,6 @@ private fun StatusPill(text: String, active: Boolean) {
             .padding(horizontal = 9.dp, vertical = 4.dp),
         fontSize = 11.sp,
         fontWeight = FontWeight.SemiBold,
-        color = if (active) MMColors.Primary else MMColors.TextMuted,
+        color = if (active) MMColors.TextPrimary else MMColors.TextMuted,
     )
 }

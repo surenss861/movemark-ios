@@ -49,7 +49,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -58,7 +57,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.ui.text.style.TextAlign
 import com.surensureshkumar.movemark.core.design.MMColors
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMMetrics
 import com.surensureshkumar.movemark.core.design.components.MMButton
 import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
 import com.surensureshkumar.movemark.data.models.EvidenceRecord
@@ -86,65 +89,82 @@ fun RoomEvidenceBody(
     val damage = ordered.flatMap { it.issueTags }.distinct()
     val notes = ordered.mapNotNull { e -> e.notes.trim().takeIf { it.isNotEmpty() }?.let { e.title to it } }
 
-    Column(modifier.fillMaxWidth()) {
-        if (latest != null) {
-            ConditionRow(latest.conditionRating)
-            Hairline()
-        }
-
-        if (damage.isNotEmpty() || notes.isNotEmpty()) {
-            Column(Modifier.padding(vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Kicker(if (damage.isEmpty()) "NOTES" else "DAMAGE NOTED", MMColors.TextMuted)
-                if (damage.isNotEmpty()) {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        damage.forEach { DamagePill(it) }
-                    }
-                }
-                notes.forEach { (title, text) ->
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        if (notes.size > 1) {
-                            Text(title, color = MMColors.TextMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    Column(modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        if (latest != null || damage.isNotEmpty() || notes.isNotEmpty()) {
+            // Summary card: condition, then damage and notes.
+            EvidenceCard {
+                if (latest != null) ConditionRow(latest.conditionRating)
+                if (damage.isNotEmpty() || notes.isNotEmpty()) {
+                    if (latest != null) Hairline()
+                    Column(Modifier.padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Kicker(if (damage.isEmpty()) "NOTES" else "DAMAGE NOTED", MMInk.Secondary)
+                        if (damage.isNotEmpty()) {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                damage.forEach { DamagePill(it) }
+                            }
                         }
-                        Text(text, color = MMColors.TextSecondary, fontSize = 16.sp, lineHeight = 22.sp)
+                        notes.forEach { (title, text) ->
+                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                if (notes.size > 1) {
+                                    Text(title, color = MMInk.Text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                                Text(text, color = MMInk.Secondary, fontSize = 16.sp, lineHeight = 22.sp)
+                            }
+                        }
                     }
                 }
             }
-            Hairline()
         }
 
-        Column(Modifier.padding(vertical = 18.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Kicker(if (proofPhase == ProofPhase.MoveOut) "MOVE-OUT ENTRIES" else "ENTRIES", MMColors.TextMuted)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Kicker(if (proofPhase == ProofPhase.MoveOut) "MOVE-OUT ENTRIES" else "ENTRIES", MMInk.Secondary)
                 Spacer(Modifier.weight(1f))
-                Text("$totalEntries", fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MMColors.TextMuted)
+                Text("$totalEntries", fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MMInk.Secondary)
             }
-            Spacer(Modifier.height(4.dp))
-            ordered.forEachIndexed { index, entry ->
-                if (index > 0) HorizontalDivider(thickness = 0.5.dp, color = MMColors.CardStroke)
-                EntryRow(entry, isBusy, onEdit, onAddPhotos, onDelete, onShowAllPhotos)
-            }
-            if (hasOlderEntries) {
-                HorizontalDivider(thickness = 0.5.dp, color = MMColors.CardStroke)
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 44.dp)
-                        .clickable(enabled = !isLoadingOlder && !isBusy, role = Role.Button, onClick = onLoadOlder),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (isLoadingOlder) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = MMColors.Primary)
-                    Text(
-                        if (isLoadingOlder) "Loading older entries…" else "Show older entries (${totalEntries - ordered.size} more)",
-                        color = MMColors.Primary,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+            EvidenceCard {
+                ordered.forEachIndexed { index, entry ->
+                    if (index > 0) Hairline()
+                    EntryRow(entry, isBusy, onEdit, onAddPhotos, onDelete, onShowAllPhotos)
+                }
+                if (hasOlderEntries) {
+                    Hairline()
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .clickable(enabled = !isLoadingOlder && !isBusy, role = Role.Button, onClick = onLoadOlder),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (isLoadingOlder) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = MMInk.Lime)
+                        Text(
+                            if (isLoadingOlder) "Loading older entries…" else "Show older entries (${totalEntries - ordered.size} more)",
+                            color = MMInk.Text,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                 }
             }
         }
         // Adding evidence lives on the hero ("Add evidence"), so the body ends with the record.
     }
+}
+
+/** A primary card on the light page: white, subtle grey hairline, card radius. */
+@Composable
+private fun EvidenceCard(content: @Composable ColumnScope.() -> Unit) {
+    val shape = RoundedCornerShape(MMMetrics.CardRadius)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(MMInk.Card)
+            .border(0.75.dp, MMInk.CardStroke, shape)
+            .padding(horizontal = 16.dp),
+        content = content,
+    )
 }
 
 @Composable
@@ -157,9 +177,16 @@ private fun ConditionRow(rating: Int?) {
             .semantics(mergeDescendants = true) { contentDescription = "Condition ${conditionLabel(rating)}, $value of 5" },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Kicker("CONDITION", MMColors.TextMuted)
-        Spacer(Modifier.weight(1f))
-        Text(conditionLabel(rating), color = MMColors.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Kicker("CONDITION", MMInk.Secondary)
+        Spacer(Modifier.width(12.dp))
+        Text(
+            conditionLabel(rating),
+            color = MMInk.Text,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f),
+        )
         Spacer(Modifier.width(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             (1..5).forEach { step ->
@@ -168,7 +195,7 @@ private fun ConditionRow(rating: Int?) {
                         .width(10.dp)
                         .height(4.dp)
                         .clip(RoundedCornerShape(50))
-                        .background(if (step <= value) MMColors.TextPrimary.copy(alpha = 0.85f) else MMColors.TextMuted.copy(alpha = 0.3f)),
+                        .background(if (step <= value) MMInk.Text else MMInk.Track),
                 )
             }
         }
@@ -186,7 +213,7 @@ private fun DamagePill(tag: String) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(Modifier.size(6.dp).clip(CircleShape).background(MMColors.SemanticWarning))
-        Text(tag, color = MMColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Text(tag, color = MMInk.Text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -200,40 +227,42 @@ private fun EntryRow(
     onShowAllPhotos: (EvidenceRecord) -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(entry.title, color = MMColors.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
+            // Wraps at large font scales rather than truncating.
+            Text(entry.title, color = MMInk.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             recordedLabel(entry.createdAt)?.let {
-                Text(it, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MMColors.TextMuted)
+                Text(it, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MMInk.Secondary)
             }
-            Text(entrySummary(entry), color = MMColors.TextSecondary, fontSize = 13.sp)
+            Text(entrySummary(entry), color = MMInk.Secondary, fontSize = 13.sp)
         }
         Box {
             IconButton(onClick = { menuOpen = true }, enabled = !isBusy) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "Actions for ${entry.title}", tint = MMColors.TextSecondary)
+                Icon(Icons.Filled.MoreVert, contentDescription = "Actions for ${entry.title}", tint = MMInk.Secondary)
             }
+            // White native-style menu (the Material scheme is light); the destructive action sits below a divider.
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(
-                    text = { Text("Edit details") },
-                    leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
+                    text = { Text("Edit details", color = MMInk.Text) },
+                    leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null, tint = MMInk.Text) },
                     onClick = { menuOpen = false; onEdit(entry) },
                 )
                 DropdownMenuItem(
-                    text = { Text("Add photos") },
-                    leadingIcon = { Icon(Icons.Outlined.AddAPhoto, contentDescription = null) },
+                    text = { Text("Add photos", color = MMInk.Text) },
+                    leadingIcon = { Icon(Icons.Outlined.AddAPhoto, contentDescription = null, tint = MMInk.Text) },
                     onClick = { menuOpen = false; onAddPhotos(entry) },
                 )
                 if (entry.hasUnloadedPhotos) {
                     DropdownMenuItem(
-                        text = { Text("Show all ${entry.photoCount} photos") },
-                        leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, contentDescription = null) },
+                        text = { Text("Show all ${entry.photoCount} photos", color = MMInk.Text) },
+                        leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, contentDescription = null, tint = MMInk.Text) },
                         onClick = { menuOpen = false; onShowAllPhotos(entry) },
                     )
                 }
-                HorizontalDivider()
+                HorizontalDivider(Modifier.padding(vertical = 4.dp), thickness = 0.75.dp, color = MMInk.Separator)
                 DropdownMenuItem(
-                    text = { Text("Delete entry", color = MMColors.SemanticDanger) },
-                    leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = MMColors.SemanticDanger) },
+                    text = { Text("Delete entry", color = MMInk.Danger) },
+                    leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = MMInk.Danger) },
                     onClick = { menuOpen = false; onDelete(entry) },
                 )
             }
@@ -249,7 +278,7 @@ private fun entrySummary(entry: EvidenceRecord): String = buildList {
 
 @Composable
 private fun Hairline() {
-    HorizontalDivider(thickness = 0.5.dp, color = MMColors.CardStroke)
+    HorizontalDivider(thickness = 0.75.dp, color = MMInk.Separator)
 }
 
 /** Title, condition, issue tags, notes — the same fields and order as the iOS capture form. */
@@ -262,7 +291,7 @@ fun EntryDetailsForm(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Details", color = MMColors.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Text("Details", color = MMInk.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         OutlinedTextField(
             value = draft.title,
             onValueChange = { onChange(draft.copy(title = it)) },
@@ -275,7 +304,7 @@ fun EntryDetailsForm(
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Kicker("CONDITION", MMColors.TextMuted)
+            Kicker("CONDITION", MMInk.Secondary)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 RoomConditionLabels.forEach { (rating, label) ->
                     SelectChip(label, selected = draft.conditionRating == rating, enabled = enabled) {
@@ -287,11 +316,11 @@ fun EntryDetailsForm(
 
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Kicker("ISSUE TAGS", MMColors.TextMuted)
+                Kicker("ISSUE TAGS", MMInk.Secondary)
                 Spacer(Modifier.weight(1f))
                 Text(
                     if (draft.tags.isEmpty()) "Optional" else "${draft.tags.size} selected",
-                    color = MMColors.TextMuted,
+                    color = MMInk.Secondary,
                     fontSize = 12.sp,
                 )
             }
@@ -321,18 +350,19 @@ fun EntryDetailsForm(
 @Composable
 private fun SelectChip(text: String, selected: Boolean, enabled: Boolean, attention: Boolean = false, onClick: () -> Unit) {
     val shape = RoundedCornerShape(50)
-    val selectedFill = if (attention) MMColors.SemanticWarning.copy(alpha = 0.18f) else MMColors.Primary.copy(alpha = 0.18f)
-    val selectedStroke = if (attention) MMColors.SemanticWarning.copy(alpha = 0.55f) else MMColors.Primary.copy(alpha = 0.55f)
+    // Lime is reserved for primary buttons and progress: a selected chip is ink-outlined (amber for issue tags).
+    val selectedFill = if (attention) MMColors.SemanticWarning.copy(alpha = 0.12f) else MMInk.Field
+    val selectedStroke = if (attention) MMColors.SemanticWarning.copy(alpha = 0.6f) else MMInk.Text
     Text(
         text,
-        color = if (selected) MMColors.TextPrimary else MMColors.TextSecondary,
+        color = if (selected) MMInk.Text else MMInk.Secondary,
         fontSize = 14.sp,
         fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
         modifier = Modifier
             .heightIn(min = 36.dp)
             .clip(shape)
-            .background(if (selected) selectedFill else MMColors.CardRaised.copy(alpha = 0.5f))
-            .border(1.dp, if (selected) selectedStroke else Color.White.copy(alpha = 0.06f), shape)
+            .background(if (selected) selectedFill else MMInk.Card)
+            .border(if (selected) 1.dp else 0.75.dp, if (selected) selectedStroke else MMInk.CardStroke, shape)
             .clickable(enabled = enabled, role = Role.Checkbox, onClick = onClick)
             .semantics { this.selected = selected }
             .padding(horizontal = 13.dp, vertical = 9.dp),
@@ -341,13 +371,16 @@ private fun SelectChip(text: String, selected: Boolean, enabled: Boolean, attent
 
 @Composable
 private fun fieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedTextColor = MMColors.TextPrimary,
-    unfocusedTextColor = MMColors.TextPrimary,
-    focusedBorderColor = MMColors.Primary,
-    unfocusedBorderColor = MMColors.CardStroke,
-    focusedLabelColor = MMColors.Primary,
-    unfocusedLabelColor = MMColors.TextMuted,
-    cursorColor = MMColors.Primary,
-    focusedPlaceholderColor = MMColors.TextMuted,
-    unfocusedPlaceholderColor = MMColors.TextMuted,
+    focusedTextColor = MMInk.Text,
+    unfocusedTextColor = MMInk.Text,
+    focusedBorderColor = MMInk.Text,
+    unfocusedBorderColor = MMInk.CardStroke,
+    focusedLabelColor = MMInk.Text,
+    unfocusedLabelColor = MMInk.Secondary,
+    cursorColor = MMInk.Text,
+    focusedPlaceholderColor = MMInk.Secondary,
+    unfocusedPlaceholderColor = MMInk.Secondary,
+    focusedContainerColor = MMInk.Card,
+    unfocusedContainerColor = MMInk.Card,
+    disabledContainerColor = MMInk.Field,
 )

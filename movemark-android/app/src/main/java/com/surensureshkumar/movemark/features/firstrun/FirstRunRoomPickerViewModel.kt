@@ -79,10 +79,8 @@ class FirstRunRoomPickerViewModel @Inject constructor(
      */
     fun startRoomProof(option: FirstRunRoomOption, otherRoomName: String, onStart: (UUID) -> Unit) {
         if (_loading.value) return
-        val userId = sessionManager.userId.value ?: run {
-            _error.value = "Sign in to continue."
-            return
-        }
+        // A signed-in screen never shows a red "Sign in to continue." (unslop audit); the session is restoring.
+        val userId = sessionManager.userId.value ?: return
         val name = FirstRunRoomChoice.targetName(option, otherRoomName) ?: run {
             _error.value = if (option == FirstRunRoomOption.Other) "Enter a room name." else "Pick a room to continue."
             return

@@ -225,7 +225,7 @@ internal fun DisputePacketContent(
 
 internal const val DISPUTE_PURPOSE_LINE = "Build a record of the evidence related to this issue."
 
-/** The status on the dark header: a lime dot when ready or generated, else a quiet one, and the status line. */
+/** The status on the light header: a lime dot when ready or generated, else a quiet one, and the status line. */
 @Composable
 private fun PacketStatus(status: String, ready: Boolean) {
     // MMHeader adds 22dp above the accessory; iOS sets the status 18 below the purpose line.
@@ -235,9 +235,9 @@ private fun PacketStatus(status: String, ready: Boolean) {
             .semantics(mergeDescendants = true) {},
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(7.dp).background(if (ready) MMInk.LimeMark else MMInk.HeroSecondary.copy(alpha = 0.62f * 0.6f), CircleShape))
+        Box(Modifier.size(7.dp).background(if (ready) MMInk.LimeMark else MMInk.HeroSecondary.copy(alpha = 0.5f), CircleShape))
         Spacer(Modifier.width(7.dp))
-        Text(status, style = mmFont(12.5f, FontWeight.Medium), color = Color.White)
+        Text(status, style = mmFont(12.5f, FontWeight.Medium), color = MMInk.HeroText)
     }
 }
 

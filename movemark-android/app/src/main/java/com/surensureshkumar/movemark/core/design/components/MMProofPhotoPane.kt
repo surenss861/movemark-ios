@@ -35,7 +35,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.surensureshkumar.movemark.core.design.MMColors
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMMetrics
 import com.surensureshkumar.movemark.core.design.MMMotion
 
 enum class MMProofPhotoOverlayStyle {
@@ -112,15 +113,16 @@ private fun ThumbnailPane(
     Box(
         modifier = modifier
             .size(72.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(MMColors.FieldFill)
-            .border(1.dp, MMColors.CardStroke, RoundedCornerShape(14.dp)),
+            .clip(RoundedCornerShape(MMMetrics.GroupRadius))
+            .background(MMInk.ThumbFill)
+            .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(MMMetrics.GroupRadius)),
         contentAlignment = Alignment.Center,
     ) {
         when {
             imageBitmap != null -> Image(bitmap = imageBitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             drawableResId != null -> Image(painter = painterResource(drawableResId), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            else -> Icon(Icons.Default.PhotoCamera, null, tint = MMColors.TextMuted.copy(0.7f), modifier = Modifier.size(26.dp))
+            // The explicit neutral placeholder (grey fill + photo glyph), never a brand mark posing as a photo.
+            else -> Icon(Icons.Default.PhotoCamera, null, tint = MMInk.Secondary, modifier = Modifier.size(26.dp))
         }
     }
 }
@@ -146,26 +148,20 @@ private fun EvidencePane(
     val showTags = overlayStyle != MMProofPhotoOverlayStyle.Minimal && issueTags.isNotEmpty() &&
         size != MMProofPhotoPaneSize.Medium
 
+    val shape = RoundedCornerShape(MMMetrics.CardRadius)
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(MMColors.FieldFill),
+            .clip(shape)
+            .background(MMInk.ThumbFill)
+            .border(0.75.dp, MMInk.CardStroke, shape),
     ) {
         when {
             imageBitmap != null -> Image(bitmap = imageBitmap, contentDescription = null, contentScale = contentScale, modifier = Modifier.fillMaxSize())
             drawableResId != null -> Image(painter = painterResource(drawableResId), contentDescription = null, contentScale = contentScale, modifier = Modifier.fillMaxSize())
+            // No photo: the explicit neutral placeholder.
+            else -> Icon(Icons.Default.PhotoCamera, null, tint = MMInk.Secondary, modifier = Modifier.size(28.dp).align(Alignment.Center))
         }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(if (size == MMProofPhotoPaneSize.Medium) 56.dp else 72.dp)
-                .align(Alignment.BottomCenter)
-                .background(
-                    androidx.compose.ui.graphics.Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Black.copy(0.18f), Color.Black.copy(0.42f)),
-                    ),
-                ),
-        )
+        // No gradient scrim: labels sit on small white pills instead of white text on a darkened photo.
         if (showScanCorners) MMProofFocusBrackets(Modifier.fillMaxSize())
         if (showTopOverlay || showTags) {
             Column(
@@ -179,22 +175,20 @@ private fun EvidencePane(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.Top,
                     ) {
-                        Column {
-                            roomName?.let {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        Modifier
-                                            .size(7.dp)
-                                            .clip(CircleShape)
-                                            .background(MMColors.Primary)
-                                            .border(0.5.dp, Color.White.copy(0.4f), CircleShape),
-                                    )
-                                    Spacer(Modifier.width(5.dp))
-                                    Text(it, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        if (roomName != null || phaseLabel != null) {
+                            Column(
+                                Modifier
+                                    .weight(1f, fill = false)
+                                    .background(MMInk.Card, RoundedCornerShape(10.dp))
+                                    .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 8.dp, vertical = 5.dp),
+                            ) {
+                                roomName?.let {
+                                    Text(it, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MMInk.Text)
                                 }
-                            }
-                            phaseLabel?.let {
-                                Text(it, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(0.88f))
+                                phaseLabel?.let {
+                                    Text(it, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = MMInk.Secondary)
+                                }
                             }
                         }
                         phaseBadge?.let {
@@ -202,10 +196,11 @@ private fun EvidencePane(
                                 it,
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color.White.copy(0.95f),
+                                color = MMInk.Text,
                                 modifier = Modifier
-                                    .background(Color.Black.copy(0.55f), CircleShape)
-                                    .border(0.8.dp, Color.White.copy(0.22f), CircleShape)
+                                    .padding(start = 6.dp)
+                                    .background(MMInk.Card, CircleShape)
+                                    .border(0.75.dp, MMInk.CardStroke, CircleShape)
                                     .padding(horizontal = 7.dp, vertical = 4.dp),
                             )
                         }
@@ -254,28 +249,28 @@ private fun MMProofIssueMarker(
                 Modifier
                     .size(if (priorDamage) 7.dp else 5.dp)
                     .clip(CircleShape)
-                    .background(if (priorDamage) Color.White else inspectionGreen),
+                    .background(if (priorDamage) MMInk.Danger else inspectionGreen)
+                    .border(1.dp, MMInk.Card, CircleShape),
             )
-            Box(Modifier.width(1.dp).height(if (priorDamage) 10.dp else 7.dp).background(Color.White.copy(0.65f)))
+            Box(Modifier.width(1.dp).height(if (priorDamage) 10.dp else 7.dp).background(MMInk.Card.copy(0.85f)))
         }
         Spacer(Modifier.width(5.dp))
-        Text(
-            label,
-            fontSize = fontSize,
-            fontWeight = if (priorDamage) FontWeight.Bold else FontWeight.SemiBold,
-            color = Color.White.copy(if (priorDamage) 1f else 0.96f),
-            modifier = Modifier
-                .background(
-                    if (priorDamage) Color.Black.copy(0.82f) else inspectionGreen.copy(0.92f),
-                    CircleShape,
-                )
-                .border(
-                    if (priorDamage) 1.15.dp else 0.5.dp,
-                    if (priorDamage) Color.White.copy(0.9f) else Color.White.copy(0.18f),
-                    CircleShape,
-                )
+        Row(
+            Modifier
+                .background(MMInk.Card, CircleShape)
+                .border(0.75.dp, MMInk.CardStroke, CircleShape)
                 .padding(horizontal = if (priorDamage) 10.dp else 9.dp, vertical = 5.dp),
-        )
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(6.dp).clip(CircleShape).background(if (priorDamage) MMInk.Danger else inspectionGreen))
+            Spacer(Modifier.width(5.dp))
+            Text(
+                label,
+                fontSize = fontSize,
+                fontWeight = if (priorDamage) FontWeight.Bold else FontWeight.SemiBold,
+                color = MMInk.Text,
+            )
+        }
     }
 }
 

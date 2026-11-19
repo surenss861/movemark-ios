@@ -148,7 +148,7 @@ val MMEyebrowStyle: TextStyle get() = mmFont(11f, FontWeight.SemiBold, tracking 
 
 /** Light or dark navigation-bar icons while a screen with a light bottom is shown. */
 @Composable
-fun MMLightSystemBars(lightNavigationBar: Boolean = true, lightStatusBar: Boolean = false) {
+fun MMLightSystemBars(lightNavigationBar: Boolean = true, lightStatusBar: Boolean = true) {
     val view = LocalView.current
     if (view.isInEditMode) return
     DisposableEffect(lightNavigationBar, lightStatusBar) {
@@ -175,11 +175,19 @@ fun MMWordmark(modifier: Modifier = Modifier, size: Float = 17f) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy((size * 0.38f).dp),
     ) {
-        Image(
-            painter = painterResource(R.drawable.movemark_mark),
-            contentDescription = null,
-            modifier = Modifier.size((size * 0.86f).dp),
-        )
+        // The mark is off-white, grey and lime: on the light page it sits on a small ink tile, like the app icon.
+        Box(
+            Modifier
+                .size((size * 1.18f).dp)
+                .background(MMInk.Text, RoundedCornerShape((size * 0.3f).dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.movemark_mark),
+                contentDescription = null,
+                modifier = Modifier.size((size * 0.8f).dp),
+            )
+        }
         Text("MoveMark", style = mmFont(size, FontWeight.SemiBold), color = MMInk.HeroText)
     }
 }
@@ -749,16 +757,16 @@ fun MMLoadingBlock(modifier: Modifier = Modifier, message: String? = null) {
     }
 }
 
-/** A small outlined capsule tag ("PRO"). */
+/** A small dark filled pill in sentence case ("Pro"), as iOS (unslop audit: never uppercase). */
 @Composable
 fun MMTag(text: String, modifier: Modifier = Modifier) {
     Text(
-        text.uppercase(),
-        style = mmFont(10.5f, FontWeight.SemiBold, tracking = 0.5f),
-        color = MMInk.Secondary,
+        text,
+        style = mmFont(11.5f, FontWeight.SemiBold),
+        color = Color.White,
         modifier = modifier
-            .border(1.dp, MMInk.CardStroke, CircleShape)
-            .padding(horizontal = 7.dp, vertical = 3.dp),
+            .background(MMInk.Text, CircleShape)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
     )
 }
 

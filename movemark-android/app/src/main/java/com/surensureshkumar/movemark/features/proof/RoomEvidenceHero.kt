@@ -1,5 +1,6 @@
 /**
- * @file Room hero — full-bleed evidence photo with filmstrip, or the empty capture field
+ * @file Room hero — light page header (stage, room, recorded) with the latest photo in a rounded card and a
+ *       filmstrip, or the empty capture field
  * @domain proof-capture
  * @status wip
  * @see [[ROOM_EVIDENCE_RECORD]] — screen spec (§4 composition)
@@ -18,7 +19,6 @@ import com.surensureshkumar.movemark.core.design.MMMetrics
 import com.surensureshkumar.movemark.core.design.MMPrimaryButton
 import com.surensureshkumar.movemark.core.design.MMSecondaryButton
 import com.surensureshkumar.movemark.core.design.mmFont
-import com.surensureshkumar.movemark.core.design.mmPullUp
 import com.surensureshkumar.movemark.core.design.mmLines
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
@@ -29,7 +29,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -47,14 +46,12 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.outlined.CenterFocusWeak
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -62,7 +59,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -74,15 +70,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -96,11 +86,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
-import com.surensureshkumar.movemark.core.design.MMColors
-import com.surensureshkumar.movemark.core.design.MMMotion
 import com.surensureshkumar.movemark.core.design.MMSpacing
-import com.surensureshkumar.movemark.core.design.components.MMButton
-import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
 import com.surensureshkumar.movemark.data.models.EvidencePhoto
 import com.surensureshkumar.movemark.data.models.EvidenceRecord
 import com.surensureshkumar.movemark.domain.ProofPhase
@@ -133,12 +119,20 @@ fun recordedLabel(raw: String?): String? {
 fun orderedRoomPhotos(entries: List<EvidenceRecord>): List<Pair<EvidencePhoto, EvidenceRecord>> =
     entries.sortedByDescending { it.createdAt.orEmpty() }.flatMap { entry -> entry.photos.map { it to entry } }
 
-/** About two-thirds of the screen — shared with the screen so the bar knows when the hero has left. */
+/** Legacy full-bleed hero height (kept for callers; the light hero sizes its photo card by aspect ratio). */
 fun roomHeroHeight(width: Dp, screenHeight: Dp): Dp = minOf(width * 1.35f, screenHeight * 0.66f)
+
+/** How far the page scrolls before the room title has left and settles into the pinned bar. */
+val RoomHeroTitleScrollAway: Dp = 120.dp
 
 fun conditionLabel(rating: Int?): String =
     RoomConditionLabels.firstOrNull { it.first == rating }?.second ?: "Not rated"
 
+/** Space the pinned [RoomTopBar] takes over the page (status bar + bar row). */
+@Composable
+private fun topBarClearance(): Dp = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 64.dp
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RoomEvidenceHero(
     roomName: String,
@@ -153,8 +147,8 @@ fun RoomEvidenceHero(
     compareLine: String?,
     /** The room's true photo total for this stage (loaded entries plus the unloaded remainder). */
     totalPhotoCount: Int? = null,
-    /** Page scroll in px, for parallax. */
-    scrollOffset: () -> Int = { 0 },
+    /** Page scroll in px. Unused by the light hero (no parallax photo); kept so callers stay unchanged. */
+    @Suppress("UNUSED_PARAMETER") scrollOffset: () -> Int = { 0 },
     modifier: Modifier = Modifier,
 ) {
     val allPhotos = orderedRoomPhotos(entries)
@@ -167,83 +161,76 @@ fun RoomEvidenceHero(
     }
 
     val (photo, entry) = current
-    val reduceMotion = MMMotion.rememberReduceMotion()
     val photoCount = totalPhotoCount ?: entries.sumOf { it.photoCount }
     val issueCount = entries.flatMap { it.issueTags }.toSet().size
+    val moveOut = proofPhase == ProofPhase.MoveOut
 
-    Column(modifier.fillMaxWidth()) {
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-            val heroHeight = roomHeroHeight(maxWidth, screenHeight)
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(heroHeight)
-                    .clipToBounds()
-                    .clickable(role = Role.Button, onClickLabel = "Open photo full screen") { onOpenPhoto(photo) },
-            ) {
-                // Scrolling up, the photo drifts slower than the page (parallax). Off under Reduce Motion.
-                Box(Modifier.fillMaxSize().graphicsLayer { translationY = if (reduceMotion) 0f else scrollOffset() * 0.4f }) {
-                    Crossfade(targetState = photo, animationSpec = tween(350), label = "heroPhoto") { shown ->
-                        HeroImage(shown, signPhotoUrl)
-                    }
-                }
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                0f to Color.Black.copy(alpha = 0.35f),
-                                0.2f to Color.Transparent,
-                                0.4f to Color.Black.copy(alpha = 0.18f),
-                                0.72f to MMColors.AppBackground.copy(alpha = 0.78f),
-                                0.9f to MMColors.AppBackground.copy(alpha = 0.95f),
-                                1f to MMColors.AppBackground,
-                            ),
-                        ),
-                )
-                HeroTitle(
-                    roomName = roomName,
-                    recorded = recordedLabel(entry.createdAt),
-                    chips = listOfNotNull(
-                        HeroChip(conditionLabel(entry.conditionRating), Icons.Filled.CheckCircle, MMColors.Primary),
-                        HeroChip(if (photoCount == 1) "1 photo" else "$photoCount photos", Icons.Outlined.PhotoLibrary, Color.White),
-                        issueCount.takeIf { it > 0 }?.let {
-                            HeroChip(if (it == 1) "1 issue" else "$it issues", Icons.Filled.Warning, MMColors.SemanticWarning)
-                        },
-                    ),
-                    isBusy = isBusy,
-                    quiet = hasPendingPhotos || isBusy,
-                    onTakePhotos = onTakePhotos,
-                    onChooseGallery = onChooseGallery,
-                    modifier = Modifier.align(Alignment.BottomStart),
-                )
+    Column(
+        modifier
+            .fillMaxWidth()
+            .background(MMInk.Sheet)
+            .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
+            // Clears the pinned RoomTopBar.
+            .padding(top = topBarClearance()),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        // Ink header on the light page: stage, room, provenance.
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(if (moveOut) "MOVE-OUT EVIDENCE" else "MOVE-IN EVIDENCE", style = MMEyebrowStyle, color = MMInk.Secondary)
+            Text(
+                roomName,
+                style = mmFont(34f, FontWeight.Bold),
+                lineHeight = 38.sp,
+                color = MMInk.Text,
+                modifier = Modifier.semantics { heading() },
+            )
+            recordedLabel(entry.createdAt)?.let { RecordedLine(it) }
+        }
+
+        // The latest photo, properly sized in a rounded card (never full-bleed, never behind text).
+        val cardShape = RoundedCornerShape(MMMetrics.CardRadius)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(4f / 3f)
+                .clip(cardShape)
+                .background(MMInk.ThumbFill)
+                .border(0.75.dp, MMInk.CardStroke, cardShape)
+                .clickable(role = Role.Button, onClickLabel = "Open photo full screen") { onOpenPhoto(photo) },
+        ) {
+            Crossfade(targetState = photo, animationSpec = tween(350), label = "heroPhoto") { shown ->
+                HeroImage(shown, signPhotoUrl)
             }
         }
 
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-                .padding(top = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            if (allPhotos.size > 1) {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(allPhotos, key = { it.first.id }) { (thumb, _) ->
-                        val isSelected = thumb.id == photo.id
-                        FilmstripThumb(
-                            photo = thumb,
-                            isSelected = isSelected,
-                            signPhotoUrl = signPhotoUrl,
-                            onClick = { selectedId = thumb.id.toString() },
-                        )
-                    }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOfNotNull(
+                HeroChip(conditionLabel(entry.conditionRating), Icons.Filled.CheckCircle, MMInk.Text),
+                HeroChip(if (photoCount == 1) "1 photo" else "$photoCount photos", Icons.Outlined.PhotoLibrary, MMInk.Secondary),
+                issueCount.takeIf { it > 0 }?.let {
+                    HeroChip(if (it == 1) "1 issue" else "$it issues", Icons.Filled.Warning, MMInk.Warning)
+                },
+            ).forEach { InfoChip(it) }
+        }
+
+        if (allPhotos.size > 1) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(allPhotos, key = { it.first.id }) { (thumb, _) ->
+                    val isSelected = thumb.id == photo.id
+                    FilmstripThumb(
+                        photo = thumb,
+                        isSelected = isSelected,
+                        signPhotoUrl = signPhotoUrl,
+                        onClick = { selectedId = thumb.id.toString() },
+                    )
                 }
             }
-            compareLine?.let {
-                Text(it, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MMColors.TextMuted)
-            }
+        }
+
+        AddEvidencePill(isBusy, onTakePhotos, onChooseGallery, Modifier.padding(top = 2.dp), quiet = hasPendingPhotos || isBusy)
+
+        compareLine?.let {
+            Text(it, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MMInk.Secondary)
         }
     }
 }
@@ -251,113 +238,85 @@ fun RoomEvidenceHero(
 @Composable
 private fun HeroImage(photo: EvidencePhoto, signPhotoUrl: suspend (String) -> String?) {
     val url by rememberSignedUrl(photo.filePath) { signPhotoUrl(photo.filePath) }
-    Box(Modifier.fillMaxSize().background(MMColors.Card)) {
+    Box(Modifier.fillMaxSize().background(MMInk.ThumbFill), contentAlignment = Alignment.Center) {
         if (url != null) {
             SubcomposeAsyncImage(
                 model = url,
                 contentDescription = "Latest evidence photo of this room",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
-                error = {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Photo unavailable", color = MMColors.TextMuted, fontSize = 13.sp)
-                    }
-                },
+                loading = { PhotoPlaceholder() },
+                error = { PhotoPlaceholder("Photo unavailable") },
             )
+        } else {
+            PhotoPlaceholder()
+        }
+    }
+}
+
+/** The explicit neutral placeholder: grey fill and a photo glyph (never the brand mark posing as a photo). */
+@Composable
+private fun PhotoPlaceholder(caption: String? = null) {
+    Column(
+        Modifier.fillMaxSize().background(MMInk.ThumbFill),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(Icons.Outlined.Image, contentDescription = null, tint = MMInk.Secondary, modifier = Modifier.size(28.dp))
+        caption?.let {
+            Text(it, color = MMInk.Secondary, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
         }
     }
 }
 
 /**
- * Pinned over the screen (not inside the scrolling hero): back and phase sit on the photo as
- * translucent controls; once the hero has scrolled away the bar fills and the room name settles in.
+ * Pinned over the screen: a light bar on the page colour with an ink back button and the stage pill; once the
+ * page title has scrolled away the room name settles in and a hairline appears under the bar.
  */
 @Composable
 fun RoomTopBar(roomName: String, phase: ProofPhase, onBack: () -> Unit, scrolledAway: Boolean) {
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val fill by animateFloatAsState(if (scrolledAway) 0.98f else 0f, tween(200), label = "barFill")
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(MMColors.AppBackground.copy(alpha = fill))
-            .padding(top = top + 4.dp, start = 8.dp, end = 16.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier
-                .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.35f * (1f - fill))),
+    val fill by animateFloatAsState(if (scrolledAway) 1f else 0f, tween(200), label = "barFill")
+    Column(Modifier.fillMaxWidth().background(MMInk.Sheet)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = top + 4.dp, start = 4.dp, end = 16.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MMInk.Text)
+            }
+            Text(
+                roomName,
+                color = MMInk.Text,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = mmLines(2),
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+                    .alpha(fill),
+            )
+            Text(
+                if (phase == ProofPhase.MoveOut) "Move-out" else "Move-in",
+                color = MMInk.Text,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(MMInk.Card)
+                    .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(50))
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+            )
         }
-        Text(
-            roomName,
-            color = Color.White,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = mmLines(),
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 8.dp)
-                .alpha(fill / 0.98f),
-        )
-        Text(
-            if (phase == ProofPhase.MoveOut) "Move-out" else "Move-in",
-            color = Color.White,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .background(Color.Black.copy(alpha = 0.35f))
-                .padding(horizontal = 12.dp, vertical = 7.dp),
-        )
+        Box(Modifier.fillMaxWidth().height(0.75.dp).alpha(fill).background(MMInk.Separator))
     }
 }
 
 private data class HeroChip(val text: String, val icon: ImageVector, val tint: Color)
-
-/** Layered on the poster: state first, then the room, then provenance, then the action. */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun HeroTitle(
-    roomName: String,
-    recorded: String?,
-    chips: List<HeroChip>,
-    isBusy: Boolean,
-    /** Photos are waiting or uploading: the save bar carries the one lime action, so this pill goes quiet. */
-    quiet: Boolean = false,
-    onTakePhotos: () -> Unit,
-    onChooseGallery: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier
-            .fillMaxWidth()
-            .padding(horizontal = MMSpacing.ScreenHorizontal.dp)
-            .padding(bottom = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            chips.forEach { GlassChip(it) }
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                roomName,
-                color = Color.White,
-                fontSize = 34.sp,
-                lineHeight = 38.sp,
-                fontWeight = FontWeight.Bold,
-                style = LocalTextStyle.current.copy(shadow = Shadow(Color.Black.copy(alpha = 0.35f), blurRadius = 20f)),
-                modifier = Modifier.semantics { heading() },
-            )
-            recorded?.let { RecordedLine(it, onPhoto = true) }
-        }
-        AddEvidencePill(isBusy, onTakePhotos, onChooseGallery, Modifier.padding(top = 6.dp), quiet = quiet)
-    }
-}
 
 /** A documented room's next action: the lime pill, as on iOS RC5 (lime is the screen's one action). */
 @Composable
@@ -366,10 +325,11 @@ private fun AddEvidencePill(
     onTakePhotos: () -> Unit,
     onChooseGallery: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Photos are waiting or uploading: the save bar carries the one lime action, so this pill goes quiet. */
     quiet: Boolean = false,
 ) {
     var open by remember { mutableStateOf(false) }
-    val ink = if (quiet) Color.White else MMInk.OnLime
+    val ink = if (quiet) MMInk.Text else MMInk.OnLime
     Box(modifier.fillMaxWidth()) {
         Row(
             Modifier
@@ -377,61 +337,62 @@ private fun AddEvidencePill(
                 .heightIn(min = 50.dp)
                 .clip(RoundedCornerShape(50))
                 .then(
-                    if (quiet) Modifier.border(1.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(50))
+                    if (quiet) Modifier.background(MMInk.Card).border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(50))
                     else Modifier.background(MMInk.Lime.copy(alpha = if (isBusy) 0.5f else 1f)),
                 )
                 .clickable(enabled = !isBusy, role = Role.Button) { open = true }
-                .testTag(if (quiet) "room.addEvidence.quiet" else "room.addEvidence"),
+                .testTag(if (quiet) "room.addEvidence.quiet" else "room.addEvidence")
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.Filled.PhotoCamera, contentDescription = null, tint = ink.copy(alpha = if (isBusy) 0.5f else 1f), modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Add evidence", color = ink.copy(alpha = if (isBusy) 0.5f else 1f), fontSize = 15.5.sp, fontWeight = FontWeight.SemiBold)
+            Text("Add evidence", color = ink.copy(alpha = if (isBusy) 0.5f else 1f), fontSize = 15.5.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(
-                text = { Text("Take photos") },
-                leadingIcon = { Icon(Icons.Outlined.PhotoCamera, contentDescription = null) },
+                text = { Text("Take photos", color = MMInk.Text) },
+                leadingIcon = { Icon(Icons.Outlined.PhotoCamera, contentDescription = null, tint = MMInk.Text) },
                 onClick = { open = false; onTakePhotos() },
             )
             DropdownMenuItem(
-                text = { Text("Choose from library") },
-                leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, contentDescription = null) },
+                text = { Text("Choose from library", color = MMInk.Text) },
+                leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, contentDescription = null, tint = MMInk.Text) },
                 onClick = { open = false; onChooseGallery() },
             )
         }
     }
 }
 
-/** Translucent chip over evidence (Compose has no backdrop blur; a dark scrim stands in). */
+/** A quiet white chip on the page: icon, ink text, hairline border. */
 @Composable
-private fun GlassChip(chip: HeroChip) {
+private fun InfoChip(chip: HeroChip) {
     Row(
         Modifier
             .clip(RoundedCornerShape(50))
-            .background(Color.Black.copy(alpha = 0.45f))
-            .border(0.5.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(50))
+            .background(MMInk.Card)
+            .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(50))
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Icon(chip.icon, contentDescription = null, tint = chip.tint, modifier = Modifier.size(14.dp))
-        Text(chip.text, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = mmLines())
+        Text(chip.text, color = MMInk.Text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RecordedLine(value: String, onPhoto: Boolean = false) {
+private fun RecordedLine(value: String) {
     // The timestamp never breaks mid-value; at large font scales it drops under its label.
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Kicker("RECORDED", if (onPhoto) Color.White.copy(alpha = 0.7f) else MMColors.TextMuted)
+        Kicker("RECORDED", MMInk.Secondary)
         Text(
             value,
             fontFamily = FontFamily.Monospace,
             fontSize = 12.sp,
-            color = if (onPhoto) Color.White.copy(alpha = 0.9f) else MMColors.TextSecondary,
+            color = MMInk.Secondary,
             softWrap = false,
         )
     }
@@ -451,14 +412,15 @@ private fun FilmstripThumb(
         Modifier
             .size(64.dp)
             .clip(shape)
-            .background(MMColors.CardRaised)
-            .border(BorderStroke(if (isSelected) 2.dp else 1.dp, if (isSelected) Color.White else Color.White.copy(alpha = 0.08f)), shape)
-            .alpha(if (isSelected) 1f else 0.72f)
+            .background(MMInk.ThumbFill)
+            .border(BorderStroke(if (isSelected) 2.dp else 0.75.dp, if (isSelected) MMInk.Text else MMInk.CardStroke), shape)
+            .alpha(if (isSelected) 1f else 0.8f)
             .clickable(role = Role.Button, onClick = onClick)
             .semantics {
                 selected = isSelected
                 contentDescription = "Evidence photo"
             },
+        contentAlignment = Alignment.Center,
     ) {
         if (url != null) {
             SubcomposeAsyncImage(
@@ -466,19 +428,25 @@ private fun FilmstripThumb(
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
-                error = {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Outlined.Image, contentDescription = null, tint = MMColors.TextMuted)
-                    }
-                },
+                loading = { ThumbGlyph() },
+                error = { ThumbGlyph() },
             )
+        } else {
+            ThumbGlyph()
         }
     }
 }
 
+@Composable
+private fun ThumbGlyph() {
+    Box(Modifier.fillMaxSize().background(MMInk.ThumbFill), contentAlignment = Alignment.Center) {
+        Icon(Icons.Outlined.Image, contentDescription = null, tint = MMInk.Secondary, modifier = Modifier.size(20.dp))
+    }
+}
+
 /**
- * A room with no proof yet (iOS RC5 room screen): the quiet dark header (stage, room, "No proof yet"), then the
- * light working sheet — a dark viewfinder field, what to capture, and the one lime action.
+ * A room with no proof yet (iOS RC5 room screen): the light header (stage, room, "No proof yet") on the page, then
+ * a white viewfinder card, what to capture, and the one lime action.
  */
 @Composable
 private fun EmptyField(
@@ -491,91 +459,82 @@ private fun EmptyField(
     modifier: Modifier = Modifier,
 ) {
     val moveOut = proofPhase == ProofPhase.MoveOut
-    Column(modifier.fillMaxWidth()) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .background(MMInk.Hero)
-                .padding(horizontal = MMMetrics.Inset)
-                // Clears the pinned RoomTopBar.
-                .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 64.dp)
-                .padding(bottom = 26.dp + MMMetrics.SheetRadius),
-        ) {
-            Text(if (moveOut) "MOVE-OUT EVIDENCE" else "MOVE-IN EVIDENCE", style = MMEyebrowStyle, color = MMInk.HeroSecondary)
-            Text(
-                roomName,
-                style = mmFont(34f, FontWeight.Bold),
-                color = Color.White,
-                modifier = Modifier
-                    .padding(top = 6.dp)
-                    .semantics { heading() },
-            )
-            Text("No proof yet", style = mmFont(17f), color = MMInk.HeroSecondary, modifier = Modifier.padding(top = 4.dp))
-        }
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .mmPullUp(MMMetrics.SheetRadius)
-                .clip(RoundedCornerShape(topStart = MMMetrics.SheetRadius, topEnd = MMMetrics.SheetRadius))
-                .background(MMInk.Sheet)
-                .padding(horizontal = MMMetrics.Inset)
-                .padding(top = 20.dp, bottom = 24.dp),
-        ) {
-            ViewfinderField(
-                if (moveOut) "This room\u2019s move-out record starts with your first photo."
-                else "This room\u2019s record starts with your first photo.",
-            )
-            Text(
-                if (moveOut) "Capture these before you return the keys" else "Capture these before you unpack",
-                style = mmFont(14.5f),
-                color = MMInk.Secondary,
-                modifier = Modifier.padding(top = 22.dp, bottom = 8.dp),
-            )
-            RoomCapturePrompts.forEachIndexed { index, prompt ->
-                Box(Modifier.fillMaxWidth().height(0.75.dp).background(MMInk.Separator))
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "%02d".format(index + 1),
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 13.sp,
-                        color = MMInk.Secondary,
-                        modifier = Modifier.width(36.dp),
-                    )
-                    Text(prompt, style = mmFont(16.5f), color = MMInk.Text)
-                }
+    Column(
+        modifier
+            .fillMaxWidth()
+            .background(MMInk.Sheet)
+            .padding(horizontal = MMMetrics.Inset)
+            // Clears the pinned RoomTopBar.
+            .padding(top = topBarClearance())
+            .padding(bottom = 24.dp),
+    ) {
+        Text(if (moveOut) "MOVE-OUT EVIDENCE" else "MOVE-IN EVIDENCE", style = MMEyebrowStyle, color = MMInk.Secondary)
+        Text(
+            roomName,
+            style = mmFont(34f, FontWeight.Bold),
+            color = MMInk.Text,
+            modifier = Modifier
+                .padding(top = 6.dp)
+                .semantics { heading() },
+        )
+        Text("No proof yet", style = mmFont(17f), color = MMInk.Secondary, modifier = Modifier.padding(top = 4.dp))
+        Spacer(Modifier.height(22.dp))
+        ViewfinderField(
+            if (moveOut) "This room’s move-out record starts with your first photo."
+            else "This room’s record starts with your first photo.",
+        )
+        Text(
+            if (moveOut) "Capture these before you return the keys" else "Capture these before you unpack",
+            style = mmFont(14.5f),
+            color = MMInk.Secondary,
+            modifier = Modifier.padding(top = 22.dp, bottom = 8.dp),
+        )
+        RoomCapturePrompts.forEachIndexed { index, prompt ->
+            Box(Modifier.fillMaxWidth().height(0.75.dp).background(MMInk.Separator))
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "%02d".format(index + 1),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp,
+                    color = MMInk.Secondary,
+                    modifier = Modifier.width(36.dp),
+                )
+                Text(prompt, style = mmFont(16.5f), color = MMInk.Text)
             }
-            Spacer(Modifier.height(24.dp))
-            // Lime only while it's the screen's one action; once photos are picked the save bar takes it.
-            if (hasPendingPhotos) {
-                MMSecondaryButton(title = "Take photos", icon = Icons.Filled.PhotoCamera, onClick = onTakePhotos, enabled = !isBusy)
-            } else {
-                MMPrimaryButton(title = "Take photos", icon = Icons.Filled.PhotoCamera, onClick = onTakePhotos, enabled = !isBusy)
-            }
-            Spacer(Modifier.height(6.dp))
-            MMSecondaryButton(title = "Choose from gallery", onClick = onChooseGallery, enabled = !isBusy)
         }
+        Spacer(Modifier.height(24.dp))
+        // Lime only while it's the screen's one action; once photos are picked the save bar takes it.
+        if (hasPendingPhotos) {
+            MMSecondaryButton(title = "Take photos", icon = Icons.Filled.PhotoCamera, onClick = onTakePhotos, enabled = !isBusy)
+        } else {
+            MMPrimaryButton(title = "Take photos", icon = Icons.Filled.PhotoCamera, onClick = onTakePhotos, enabled = !isBusy)
+        }
+        Spacer(Modifier.height(6.dp))
+        MMSecondaryButton(title = "Choose from gallery", onClick = onChooseGallery, enabled = !isBusy)
     }
 }
 
-/** A dark field with viewfinder corners and one quiet line: the room's record hasn't started yet. */
+/** A white card with grey viewfinder corners and one quiet line: the room's record hasn't started yet. */
 @Composable
 private fun ViewfinderField(line: String) {
+    val shape = RoundedCornerShape(MMMetrics.CardRadius)
     Box(
         Modifier
             .fillMaxWidth()
             .aspectRatio(1.8f)
-            .clip(RoundedCornerShape(MMMetrics.CardRadius))
-            .background(MMInk.Hero)
+            .clip(shape)
+            .background(MMInk.Card)
+            .border(0.75.dp, MMInk.CardStroke, shape)
             .drawBehind {
                 val inset = 14.dp.toPx()
                 val len = 18.dp.toPx()
                 val stroke = 1.5.dp.toPx()
-                val c = Color.White.copy(alpha = 0.7f)
+                val c = MMInk.Secondary.copy(alpha = 0.55f)
                 val w = size.width
                 val h = size.height
                 listOf(
@@ -595,7 +554,7 @@ private fun ViewfinderField(line: String) {
             fontFamily = FontFamily.Serif,
             fontStyle = FontStyle.Italic,
             fontSize = 17.sp,
-            color = Color.White.copy(alpha = 0.88f),
+            color = MMInk.Secondary,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 36.dp),
         )

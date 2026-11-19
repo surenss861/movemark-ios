@@ -29,7 +29,7 @@ fun MMProofStatusBadge(
 ) {
     val (bg, fg, border) = when (tone) {
         MMProofStatusTone.Success ->
-            Triple(MMColors.Primary.copy(0.16f), MMColors.Primary.copy(0.92f), MMColors.Primary.copy(0.48f))
+            Triple(MMColors.Primary.copy(0.28f), MMColors.TextPrimary, Color.Transparent)
         MMProofStatusTone.Warning ->
             Triple(MMColors.SemanticWarning.copy(0.14f), MMColors.SemanticWarning, MMColors.SemanticWarning.copy(0.45f))
         MMProofStatusTone.Danger ->

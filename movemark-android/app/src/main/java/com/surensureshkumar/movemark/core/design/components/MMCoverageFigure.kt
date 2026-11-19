@@ -90,7 +90,7 @@ fun MMCoverageRing(
     Canvas(modifier.size(size)) {
         val stroke = Stroke(width = 3.5.dp.toPx(), cap = StrokeCap.Round)
         drawArc(
-            color = Color.White.copy(alpha = 0.08f),
+            color = com.surensureshkumar.movemark.core.design.MMInk.Track,
             startAngle = 0f,
             sweepAngle = 360f,
             useCenter = false,

@@ -10,47 +10,27 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.surensureshkumar.movemark.core.design.MMColors
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMMetrics
 
+/**
+ * The primary card of the one light system (owner, 2026-11-18): white, a 0.75dp hairline, the shared card radius.
+ * No shadow, glow or gradient; `emphasis` is kept for callers and no longer changes the surface.
+ */
 @Composable
 fun MMCaseFilePlate(
     modifier: Modifier = Modifier,
-    emphasis: Boolean = false,
+    @Suppress("UNUSED_PARAMETER") emphasis: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val shape = RoundedCornerShape(24.dp)
+    val shape = RoundedCornerShape(MMMetrics.CardRadius)
     Column(
         modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = if (emphasis) 16.dp else 6.dp,
-                shape = shape,
-                ambientColor = Color(0xFF07120E),
-                spotColor = Color(0xFF07120E),
-            )
             .clip(shape)
-            .background(MMColors.SurfaceRaised)
-            .background(
-                if (emphasis) {
-                    Brush.radialGradient(
-                        colors = listOf(MMColors.Primary.copy(alpha = 0.12f), Color.Transparent),
-                        center = Offset(90f, 0f),
-                        radius = 520f,
-                    )
-                } else {
-                    Brush.linearGradient(listOf(Color.Transparent, Color.Transparent))
-                },
-            )
-            .border(
-                width = 0.5.dp,
-                color = Color.White.copy(alpha = if (emphasis) 0.12f else 0.08f),
-                shape = shape,
-            )
+            .background(MMInk.Card)
+            .border(width = 0.75.dp, color = MMInk.CardStroke, shape = shape)
             .padding(18.dp),
         content = content,
     )

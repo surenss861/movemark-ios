@@ -18,7 +18,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -54,7 +53,7 @@ fun MMReportReadinessChecklist(
                 if (index > 0) {
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 6.dp),
-                        color = Color.White.copy(alpha = 0.06f),
+                        color = com.surensureshkumar.movemark.core.design.MMInk.Separator,
                     )
                 }
                 ChecklistRow(
@@ -76,7 +75,7 @@ private fun ChecklistRow(
     modifier: Modifier = Modifier,
 ) {
     val iconColor = when (item.state) {
-        ChecklistItemState.Complete -> MMColors.Primary.copy(0.9f)
+        ChecklistItemState.Complete -> MMColors.TextPrimary
         ChecklistItemState.Incomplete -> MMColors.SemanticWarning.copy(0.85f)
         ChecklistItemState.Locked -> MMColors.TextMuted.copy(0.45f)
     }

@@ -46,7 +46,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -156,7 +155,7 @@ fun DocumentsScreen(
         onBack = onBack,
         trailing = {
             TextButton(onClick = { if (onEditRental != null) onEditRental() else editing = true }, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text("Edit rental", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text("Edit rental", color = MMInk.HeroText, fontWeight = FontWeight.SemiBold)
             }
         },
     ) {
@@ -372,7 +371,7 @@ private fun RecordActionPill(title: String, label: String, busy: Boolean = false
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             if (busy) CircularProgressIndicator(color = MMInk.Secondary, strokeWidth = 1.5.dp, modifier = Modifier.size(12.dp))
-            Text(if (busy) "Saving…" else title, style = mmFont(14f, FontWeight.SemiBold), color = MMInk.Text, maxLines = 1)
+            Text(if (busy) "Saving…" else title, style = mmFont(14f, FontWeight.SemiBold), color = MMInk.Text)
         }
     }
 }

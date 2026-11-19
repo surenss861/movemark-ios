@@ -34,8 +34,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -65,15 +63,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMEyebrowStyle
 import com.surensureshkumar.movemark.core.design.MMInk
 import com.surensureshkumar.movemark.core.design.MMLightSystemBars
 import com.surensureshkumar.movemark.core.design.MMMetrics
+import com.surensureshkumar.movemark.core.design.MMNotice
+import com.surensureshkumar.movemark.core.design.MMNoticeTone
 import com.surensureshkumar.movemark.core.design.MMPrimaryButton
-import com.surensureshkumar.movemark.core.design.MMSpacing
 import com.surensureshkumar.movemark.core.design.mmFont
 import com.surensureshkumar.movemark.data.subscription.BillingConfig
 import com.surensureshkumar.movemark.data.subscription.PlanPackageUi
@@ -81,11 +78,10 @@ import com.surensureshkumar.movemark.features.account.AccountViewModel
 import com.surensureshkumar.movemark.features.subscription.PaywallReason
 import com.surensureshkumar.movemark.features.subscription.SubscriptionViewModel
 
-/** The paywall is one dark, full-bleed surface on the archival header colour (iOS `ProPaywallView.surface`). */
-private val PaywallSurface = MMInk.Hero
-private val HeroSecondary = MMInk.HeroSecondary
-private val EvidenceRaised = Color.White.copy(alpha = 0.06f)
-private val EvidenceStroke = Color.White.copy(alpha = 0.12f)
+/** The paywall is one light page (owner, 2026-11-18): soft off-white, ink headings, white hairline cards. */
+private val PaywallSurface = MMInk.Sheet
+private val Ink = MMInk.Text
+private val Quiet = MMInk.Secondary
 
 /**
  * MoveMark Pro, in the locked iOS 1.4 information hierarchy (`ProPaywallView`): the outcome headline, the rental
@@ -195,7 +191,7 @@ internal fun ProPaywallContent(
     val busy = loading || purchasing
     val plansUnavailable = !comingSoon && plans.isEmpty() && !loading && error != null
 
-    MMLightSystemBars(lightNavigationBar = false, lightStatusBar = false)
+    MMLightSystemBars(lightNavigationBar = true, lightStatusBar = true)
 
     Box(Modifier.fillMaxSize().background(PaywallSurface)) {
         Column(Modifier.fillMaxSize()) {
@@ -205,7 +201,7 @@ internal fun ProPaywallContent(
             ) {
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = onClose, enabled = !purchasing) {
-                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White)
+                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = Ink)
                 }
             }
             Column(
@@ -213,27 +209,27 @@ internal fun ProPaywallContent(
                     .padding(horizontal = MMMetrics.Inset).padding(top = 4.dp, bottom = 24.dp),
             ) {
                 // Outcome
-                Text("MOVEMARK PRO", style = MMEyebrowStyle, color = HeroSecondary)
+                Text("MOVEMARK PRO", style = MMEyebrowStyle, color = Quiet)
                 Text(
                     "Protect the full rental timeline.",
                     style = mmFont(30f, FontWeight.SemiBold),
-                    color = Color.White,
+                    color = Ink,
                     modifier = Modifier.padding(top = 10.dp).semantics { heading() },
                 )
                 Text(
                     "Keep the record from move-in through move-out, and turn your evidence into reports when you need it.",
                     style = mmFont(16f),
-                    color = Color.White.copy(alpha = 0.78f),
+                    color = Quiet,
                     modifier = Modifier.padding(top = 10.dp),
                 )
                 reason.contextLine?.let {
-                    Text(it, style = mmFont(14f), color = HeroSecondary, modifier = Modifier.padding(top = 10.dp))
+                    Text(it, style = mmFont(14f), color = Quiet, modifier = Modifier.padding(top = 10.dp))
                 }
                 if (isMockMode) {
                     Text(
                         "Test billing mode. No real purchase will be made.",
                         style = mmFont(12.5f),
-                        color = HeroSecondary,
+                        color = Quiet,
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
@@ -260,23 +256,23 @@ internal fun ProPaywallContent(
                 }
 
                 // Truth lines
-                Box(Modifier.padding(top = 26.dp).fillMaxWidth().height(0.5.dp).background(EvidenceStroke))
+                Box(Modifier.padding(top = 26.dp).fillMaxWidth().height(0.75.dp).background(MMInk.Separator))
                 Text(
                     "Free keeps the record. Pro turns it into the reports and evidence packet you’d use.",
                     style = mmFont(15f, FontWeight.Medium),
-                    color = Color.White,
+                    color = Ink,
                     modifier = Modifier.padding(top = 22.dp),
                 )
                 Text(
                     "Pro also includes unlimited reports and more than one rental.",
                     style = mmFont(13.5f),
-                    color = HeroSecondary,
+                    color = Quiet,
                     modifier = Modifier.padding(top = 6.dp),
                 )
 
                 // Plans
                 if (!comingSoon && !plansUnavailable) {
-                    Text("CHOOSE YOUR PLAN", style = MMEyebrowStyle, color = HeroSecondary, modifier = Modifier.padding(top = 30.dp, bottom = 12.dp))
+                    Text("CHOOSE YOUR PLAN", style = MMEyebrowStyle, color = Quiet, modifier = Modifier.padding(top = 30.dp, bottom = 12.dp))
                     if (plans.isEmpty()) {
                         // Loading keeps the plan layout (iOS redacted rows); prices only ever come from Google Play.
                         // Hidden from TalkBack (iOS accessibilityHidden); the progress line below speaks for it.
@@ -290,9 +286,9 @@ internal fun ProPaywallContent(
                             Modifier.padding(top = 12.dp).semantics(mergeDescendants = true) {},
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            CircularProgressIndicator(color = HeroSecondary, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                            CircularProgressIndicator(color = Quiet, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Getting prices from Google Play…", style = mmFont(13f), color = HeroSecondary)
+                            Text("Getting prices from Google Play…", style = mmFont(13f), color = Quiet)
                         }
                     } else {
                         Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -310,12 +306,12 @@ internal fun ProPaywallContent(
                     Row(Modifier.padding(top = 22.dp).fillMaxWidth()) {
                         QuietAction(
                             if (purchasing) "Restoring purchases…" else "Restore purchases",
-                            Color.White,
+                            Ink,
                             enabled = !busy,
                             modifier = Modifier.weight(1f),
                             onClick = onRestore,
                         )
-                        QuietAction("Not now", HeroSecondary, enabled = !purchasing, modifier = Modifier.weight(1f), onClick = onClose)
+                        QuietAction("Not now", Quiet, enabled = !purchasing, modifier = Modifier.weight(1f), onClick = onClose)
                     }
                 }
 
@@ -323,16 +319,16 @@ internal fun ProPaywallContent(
                 if (!comingSoon) Text(
                     "MoveMark Pro is an auto-renewing subscription. Prices come from Google Play; Google handles payment and renewal. Manage or cancel in Google Play › Subscriptions.",
                     style = mmFont(12.5f),
-                    color = HeroSecondary,
+                    color = Quiet,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().padding(top = 26.dp),
                 )
                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.Center) {
                     TextButton(onClick = { com.surensureshkumar.movemark.core.ui.openInAppBrowser(context, AccountViewModel.TERMS_URL) }) {
-                        Text("Terms of Use", style = mmFont(13f, FontWeight.Medium), color = Color.White, textDecoration = TextDecoration.Underline)
+                        Text("Terms of Use", style = mmFont(13f, FontWeight.Medium), color = Ink, textDecoration = TextDecoration.Underline)
                     }
                     TextButton(onClick = { com.surensureshkumar.movemark.core.ui.openInAppBrowser(context, AccountViewModel.PRIVACY_URL) }) {
-                        Text("Privacy Policy", style = mmFont(13f, FontWeight.Medium), color = Color.White, textDecoration = TextDecoration.Underline)
+                        Text("Privacy Policy", style = mmFont(13f, FontWeight.Medium), color = Ink, textDecoration = TextDecoration.Underline)
                     }
                 }
             }
@@ -344,8 +340,8 @@ internal fun ProPaywallContent(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Box(Modifier.fillMaxWidth().height(0.5.dp).background(EvidenceStroke))
-                // iOS purchaseFooter: the purchase error, then the restore outcome, as notices on the dark surface.
+                Box(Modifier.fillMaxWidth().height(0.75.dp).background(MMInk.Separator))
+                // iOS purchaseFooter: the purchase error, then the restore outcome, as light notices.
                 if (!comingSoon && !plansUnavailable && error != null && plans.isNotEmpty()) {
                     PaywallNotice(error, PaywallNoticeTone.Error, tag = "paywall.notice.error")
                 }
@@ -354,12 +350,12 @@ internal fun ProPaywallContent(
                 }
                 when {
                     comingSoon -> {
-                        DarkNotice(BillingConfig.COMING_SOON_TITLE, BillingConfig.COMING_SOON_BODY, tag = "paywall.comingSoon")
+                        PaywallStateNotice(BillingConfig.COMING_SOON_TITLE, BillingConfig.COMING_SOON_BODY, tag = "paywall.comingSoon")
                         MMPrimaryButton(title = "Continue on Free", onClick = onClose)
                     }
                     plansUnavailable -> {
                         // What failed sits right above its recovery; said once.
-                        DarkNotice("Plans didn’t load", "Try again in a minute. You can keep using Free for now.", tag = "paywall.plansUnavailable")
+                        PaywallStateNotice("Plans didn’t load", "Try again in a minute. You can keep using Free for now.", tag = "paywall.plansUnavailable")
                         MMPrimaryButton(
                             title = if (loading) "Trying…" else "Try again",
                             isLoading = loading,
@@ -367,13 +363,13 @@ internal fun ProPaywallContent(
                             onClick = onRetry,
                         )
                         Row(Modifier.fillMaxWidth()) {
-                            QuietAction("Restore purchases", Color.White, enabled = !busy, modifier = Modifier.weight(1f), onClick = onRestore)
-                            QuietAction("Continue on Free", HeroSecondary, enabled = !purchasing, modifier = Modifier.weight(1f), onClick = onClose)
+                            QuietAction("Restore purchases", Ink, enabled = !busy, modifier = Modifier.weight(1f), onClick = onRestore)
+                            QuietAction("Continue on Free", Quiet, enabled = !purchasing, modifier = Modifier.weight(1f), onClick = onClose)
                         }
                     }
                     else -> {
                         selected?.let { plan ->
-                            Text(planPriceWithPeriod(plan), style = mmFont(17f, FontWeight.SemiBold), color = Color.White, textAlign = TextAlign.Center)
+                            Text(planPriceWithPeriod(plan), style = mmFont(17f, FontWeight.SemiBold), color = Ink, textAlign = TextAlign.Center)
                         }
                         MMPrimaryButton(
                             title = when {
@@ -387,31 +383,32 @@ internal fun ProPaywallContent(
                             onClick = onPurchase,
                             modifier = Modifier.testTag("paywall.continue"),
                         )
-                        Text("Cancel anytime · Managed by Google Play", style = mmFont(12.5f), color = HeroSecondary, textAlign = TextAlign.Center)
+                        Text("Cancel anytime · Managed by Google Play", style = mmFont(12.5f), color = Quiet, textAlign = TextAlign.Center)
                     }
                 }
             }
         }
 
         if (purchaseSuccess) {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
+            // A white card over a soft scrim (the page stays light behind it).
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.32f)), contentAlignment = Alignment.Center) {
                 Column(
                     Modifier.padding(horizontal = MMMetrics.Inset).widthIn(max = 320.dp)
-                        .background(PaywallSurface, RoundedCornerShape(20.dp))
-                        .border(0.75.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(20.dp))
+                        .background(MMInk.Card, RoundedCornerShape(MMMetrics.SheetRadius))
+                        .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(MMMetrics.SheetRadius))
                         .padding(horizontal = 28.dp, vertical = 26.dp)
                         .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Box(Modifier.size(44.dp).background(MMInk.LimeMark, CircleShape), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Check, contentDescription = null, tint = MMInk.OnLime, modifier = Modifier.size(20.dp))
+                    Box(Modifier.size(44.dp).background(Ink, CircleShape), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Check, contentDescription = null, tint = MMInk.Card, modifier = Modifier.size(20.dp))
                     }
-                    Text(if (packWasBought) "Report Pack unlocked" else "Pro unlocked", style = mmFont(19f, FontWeight.SemiBold), color = Color.White)
+                    Text(if (packWasBought) "Report Pack unlocked" else "Pro unlocked", style = mmFont(19f, FontWeight.SemiBold), color = Ink, textAlign = TextAlign.Center)
                     Text(
                         if (packWasBought) "One more move-in report is ready to make."
                         else "Your move-out report and evidence packet are ready when you need them.",
-                        style = mmFont(14f), color = HeroSecondary, textAlign = TextAlign.Center,
+                        style = mmFont(14f), color = Quiet, textAlign = TextAlign.Center,
                     )
                 }
             }
@@ -419,7 +416,7 @@ internal fun ProPaywallContent(
     }
 }
 
-/** One step of the rental timeline on the dark surface (iOS `MMDarkTimelineStep`). */
+/** One step of the rental timeline on the light page (iOS `MMDarkTimelineStep`, re-inked for the light system). */
 @Composable
 private fun TimelineStep(
     phase: String,
@@ -430,11 +427,11 @@ private fun TimelineStep(
 ) {
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).semantics(mergeDescendants = true) {}) {
         Column(Modifier.width(18.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
-            // iOS: a lime mark with an ink check once recorded; otherwise the hollow evidence dot.
+            // iOS: a lime mark with an ink check once recorded (progress); otherwise a hollow white dot.
             Box(
                 Modifier.padding(top = 1.dp).size(18.dp)
-                    .background(if (isRecorded) MMInk.LimeMark else MMInk.Evidence, CircleShape)
-                    .then(if (isRecorded) Modifier else Modifier.border(1.5.dp, Color.White.copy(alpha = 0.45f), CircleShape))
+                    .background(if (isRecorded) MMInk.LimeMark else MMInk.Card, CircleShape)
+                    .then(if (isRecorded) Modifier else Modifier.border(1.5.dp, Quiet.copy(alpha = 0.55f), CircleShape))
                     .then(if (isRecorded) Modifier.testTag("paywall.timeline.recorded") else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
@@ -442,24 +439,24 @@ private fun TimelineStep(
                     Icon(Icons.Filled.Check, contentDescription = null, tint = MMInk.OnLime, modifier = Modifier.size(11.dp))
                 }
             }
-            if (!isLast) Box(Modifier.width(1.5.dp).weight(1f).background(Color.White.copy(alpha = 0.16f)))
+            if (!isLast) Box(Modifier.width(1.5.dp).weight(1f).background(MMInk.Separator))
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.padding(bottom = if (isLast) 0.dp else 18.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(phase.uppercase(), style = MMEyebrowStyle, color = HeroSecondary)
-            Text(title, style = mmFont(17f, FontWeight.SemiBold), color = Color.White)
+            Text(phase.uppercase(), style = MMEyebrowStyle, color = Quiet)
+            Text(title, style = mmFont(17f, FontWeight.SemiBold), color = Ink)
             proPart?.let {
                 Row(
                     Modifier.padding(top = 3.dp).semantics { contentDescription = "$it, included with Pro" },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(it, style = mmFont(13.5f, FontWeight.Medium), color = Color.White)
+                    Text(it, style = mmFont(13.5f, FontWeight.Medium), color = Ink)
                     Spacer(Modifier.width(6.dp))
                     Text(
                         "Pro",
                         style = mmFont(11.5f, FontWeight.SemiBold),
-                        color = MMInk.Evidence,
-                        modifier = Modifier.background(Color.White, RoundedCornerShape(50)).padding(horizontal = 7.dp, vertical = 2.dp),
+                        color = Ink,
+                        modifier = Modifier.border(1.dp, MMInk.CardStroke, RoundedCornerShape(50)).padding(horizontal = 7.dp, vertical = 2.dp),
                     )
                 }
             }
@@ -470,11 +467,11 @@ private fun TimelineStep(
 /** A selectable plan: radio, name, Google Play price, one quiet line (iOS `MMDarkPlanRow`), as a native radio. */
 @Composable
 private fun PlanRow(plan: PlanPackageUi, selected: Boolean, enabled: Boolean, onSelect: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(MMMetrics.GroupRadius)
     Row(
         Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(shape)
-            .background(if (selected) Color.White.copy(alpha = 0.09f) else EvidenceRaised, shape)
-            .border(if (selected) 1.5.dp else 0.75.dp, if (selected) Color.White.copy(alpha = 0.85f) else EvidenceStroke, shape)
+            .background(MMInk.Card, shape)
+            .border(if (selected) 1.5.dp else 0.75.dp, if (selected) Ink else MMInk.CardStroke, shape)
             .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
             .padding(horizontal = 16.dp, vertical = 14.dp)
             .testTag("paywall.plan.${if (plan.isYearly) "yearly" else "monthly"}"),
@@ -483,11 +480,11 @@ private fun PlanRow(plan: PlanPackageUi, selected: Boolean, enabled: Boolean, on
         PlanMarker(selected)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(if (plan.isYearly) "Yearly" else "Monthly", style = mmFont(16f, FontWeight.SemiBold), color = Color.White)
-            Text(plan.periodLabel, style = mmFont(13f), color = HeroSecondary)
+            Text(if (plan.isYearly) "Yearly" else "Monthly", style = mmFont(16f, FontWeight.SemiBold), color = Ink)
+            Text(plan.periodLabel, style = mmFont(13f), color = Quiet)
         }
         Spacer(Modifier.width(8.dp))
-        Text(planPriceWithPeriod(plan), style = mmFont(16f, FontWeight.SemiBold), color = Color.White)
+        Text(planPriceWithPeriod(plan), style = mmFont(16f, FontWeight.SemiBold), color = Ink)
     }
 }
 
@@ -506,12 +503,12 @@ private fun PlanMarker(selected: Boolean) {
             Icon(
                 Icons.Filled.CheckCircle,
                 contentDescription = null,
-                tint = Color.White,
+                tint = Ink,
                 modifier = Modifier.size(24.dp).testTag("paywall.plan.marker.selected"),
             )
         } else {
             Box(
-                Modifier.size(20.dp).border(1.5.dp, Color.White.copy(alpha = 0.4f), CircleShape)
+                Modifier.size(20.dp).border(1.5.dp, Quiet.copy(alpha = 0.55f), CircleShape)
                     .testTag("paywall.plan.marker.unselected"),
             )
         }
@@ -521,12 +518,12 @@ private fun PlanMarker(selected: Boolean) {
 /** A plan row's shape while prices load (iOS `.redacted(reason: .placeholder)`): same frame, quiet bars, no claim. */
 @Composable
 private fun PlanRowPlaceholder(titleWidth: Dp, detailWidth: Dp, priceWidth: Dp) {
-    val shape = RoundedCornerShape(14.dp)
-    val bar = Color.White.copy(alpha = 0.14f)
+    val shape = RoundedCornerShape(MMMetrics.GroupRadius)
+    val bar = MMInk.Field
     Row(
         Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(shape)
-            .background(EvidenceRaised, shape)
-            .border(0.75.dp, EvidenceStroke, shape)
+            .background(MMInk.Card, shape)
+            .border(0.75.dp, MMInk.CardStroke, shape)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -545,28 +542,16 @@ private fun PlanRowPlaceholder(titleWidth: Dp, detailWidth: Dp, priceWidth: Dp) 
 
 internal enum class PaywallNoticeTone { Error, Info }
 
-/** iOS `MMEvidenceNotice` dark-surface colours: danger for a failed purchase, hero secondary for information. */
-private val NoticeDangerOnDark = Color(red = 1.0f, green = 0.478f, blue = 0.431f)
-
-/** A calm notice on the dark surface (iOS `MMEvidenceNotice`): a tone mark, then the message. Announced politely. */
+/** A calm light notice (the system `MMNotice`): a tone mark, then the message. Tagged and announced politely. */
 @Composable
 private fun PaywallNotice(message: String, tone: PaywallNoticeTone, tag: String) {
-    val shape = RoundedCornerShape(12.dp)
-    Row(
-        Modifier.fillMaxWidth().background(EvidenceRaised, shape).border(0.75.dp, EvidenceStroke, shape).padding(12.dp)
+    MMNotice(
+        message = message,
+        tone = if (tone == PaywallNoticeTone.Error) MMNoticeTone.Error else MMNoticeTone.Info,
+        modifier = Modifier
             .testTag(tag)
             .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
-        verticalAlignment = Alignment.Top,
-    ) {
-        Icon(
-            if (tone == PaywallNoticeTone.Error) Icons.Filled.Error else Icons.Filled.Info,
-            contentDescription = null,
-            tint = if (tone == PaywallNoticeTone.Error) NoticeDangerOnDark else HeroSecondary,
-            modifier = Modifier.padding(top = 1.dp).size(16.dp),
-        )
-        Spacer(Modifier.width(10.dp))
-        Text(message, style = mmFont(14f), color = Color.White, modifier = Modifier.weight(1f))
-    }
+    )
 }
 
 @Composable
@@ -576,17 +561,17 @@ private fun QuietAction(title: String, color: Color, enabled: Boolean, modifier:
     }
 }
 
-/** A notice on the dark surface: what happened, then one quiet line (iOS `plansUnavailableNotice`). */
+/** A white hairline card: what happened, then one quiet line (iOS `plansUnavailableNotice`). */
 @Composable
-private fun DarkNotice(title: String, body: String, tag: String) {
-    val shape = RoundedCornerShape(14.dp)
+private fun PaywallStateNotice(title: String, body: String, tag: String) {
+    val shape = RoundedCornerShape(MMMetrics.GroupRadius)
     Column(
-        Modifier.fillMaxWidth().background(EvidenceRaised, shape).border(0.75.dp, EvidenceStroke, shape).padding(14.dp)
+        Modifier.fillMaxWidth().background(MMInk.Card, shape).border(0.75.dp, MMInk.CardStroke, shape).padding(14.dp)
             .testTag(tag).semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(title, style = mmFont(16f, FontWeight.SemiBold), color = Color.White)
-        Text(body, style = mmFont(14f), color = HeroSecondary)
+        Text(title, style = mmFont(16f, FontWeight.SemiBold), color = Ink)
+        Text(body, style = mmFont(14f), color = Quiet)
     }
 }
 
@@ -601,9 +586,9 @@ internal fun showsReportPackSection(offersReportPack: Boolean, reportPack: PlanP
 @Composable
 private fun ReportPackSection(pack: PlanPackageUi?, enabled: Boolean, onBuy: (PlanPackageUi) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("ONE REPORT ONLY", color = MMColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp)
+        Text("ONE REPORT ONLY", style = MMEyebrowStyle, color = Quiet)
         if (pack == null) {
-            Text("Report Pack isn’t available right now. Pro still unlocks unlimited reports.", color = MMColors.TextSecondary, fontSize = 13.sp)
+            Text("Report Pack isn’t available right now. Pro still unlocks unlimited reports.", style = mmFont(13f), color = Quiet)
             return@Column
         }
         Surface(
@@ -614,28 +599,28 @@ private fun ReportPackSection(pack: PlanPackageUi?, enabled: Boolean, onBuy: (Pl
                 .semantics(mergeDescendants = true) {
                     contentDescription = "Buy Report Pack, one move-in report, no subscription, ${pack.price}"
                 },
-            shape = RoundedCornerShape(14.dp),
-            color = MMColors.CardRaised,
-            border = BorderStroke(0.75.dp, MMColors.CardStroke),
+            shape = RoundedCornerShape(MMMetrics.GroupRadius),
+            color = MMInk.Card,
+            border = BorderStroke(0.75.dp, MMInk.CardStroke),
         ) {
             val large = LocalDensity.current.fontScale >= 1.5f
             val copy: @Composable () -> Unit = {
                 Column {
-                    Text("Report Pack", color = MMColors.TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                    Text("One move-in report · no subscription", color = MMColors.TextSecondary, fontSize = 13.sp)
+                    Text("Report Pack", style = mmFont(16f, FontWeight.SemiBold), color = Ink)
+                    Text("One move-in report · no subscription", style = mmFont(13f), color = Quiet)
                 }
             }
-            val price: @Composable () -> Unit = { Text(pack.price, color = MMColors.TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) }
+            val price: @Composable () -> Unit = { Text(pack.price, style = mmFont(16f, FontWeight.SemiBold), color = Ink) }
             if (large) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { copy(); price() }
             } else {
                 Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Description, contentDescription = null, tint = MMColors.TextPrimary, modifier = Modifier.padding(end = 12.dp))
+                    Icon(Icons.Filled.Description, contentDescription = null, tint = Ink, modifier = Modifier.padding(end = 12.dp))
                     Box(Modifier.weight(1f)) { copy() }
                     price()
                 }
             }
         }
-        Text("The move-out report and evidence packet stay on Pro.", color = MMColors.TextSecondary, fontSize = 12.5.sp)
+        Text("The move-out report and evidence packet stay on Pro.", style = mmFont(12.5f), color = Quiet)
     }
 }

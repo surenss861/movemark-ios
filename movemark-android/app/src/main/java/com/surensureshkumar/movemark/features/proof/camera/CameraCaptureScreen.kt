@@ -71,6 +71,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImage
 import com.surensureshkumar.movemark.core.design.MMColors
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMLightSystemBars
 import com.surensureshkumar.movemark.features.proof.RoomCapturePrompts
 import com.google.common.util.concurrent.ListenableFuture
 import java.util.concurrent.Executor
@@ -156,25 +158,27 @@ fun CameraCaptureScreen(
                 TextButton(onClick = {
                     showExitDialog = false
                     viewModel.finishAndDeliver { delivered -> if (delivered) onDone() else onClose() }
-                }) { Text("Keep photos", color = MMColors.Primary) }
+                }) { Text("Keep photos", color = MMInk.Text, fontWeight = FontWeight.SemiBold) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     showExitDialog = false
                     viewModel.discardPending()
                     onClose()
-                }) { Text("Discard", color = MMColors.TextSecondary) }
+                }) { Text("Discard", color = MMInk.Secondary) }
             },
         )
     }
 
     // iOS EvidenceCameraViewController: header band (room, count, next suggestion), the whole frame between it and
     // the shutter (resizeAspect), then Cancel or the latest-photo thumbnail · shutter · Done.
+    // One light system (2026-11-18): the header and footer bands are the light page; only the feed between them is dark.
+    MMLightSystemBars(lightNavigationBar = true, lightStatusBar = true)
     val latest = CameraCaptureUi.latestThumbnail(capturedUris)
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(MMInk.Sheet)
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
@@ -187,7 +191,7 @@ fun CameraCaptureScreen(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     roomName,
-                    color = Color.White,
+                    color = MMInk.Text,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 17.sp,
                     modifier = Modifier.semantics { heading() },
@@ -198,29 +202,28 @@ fun CameraCaptureScreen(
                         1 -> "1 photo captured"
                         else -> "$capturedCount photos captured"
                     },
-                    color = Color.White.copy(alpha = 0.65f),
+                    color = MMInk.Secondary,
                     fontSize = 13.sp,
                     modifier = Modifier.testTag("camera.count"),
                 )
             }
             IconButton(
+                modifier = Modifier.size(48.dp),
                 onClick = {
                     galleryPicker.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                     )
                 },
             ) {
-                Icon(Icons.Filled.PhotoLibrary, contentDescription = "Gallery", tint = Color.White)
+                Icon(Icons.Filled.PhotoLibrary, contentDescription = "Gallery", tint = MMInk.Text)
             }
         }
 
         // The room's suggested shots (same list iOS passes: RoomCapturePrompts), indexed by the photos taken here.
         Text(
             CameraCaptureUi.suggestion(capturedCount, RoomCapturePrompts),
-            color = Color.White,
+            color = MMInk.Text,
             fontSize = 15.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 20.dp, end = 20.dp, top = 10.dp)
@@ -231,7 +234,9 @@ fun CameraCaptureScreen(
             Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .padding(top = 12.dp, bottom = 16.dp),
+                .padding(top = 12.dp, bottom = 16.dp)
+                // The camera feed itself: dark behind the letterboxed frame, between the two light bands.
+                .background(Color.Black),
         ) {
             AndroidView(
                 factory = { previewView },
@@ -288,9 +293,9 @@ fun CameraCaptureScreen(
                 // Cancel is the same way out as Back: with photos it asks "Keep these photos?".
                 TextButton(
                     onClick = { tryClose() },
-                    modifier = Modifier.align(Alignment.CenterStart).testTag("camera.cancel"),
+                    modifier = Modifier.align(Alignment.CenterStart).heightIn(min = 48.dp).testTag("camera.cancel"),
                 ) {
-                    Text("Cancel", color = Color.White, fontSize = 17.sp)
+                    Text("Cancel", color = MMInk.Text, fontSize = 17.sp)
                 }
             } else {
                 // The latest photo; like iOS it goes back to the room, where review, removal and retakes happen.
@@ -302,7 +307,7 @@ fun CameraCaptureScreen(
                         .align(Alignment.CenterStart)
                         .size(52.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .border(1.5.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(10.dp))
+                        .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(10.dp))
                         .clickable(enabled = !isCapturing, role = Role.Button) {
                             viewModel.finishAndDeliver { delivered -> if (delivered) onDone() }
                         }
@@ -315,7 +320,8 @@ fun CameraCaptureScreen(
                 modifier = Modifier
                     .size(72.dp)
                     .clip(CircleShape)
-                    .background(if (shutterEnabled) Color.White else Color.White.copy(0.35f))
+                    .background(MMInk.Card)
+                    .border(3.dp, if (shutterEnabled) MMInk.Text else MMInk.Text.copy(alpha = 0.35f), CircleShape)
                     .clickable(enabled = shutterEnabled, role = Role.Button, onClickLabel = "Take Photo") {
                         viewModel.capture(imageCapture)
                     }
@@ -325,9 +331,9 @@ fun CameraCaptureScreen(
             ) {
                 Box(
                     Modifier
-                        .size(62.dp)
+                        .size(58.dp)
                         .clip(CircleShape)
-                        .background(Color.Black.copy(0.15f)),
+                        .background(if (shutterEnabled) MMInk.Text else MMInk.Text.copy(alpha = 0.35f)),
                 )
             }
 
@@ -338,7 +344,7 @@ fun CameraCaptureScreen(
                         .align(Alignment.CenterEnd)
                         .heightIn(min = 48.dp)
                         .clip(CircleShape)
-                        .background(if (isCapturing) MMColors.Primary.copy(alpha = 0.5f) else MMColors.Primary)
+                        .background(if (isCapturing) MMInk.Lime.copy(alpha = 0.5f) else MMInk.Lime)
                         .clickable(enabled = !isCapturing, role = Role.Button) {
                             viewModel.finishAndDeliver { delivered -> if (delivered) onDone() }
                         }
@@ -346,7 +352,7 @@ fun CameraCaptureScreen(
                         .testTag("camera.done"),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("Done", color = com.surensureshkumar.movemark.core.design.MMInk.OnLime, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Text("Done", color = MMInk.OnLime, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 }
             }
         }

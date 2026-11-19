@@ -22,7 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -41,7 +41,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -59,9 +58,12 @@ import com.surensureshkumar.movemark.core.util.rememberSignedImageRequest
 /** A signed thumbnail for a case (the log row / strip); [path] keys Coil's cache so a re-signed URL still hits. */
 data class MaintenanceThumb(val url: String, val path: String)
 
-/** iOS `MMCaseStatusMark`: a hollow ring while open or in follow-up, a lime dot once resolved. Never red, never a pill. */
+/**
+ * iOS `MMCaseStatusMark`: a hollow ring while open or in follow-up, a lime dot once resolved. Never red, never a pill.
+ * Headers are light now, so [onDark] no longer changes the ink; it is kept for existing callers.
+ */
 @Composable
-internal fun MaintenanceStatusMark(status: MaintenanceCaseStatus, modifier: Modifier = Modifier, onDark: Boolean = false) {
+internal fun MaintenanceStatusMark(status: MaintenanceCaseStatus, modifier: Modifier = Modifier, @Suppress("UNUSED_PARAMETER") onDark: Boolean = false) {
     Row(
         modifier.clearAndSetSemantics { contentDescription = "Status: ${status.label}" },
         verticalAlignment = Alignment.CenterVertically,
@@ -73,13 +75,13 @@ internal fun MaintenanceStatusMark(status: MaintenanceCaseStatus, modifier: Modi
             Box(
                 Modifier
                     .size(8.dp)
-                    .border(1.5.dp, if (onDark) Color.White.copy(alpha = 0.7f) else MMInk.Secondary, CircleShape),
+                    .border(1.5.dp, MMInk.Secondary, CircleShape),
             )
         }
         Text(
             status.label,
             style = mmFont(12.5f, FontWeight.Medium),
-            color = if (onDark) Color.White.copy(alpha = 0.85f) else MMInk.Text,
+            color = MMInk.Text,
         )
     }
 }
@@ -95,7 +97,7 @@ internal fun MaintenanceCaption(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** A small clipped thumbnail (iOS `MMCaseThumb`), or the quiet document placeholder when there is no photo. */
+/** A small clipped thumbnail (iOS `MMCaseThumb`), or the neutral photo placeholder when there is no photo. */
 @Composable
 internal fun MaintenanceThumbTile(thumb: MaintenanceThumb?, side: Dp, modifier: Modifier = Modifier, contentDescription: String? = null) {
     val shape = RoundedCornerShape(10.dp)
@@ -103,8 +105,8 @@ internal fun MaintenanceThumbTile(thumb: MaintenanceThumb?, side: Dp, modifier: 
         modifier
             .size(side)
             .clip(shape)
-            .background(MMInk.Field)
-            .border(0.75.dp, Color.Black.copy(alpha = 0.06f), shape),
+            .background(MMInk.ThumbFill)
+            .border(0.75.dp, MMInk.CardStroke, shape),
         contentAlignment = Alignment.Center,
     ) {
         if (thumb != null) {
@@ -115,13 +117,14 @@ internal fun MaintenanceThumbTile(thumb: MaintenanceThumb?, side: Dp, modifier: 
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
-            Icon(Icons.Outlined.Description, contentDescription = null, tint = MMInk.Secondary, modifier = Modifier.size(18.dp))
+            // The explicit neutral placeholder: never the brand mark posing as a photo.
+            Icon(Icons.Outlined.Image, contentDescription = null, tint = MMInk.Secondary, modifier = Modifier.size(18.dp))
         }
     }
 }
 
 /**
- * iOS `MMCaseRow`: the case's newest photo (or a document placeholder; never a stand-in photo), the title, a quiet
+ * iOS `MMCaseRow`: the case's newest photo (or the neutral placeholder; never a stand-in photo), the title, a quiet
  * line (category · reported date), the status mark and photo count, a chevron. Read once by TalkBack.
  */
 @Composable
@@ -151,8 +154,6 @@ internal fun MaintenanceCaseRow(
                 title,
                 style = mmFont(16f, FontWeight.SemiBold),
                 color = MMInk.Text,
-                maxLines = if (large) 4 else 2,
-                overflow = TextOverflow.Ellipsis,
             )
             Text(line, style = mmFont(13f), color = MMInk.Secondary)
             Row(
@@ -251,9 +252,9 @@ internal fun MaintenanceField(
                 unfocusedTextColor = MMInk.Text,
                 disabledTextColor = MMInk.Text.copy(alpha = 0.6f),
                 cursorColor = MMInk.Text,
-                focusedContainerColor = Color.White,
-                unfocusedContainerColor = Color.White,
-                disabledContainerColor = Color.White,
+                focusedContainerColor = MMInk.Card,
+                unfocusedContainerColor = MMInk.Card,
+                disabledContainerColor = MMInk.Card,
             ),
         )
     }
@@ -277,7 +278,7 @@ internal fun MaintenanceCategoryChips(
                 val isSelected = category == selected
                 Box(
                     Modifier
-                        .heightIn(min = 36.dp)
+                        .heightIn(min = 48.dp)
                         .clip(CircleShape)
                         .background(if (isSelected) MMInk.Text else MMInk.Card)
                         .border(0.75.dp, if (isSelected) MMInk.Text else MMInk.CardStroke, CircleShape)
@@ -289,7 +290,7 @@ internal fun MaintenanceCategoryChips(
                     Text(
                         category.raw,
                         style = mmFont(14f, if (isSelected) FontWeight.SemiBold else FontWeight.Normal),
-                        color = if (isSelected) Color.White else MMInk.Text,
+                        color = if (isSelected) MMInk.Card else MMInk.Text,
                     )
                 }
             }

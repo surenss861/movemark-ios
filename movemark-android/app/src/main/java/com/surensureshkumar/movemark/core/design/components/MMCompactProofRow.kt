@@ -78,8 +78,8 @@ fun MMCompactProofRow(
     if (style == MMCompactProofRowStyle.Settings) {
         Row(
             modifier = rowModifier
-                .background(MMColors.Card.copy(alpha = 0.96f), RoundedCornerShape(cornerRadius))
-                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(cornerRadius))
+                .background(MMColors.Card, RoundedCornerShape(cornerRadius))
+                .border(0.75.dp, MMColors.CardStroke, RoundedCornerShape(cornerRadius))
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

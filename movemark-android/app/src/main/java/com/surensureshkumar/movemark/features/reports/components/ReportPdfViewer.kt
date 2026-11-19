@@ -61,7 +61,7 @@ fun ReportPdfViewer(
         Column(
             Modifier
                 .fillMaxSize()
-                .background(MMColors.EvidenceCard),
+                .background(MMColors.AppBackground),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -78,14 +78,12 @@ fun ReportPdfViewer(
                     color = MMColors.TextPrimary,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .weight(1f)
                         .semantics { heading() },
                 )
                 IconButton(onClick = onShare) {
-                    Icon(Icons.Filled.Share, contentDescription = "Share report", tint = MMColors.Primary)
+                    Icon(Icons.Filled.Share, contentDescription = "Share report", tint = MMColors.TextPrimary)
                 }
             }
             if (pages == null || pages.pageCount == 0) {

@@ -20,27 +20,31 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMLightSystemBars
+import com.surensureshkumar.movemark.core.design.MMMetrics
+import com.surensureshkumar.movemark.core.design.MMWordmark
 
-private val Hero = Color(0xFF161817)
-private val Sheet = Color(0xFFF8F8F8)
-private val Ink = Color(0xFF141415)
-private val Quiet = Color(0xFF7E7F80)
-private val Lime = Color(0xFFCAE36C)
-private val OnLime = Color(0xFF111608)
+// One light system (owner, 2026-11-18): the header is the page itself, ink on soft off-white.
+private val Sheet = MMInk.Sheet
+private val Ink = MMInk.Text
+private val Quiet = MMInk.Secondary
+private val Lime = MMInk.Lime
+private val OnLime = MMInk.OnLime
 
 internal const val STARTUP_OFFLINE_TITLE = "Can’t reach MoveMark"
 internal const val STARTUP_OFFLINE_BODY =
@@ -48,16 +52,17 @@ internal const val STARTUP_OFFLINE_BODY =
 
 @Composable
 fun StartupOfflineScreen(isRetrying: Boolean, onRetry: () -> Unit, onSignOut: () -> Unit) {
+    MMLightSystemBars(lightNavigationBar = true, lightStatusBar = true)
     Column(Modifier.fillMaxSize().background(Sheet).testTag("startup.offline")) {
         Column(
-            Modifier.fillMaxWidth().background(Hero).statusBarsPadding()
-                .padding(start = 20.dp, end = 20.dp, top = 32.dp, bottom = 40.dp),
+            Modifier.fillMaxWidth().statusBarsPadding()
+                .padding(start = MMMetrics.Inset, end = MMMetrics.Inset, top = 24.dp, bottom = 8.dp),
         ) {
-            Text("MoveMark", color = Color.White.copy(alpha = 0.62f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.padding(top = 8.dp))
+            MMWordmark(size = 15f)
+            Spacer(Modifier.padding(top = 10.dp))
             Text(
                 STARTUP_OFFLINE_TITLE,
-                color = Color.White,
+                color = Ink,
                 fontSize = 30.sp,
                 lineHeight = 36.sp,
                 fontWeight = FontWeight.Bold,
@@ -66,25 +71,32 @@ fun StartupOfflineScreen(isRetrying: Boolean, onRetry: () -> Unit, onSignOut: ()
         }
         Text(
             STARTUP_OFFLINE_BODY,
-            color = Ink,
+            color = Quiet,
             fontSize = 16.sp,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp).weight(1f),
+            modifier = Modifier.padding(horizontal = MMMetrics.Inset, vertical = 22.dp).weight(1f),
         )
         Column(
-            Modifier.fillMaxWidth().background(Color.White).navigationBarsPadding()
-                .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
+            Modifier.fillMaxWidth().background(Sheet).navigationBarsPadding()
+                .padding(start = MMMetrics.Inset, end = MMMetrics.Inset, top = 12.dp, bottom = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(
-                Modifier.fillMaxWidth().heightIn(min = 52.dp)
-                    .background(if (isRetrying) Lime.copy(alpha = 0.45f) else Lime, RoundedCornerShape(26.dp))
+                Modifier.fillMaxWidth().heightIn(min = MMMetrics.CtaHeight)
+                    .background(if (isRetrying) Lime.copy(alpha = 0.45f) else Lime, CircleShape)
                     .clickable(enabled = !isRetrying, role = Role.Button, onClick = onRetry)
                     .testTag("startup.offline.retry"),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(if (isRetrying) "Trying…" else "Try again", color = OnLime, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (isRetrying) "Trying…" else "Try again",
+                    color = OnLime,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
+                )
             }
-            TextButton(onClick = onSignOut, enabled = !isRetrying) { Text("Sign out", color = Quiet) }
+            TextButton(onClick = onSignOut, enabled = !isRetrying, modifier = Modifier.heightIn(min = 48.dp)) { Text("Sign out", color = Quiet) }
         }
     }
 }

@@ -136,7 +136,7 @@ fun MMProofCaseAccentRailOverlay(
 }
 
 private fun statusTextColor(tone: MMProofStatusTone) = when (tone) {
-    MMProofStatusTone.Success -> MMColors.Primary.copy(alpha = 0.92f)
+    MMProofStatusTone.Success -> MMColors.TextPrimary
     MMProofStatusTone.Warning -> MMColors.SemanticWarning
     MMProofStatusTone.Danger -> MMColors.SemanticDanger
     MMProofStatusTone.Info -> MMColors.SemanticInfo
@@ -160,7 +160,7 @@ fun MMProofCaseReceiptRow(
         androidx.compose.material3.Icon(
             imageVector = Icons.Default.CheckCircle,
             contentDescription = null,
-            tint = MMColors.Primary,
+            tint = MMColors.TextPrimary,
             modifier = Modifier.size(18.dp),
         )
         Spacer(Modifier.width(8.dp))

@@ -1,6 +1,5 @@
 package com.surensureshkumar.movemark.features.moveout
 
-import androidx.compose.ui.graphics.Color
 import com.surensureshkumar.movemark.core.design.MMInk
 import com.surensureshkumar.movemark.core.design.MMPrimaryButton
 import com.surensureshkumar.movemark.core.design.MMScreen
@@ -31,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -102,7 +102,7 @@ fun MoveOutRoomsScreen(
         photos.firstOrNull()?.let { viewer = photos to it }
     }
 
-    // iOS draws move-out progress in the dark header (headerAccessory), lime on the track.
+    // Move-out progress in the light header (headerAccessory): ink and grey text, a light track, the lime fill.
     val progressFor = overview?.takeIf { it.rooms.isNotEmpty() && it.hasBaseline }
     val headerProgress: (@Composable ColumnScope.() -> Unit)? = if (progressFor != null) {
         { MoveOutHeaderProgress(done = progressFor.roomsWithMoveOutPhotos, total = progressFor.rooms.size) }
@@ -121,7 +121,12 @@ fun MoveOutRoomsScreen(
                 val o = overview
                 when {
                     o == null && loading -> CircularProgressIndicator(color = MMInk.Text, modifier = Modifier.padding(top = 24.dp))
-                    o == null -> Text("No rental loaded.", color = MMInk.Secondary, modifier = Modifier.padding(top = 24.dp))
+                    o == null -> com.surensureshkumar.movemark.core.design.MMEmptyBlock(
+                        icon = Icons.Outlined.Home,
+                        title = "No rental yet",
+                        message = "Add a rental to compare move-out with move-in.",
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
                     else -> MoveOutContent(
                         o = o,
                         justCompared = justCompared,
@@ -372,8 +377,8 @@ private fun Panel(content: @Composable ColumnScope.() -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
-            .background(MMInk.Paper, RoundedCornerShape(18.dp))
-            .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(18.dp))
+            .background(MMInk.Card, RoundedCornerShape(16.dp))
+            .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(16.dp))
             .padding(14.dp),
         content = content,
     )
@@ -396,8 +401,8 @@ private fun Group(content: @Composable ColumnScope.() -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
-            .background(MMInk.Paper, RoundedCornerShape(18.dp))
-            .border(1.dp, MMInk.CardStroke, RoundedCornerShape(18.dp)),
+            .background(MMInk.Card, RoundedCornerShape(16.dp))
+            .border(0.75.dp, MMInk.CardStroke, RoundedCornerShape(16.dp)),
         content = content,
     )
 }

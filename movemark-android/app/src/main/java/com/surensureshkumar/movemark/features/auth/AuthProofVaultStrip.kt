@@ -18,13 +18,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.surensureshkumar.movemark.core.design.MMColors
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.mmLines
 
-private val stripRaised = Color(0xFF1A1C1B)
+private val stripRaised = MMInk.Card
 private val trustItems = listOf(
     "Private proof vault",
     "Move-in report included",
@@ -45,7 +45,7 @@ fun AuthProofVaultStrip(
             .fillMaxWidth()
             .clip(shape)
             .background(stripRaised)
-            .border(0.75.dp, MMColors.CardStroke.copy(alpha = 0.55f), shape)
+            .border(0.75.dp, MMInk.CardStroke, shape)
             .padding(horizontal = 12.dp, vertical = 11.dp),
     ) {
         if (mode == AuthMode.SignIn) {
@@ -53,7 +53,7 @@ fun AuthProofVaultStrip(
                 Icon(
                     Icons.Filled.CheckCircle,
                     contentDescription = null,
-                    tint = MMColors.Primary.copy(alpha = 0.9f),
+                    tint = MMInk.Text,
                     modifier = Modifier
                         .size(15.dp)
                         .padding(top = 1.dp),
@@ -64,24 +64,24 @@ fun AuthProofVaultStrip(
                         "Proof vault ready",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = MMColors.TextPrimary,
-                        maxLines = 1,
+                        color = MMInk.Text,
+                        maxLines = mmLines(1),
                     )
                     Text(
                         "Pick up where your room proof left off.",
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.Medium,
-                        color = MMColors.TextSecondary,
+                        color = MMInk.Secondary,
                         modifier = Modifier.padding(top = 3.dp),
-                        maxLines = 2,
+                        maxLines = mmLines(2),
                     )
                     Text(
                         "Move-in proof · Reports when needed",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
-                        color = MMColors.TextMuted,
+                        color = MMInk.Secondary,
                         modifier = Modifier.padding(top = 4.dp),
-                        maxLines = 1,
+                        maxLines = mmLines(1),
                     )
                 }
             }
@@ -96,7 +96,7 @@ fun AuthProofVaultStrip(
                     Icon(
                         Icons.Filled.CheckCircle,
                         contentDescription = null,
-                        tint = MMColors.Primary.copy(alpha = 0.88f),
+                        tint = MMInk.Text,
                         modifier = Modifier.size(13.dp),
                     )
                     Spacer(Modifier.width(8.dp))
@@ -104,8 +104,8 @@ fun AuthProofVaultStrip(
                         label,
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.Medium,
-                        color = MMColors.TextSecondary,
-                        maxLines = 2,
+                        color = MMInk.Secondary,
+                        maxLines = mmLines(2),
                     )
                 }
             }

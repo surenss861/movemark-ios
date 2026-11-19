@@ -22,7 +22,7 @@ fun MMProofCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(MMSpacing.CornerRadius.dp),
         color = MMColors.Card,
-        border = BorderStroke(1.dp, MMColors.CardStroke),
+        border = BorderStroke(0.75.dp, MMColors.CardStroke),
         content = {
             Column(Modifier.padding(20.dp), content = content)
         },

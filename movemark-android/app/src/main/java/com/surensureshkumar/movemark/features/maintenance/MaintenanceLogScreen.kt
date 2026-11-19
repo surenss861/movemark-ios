@@ -29,7 +29,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -157,7 +156,7 @@ internal fun MaintenanceLogContent(
     }
 }
 
-/** The header's "+" (iOS: a 32pt white-12% circle in a 44pt target). */
+/** The header's "+" (a 32dp light field circle in a 48dp target, ink glyph). */
 @Composable
 private fun MaintenanceRecordButton(onClick: () -> Unit) {
     Box(
@@ -172,10 +171,10 @@ private fun MaintenanceRecordButton(onClick: () -> Unit) {
             Modifier
                 .size(32.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.12f)),
+                .background(MMInk.Field),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Filled.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+            Icon(Icons.Filled.Add, contentDescription = null, tint = MMInk.Text, modifier = Modifier.size(18.dp))
         }
     }
 }

@@ -48,7 +48,11 @@ fun EditNameDialog(
         },
         confirmButton = {
             TextButton(onClick = { onSave(trimmed) }, enabled = canSave) {
-                Text(if (saving) "Saving…" else "Save", color = MMColors.Primary)
+                Text(
+                    if (saving) "Saving…" else "Save",
+                    color = if (canSave) MMColors.TextPrimary else MMColors.TextMuted,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                )
             }
         },
         dismissButton = {

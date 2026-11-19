@@ -70,7 +70,7 @@ private fun CaseFileStrip(model: MMProofReceiptStripModel, modifier: Modifier = 
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Default.CheckCircle, null, tint = MMColors.Primary, modifier = Modifier.size(18.dp))
+            Icon(Icons.Default.CheckCircle, null, tint = MMColors.TextPrimary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Text(model.savedTitle, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MMColors.TextPrimary)
@@ -94,7 +94,7 @@ private fun StackedStrip(model: MMProofReceiptStripModel, modifier: Modifier = M
         MMProofCaseDivider()
         Spacer(Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.CheckCircle, null, tint = MMColors.Primary, modifier = Modifier.size(18.dp))
+            Icon(Icons.Default.CheckCircle, null, tint = MMColors.TextPrimary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text(model.savedTitle, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MMColors.TextPrimary)
             Spacer(Modifier.weight(1f))

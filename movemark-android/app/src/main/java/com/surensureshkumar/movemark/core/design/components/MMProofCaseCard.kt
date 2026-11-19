@@ -44,16 +44,11 @@ fun MMProofCaseCard(
     val shape = RoundedCornerShape(cornerRadius)
     val surfaceColor = when (style) {
         MMProofCaseCardStyle.Standard -> MMColors.CardRaised
-        MMProofCaseCardStyle.Marketing -> MMColors.Card.copy(alpha = 0.98f)
+        MMProofCaseCardStyle.Marketing -> MMColors.Card
     }
     val border = when (style) {
-        MMProofCaseCardStyle.Standard -> BorderStroke(1.dp, MMColors.CardStroke)
-        MMProofCaseCardStyle.Marketing -> BorderStroke(
-            1.dp,
-            Brush.linearGradient(
-                listOf(MMColors.Primary.copy(0.28f), MMColors.CardStroke.copy(0.75f)),
-            ),
-        )
+        MMProofCaseCardStyle.Standard -> BorderStroke(0.75.dp, MMColors.CardStroke)
+        MMProofCaseCardStyle.Marketing -> BorderStroke(0.75.dp, MMColors.CardStroke)
     }
 
     Surface(

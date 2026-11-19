@@ -1,5 +1,5 @@
 /**
- * @file Proof tab (iOS `ProofHomeView`): a quiet dark header carrying the rental and its move-in proof progress,
+ * @file Proof tab (iOS `ProofHomeView`): a quiet light header carrying the rental and its move-in proof progress,
  *       then the light sheet — the next room with the one capture action, the evidence counts, the recent
  *       evidence strip, the rooms still to do, and the next actions. Evidence lives only inside its own clipped
  *       thumbnails, never as a header photo.
@@ -65,13 +65,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
@@ -91,7 +89,6 @@ import com.surensureshkumar.movemark.core.design.MMHeaderProofProgress
 import com.surensureshkumar.movemark.core.design.MMWordmark
 import com.surensureshkumar.movemark.core.design.mmFont
 import com.surensureshkumar.movemark.core.design.mmIsLargeFont
-import com.surensureshkumar.movemark.core.design.mmLines
 import com.surensureshkumar.movemark.core.design.mmPressable
 import com.surensureshkumar.movemark.core.design.mmPullUp
 import com.surensureshkumar.movemark.core.design.mmRoomGlyph
@@ -142,7 +139,7 @@ fun VaultScreen(
         if (!hasPro && propertyCount >= 1) onShowPaywall(PaywallReason.ExtraProperty) else onAddProperty()
     }
 
-    MMLightSystemBars()
+    MMLightSystemBars(lightNavigationBar = true, lightStatusBar = true)
     val p = property
     if (p == null && !loading) {
         ProofHomeEmpty(errorMessage = error, onStart = onAddProperty, modifier = modifier)
@@ -177,15 +174,13 @@ fun VaultScreen(
                 Text(
                     p?.title?.ifBlank { null } ?: "Your rental",
                     style = mmFont(27f, FontWeight.SemiBold),
-                    color = Color.White,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                    color = MMInk.HeroText,
                     modifier = Modifier
                         .padding(top = 6.dp)
                         .semantics { heading() },
                 )
                 p?.let { RentalLocation.line(it.city, it.provinceState) }?.takeIf { it.isNotEmpty() }?.let {
-                    Text(it, style = mmFont(14f), color = MMInk.HeroSecondary, maxLines = mmLines(1), modifier = Modifier.padding(top = 3.dp))
+                    Text(it, style = mmFont(14f), color = MMInk.HeroSecondary, modifier = Modifier.padding(top = 3.dp))
                 }
                 if (p != null) {
                     MMHeaderProofProgress(
@@ -307,7 +302,7 @@ private fun ProofSheet(
                         Icon(mmRoomGlyph(next.name), contentDescription = null, tint = MMInk.Text.copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                     }
-                    Text(next.name, style = mmFont(20f, FontWeight.SemiBold), color = MMInk.Text, maxLines = mmLines(1), overflow = TextOverflow.Ellipsis)
+                    Text(next.name, style = mmFont(20f, FontWeight.SemiBold), color = MMInk.Text)
                 }
                 if (!mmIsLargeFont()) Text("No proof yet", style = mmFont(13f), color = MMInk.Secondary)
             }
@@ -492,11 +487,14 @@ private fun EvidenceTile(item: RecentEvidence, side: androidx.compose.ui.unit.Dp
             val request = rememberSignedImageRequest(item.url, item.path)
             if (request != null) {
                 AsyncImage(model = request, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            } else {
+                // An explicit neutral placeholder, never the brand mark posing as a photo.
+                Icon(Icons.Outlined.Image, contentDescription = null, tint = MMInk.Secondary, modifier = Modifier.size(24.dp).align(Alignment.Center))
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(item.roomName, style = mmFont(12.5f, FontWeight.Medium), color = MMInk.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(tileCaption(item.capturedAt, count), style = mmFont(11.5f), color = MMInk.Secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(item.roomName, style = mmFont(12.5f, FontWeight.Medium), color = MMInk.Text)
+            Text(tileCaption(item.capturedAt, count), style = mmFont(11.5f), color = MMInk.Secondary)
         }
     }
 }
@@ -537,13 +535,13 @@ private fun RentalMenu(
                 Modifier
                     .size(32.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.12f)),
+                    .background(MMInk.Field),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     if (otherRentals.isEmpty()) Icons.Filled.Add else Icons.Filled.MoreHoriz,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = MMInk.Text,
                     modifier = Modifier.size(18.dp),
                 )
             }
@@ -587,7 +585,7 @@ private fun RentalMenu(
     }
 }
 
-/** No rental yet: the same light language, a quiet dark field, one lime action (iOS `ProofHomeEmptyView`). */
+/** No rental yet: the same light language, a quiet light header, one lime action (iOS `ProofHomeEmptyView`). */
 @Composable
 private fun ProofHomeEmpty(errorMessage: String?, onStart: () -> Unit, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize().background(MMInk.Sheet)) {

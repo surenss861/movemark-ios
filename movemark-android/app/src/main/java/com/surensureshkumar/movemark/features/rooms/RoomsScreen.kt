@@ -39,7 +39,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -140,7 +139,7 @@ fun RoomsScreen(
         modifier = modifier,
         trailing = {
             IconButton(onClick = { showAddRoomDialog = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "Add room", tint = Color.White)
+                Icon(Icons.Filled.Add, contentDescription = "Add room", tint = MMInk.HeroText)
             }
         },
         headerAccessory = if (rooms.isNotEmpty() && p != null) {
@@ -151,7 +150,7 @@ fun RoomsScreen(
     ) {
         when {
             loading && p == null -> MMLoadingBlock()
-            p == null -> MMEmptyBlock(icon = Icons.Outlined.MeetingRoom, title = "No rooms loaded")
+            p == null -> MMEmptyBlock(icon = Icons.Outlined.MeetingRoom, title = "No rental yet", message = "Add a rental to document its rooms.")
             rooms.isEmpty() -> MMEmptyBlock(
                 icon = Icons.Outlined.MeetingRoom,
                 title = "No rooms yet",

@@ -248,7 +248,6 @@ private fun ReportArtifact(
                     state.rentalName.ifBlank { "Your rental" },
                     style = mmFont(22f, FontWeight.SemiBold),
                     color = MMInk.Text,
-                    maxLines = 2,
                     modifier = Modifier.padding(top = 6.dp),
                 )
                 roomsLine(state)?.let {

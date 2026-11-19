@@ -177,7 +177,7 @@ fun MMVaultProofHeroCard(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 1.05.sp,
-                color = MMColors.Primary,
+                color = MMColors.TextPrimary,
             )
             Text(
                 nextName,
@@ -207,7 +207,7 @@ fun MMVaultProofHeroCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(reportReadyLine, fontSize = 14.sp, color = MMColors.TextSecondary, modifier = Modifier.weight(1f))
-                Text("View", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MMColors.Primary)
+                Text("View", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MMColors.TextPrimary)
             }
         }
     }
@@ -244,7 +244,7 @@ private fun ProofThumb(url: String, path: String?) {
             .size(width = 64.dp, height = 80.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(MMColors.SurfaceInteractive)
-            .border(0.5.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(8.dp)),
+            .border(0.75.dp, MMColors.CardStroke, RoundedCornerShape(8.dp)),
         contentAlignment = Alignment.Center,
     ) {
         AsyncImage(

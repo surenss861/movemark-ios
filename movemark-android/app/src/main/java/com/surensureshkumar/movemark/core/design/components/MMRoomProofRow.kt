@@ -81,7 +81,7 @@ fun MMRoomProofRow(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 1.15.sp,
-                color = MMColors.Primary,
+                color = MMColors.TextPrimary,
             )
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -89,7 +89,7 @@ fun MMRoomProofRow(
                     "%02d".format(index),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp,
-                    color = MMColors.Primary,
+                    color = MMColors.TextPrimary,
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
@@ -108,7 +108,7 @@ fun MMRoomProofRow(
                     .fillMaxWidth()
                     .height(2.dp)
                     .clip(RoundedCornerShape(1.dp))
-                    .background(Color.White.copy(alpha = 0.08f)),
+                    .background(com.surensureshkumar.movemark.core.design.MMInk.Track),
             )
         }
     } else {
@@ -147,7 +147,7 @@ fun MMRoomProofRow(
             Icon(
                 imageVector = if (documented) Icons.Default.CheckCircle else Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                tint = if (documented) MMColors.Primary else MMColors.TextMuted.copy(alpha = 0.7f),
+                tint = if (documented) MMColors.TextPrimary else MMColors.TextMuted.copy(alpha = 0.7f),
                 modifier = Modifier.padding(start = 8.dp),
             )
         }

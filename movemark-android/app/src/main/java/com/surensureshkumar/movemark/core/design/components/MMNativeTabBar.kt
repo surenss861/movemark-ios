@@ -60,12 +60,8 @@ fun MMNativeTabBar(selected: MainTab, onSelect: (MainTab) -> Unit) {
                 .widthIn(min = 260.dp, max = 310.dp)
                 .height(70.dp),
             shape = RoundedCornerShape(26.dp),
-            color = MMColors.EvidenceCardRaised.copy(alpha = 0.96f),
-            border = BorderStroke(
-                1.dp,
-                Color(0xFF21B866).copy(alpha = 0.22f),
-            ),
-            shadowElevation = 8.dp,
+            color = MMColors.Card,
+            border = BorderStroke(0.75.dp, MMColors.CardStroke),
         ) {
             Row(
                 modifier = Modifier

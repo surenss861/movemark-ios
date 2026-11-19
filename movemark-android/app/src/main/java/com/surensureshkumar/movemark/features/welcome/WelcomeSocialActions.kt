@@ -1,19 +1,21 @@
 package com.surensureshkumar.movemark.features.welcome
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
@@ -23,17 +25,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.sp
 import com.surensureshkumar.movemark.R
-import com.surensureshkumar.movemark.core.design.MMColors
-import com.surensureshkumar.movemark.core.design.MMSpacing
+import com.surensureshkumar.movemark.core.design.MMInk
+import com.surensureshkumar.movemark.core.design.MMMetrics
+import com.surensureshkumar.movemark.core.design.mmFont
 import com.surensureshkumar.movemark.features.auth.social.SocialProvider
 
-private val GoogleNeutral = Color(0xFFF2F2F2)
+/** Google's light-theme button outline: a quiet grey that still reads on the off-white page. */
+private val SocialStroke = Color(0xFFDADCE0)
 
 /** State for the "or continue with" block on Welcome. Null means the block is hidden (Release, or no probe). */
 data class WelcomeSocialState(
@@ -42,9 +46,9 @@ data class WelcomeSocialState(
 )
 
 /*
- * Google's Neutral button (#F2F2F2, no stroke, #1F1F1F label) with the official "G" from Google's sign-in
- * branding pack (res/drawable-*dpi/google_signin_mark_neutral.png; its #F2F2F2 tile is the button fill).
- * Same geometry as iOS. Apple is not shown on Android until its flow exists (SocialProvider.androidShown).
+ * The provider buttons in the one light system: a white capsule (the primary button's shape), a 1dp grey outline,
+ * ink label and the official multicolour Google "G" (res/drawable/ic_google_g.xml, Google's four brand colours).
+ * Apple is not shown on Android until its flow exists (SocialProvider.androidShown).
  */
 @Composable
 fun WelcomeSocialActions(
@@ -57,59 +61,59 @@ fun WelcomeSocialActions(
             modifier = Modifier.fillMaxWidth().clearAndSetSemantics {},
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.weight(1f).height(1.dp).background(Color.White.copy(alpha = 0.16f)))
+            Box(Modifier.weight(1f).height(0.75.dp).background(MMInk.Separator))
             Text(
                 "or continue with",
-                fontSize = 12.5.sp,
-                color = MMColors.TextSecondary,
+                style = mmFont(12.5f),
+                color = MMInk.Secondary,
                 modifier = Modifier.padding(horizontal = 10.dp),
             )
-            Box(Modifier.weight(1f).height(1.dp).background(Color.White.copy(alpha = 0.16f)))
+            Box(Modifier.weight(1f).height(0.75.dp).background(MMInk.Separator))
         }
         SocialProvider.androidShown.forEach { provider ->
             val busy = state.busyProvider == provider
+            val dim = if (busy) 1f else 0.55f
             OutlinedButton(
                 onClick = { onSelect(provider) },
                 enabled = state.busyProvider == null,
-                shape = RoundedCornerShape(MMSpacing.CornerRadius.dp),
-                border = null,
+                shape = CircleShape,
+                border = BorderStroke(1.dp, SocialStroke),
+                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = GoogleNeutral,
-                    contentColor = Color(0xFF1F1F1F),
-                    disabledContainerColor = GoogleNeutral.copy(alpha = if (busy) 1f else 0.55f),
-                    disabledContentColor = Color(0xFF1F1F1F).copy(alpha = if (busy) 1f else 0.55f),
+                    containerColor = MMInk.Card,
+                    contentColor = MMInk.Text,
+                    disabledContainerColor = MMInk.Card,
+                    disabledContentColor = MMInk.Text.copy(alpha = dim),
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
                     // A minimum, not a fixed height: at large font scales the label wraps instead of being clipped (F29).
-                    .heightIn(min = MMSpacing.ButtonHeight.dp)
+                    .heightIn(min = MMMetrics.CtaHeight)
                     .testTag("welcome.social.${provider.id}"),
             ) {
                 if (busy) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color(0xFF1F1F1F))
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MMInk.Secondary)
                 } else {
                     if (provider == SocialProvider.GOOGLE) {
                         Image(
-                            painter = painterResource(R.drawable.google_signin_mark_neutral),
+                            painter = painterResource(R.drawable.ic_google_g),
                             contentDescription = null,
-                            modifier = Modifier.size(40.dp),
+                            modifier = Modifier.size(18.dp),
                         )
-                        Spacer(Modifier.width(2.dp))
+                        Spacer(Modifier.width(10.dp))
                     }
-                    // Explicit: the app theme's text style is light-on-dark and would override the button's content colour.
                     Text(
                         provider.buttonTitle,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF1F1F1F),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        style = mmFont(15.5f, FontWeight.Medium),
+                        color = MMInk.Text.copy(alpha = if (state.busyProvider == null) 1f else dim),
+                        textAlign = TextAlign.Center,
                         modifier = Modifier.weight(1f, fill = false),
                     )
                 }
             }
         }
         state.errorMessage?.let {
-            Text(it, fontSize = 13.sp, color = MMColors.TextSecondary, modifier = Modifier.testTag("welcome.social.error"))
+            Text(it, style = mmFont(13f), color = MMInk.Danger, modifier = Modifier.testTag("welcome.social.error"))
         }
     }
 }
