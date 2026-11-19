@@ -1,5 +1,6 @@
 package com.surensureshkumar.movemark.core.design.components
 
+import com.surensureshkumar.movemark.core.design.mmLines
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -103,7 +104,7 @@ private fun StackedStrip(model: MMProofReceiptStripModel, modifier: Modifier = M
             Text(it, fontSize = 10.5.sp, fontWeight = FontWeight.Medium, color = MMColors.TextSecondary.copy(0.78f), modifier = Modifier.padding(top = 5.dp))
         }
         model.metricsLine?.let {
-            Text(it, fontSize = 10.5.sp, color = MMColors.TextSecondary.copy(0.72f), modifier = Modifier.padding(top = 1.dp), maxLines = 1)
+            Text(it, fontSize = 10.5.sp, color = MMColors.TextSecondary.copy(0.72f), modifier = Modifier.padding(top = 1.dp), maxLines = mmLines())
         }
     }
 }

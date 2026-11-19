@@ -6,6 +6,7 @@ import com.surensureshkumar.movemark.data.auth.AuthState
 import com.surensureshkumar.movemark.data.auth.SessionManager
 import com.surensureshkumar.movemark.data.firstrun.FirstRunProofPreferences
 import com.surensureshkumar.movemark.data.property.PropertyStore
+import com.surensureshkumar.movemark.domain.RoomProofMetrics
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -58,7 +59,11 @@ class WelcomeViewModel @Inject constructor(
                 if (state == AuthState.SignedIn) {
                     sessionManager.userId.value?.let { userId ->
                         propertyStore.fetchAll(userId)
-                        _firstRunComplete.value = firstRunPreferences.isComplete(userId.toString())
+                        val local = firstRunPreferences.isComplete(userId.toString())
+                        val complete = RoomProofMetrics.isFirstRunComplete(local, propertyStore.currentProperty.value)
+                        // A vault that already has proof (saved on another device) skips the first-room picker here too.
+                        if (complete && !local) firstRunPreferences.markComplete(userId.toString())
+                        _firstRunComplete.value = complete
                     }
                 } else {
                     _firstRunComplete.value = null

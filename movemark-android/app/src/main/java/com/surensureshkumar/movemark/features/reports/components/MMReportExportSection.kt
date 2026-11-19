@@ -36,6 +36,8 @@ fun MMReportExportSection(
     isProLocked: Boolean = false,
     useQuietPrimaryWhenLocked: Boolean = false,
     legalNote: String? = null,
+    generatedLine: String? = null,
+    recordId: String? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier) {
@@ -54,13 +56,15 @@ fun MMReportExportSection(
             model = MMProofReportModel(
                 reportTitle = sectionTitle,
                 metricsLine = metricsLine,
-                statusLabel = if (isProLocked) "Pro feature" else statusLine,
+                statusLabel = if (isProLocked) "Pro" else statusLine,
                 statusTone = if (isProLocked) MMProofStatusTone.Neutral else statusTone(statusColor, primaryEnabled),
                 footnote = when {
                     isProLocked && useQuietPrimaryWhenLocked -> "Bundle proof if your deposit is questioned."
                     isProLocked -> "Unlock with MoveMark Pro"
                     else -> footnote
                 },
+                generatedLine = if (isProLocked) null else generatedLine,
+                recordId = if (isProLocked) null else recordId,
             ),
             primaryTitle = primaryTitle,
             onPrimary = onPrimary,
@@ -69,7 +73,7 @@ fun MMReportExportSection(
             isBright = !isProLocked && statusColor == MMColors.Primary,
             isProcessing = isProcessing,
             isCompact = true,
-            primaryStyle = if (isProLocked && useQuietPrimaryWhenLocked) MMButtonStyle.Secondary else MMButtonStyle.Primary,
+            primaryStyle = if (isProLocked) MMButtonStyle.Secondary else MMButtonStyle.Primary,
             legalNote = legalNote,
             reduceMotion = reduceMotion,
             modifier = Modifier.mmAppearRise(appeared, reduceMotion, label = "export_$sectionTitle"),
@@ -81,6 +85,7 @@ private fun statusTone(statusColor: Color, primaryEnabled: Boolean): MMProofStat
     statusColor == MMColors.Primary -> MMProofStatusTone.Success
     statusColor == MMColors.SemanticDanger -> MMProofStatusTone.Danger
     statusColor == MMColors.SemanticWarning -> MMProofStatusTone.Warning
+    statusColor == MMColors.SemanticInfo -> MMProofStatusTone.Info
     statusColor == MMColors.TextSecondary -> MMProofStatusTone.Warning
     primaryEnabled -> MMProofStatusTone.Neutral
     else -> MMProofStatusTone.Neutral

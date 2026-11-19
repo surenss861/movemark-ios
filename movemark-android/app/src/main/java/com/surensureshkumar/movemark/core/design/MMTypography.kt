@@ -1,3 +1,10 @@
+/**
+ * @file Android type scale (sans / serif / mono voices)
+ * @domain design-system
+ * @status stable
+ * @see [[VISUAL_STANDARD]] — rules these tokens implement
+ * @see [[MoveMarkTheme.swift]] — iOS reference tokens
+ */
 package com.surensureshkumar.movemark.core.design
 
 import androidx.compose.material3.Typography
