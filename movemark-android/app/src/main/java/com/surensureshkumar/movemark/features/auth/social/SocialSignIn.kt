@@ -25,7 +25,8 @@ enum class SocialProvider(val id: String, val buttonTitle: String) {
     companion object {
         /** Platform order: Google first on Android (Apple first on iOS). */
         val androidOrder = listOf(GOOGLE, APPLE)
-        val androidShown = androidOrder
+        /** Apple through the Neon browser flow hasn't been proven end to end on Android: Google only, for now. */
+        val androidShown = listOf(GOOGLE)
     }
 }
 

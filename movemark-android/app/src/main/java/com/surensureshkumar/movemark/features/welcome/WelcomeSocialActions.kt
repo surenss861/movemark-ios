@@ -55,9 +55,11 @@ fun WelcomeSocialActions(
     state: WelcomeSocialState,
     onSelect: (SocialProvider) -> Unit,
     modifier: Modifier = Modifier,
+    /** On the dark welcome (iOS TestFlight variant): just the white pills, no light divider. */
+    onDark: Boolean = false,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(
+        if (!onDark) Row(
             modifier = Modifier.fillMaxWidth().clearAndSetSemantics {},
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -113,7 +115,12 @@ fun WelcomeSocialActions(
             }
         }
         state.errorMessage?.let {
-            Text(it, style = mmFont(13f), color = MMInk.Danger, modifier = Modifier.testTag("welcome.social.error"))
+            Text(
+                it,
+                style = mmFont(13f),
+                color = if (onDark) androidx.compose.ui.graphics.Color(0xFFFF8A80) else MMInk.Danger,
+                modifier = Modifier.testTag("welcome.social.error"),
+            )
         }
     }
 }
