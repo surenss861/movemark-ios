@@ -65,7 +65,7 @@ extension EvidenceCaptureView {
         }
     }
 
-    static let keepFailedMessage = "Couldn’t keep that photo on this iPhone. Free up some space and try again."
+    static var keepFailedMessage: String { "Couldn’t keep that photo on this \(MMDeviceNoun.current). Free up some space and try again." }
 
     /// A camera shot: kept only once it is written to this iPhone.
     func admitCapture(_ capture: MMCameraCapture) async -> Bool {

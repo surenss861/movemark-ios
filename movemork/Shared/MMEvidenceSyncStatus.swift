@@ -19,7 +19,7 @@ enum MMEvidenceSyncState: Equatable {
 
     var message: String {
         switch self {
-        case .savedLocally: return "Saved on this iPhone · not uploaded yet"
+        case .savedLocally: return "Saved on this \(MMDeviceNoun.current) · not uploaded yet"
         case .uploading(let count): return count == 1 ? "Uploading 1 photo…" : "Uploading \(count) photos…"
         case .failed: return "Upload failed —"
         }
