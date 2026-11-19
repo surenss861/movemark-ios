@@ -25,7 +25,13 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.UUID
 
+/**
+ * Native graphics, like the other full-screen Compose tests here: in Robolectric's legacy mode text has no real
+ * metrics, and the rebuilt screen's header and notice row laid out with those fake sizes leave touch input missing
+ * the controls (their semantics click works, a real tap at their centre doesn't). Real measurement fixes the taps.
+ */
 @RunWith(AndroidJUnit4::class)
+@org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
 class DisputePacketContentTest {
     @get:Rule val compose = createComposeRule()
 
