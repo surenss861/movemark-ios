@@ -17,7 +17,7 @@ final class ProofScrollQATests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-MMRichQA", "proof-home"]
         app.launch()
-        XCTAssertTrue(app.staticTexts["Your proof"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["YOUR PROOF"].waitForExistence(timeout: 10))
 
         func capture(_ name: String) {
             let shot = XCTAttachment(screenshot: app.screenshot())
