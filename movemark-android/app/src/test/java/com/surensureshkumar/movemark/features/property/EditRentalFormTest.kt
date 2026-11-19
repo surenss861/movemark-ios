@@ -76,7 +76,7 @@ class EditRentalFormTest {
         val initial = RentalEditForm(addressLine1 = "12 Elm St", country = "CA")
         var form = initial
         render(initial) { form = it }
-        compose.onNodeWithContentDescription("Country, CA").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Country, Canada").performScrollTo().performClick()
         compose.onNodeWithText("Other").performClick()
         compose.onNodeWithContentDescription("Country code").performScrollTo().performTextReplacement("FR")
         assertEquals("FR", form.country)
