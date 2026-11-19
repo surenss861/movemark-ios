@@ -133,7 +133,7 @@ struct ProofSavedReceiptView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .accessibilityHidden(true)
                     // Saved locally, not confirmed by the server: said as such, with no time of its own.
-                    Text("\(Self.count(model.pendingCount, "photo")) only on this iPhone · \(model.pendingCount == 1 ? "needs" : "need") a retry")
+                    Text("\(Self.count(model.pendingCount, "photo")) only on this \(MMDeviceNoun.current) · \(model.pendingCount == 1 ? "needs" : "need") a retry")
                         .mmFont(14.5, .medium)
                 }
                 .foregroundStyle(Ink.warning)

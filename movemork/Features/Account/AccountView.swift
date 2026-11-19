@@ -70,8 +70,8 @@ struct AccountView: View {
             }
             .confirmationDialog(
                 unsavedPhotoCount == 1
-                    ? "1 photo hasn’t been saved yet. Signing out removes it from this iPhone."
-                    : "\(unsavedPhotoCount) photos haven’t been saved yet. Signing out removes them from this iPhone.",
+                    ? "1 photo hasn’t been saved yet. Signing out removes it from this \(MMDeviceNoun.current)."
+                    : "\(unsavedPhotoCount) photos haven’t been saved yet. Signing out removes them from this \(MMDeviceNoun.current).",
                 isPresented: $confirmSignOut,
                 titleVisibility: .visible
             ) {
