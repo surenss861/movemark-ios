@@ -21,7 +21,9 @@ class MoveMarkApplication : Application() {
         )
         BillingConfig.logStartup()
         val key = BuildConfig.REVENUECAT_PUBLIC_KEY
-        if (BillingConfig.shouldConfigureRevenueCat(key)) {
+        // Robolectric unit tests run this Application without the merged manifest's INTERNET permission.
+        val underRobolectric = android.os.Build.FINGERPRINT == "robolectric"
+        if (BillingConfig.shouldConfigureRevenueCat(key) && !underRobolectric) {
             if (BuildConfig.DEBUG) {
                 Purchases.logLevel = LogLevel.DEBUG
             }

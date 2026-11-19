@@ -62,7 +62,7 @@ class SavedProofReceiptViewModel @Inject constructor(
         val attempted = payload?.attemptedCount ?: saved
         val partial = payload?.hadPartialFailure == true
         val ts = payload?.timestampMillis ?: System.currentTimeMillis()
-        val serverTime = payload?.serverSavedAt?.let(com.surensureshkumar.movemark.data.evidence.pending::parseServerTimestamp)
+        val serverTime = payload?.serverSavedAt?.let { com.surensureshkumar.movemark.data.evidence.pending.parseServerTimestamp(it) }
         val nextRoom = propertyStore.currentProperty.value?.let { RoomProofMetrics.nextRoom(it, phase) }
         val totalRooms = propertyStore.currentProperty.value?.rooms?.size ?: 0
         val documented = propertyStore.currentProperty.value?.let { RoomProofMetrics.documentedCount(it, phase) } ?: 0

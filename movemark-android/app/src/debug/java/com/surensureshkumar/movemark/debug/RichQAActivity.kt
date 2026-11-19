@@ -8,6 +8,7 @@
  */
 package com.surensureshkumar.movemark.debug
 
+import com.surensureshkumar.movemark.features.moveout.MoveOutContent
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -196,7 +197,7 @@ private fun PopulatedMoveOut() {
     com.surensureshkumar.movemark.core.design.MMScreen(
         title = qaProperty.title, eyebrow = "Move-out", lines = listOf("Compare what changed since move-in."), onBack = {},
     ) {
-        com.surensureshkumar.movemark.features.moveout.MoveOutContent(
+        MoveOutContent(
             o = com.surensureshkumar.movemark.domain.MoveOutOverview(qaRooms),
             justCompared = emptySet(), checklist = null, loadingChecklist = false, error = null, errorFromExport = false,
             queuedNotice = null, exporting = false, hasPro = true,
