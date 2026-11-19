@@ -14,6 +14,11 @@ class SocialSignInTest {
         assertFalse(SocialBrowserReturn.isReturn("https", "auth", "/callback"))
         assertFalse(SocialBrowserReturn.isReturn("movemark", "reset-password", "/callback"))
         assertFalse(SocialBrowserReturn.isReturn("movemark", "auth", "/other"))
+        // The return page opened as a verified App Link.
+        assertTrue(SocialBrowserReturn.isReturn("https", "account.movemark.ca", "/auth/return"))
+        assertFalse(SocialBrowserReturn.isReturn("https", "account.movemark.ca", "/reset"))
+        assertFalse(SocialBrowserReturn.isReturn("https", "evil.example", "/auth/return"))
+        assertFalse(SocialBrowserReturn.isReturn("http", "account.movemark.ca", "/auth/return"))
     }
 
     @Test fun aVerifierIsReturned() {

@@ -45,8 +45,10 @@ object SocialBrowserReturn {
     const val ACCOUNT_CONFLICT_MESSAGE = "This email already has a MoveMark vault. Sign in the way you created it."
     private const val FAILED = "Sign-in didn’t finish. Try again."
 
+    /** The return page's movemark:// hand-off, or the return page itself opened as a verified App Link. */
     fun isReturn(scheme: String?, host: String?, path: String?): Boolean =
-        scheme == "movemark" && host == "auth" && path == "/callback"
+        (scheme == "movemark" && host == "auth" && path == "/callback") ||
+            (scheme == "https" && host == "account.movemark.ca" && path == "/auth/return")
 
     /** The verifier from the return's query. Anything else is a failed sign-in, never a session. */
     fun verifier(verifier: String?, error: String?): String {
