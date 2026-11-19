@@ -2,7 +2,7 @@
 //  NewPropertyView.swift
 //  movemork
 //
-//  MoveMark — Add your property. Single flow: form → CreatePropertyInput → store → Supabase → Vault.
+//  MoveMark — Add your rental: address first, dates, optional details → CreatePropertyInput → store → Neon.
 //
 
 import SwiftUI
@@ -20,9 +20,9 @@ struct NewPropertyView: View {
     @State private var postalCode = ""
     @State private var selectedCountryOption = "CA"
     @State private var customCountry = ""
-    @State private var moveInDate = Date()
-    @State private var leaseStartDate = Date()
-    @State private var leaseEndDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
+    @State private var moveInDate: Date
+    @State private var leaseStartDate: Date
+    @State private var leaseEndDate: Date
     @State private var landlordName = ""
     @State private var landlordEmail = ""
     @State private var landlordPhone = ""
@@ -31,12 +31,44 @@ struct NewPropertyView: View {
 
     @State private var errorMessage = ""
     @State private var isLoading = false
+    @State private var confirmDiscard = false
+
+    /// Set when this sheet owns its Cancel (and asks before dropping what was entered). The presenter's own
+    /// Cancel, if it adds one instead, closes without asking.
+    private let onCancel: (() -> Void)?
+    /// The dates as the form opened, to tell whether anything was entered.
+    private let openedDates: [Date]
+
+    init(onCancel: (() -> Void)? = nil) {
+        self.init(today: Date(), onCancel: onCancel)
+    }
+
+    /// `today` is a snapshot seam: the form as it opens on a fixed day, so the default dates don't drift.
+    init(today: Date, onCancel: (() -> Void)? = nil) {
+        let leaseEnd = Calendar.current.date(byAdding: .year, value: 1, to: today) ?? today
+        _moveInDate = State(initialValue: today)
+        _leaseStartDate = State(initialValue: today)
+        _leaseEndDate = State(initialValue: leaseEnd)
+        openedDates = [today, today, leaseEnd]
+        self.onCancel = onCancel
+    }
+
+    /// Anything entered that closing the sheet would lose.
+    private var hasChanges: Bool {
+        let typed = [name, addressLine1, unit, city, region, postalCode, customCountry,
+                     landlordName, landlordEmail, landlordPhone, depositAmount, rentAmount]
+        return typed.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            || selectedCountryOption != "CA"
+            || [moveInDate, leaseStartDate, leaseEndDate] != openedDates
+    }
+
+    private var detailsIssue: String? {
+        RentalFormFields.detailsIssue(email: landlordEmail, deposit: depositAmount, rent: rentAmount)
+    }
 
     private var countryValue: String {
         selectedCountryOption == "Other" ? customCountry : selectedCountryOption
     }
-
-    private let supportedCountries = ["CA", "US", "GB", "AU", "NZ"]
 
     private var input: CreatePropertyInput {
         CreatePropertyInput(
@@ -59,143 +91,50 @@ struct NewPropertyView: View {
     }
 
     var body: some View {
-        ZStack {
-            MoveMarkTheme.Colors.appBackground.ignoresSafeArea()
+        MMSheetScaffold(title: "Add your rental") {
+            Text("Start a dated record of the condition you moved into.")
+                .mmFont(15)
+                .foregroundStyle(MMInk.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    // 1. Intro
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Add your property")
-                                .font(MoveMarkTheme.Typography.subtitleLarge)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            Text("This is where your proof trail starts. Photos, documents, issues, and exports will live here.")
-                                .font(MoveMarkTheme.Typography.detail)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                        }
+            RentalFormFields(
+                name: $name, addressLine1: $addressLine1, unit: $unit, city: $city, region: $region,
+                postalCode: $postalCode, selectedCountryOption: $selectedCountryOption, customCountry: $customCountry,
+                moveInDate: $moveInDate, leaseStartDate: $leaseStartDate, leaseEndDate: $leaseEndDate,
+                landlordName: $landlordName, landlordEmail: $landlordEmail, landlordPhone: $landlordPhone,
+                depositAmount: $depositAmount, rentAmount: $rentAmount, optionalStartsExpanded: false
+            )
+
+            if !errorMessage.isEmpty {
+                MMNotice(message: errorMessage).padding(.top, 22)
+            } else if let leaseError = input.leaseDatesError {
+                MMNotice(message: leaseError).padding(.top, 22)
+            }
+            MMPrimaryButton(title: "Create rental record", isLoading: isLoading, isDisabled: isSubmitDisabled) { submit() }
+                .padding(.top, 26)
+            Text("Next, you'll add rooms and photograph each one.")
+                .mmFont(12.5)
+                .foregroundStyle(MMInk.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .multilineTextAlignment(.center)
+                .padding(.top, 10)
+        }
+        .toolbar {
+            if let onCancel {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        MMDiscardChanges.cancel(hasChanges: hasChanges, isConfirming: $confirmDiscard, dismiss: onCancel)
                     }
-
-                    // 2. Property
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Property")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(
-                                title: "Nickname or label",
-                                placeholder: "e.g. Downtown Condo or 123 Main St",
-                                text: $name
-                            )
-                        }
-                    }
-
-                    // 3. Address
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Address")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(title: "Address line 1", placeholder: "123 Main St", text: $addressLine1)
-                            MMTextField(title: "Unit / apartment", placeholder: "Optional", text: $unit)
-                            MMTextField(title: "City", placeholder: "San Francisco", text: $city)
-                            MMTextField(title: "Province / state", placeholder: "CA", text: $region)
-                            MMTextField(title: "Postal / ZIP code", placeholder: "94102", text: $postalCode)
-                        }
-                    }
-
-                    // 4. Move-in & lease
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Move-in & lease")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            DatePicker("Move-in date", selection: $moveInDate, displayedComponents: .date)
-                                .colorScheme(.light)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            DatePicker("Lease start", selection: $leaseStartDate, displayedComponents: .date)
-                                .colorScheme(.light)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            DatePicker("Lease end", selection: $leaseEndDate, displayedComponents: .date)
-                                .colorScheme(.light)
-                                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                        }
-                    }
-
-                    // 5. Landlord
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Landlord")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(title: "Name", placeholder: "Property manager or landlord", text: $landlordName)
-                            MMTextField(title: "Email", placeholder: "Optional", text: $landlordEmail, keyboardType: .emailAddress)
-                            MMTextField(title: "Phone", placeholder: "Optional", text: $landlordPhone, keyboardType: .phonePad)
-                        }
-                    }
-
-                    // 6. Financials
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Financials")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            MMTextField(title: "Deposit amount", placeholder: "e.g. 1500", text: $depositAmount, keyboardType: .decimalPad)
-                            MMTextField(title: "Rent amount (optional)", placeholder: "e.g. 2200", text: $rentAmount, keyboardType: .decimalPad)
-                        }
-                    }
-
-                    // 7. Country (optional)
-                    MMCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Location")
-                                .font(MoveMarkTheme.Typography.captionEmphasis)
-                                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                            Picker("Country", selection: $selectedCountryOption) {
-                                ForEach(supportedCountries + ["Other"], id: \.self) { option in
-                                    Text(option).tag(option)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-                            if selectedCountryOption == "Other" {
-                                MMTextField(title: "Country code", placeholder: "e.g. FR, DE", text: $customCountry)
-                                    .textInputAutocapitalization(.characters)
-                            }
-                        }
-                    }
-
-                    if !errorMessage.isEmpty {
-                        MMErrorBanner(message: errorMessage)
-                    }
-
-                    // CTA
-                    ZStack {
-                        MMButton(
-                            title: "Create property vault",
-                            action: { submit() },
-                            isDisabled: isSubmitDisabled
-                        )
-                        .opacity(isLoading ? 0.6 : 1.0)
-                        .disabled(isLoading)
-
-                        if isLoading {
-                            ProgressView()
-                                .tint(MoveMarkTheme.Colors.primary)
-                        }
-                    }
+                    .disabled(isLoading)
                 }
-                .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
-                .padding(.top, 24)
-                .padding(.bottom, 32)
             }
         }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
+        .mmDiscardChangesGuard(hasChanges: hasChanges, isBusy: isLoading, isConfirming: $confirmDiscard,
+                               onDiscard: { if let onCancel { onCancel() } else { dismiss() } })
     }
 
     private var isSubmitDisabled: Bool {
-        input.validationError != nil || isLoading
+        input.validationError != nil || detailsIssue != nil || isLoading
     }
 
     private func submit() {
@@ -205,7 +144,7 @@ struct NewPropertyView: View {
         print("👤 userId: \(sessionManager.userId?.uuidString ?? "nil")")
         #endif
 
-        if let msg = input.validationError {
+        if let msg = input.validationError ?? detailsIssue {
             errorMessage = msg
             return
         }

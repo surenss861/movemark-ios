@@ -51,7 +51,7 @@ struct SupportingRecordRow: View {
                     .fixedSize()
             }
         }
-        .frame(minHeight: 60)
+        .frame(minHeight: 52)
         .padding(.horizontal, 4)
         .contentShape(Rectangle())
     }
@@ -82,31 +82,6 @@ struct SupportingRecordRow: View {
     }
 
     private var statusPill: some View {
-        Text(isPresent ? "Uploaded" : "Missing")
-            .font(MoveMarkTheme.Typography.microLabel)
-            .foregroundStyle(
-                isPresent
-                    ? MoveMarkTheme.Colors.semanticSuccess.opacity(0.95)
-                    : MoveMarkTheme.Colors.semanticWarning.opacity(0.95)
-            )
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(
-                Capsule()
-                    .fill(
-                        isPresent
-                            ? MoveMarkTheme.Colors.semanticSuccess.opacity(0.13)
-                            : MoveMarkTheme.Colors.semanticWarning.opacity(0.12)
-                    )
-            )
-            .overlay(
-                Capsule()
-                    .stroke(
-                        isPresent
-                            ? MoveMarkTheme.Colors.semanticSuccess.opacity(0.22)
-                            : MoveMarkTheme.Colors.semanticWarning.opacity(0.28),
-                        lineWidth: 0.8
-                    )
-            )
+        ProofStatusBadge(text: isPresent ? "Added" : "Needed", tone: isPresent ? .success : .warning)
     }
 }

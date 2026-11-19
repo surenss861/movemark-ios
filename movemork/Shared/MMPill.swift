@@ -2,7 +2,8 @@
 //  MMPill.swift
 //  movemork
 //
-//  MoveMark — Stamped status chips on dark emerald.
+//  Legacy name for a status chip. Renders through `ProofStatusBadge` so there is one
+//  badge system; `accent` maps to info.
 //
 
 import SwiftUI
@@ -20,47 +21,16 @@ struct MMPill: View {
     }
 
     var body: some View {
-        Text(text)
-            .font(MoveMarkTheme.Typography.captionEmphasis)
-            .tracking(0.3)
-            .foregroundStyle(foregroundColor)
-            .padding(.horizontal, 11)
-            .padding(.vertical, 7)
-            .background(backgroundColor)
-            .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(borderColor, lineWidth: 1)
-            )
+        ProofStatusBadge(text: text, tone: badgeTone)
     }
 
-    private var foregroundColor: Color {
+    private var badgeTone: ProofStatusTone {
         switch tone {
-        case .neutral: return MoveMarkTheme.Colors.textSecondary
-        case .accent: return MoveMarkTheme.Colors.proofMint
-        case .success: return MoveMarkTheme.Colors.limeAccent
-        case .warning: return MoveMarkTheme.Colors.semanticWarning
-        case .danger: return MoveMarkTheme.Colors.semanticDanger
-        }
-    }
-
-    private var backgroundColor: Color {
-        switch tone {
-        case .neutral: return MoveMarkTheme.Colors.surface.opacity(0.9)
-        case .accent: return MoveMarkTheme.Colors.primary.opacity(0.18)
-        case .success: return MoveMarkTheme.Colors.primary.opacity(0.2)
-        case .warning: return MoveMarkTheme.Colors.semanticWarning.opacity(0.12)
-        case .danger: return MoveMarkTheme.Colors.semanticDanger.opacity(0.14)
-        }
-    }
-
-    private var borderColor: Color {
-        switch tone {
-        case .neutral: return MoveMarkTheme.Colors.subtleStroke
-        case .accent: return MoveMarkTheme.Colors.primary.opacity(0.45)
-        case .success: return MoveMarkTheme.Colors.proofMint.opacity(0.5)
-        case .warning: return MoveMarkTheme.Colors.semanticWarning.opacity(0.28)
-        case .danger: return MoveMarkTheme.Colors.semanticDanger.opacity(0.45)
+        case .neutral: .neutral
+        case .accent: .info
+        case .success: .success
+        case .warning: .warning
+        case .danger: .danger
         }
     }
 }

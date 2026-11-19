@@ -1,0 +1,21 @@
+-- PORTED for Neon by neon/port_migrations.py — do not edit by hand.
+-- source: supabase/migrations/20260312000006_rls_enable.sql (sha256 cebc37acaaaf4f37)
+-- change: none (verbatim)
+
+-- MoveMark production: enable RLS on all tables
+
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.properties ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.rooms ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inspections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inspection_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.evidence_files ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.issue_tags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inspection_item_tags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.maintenance_issues ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.property_documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.move_out_checklists ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.move_out_checklist_state ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.disputes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dispute_evidence_links ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.exports ENABLE ROW LEVEL SECURITY;

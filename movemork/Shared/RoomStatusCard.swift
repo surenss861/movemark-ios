@@ -17,12 +17,11 @@ struct RoomStatusCard: View {
     private var isDone: Bool { !room.evidence.isEmpty }
 
     private var issueCount: Int {
-        room.evidence.flatMap(\.issueTags).count + room.moveOutEvidence.flatMap(\.issueTags).count
+        room.moveInIssueTagTotal + room.moveOutIssueTagTotal
     }
 
     private var photoCount: Int {
-        room.evidence.reduce(0) { $0 + $1.photoCount } +
-        room.moveOutEvidence.reduce(0) { $0 + $1.photoCount }
+        room.moveInPhotoTotal + room.moveOutPhotoTotal
     }
 
     private var cardWidth: CGFloat { isNext ? 164 : 144 }

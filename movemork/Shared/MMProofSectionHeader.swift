@@ -24,14 +24,14 @@ struct MMProofSectionHeader<Trailing: View>: View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.titleToSubtitle) {
                 Text(title)
-                    .font(MoveMarkTheme.Typography.screenTitle)
-                    .tracking(-0.6)
+                    .font(MoveMarkTheme.Typography.pageTitle)
+                    .tracking(-0.7)
                     .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text(subtitle)
-                    .font(MoveMarkTheme.Typography.screenSubtitle)
-                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary.opacity(0.92))
+                    .font(MoveMarkTheme.Typography.body)
+                    .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .layoutPriority(1)
             }
@@ -51,6 +51,30 @@ extension MMProofSectionHeader where Trailing == EmptyView {
     }
 }
 
+/// Small letterspaced label that opens a section — "NEXT ACTIONS", "EXPORT HISTORY".
+struct MMSectionLabel<Trailing: View>: View {
+    let title: String
+    @ViewBuilder var trailing: () -> Trailing
+
+    init(_ title: String, @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }) {
+        self.title = title
+        self.trailing = trailing
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title.uppercased())
+                .font(MoveMarkTheme.Typography.sectionLabel)
+                .tracking(0.9)
+                .foregroundStyle(MoveMarkTheme.Colors.textMuted)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 8)
+            trailing()
+        }
+        .padding(.horizontal, 4)
+    }
+}
+
 struct MMProofHeaderAddButton: View {
     let action: () -> Void
 
@@ -62,11 +86,11 @@ struct MMProofHeaderAddButton: View {
                 .frame(width: 38, height: 38)
                 .background(
                     Circle()
-                        .fill(MoveMarkTheme.Colors.fieldFill.opacity(0.85))
+                        .fill(MoveMarkTheme.Surface.raised)
                 )
                 .overlay(
                     Circle()
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(MoveMarkTheme.Stroke.interactive, lineWidth: 1)
                 )
         }
         .buttonStyle(.plain)

@@ -15,6 +15,8 @@ data class SavedProofReceiptPayload(
     val timestampMillis: Long,
     val thumbnailJpeg: ByteArray?,
     val proofPhase: ProofPhase = ProofPhase.MoveIn,
+    /** Issue tags saved on this entry, so the receipt matches what the room list shows. */
+    val issueCount: Int = 0,
 )
 
 @Singleton

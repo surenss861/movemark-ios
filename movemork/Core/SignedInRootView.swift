@@ -16,14 +16,12 @@ struct SignedInRootView: View {
     var body: some View {
         Group {
             if !propertyStore.hasCompletedInitialFetch {
-                ProgressView()
-                    .tint(MoveMarkTheme.Colors.primary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                MMLaunchWait()
             } else if shouldShowLoadFailure {
                 PropertyLoadFailureView(
-                    message: propertyStore.errorMessage,
                     isRetrying: isRetrying,
-                    onRetry: { Task { await retry() } }
+                    onRetry: { Task { await retry() } },
+                    onSignOut: { Task { await sessionManager.signOut() } }
                 )
             } else if shouldShowFirstRunProof {
                 FirstRunProofFlowView(requiresOnboarding: false)
@@ -96,33 +94,35 @@ struct SignedInRootView: View {
 
 // MARK: - Recoverable load failure
 
-/// Authentication succeeded; only the property load failed. The user stays signed in.
-private struct PropertyLoadFailureView: View {
-    let message: String?
+/// Authentication succeeded; only the property load failed. The user stays signed in, and the copy never
+/// implies the proof is gone — it is stored; it just couldn't be reached.
+struct PropertyLoadFailureView: View {
     let isRetrying: Bool
     let onRetry: () -> Void
+    var onSignOut: () -> Void = {}
 
     var body: some View {
-        VStack(alignment: .leading, spacing: MoveMarkTheme.Spacing.titleToSubtitle) {
-            Text("Can’t load your vault")
-                .font(MoveMarkTheme.Typography.screenTitle)
-                .foregroundStyle(MoveMarkTheme.Colors.textPrimary)
-
-            Text(message ?? "Your proof is safe. We couldn’t reach MoveMark to load it just now.")
-                .font(MoveMarkTheme.Typography.body)
-                .foregroundStyle(MoveMarkTheme.Colors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            MMButton(
+        MMScreen(
+            title: "Your vault couldn’t load",
+            subtitle: "Your proof is still stored. MoveMark couldn’t reach it right now."
+        ) {
+            MMPrimaryButton(
                 title: isRetrying ? "Trying again…" : "Try again",
-                action: onRetry,
-                kind: .primary,
-                size: .standard,
-                isDisabled: isRetrying
+                isLoading: isRetrying,
+                action: onRetry
             )
-            .padding(.top, MoveMarkTheme.Spacing.titleToSubtitle)
+            .accessibilityIdentifier("loadFailure.retry")
+
+            Text("Check your connection and try again.")
+                .mmFont(13.5)
+                .foregroundStyle(MMInk.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 12)
+
+            MMSecondaryButton(title: "Sign out", tint: MMInk.secondary, isDisabled: isRetrying, action: onSignOut)
+                .accessibilityIdentifier("loadFailure.signOut")
+                .padding(.top, 18)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .padding(.horizontal, MoveMarkTheme.Spacing.screenHorizontal)
     }
 }

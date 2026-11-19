@@ -25,22 +25,24 @@ struct MMReportPreviewHero: View {
     let primaryTitle: String
     var isPrimaryDisabled: Bool = false
     var unlockPulse: Bool = false
+    var generatedLine: String? = nil
+    var recordId: String? = nil
     let onPrimary: () -> Void
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isDocumentBright: Bool {
         state == .ready
     }
 
-  var body: some View {
+    var body: some View {
         ProofReportCard(
             model: ProofReportModel(
                 reportTitle: "Move-in report",
                 metricsLine: metricsLine ?? headline,
                 statusLabel: statusLabel,
                 statusTone: statusTone,
-                footnote: footnote
+                footnote: footnote,
+                generatedLine: generatedLine,
+                recordId: recordId
             ),
             primaryTitle: primaryTitle,
             onPrimary: {
@@ -48,8 +50,10 @@ struct MMReportPreviewHero: View {
                 onPrimary()
             },
             primaryEnabled: !isPrimaryDisabled,
+            primaryKind: state == .canMake || state == .failed || state == .ready ? .primary : .secondary,
             isBright: isDocumentBright,
             isProcessing: state == .processing,
+            isCompact: false,
             proofChips: proofChips
         )
         .mmAppearRise(isVisible: state != .loading, delay: 0.08, offset: 6)
@@ -58,10 +62,10 @@ struct MMReportPreviewHero: View {
 
     private var statusLabel: String {
         switch state {
-        case .loading: return "Checking proof"
+        case .loading: return "Preparing evidence"
         case .notReady: return "Needs proof"
-        case .canMake: return "Report can be made"
-        case .processing: return "Building report"
+        case .canMake: return "Can be made"
+        case .processing: return "Generating record"
         case .ready: return "Ready to share"
         case .failed: return "Failed"
         }
@@ -70,8 +74,8 @@ struct MMReportPreviewHero: View {
     private var statusTone: ProofStatusTone {
         switch state {
         case .ready: return .success
-        case .canMake: return .neutral
-        case .processing, .loading: return .warning
+        case .canMake: return .info
+        case .processing, .loading: return .neutral
         case .failed: return .danger
         case .notReady: return .warning
         }

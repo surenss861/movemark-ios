@@ -35,7 +35,7 @@ Use `BILLING_MODE=mock` in `movemark-android/local.properties` for local Pro QA.
 
 - No crashes
 - No stuck loading (every spinner has context or clears on failure)
-- No raw Supabase/Ktor/RevenueCat/API strings in UI
+- No raw Data API/HTTP/RevenueCat/API strings in UI
 - No fake “ready” report states
 - No content hidden under tab bar
 - `photoCount == 0` never counts as documented

@@ -26,15 +26,15 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>MoveMark may save exported or captured images to your photo library when you choose to do so.</string>
 	<key>LegalPrivacyPolicyURL</key>
-	<string>https://silver-peripheral-2ef.notion.site/MoveMark-Privacy-Policy-32f38275720980658acbe9aafa4e331b</string>
+	<string>https://movemark.ca/privacy</string>
 	<key>LegalTermsURL</key>
-	<string>https://silver-peripheral-2ef.notion.site/MoveMark-Terms-of-Service-32f382757209804aa569e43311b492b1</string>
+	<string>https://movemark.ca/terms</string>
 	<key>LegalSupportURL</key>
-	<string>https://silver-peripheral-2ef.notion.site/Contact-Support-32f38275720980248f36d19e1ea533d8</string>
+	<string>https://movemark.ca/support</string>
 	<key>LegalAccountDeletionURL</key>
-	<string>https://silver-peripheral-2ef.notion.site/MoveMark-Account-Data-Deletion-32f3827572098020aa45d0bacc3d13a5</string>
+	<string>https://movemark.ca/delete-account</string>
 	<key>LegalSupportEmail</key>
-	<string>support@movemark.app</string>
+	<string>connect@movemark.ca</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
@@ -45,9 +45,13 @@
 	<string>$(REVENUECAT_TEST_STORE_PUBLIC_KEY)</string>
 	<key>MoveMarkAPIBaseURL</key>
 	<string>$(MoveMarkAPIBaseURL)</string>
-	<key>SupabaseURL</key>
-	<string>$(SUPABASE_URL)</string>
-	<key>SupabaseAnonKey</key>
-	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>MoveMarkAPIBaseURLOverride</key>
+	<string>$(MOVEMARK_API_BASE_URL_OVERRIDE)</string>
+	<key>NeonAuthURL</key>
+	<string>$(NEON_AUTH_URL)</string>
+	<key>NeonDataAPIURL</key>
+	<string>$(NEON_DATA_API_URL)</string>
+	<key>MoveMarkPasswordResetURL</key>
+	<string>$(MOVEMARK_PASSWORD_RESET_URL)</string>
 </dict>
 </plist>
