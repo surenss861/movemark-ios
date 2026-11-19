@@ -547,7 +547,8 @@ struct RoomPhotoPreviewTarget: Identifiable {
 struct EditEvidenceSheet: View {
     let evidence: EvidenceRecord
     let roomName: String
-    let onSave: (String, String, [String], RoomRecord.ConditionRating) async -> String?
+    /// `@MainActor`: see `LegalAcceptanceScreen.onAccept` (a caller-isolated async closure type lost its arguments).
+    let onSave: @MainActor (String, String, [String], RoomRecord.ConditionRating) async -> String?
     /// Removes the entry after the native confirmation; nil hides Delete.
     var onDelete: (() -> Void)?
     let onDismiss: () -> Void
@@ -564,7 +565,7 @@ struct EditEvidenceSheet: View {
     init(
         evidence: EvidenceRecord,
         roomName: String,
-        onSave: @escaping (String, String, [String], RoomRecord.ConditionRating) async -> String?,
+        onSave: @escaping @MainActor (String, String, [String], RoomRecord.ConditionRating) async -> String?,
         onDelete: (() -> Void)? = nil,
         onDismiss: @escaping () -> Void
     ) {

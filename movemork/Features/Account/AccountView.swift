@@ -179,7 +179,8 @@ struct AccountView: View {
 
 struct EditNameSheet: View {
     let currentName: String
-    let onSave: (String) async throws -> Void
+    /// `@MainActor`: see `LegalAcceptanceScreen.onAccept` (a caller-isolated async closure type lost its arguments).
+    let onSave: @MainActor (String) async throws -> Void
     @Environment(\.dismiss) private var dismiss
 
     @State private var name: String
@@ -202,7 +203,7 @@ struct EditNameSheet: View {
     }
 
     /// `draftName` / `initialError` are snapshot seams for the error state; the app starts from the current name.
-    init(currentName: String, onSave: @escaping (String) async throws -> Void, draftName: String? = nil, initialError: String? = nil) {
+    init(currentName: String, onSave: @escaping @MainActor (String) async throws -> Void, draftName: String? = nil, initialError: String? = nil) {
         self.currentName = currentName
         self.onSave = onSave
         _name = State(initialValue: draftName ?? currentName)

@@ -18,7 +18,10 @@ struct LegalAcceptanceScreen: View {
     /// The age statement to confirm; `nil` when the server requires one this build doesn't know (update the app).
     var age: LegalAgeRequirement? = .thirteenQuebecFourteen
     /// The chosen range for the age-range question (nil for the single-box statements).
-    var onAccept: (LegalAgeBand?) async -> String? = { _ in nil }
+    /// `@MainActor` on purpose: as a plain `(LegalAgeBand?) async -> String?` (caller-isolated under approachable
+    /// concurrency) the reabstraction thunk from a main-actor closure dropped the argument, and every answer arrived
+    /// as `.teen` (P0, 2026-11-18). Same fix as `CameraCaptureView.onCapture`.
+    var onAccept: @MainActor (LegalAgeBand?) async -> String? = { _ in nil }
     var onSignOut: () -> Void = {}
     var onDeleteAccount: () -> Void = {}
 
@@ -31,7 +34,7 @@ struct LegalAcceptanceScreen: View {
 
     /// `livesInQuebec` and `ageChoice` start unanswered; they're parameters only to render a state in snapshots.
     init(termsURL: URL?, privacyURL: URL?, age: LegalAgeRequirement? = .thirteenQuebecFourteen,
-         onAccept: @escaping (LegalAgeBand?) async -> String? = { _ in nil }, onSignOut: @escaping () -> Void = {},
+         onAccept: @escaping @MainActor (LegalAgeBand?) async -> String? = { _ in nil }, onSignOut: @escaping () -> Void = {},
          onDeleteAccount: @escaping () -> Void = {}, livesInQuebec: Bool? = nil, ageChoice: LegalAgeChoice? = nil) {
         self.termsURL = termsURL
         self.privacyURL = privacyURL
