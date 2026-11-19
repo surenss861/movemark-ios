@@ -28,4 +28,12 @@ struct AuthErrorMessageTests {
         #expect(MoveMarkFlowMessage.authOperationFailed(NeonAuthError.rejected(code: "USER_ALREADY_EXISTS", message: ""))
                 == "An account with this email already exists. Sign in instead.")
     }
+
+    /// Found on iPad QA 2026-11-18: "Passwords do not match." and the other local checks surfaced as the
+    /// generic "Couldn't complete sign-in. Try again.", which gives the person nothing to fix.
+    @Test func localFormChecksKeepTheirOwnMessage() {
+        for text in ["Enter your email.", "Password must be at least 8 characters.", "Passwords do not match."] {
+            #expect(MoveMarkFlowMessage.authOperationFailed(SessionManager.AuthError.validation(text)) == text)
+        }
+    }
 }
