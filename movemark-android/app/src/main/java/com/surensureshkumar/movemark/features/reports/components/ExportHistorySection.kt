@@ -1,25 +1,30 @@
 package com.surensureshkumar.movemark.features.reports.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.surensureshkumar.movemark.core.design.MMColors
-import com.surensureshkumar.movemark.core.design.components.MMButton
-import com.surensureshkumar.movemark.core.design.components.MMButtonStyle
-import com.surensureshkumar.movemark.core.design.components.MMProofDocumentPreview
 import com.surensureshkumar.movemark.core.design.components.MMProofStatusBadge
 import com.surensureshkumar.movemark.core.design.components.MMProofStatusTone
 import com.surensureshkumar.movemark.data.export.ExportRow
@@ -59,15 +64,31 @@ fun ExportHistorySection(
     if (exports.isEmpty()) return
     Column(modifier) {
         Text(
-            "Export history",
+            "EXPORT HISTORY",
             color = MMColors.TextMuted,
-            fontSize = 13.sp,
+            fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
+            letterSpacing = 1.05.sp,
             modifier = Modifier.padding(start = 2.dp, bottom = 10.dp),
         )
-        exports.forEach { row ->
-            ExportHistoryRow(row = row, onShare = { onShare(row) }, onRetry = { onRetry(row) })
-            Spacer(Modifier.height(8.dp))
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(MMColors.SurfaceRaised),
+        ) {
+            exports.forEachIndexed { index, row ->
+                if (index > 0) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp)
+                            .height(1.dp)
+                            .background(MMColors.CardStroke),
+                    )
+                }
+                ExportHistoryRow(row = row, onShare = { onShare(row) }, onRetry = { onRetry(row) })
+            }
         }
     }
 }
@@ -78,55 +99,50 @@ private fun ExportHistoryRow(
     onShare: () -> Unit,
     onRetry: () -> Unit,
 ) {
-    val isReady = row.verification == ExportVerificationStatus.Ready
-  Row(
+    val canShare = row.verification == ExportVerificationStatus.Ready
+    val canRetry = row.verification == ExportVerificationStatus.ServerFailed
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 2.dp, vertical = 4.dp),
+            .clickable(enabled = canShare || canRetry, onClick = { if (canShare) onShare() else onRetry() })
+            .padding(horizontal = 16.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        MMProofDocumentPreview(
-            large = false,
-            isBright = isReady,
-            isProcessing = row.verification.isActiveJob,
-        )
         Column(Modifier.weight(1f)) {
             Text(
                 exportTypeLabel(row.type),
                 color = MMColors.TextPrimary,
-                fontWeight = FontWeight.Medium,
-                fontSize = 14.sp,
-                maxLines = 1,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(2.dp))
             Text(
-                formatExportDate(row.requestedAt),
+                shortExportDate(row.requestedAt),
                 color = MMColors.TextMuted,
                 fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.padding(top = 2.dp),
             )
-            Spacer(Modifier.height(4.dp))
+            Text(
+                "MM-RP-" + row.id.toString().take(4).uppercase(),
+                color = MMColors.TextMuted,
+                fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+            )
+        }
+        if (!canShare) {
             MMProofStatusBadge(
-                text = row.verification.displayLabel,
+                text = if (canRetry) "Failed · Retry" else row.verification.displayLabel,
                 tone = historyStatusTone(row.verification),
             )
         }
-        if (isReady) {
-            MMButton(
-                text = "Share",
-                onClick = onShare,
-                style = MMButtonStyle.Secondary,
-                modifier = Modifier.width(88.dp),
-            )
-        } else if (row.verification == ExportVerificationStatus.ServerFailed) {
-            MMButton(
-                text = "Retry",
-                onClick = onRetry,
-                style = MMButtonStyle.Secondary,
-                modifier = Modifier.width(88.dp),
-            )
-        }
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MMColors.TextMuted.copy(alpha = if (canShare || canRetry) 1f else 0f),
+        )
     }
 }
 
@@ -147,11 +163,11 @@ private fun exportTypeLabel(type: String): String = when (type) {
     else -> type.replace('_', ' ').replaceFirstChar { it.titlecase(Locale.getDefault()) }
 }
 
-private fun formatExportDate(raw: String?): String {
+private fun shortExportDate(raw: String?): String {
     if (raw.isNullOrBlank()) return "Unknown date"
     return runCatching {
         val instant = Instant.parse(raw)
-        DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a")
+        DateTimeFormatter.ofPattern("MMM d · h:mm a", Locale.US)
             .withZone(ZoneId.systemDefault())
             .format(instant)
     }.getOrElse { raw }

@@ -4,18 +4,23 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.surensureshkumar.movemark.core.navigation.Routes
-import com.surensureshkumar.movemark.core.util.thumbnailPathFor
-import com.surensureshkumar.movemark.core.util.toThumbnailJpeg
-import com.surensureshkumar.movemark.data.auth.SessionManager
+import android.content.Context
+import android.net.Uri
+import com.surensureshkumar.movemark.data.evidence.EvidenceCaptureSource
+import com.surensureshkumar.movemark.data.evidence.EvidenceImport
+import com.surensureshkumar.movemark.data.evidence.PendingEvidence
 import com.surensureshkumar.movemark.data.models.MaintenanceRecord
 import com.surensureshkumar.movemark.data.property.InspectionRepository
 import com.surensureshkumar.movemark.data.property.MaintenanceRepository
 import com.surensureshkumar.movemark.data.property.PropertyStore
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 import javax.inject.Inject
 
@@ -31,11 +36,11 @@ data class MaintenancePhotoUi(
 
 @HiltViewModel
 class MaintenanceIssueDetailViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle,
     private val propertyStore: PropertyStore,
     private val maintenanceRepository: MaintenanceRepository,
     private val inspectionRepository: InspectionRepository,
-    private val sessionManager: SessionManager,
 ) : ViewModel() {
 
     private val issueId: UUID? = savedStateHandle.get<String>(Routes.MaintenanceIssueArg)
@@ -73,7 +78,7 @@ class MaintenanceIssueDetailViewModel @Inject constructor(
             // Prefer signing the thumbnail (grid display) over the full-size file; rows saved
             // before thumbnails existed have no thumbnail_path and fall back to the full-size path.
             val displayPath = file.thumbnailPath ?: file.filePath
-            val signed = runCatching { maintenanceRepository.signedUrl(displayPath) }.getOrNull()
+            val signed = runCatching { inspectionRepository.signedUrl(displayPath) }.getOrNull()
             MaintenancePhotoUi(
                 id = UUID.fromString(file.id),
                 filePath = file.filePath,
@@ -129,45 +134,37 @@ class MaintenanceIssueDetailViewModel @Inject constructor(
         }
     }
 
-    /** Uploads each photo's bytes to maintenance-media, then links it via an evidence_files row. Stops at the first failure. */
-    fun attachPhotos(photoBytes: List<ByteArray>) {
-        if (photoBytes.isEmpty()) return
+    /**
+     * Saves each picked photo as maintenance evidence (untouched source + derivative + thumbnail through the
+     * MoveMark API, then its `evidence_files` row). Photos are saved one by one; a failure never leaves a
+     * duplicate row, and the ones that made it stay saved.
+     */
+    fun attachPhotos(uris: List<Uri>) {
+        if (uris.isEmpty()) return
         val id = issueId ?: return
         val propertyId = propertyStore.activePropertyId.value ?: return
-        val userId = sessionManager.userId.value ?: return
 
         viewModelScope.launch {
             _isUploadingPhotos.value = true
             _message.value = null
-            for (bytes in photoBytes) {
-                val path = "$userId/$propertyId/$id/${UUID.randomUUID()}.jpg"
-                try {
-                    maintenanceRepository.uploadAttachment(bytes, path)
-                } catch (e: Exception) {
-                    _message.value = e.message ?: "Couldn't upload photo. Try again."
-                    _isUploadingPhotos.value = false
-                    return@launch
-                }
-                // Thumbnail is a best-effort enhancement (grid loading only) -- a failure here
-                // shouldn't fail the attachment, which is why it's not inside the try/catch above.
-                val thumbPath = thumbnailPathFor(path)
-                val thumbBytes = bytes.toThumbnailJpeg()
-                val thumbUploaded = thumbBytes != null && runCatching {
-                    maintenanceRepository.uploadAttachment(thumbBytes, thumbPath)
-                }.isSuccess
-                try {
-                    inspectionRepository.insertMaintenanceEvidenceFile(
-                        propertyId,
-                        id,
-                        path,
-                        thumbnailPath = if (thumbUploaded) thumbPath else null,
-                    )
-                } catch (e: Exception) {
-                    maintenanceRepository.removeOrphanAttachment(path)
-                    if (thumbUploaded) maintenanceRepository.removeOrphanAttachment(thumbPath)
-                    _message.value = e.message ?: "Photo uploaded but couldn't be saved. Try again."
-                    _isUploadingPhotos.value = false
-                    return@launch
+            val imported = withContext(Dispatchers.IO) {
+                uris.map { runCatching { EvidenceImport.source(context, it, EvidenceCaptureSource.Library) } }
+            }
+            val pending = imported.mapNotNull { it.getOrNull() }.distinctBy { it.sha256Hex }.map { PendingEvidence(it) }
+            if (pending.isEmpty()) {
+                _message.value = imported.firstNotNullOfOrNull { it.exceptionOrNull()?.message }
+                    ?: "Couldn't read that photo. Try another one."
+                _isUploadingPhotos.value = false
+                return@launch
+            }
+            val result = withContext(Dispatchers.IO) {
+                inspectionRepository.maintenanceSaver(id, propertyId).save(pending)
+            }
+            if (!result.isComplete) {
+                _message.value = if (result.saved.isEmpty()) {
+                    "Couldn't upload photo. Try again."
+                } else {
+                    "${result.saved.size} of ${pending.size} photos saved. Try the rest again."
                 }
             }
             loadPhotos()

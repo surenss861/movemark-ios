@@ -54,6 +54,7 @@ struct ProofCaseMetadataRow: View {
         case .success: MoveMarkTheme.Colors.primary.opacity(0.92)
         case .warning: MoveMarkTheme.Colors.semanticWarning
         case .danger: MoveMarkTheme.Colors.semanticDanger
+        case .info: MoveMarkTheme.Colors.semanticInfo
         case .neutral: MoveMarkTheme.Colors.textMuted
         }
     }

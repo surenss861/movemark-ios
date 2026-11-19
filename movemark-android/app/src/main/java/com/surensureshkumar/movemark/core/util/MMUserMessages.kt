@@ -48,6 +48,9 @@ object MMUserMessages {
     fun profile(error: Throwable): String =
         friendly(error, "Couldn't update your profile. Try again.")
 
+    fun deleteAccount(error: Throwable): String =
+        friendly(error, "Couldn’t delete your account. Try again.")
+
     fun passwordReset(error: Throwable): String =
         friendly(error, "Couldn't send reset email. Try again.")
 
@@ -61,8 +64,10 @@ object MMUserMessages {
         val lower = message.lowercase()
         if (message.length > 120) return true
         val needles = listOf(
-            "supabase",
-            "ktor",
+            "postgrest",
+            "pgrst",
+            "resolve host",
+            "failed to connect",
             "revenuecat",
             "billingclient",
             "json",

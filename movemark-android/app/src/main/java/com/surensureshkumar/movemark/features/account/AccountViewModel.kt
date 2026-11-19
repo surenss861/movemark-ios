@@ -29,14 +29,14 @@ class AccountViewModel @Inject constructor(
 ) : ViewModel() {
     companion object {
         const val PRIVACY_URL =
-            "https://silver-peripheral-2ef.notion.site/MoveMark-Privacy-Policy-32f38275720980658acbe9aafa4e331b"
+            "https://movemark.ca/privacy"
         const val TERMS_URL =
-            "https://silver-peripheral-2ef.notion.site/MoveMark-Terms-of-Service-32f382757209804aa569e43311b492b1"
+            "https://movemark.ca/terms"
         const val SUPPORT_URL =
-            "https://silver-peripheral-2ef.notion.site/Contact-Support-32f38275720980248f36d19e1ea533d8"
+            "https://movemark.ca/support"
         const val ACCOUNT_DELETION_URL =
-            "https://silver-peripheral-2ef.notion.site/MoveMark-Account-Data-Deletion-32f3827572098020aa45d0bacc3d13a5"
-        const val SUPPORT_EMAIL = "support@movemark.app"
+            "https://movemark.ca/delete-account"
+        const val SUPPORT_EMAIL = "connect@movemark.ca"
     }
 
     val isMockMode: Boolean get() = subscriptionRepository.isMockMode
@@ -48,6 +48,9 @@ class AccountViewModel @Inject constructor(
 
     private val _resetInProgress = MutableStateFlow(false)
     val resetInProgress: StateFlow<Boolean> = _resetInProgress.asStateFlow()
+
+    private val _deleting = MutableStateFlow(false)
+    val deleting: StateFlow<Boolean> = _deleting.asStateFlow()
 
     private val _profileSaving = MutableStateFlow(false)
     val profileSaving: StateFlow<Boolean> = _profileSaving.asStateFlow()
@@ -119,10 +122,31 @@ class AccountViewModel @Inject constructor(
         }
     }
 
+    /** Photos not uploaded yet; non-zero means sign-out must warn first. */
+    suspend fun unsavedPhotoCount(): Int = runCatching { sessionManager.unsavedPhotoCount() }.getOrDefault(0)
+
     fun signOut(onDone: () -> Unit) {
         viewModelScope.launch {
             sessionManager.signOut { propertyStore.clear() }
             onDone()
+        }
+    }
+
+    /** Permanently deletes the account and its cloud data, then signs out on this device (iOS `DeleteAccountView`). */
+    fun deleteAccount(onDone: () -> Unit) {
+        if (_deleting.value) return
+        viewModelScope.launch {
+            _deleting.value = true
+            _notice.value = null
+            try {
+                sessionManager.deleteAccount { propertyStore.clear() }
+                onDone()
+            } catch (e: Exception) {
+                Log.e("AccountViewModel", "deleteAccount failed", e)
+                _notice.value = AccountNotice(MMUserMessages.deleteAccount(e), isError = true)
+            } finally {
+                _deleting.value = false
+            }
         }
     }
 

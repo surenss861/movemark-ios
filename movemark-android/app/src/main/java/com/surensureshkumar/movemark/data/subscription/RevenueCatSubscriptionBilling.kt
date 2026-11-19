@@ -54,6 +54,9 @@ class RevenueCatSubscriptionBilling @Inject constructor() : SubscriptionBilling,
     private val _restoreMessage = MutableStateFlow<String?>(null)
     override val restoreMessage: StateFlow<String?> = _restoreMessage.asStateFlow()
 
+    private val _reportPackPurchases = MutableStateFlow(0)
+    override val reportPackPurchases: StateFlow<Int> = _reportPackPurchases.asStateFlow()
+
     init {
         if (isConfigured) {
             Purchases.sharedInstance.updatedCustomerInfoListener = this
@@ -61,7 +64,7 @@ class RevenueCatSubscriptionBilling @Inject constructor() : SubscriptionBilling,
     }
 
     val isConfigured: Boolean
-        get() = BuildConfig.REVENUECAT_PUBLIC_KEY.isNotBlank() &&
+        get() = BillingConfig.keyProblem(BuildConfig.REVENUECAT_PUBLIC_KEY) == null &&
             runCatching { Purchases.isConfigured }.getOrDefault(false)
 
     override fun onReceived(customerInfo: CustomerInfo) {
@@ -120,7 +123,7 @@ class RevenueCatSubscriptionBilling @Inject constructor() : SubscriptionBilling,
         try {
             val offerings: Offerings = Purchases.sharedInstance.awaitOfferings()
             val current = offerings.current
-            if (current == null || current.availablePackages.isEmpty()) {
+            if (current == null || current.availablePackages.none { !ReportCreditPolicy.isReportPackProduct(it.product.id) }) {
                 _packages.value = emptyList()
                 _errorMessage.value = "Plans didn't load. Try again."
                 return
@@ -172,12 +175,20 @@ class RevenueCatSubscriptionBilling @Inject constructor() : SubscriptionBilling,
         return try {
             val info = Purchases.sharedInstance.awaitRestore()
             applyCustomerInfo(info)
-            if (_hasPro.value) {
-                _restoreMessage.value = "MoveMark Pro restored."
-                RestoreOutcome.Restored
-            } else {
-                _restoreMessage.value = "No active subscription found for this Google account."
-                RestoreOutcome.NoneFound
+            when {
+                _hasPro.value -> {
+                    _restoreMessage.value = "MoveMark Pro restored."
+                    RestoreOutcome.Restored
+                }
+                _reportPackPurchases.value > 0 -> {
+                    // Whether a pack is still unspent is decided with the server balance (ReportCreditsManager).
+                    _restoreMessage.value = null
+                    RestoreOutcome.Restored
+                }
+                else -> {
+                    _restoreMessage.value = "No active subscription or Report Pack was found for this Google account."
+                    RestoreOutcome.NoneFound
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "restore failed", e)
@@ -201,9 +212,13 @@ class RevenueCatSubscriptionBilling @Inject constructor() : SubscriptionBilling,
 
     private fun applyCustomerInfo(info: CustomerInfo?) {
         _hasPro.value = info?.entitlements?.get(PRO_ENTITLEMENT_ID)?.isActive == true
+        _reportPackPurchases.value = info?.nonSubscriptionTransactions
+            ?.count { ReportCreditPolicy.isReportPackProduct(it.productIdentifier) } ?: 0
     }
 
-    private fun mapPackages(packages: List<Package>): List<PlanPackageUi> {
+    private fun mapPackages(all: List<Package>): List<PlanPackageUi> {
+        val packs = all.filter { ReportCreditPolicy.isReportPackProduct(it.product.id) }
+        val packages = all - packs.toSet()
         val monthly = packages.firstOrNull { pkg ->
             val id = pkg.product.id.lowercase()
             pkg.packageType.name.contains("MONTH", ignoreCase = true) ||
@@ -218,6 +233,17 @@ class RevenueCatSubscriptionBilling @Inject constructor() : SubscriptionBilling,
         return listOfNotNull(
             monthly?.toUi(isYearly = false),
             yearly?.toUi(isYearly = true),
+            packs.firstOrNull()?.let { pack ->
+                PlanPackageUi(
+                    id = pack.identifier,
+                    revenueCatPackage = pack,
+                    title = "Report Pack",
+                    periodLabel = "One move-in report · no subscription",
+                    price = pack.product.price.formatted,
+                    isYearly = false,
+                    isReportPack = true,
+                )
+            },
         )
     }
 

@@ -6,13 +6,14 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import android.util.Log
 import com.surensureshkumar.movemark.core.util.MMUserMessages
-import com.surensureshkumar.movemark.core.util.thumbnailPathFor
-import com.surensureshkumar.movemark.core.util.toThumbnailJpeg
+import com.surensureshkumar.movemark.data.backend.StoredFileUrls
 import com.surensureshkumar.movemark.data.models.CreatePropertyInput
 import com.surensureshkumar.movemark.data.models.EvidenceRecord
 import com.surensureshkumar.movemark.data.models.MaintenanceRecord
 import com.surensureshkumar.movemark.data.models.PropertyRecord
 import com.surensureshkumar.movemark.data.models.PropertyRow
+import com.surensureshkumar.movemark.data.models.RoomRecord
+import com.surensureshkumar.movemark.data.models.VaultSummary
 import com.surensureshkumar.movemark.domain.ProofPhase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,20 +23,13 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
-data class SaveEvidenceResult(
-    val savedCount: Int,
-    val attemptedCount: Int,
-    val hydrationRefreshed: Boolean,
-) {
-    val hadPartialFailure: Boolean get() = savedCount in 1 until attemptedCount
-}
-
 @Singleton
 class PropertyStore @Inject constructor(
     private val propertyRepository: PropertyRepository,
     private val inspectionRepository: InspectionRepository,
     private val maintenanceRepository: MaintenanceRepository,
     private val hydrator: PropertyHydrator,
+    private val fileUrls: StoredFileUrls,
     private val dataStore: DataStore<Preferences>,
 ) {
     private val _properties = MutableStateFlow<List<PropertyRow>>(emptyList())
@@ -61,6 +55,13 @@ class PropertyStore @Inject constructor(
 
     private fun activeKey(userId: UUID) = stringPreferencesKey("active_property_${userId}")
 
+    private var vaultSummaries: Pair<Long, Map<String, VaultSummary>>? = null
+
+    private fun apply(hydrated: PropertyHydrator.Hydrated) {
+        _currentProperty.value = hydrated.record
+        _maintenanceLog.value = hydrated.maintenance
+    }
+
     /** Call on sign-out to prevent stale data — including the offline snapshot cache — from showing for a different user. */
     suspend fun clear() {
         _currentProperty.value = null
@@ -69,6 +70,7 @@ class PropertyStore @Inject constructor(
         _errorMessage.value = null
         _hasCompletedInitialFetch.value = false
         _maintenanceLog.value = emptyList()
+        vaultSummaries = null
         hydrator.clearCache()
     }
 
@@ -93,10 +95,10 @@ class PropertyStore @Inject constructor(
 
             // Instant local read so the UI isn't blank while the network hydrate below is in
             // flight -- see PropertySnapshotCache. No-op (returns null) if nothing's cached yet.
-            hydrator.hydrateFromCache(row)?.let { cached -> _currentProperty.value = cached }
+            hydrator.hydrateFromCache(row)?.let(::apply)
 
             try {
-                _currentProperty.value = hydrator.hydrate(row)
+                apply(hydrator.hydrate(row))
                 _errorMessage.value = null
             } catch (e: Exception) {
                 Log.e("PropertyStore", "fetchAll hydrate failed", e)
@@ -104,7 +106,6 @@ class PropertyStore @Inject constructor(
                 // Keep showing the cached/previous property rather than blanking the screen over
                 // a failed refresh -- only a listing failure (outer catch) clears it.
             }
-            refreshMaintenance(targetId)
         } catch (e: Exception) {
             Log.e("PropertyStore", "fetchAll failed", e)
             _errorMessage.value = MMUserMessages.loadRentals(e)
@@ -120,6 +121,12 @@ class PropertyStore @Inject constructor(
         propertyRepository.insertDefaultRooms(UUID.fromString(created.id))
         // Persist selection before fetchAll so it resolves the new property as active.
         dataStore.edit { it[activeKey(userId)] = created.id }
+        fetchAll(userId)
+    }
+
+    /** Edit rental (iOS `updateProperty`): saves, then re-reads the rentals and the active one. */
+    suspend fun updateProperty(propertyId: UUID, patch: com.surensureshkumar.movemark.domain.PropertyPatch, userId: UUID) {
+        propertyRepository.updateProperty(propertyId, patch)
         fetchAll(userId)
     }
 
@@ -150,8 +157,8 @@ class PropertyStore @Inject constructor(
         try {
             dataStore.edit { it[activeKey(userId)] = propertyId.toString() }
             // Instant local read first (see fetchAll's comment), then refresh from network.
-            hydrator.hydrateFromCache(row)?.let { cached -> _currentProperty.value = cached }
-            _currentProperty.value = hydrator.hydrate(row)
+            hydrator.hydrateFromCache(row)?.let(::apply)
+            apply(hydrator.hydrate(row))
         } catch (e: Exception) {
             Log.e("PropertyStore", "activateProperty failed", e)
             _errorMessage.value = MMUserMessages.activateRental(e)
@@ -169,18 +176,77 @@ class PropertyStore @Inject constructor(
         }
         val row = _properties.value.firstOrNull { it.id == activeId.toString() } ?: return false
         return try {
-            _currentProperty.value = hydrator.hydrate(row)
+            apply(hydrator.hydrate(row))
+            vaultSummaries = null
             true
         } catch (_: Exception) {
             false
         }
     }
 
+    /**
+     * Rooms, documented rooms and newest evidence for every rental, from one aggregate call
+     * (`get_vault_summaries`), never a snapshot per rental. Cached for 30 s; a failed refresh keeps the last result.
+     */
+    suspend fun vaultSummaries(): Map<String, VaultSummary> {
+        val now = System.currentTimeMillis()
+        vaultSummaries?.takeIf { now - it.first < VAULT_SUMMARY_TTL_MS }?.let { return it.second }
+        return try {
+            propertyRepository.fetchVaultSummaries()
+                .associateBy { it.propertyId.lowercase() }
+                .also { vaultSummaries = now to it }
+        } catch (e: Exception) {
+            Log.e("PropertyStore", "vault summaries failed", e)
+            vaultSummaries?.second.orEmpty()
+        }
+    }
+
+    /**
+     * Appends the next page of older entries for a room and stage, moving them out of the room's unloaded
+     * remainder so totals stay exactly what the server counted. Returns whether more remain.
+     */
+    suspend fun loadOlderEntries(roomId: UUID, phase: ProofPhase, pageSize: Int = 30): Boolean {
+        val moveOut = phase == ProofPhase.MoveOut
+        val room = _currentProperty.value?.rooms?.firstOrNull { it.id == roomId } ?: return false
+        if (!room.hasOlderEntries(moveOut)) return false
+        val cursor = EvidenceHistory.olderEntriesCursor(room.evidence(moveOut))
+        val page = propertyRepository.fetchRoomEntriesPage(roomId, phase.key, cursor?.createdAt, cursor?.id, pageSize)
+        page.entries.evidenceFiles.forEach { fileUrls.remember(it.id, it.filePath, it.thumbnailPath) }
+        val defaultTitle = if (moveOut) "Move-out capture" else "Move-in capture"
+        updateRoom(roomId) { EvidenceHistory.applyOlderEntries(it, moveOut, page, defaultTitle) }
+        return page.hasMore
+    }
+
+    /** Loads every remaining photo of one entry (capture order), page by page. */
+    suspend fun loadAllPhotos(entryId: UUID, roomId: UUID, phase: ProofPhase, pageSize: Int = 200) {
+        val moveOut = phase == ProofPhase.MoveOut
+        fun entry(): EvidenceRecord? = _currentProperty.value?.rooms?.firstOrNull { it.id == roomId }
+            ?.evidence(moveOut)?.firstOrNull { it.id == entryId }
+        var loaded = entry() ?: return
+        var hasMore = loaded.hasUnloadedPhotos
+        while (hasMore && loaded.hasUnloadedPhotos) {
+            val cursor = EvidenceHistory.photosCursor(loaded.photos)
+            val page = propertyRepository.fetchEntryPhotosPage(entryId, cursor?.createdAt, cursor?.id, pageSize)
+            page.evidenceFiles.forEach { fileUrls.remember(it.id, it.filePath, it.thumbnailPath) }
+            loaded = EvidenceHistory.appendPhotos(loaded, page.evidenceFiles)
+            hasMore = page.hasMore && page.evidenceFiles.isNotEmpty()
+        }
+        updateRoom(roomId) { room ->
+            val replace = { list: List<EvidenceRecord> -> list.map { if (it.id == entryId) loaded else it } }
+            if (moveOut) room.copy(moveOutEvidence = replace(room.moveOutEvidence))
+            else room.copy(moveInEvidence = replace(room.moveInEvidence))
+        }
+    }
+
+    private fun updateRoom(roomId: UUID, transform: (RoomRecord) -> RoomRecord) {
+        val prop = _currentProperty.value ?: return
+        _currentProperty.value = prop.copy(rooms = prop.rooms.map { if (it.id == roomId) transform(it) else it })
+    }
+
     suspend fun refreshMaintenance(propertyId: UUID): Boolean {
         return try {
             val rows = maintenanceRepository.fetchIssues(propertyId)
-            val issueIds = rows.map { UUID.fromString(it.id) }
-            val photoCounts = inspectionRepository.fetchEvidenceFileCountsByMaintenanceIssue(issueIds)
+            val photoCounts = inspectionRepository.fetchMaintenancePhotoCounts(propertyId)
             _maintenanceLog.value = rows.map { row ->
                 val id = UUID.fromString(row.id)
                 MaintenanceRecord(
@@ -202,111 +268,45 @@ class PropertyStore @Inject constructor(
     }
 
     private companion object {
-        const val UPLOAD_TAG = "MoveMarkUpload"
-        const val UPLOAD_FAILURE_MESSAGE =
-            "Photos couldn't upload. Check your connection and try again."
+        const val VAULT_SUMMARY_TTL_MS = 30_000L
     }
 
-    suspend fun createEvidenceUploadContext(
-        roomId: UUID,
+    /** Edit a saved entry. Mirrors iOS `updateEvidence`: item first, then replace its tag links. */
+    suspend fun updateEvidence(
+        entryId: UUID,
         title: String,
         notes: String,
-        propertyId: UUID,
+        issueTags: List<String>,
+        conditionRating: Int,
         userId: UUID,
-        proofPhase: ProofPhase = ProofPhase.MoveIn,
-    ): EvidenceUploadContext {
-        val inspectionId = inspectionRepository.upsertInspection(propertyId, userId, proofPhase.key)
-        val itemId = inspectionRepository.insertInspectionItem(
-            inspectionId = inspectionId,
-            roomId = roomId,
-            notes = "$title\n$notes",
-            conditionRating = 4,
-        )
-        return EvidenceUploadContext(
-            inspectionItemId = itemId,
-            roomId = roomId,
-            title = title,
-            propertyId = propertyId,
-            userId = userId,
-            proofPhase = proofPhase,
-        )
-    }
-
-    suspend fun uploadSingleEvidencePhoto(
-        context: EvidenceUploadContext,
-        photo: ByteArray,
     ): Boolean {
-        val path =
-            "${context.userId}/${context.propertyId}/${context.proofPhase.storageFolder}/${context.roomId}/${UUID.randomUUID()}.jpg"
-        return try {
-            inspectionRepository.uploadPhoto(photo, path)
-            // Thumbnail is a best-effort enhancement (grid loading only) -- its failure shouldn't
-            // fail the evidence save, which is why it's uploaded after the full-size photo lands.
-            val thumbPath = thumbnailPathFor(path)
-            val thumbBytes = photo.toThumbnailJpeg()
-            val thumbUploaded = thumbBytes != null && inspectionRepository.uploadThumbnail(thumbBytes, thumbPath)
-            inspectionRepository.insertEvidenceFile(
-                context.propertyId,
-                context.inspectionItemId,
-                path,
-                thumbnailPath = if (thumbUploaded) thumbPath else null,
-            )
-            true
-        } catch (e: Exception) {
-            Log.e(UPLOAD_TAG, "Photo upload failed room=${context.roomId} path=$path", e)
-            inspectionRepository.removeOrphanUpload(path)
-            false
-        }
+        inspectionRepository.updateInspectionItem(entryId, "$title\n$notes", conditionRating)
+        inspectionRepository.deleteItemTags(entryId)
+        if (issueTags.isNotEmpty()) inspectionRepository.insertItemTags(entryId, issueTags)
+        return refreshActive(userId)
     }
 
-    suspend fun commitEvidenceUpload(
-        context: EvidenceUploadContext,
-        uploadedCount: Int,
-        attemptedCount: Int,
-    ): SaveEvidenceResult {
-        if (uploadedCount <= 0) {
-            runCatching {
-                inspectionRepository.deleteInspectionItem(context.inspectionItemId)
-            }.onFailure {
-                Log.e(UPLOAD_TAG, "Failed to roll back empty evidence item", it)
-            }
-            throw IllegalStateException(UPLOAD_FAILURE_MESSAGE)
-        }
-        applyOptimisticEvidence(
-            context.roomId,
-            context.inspectionItemId,
-            context.title,
-            uploadedCount,
-            context.proofPhase,
-        )
-        val refreshed = refreshActive(context.userId)
-        return SaveEvidenceResult(uploadedCount, attemptedCount, refreshed)
+    /** Delete a saved entry with its photos and tags. Mirrors iOS `deleteEvidence`. */
+    suspend fun deleteEvidence(entryId: UUID, userId: UUID): Boolean {
+        inspectionRepository.deleteInspectionItem(entryId)
+        return refreshActive(userId)
     }
 
-    suspend fun abandonEvidenceUpload(context: EvidenceUploadContext) {
-        runCatching {
-            inspectionRepository.deleteInspectionItem(context.inspectionItemId)
-        }.onFailure {
-            Log.e(UPLOAD_TAG, "Failed to abandon evidence upload", it)
-        }
-    }
-
-    /** @deprecated Prefer [createEvidenceUploadContext] + per-photo upload for progress/retry. */
-    suspend fun addEvidence(
+    /**
+     * After a pending-evidence sync confirmed [confirmed] photos of [entryId]: show them at once, then refresh
+     * from the server. Returns whether the refresh succeeded.
+     */
+    suspend fun applyEvidenceSync(
         roomId: UUID,
+        entryId: UUID?,
         title: String,
-        notes: String,
-        photos: List<ByteArray>,
-        propertyId: UUID,
+        confirmed: Int,
+        phase: ProofPhase,
         userId: UUID,
-    ): SaveEvidenceResult {
-        if (photos.isEmpty()) throw IllegalArgumentException("Add at least one photo before saving.")
-        val context = createEvidenceUploadContext(roomId, title, notes, propertyId, userId, ProofPhase.MoveIn)
-        var saved = 0
-        for (photo in photos) {
-            if (uploadSingleEvidencePhoto(context, photo)) saved++
-        }
-        return commitEvidenceUpload(context, saved, photos.size)
+    ): Boolean {
+        if (entryId != null && confirmed > 0) applyOptimisticEvidence(roomId, entryId, title, confirmed, phase)
+        vaultSummaries = null
+        return refreshActive(userId)
     }
 
     private fun applyOptimisticEvidence(
@@ -323,9 +323,8 @@ class PropertyStore @Inject constructor(
                 ProofPhase.MoveIn -> room.moveInEvidence
                 ProofPhase.MoveOut -> room.moveOutEvidence
             }
-            // Each save creates a brand-new inspection_item row (see createEvidenceUploadContext),
-            // so itemId is never an existing record's id except on a retry of the same context.
-            // Append a new entry rather than merging counts into an unrelated pre-existing one.
+            // Each new-entry save has its own client-chosen inspection_item id (PendingEvidenceSync), so
+            // itemId matches an existing record only when a retry completes the same entry.
             val updatedEvidence = if (existingList.any { it.id == itemId }) {
                 existingList.map { e ->
                     if (e.id == itemId) e.copy(photoCount = e.photoCount + photoCount) else e

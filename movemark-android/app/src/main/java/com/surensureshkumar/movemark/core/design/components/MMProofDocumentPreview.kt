@@ -6,11 +6,13 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,15 +20,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.surensureshkumar.movemark.core.design.MMColors
 
+/**
+ * Single paper cover. The edge turns green only once the record is ready.
+ * Matches the iOS case-file mark: MM, rules, and PDF or FILE.
+ */
 @Composable
 fun MMProofDocumentPreview(
     modifier: Modifier = Modifier,
@@ -38,95 +46,95 @@ fun MMProofDocumentPreview(
     val pulseAlpha = if (isProcessing && !reduceMotion) {
         val transition = rememberInfiniteTransition(label = "docPulse")
         transition.animateFloat(
-            initialValue = 0.88f,
-            targetValue = 1f,
+            initialValue = 1f,
+            targetValue = 0.78f,
             animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
             label = "docPulseAlpha",
         ).value
     } else {
         1f
     }
-
-    if (large) {
-        Box(modifier.alpha(pulseAlpha)) {
-            Box(Modifier.size(width = 88.dp, height = 116.dp).then(modifier)) {
-                Box(
-                    Modifier
-                        .size(58.dp, 88.dp)
-                        .offset(x = 10.dp, y = 8.dp)
-                        .rotate(5f)
-                        .background(MMColors.EvidenceCard.copy(0.9f), RoundedCornerShape(10.dp)),
-                )
-                Box(
-                    Modifier
-                        .size(60.dp, 92.dp)
-                        .offset(x = 5.dp, y = 4.dp)
-                        .rotate(2.5f)
-                        .background(MMColors.EvidenceCard.copy(0.95f), RoundedCornerShape(12.dp)),
-                )
-                DocumentSheet(isBright = isBright, width = 72.dp, height = 108.dp, radius = 14.dp, pad = 12.dp, compact = false)
-            }
-        }
-    } else {
-        DocumentSheet(
-            modifier = modifier.alpha(pulseAlpha),
-            isBright = isBright,
-            width = 52.dp,
-            height = 68.dp,
-            radius = 10.dp,
-            pad = 8.dp,
-            compact = true,
-        )
-    }
+    val width = if (large) 84.dp else 58.dp
+    val height = if (large) 112.dp else 76.dp
+    DocumentSheet(
+        modifier = modifier.alpha(pulseAlpha),
+        isBright = isBright,
+        isProcessing = isProcessing,
+        width = width,
+        height = height,
+        compact = !large,
+    )
 }
 
 @Composable
 private fun DocumentSheet(
     modifier: Modifier = Modifier,
     isBright: Boolean,
+    isProcessing: Boolean,
     width: androidx.compose.ui.unit.Dp,
     height: androidx.compose.ui.unit.Dp,
-    radius: androidx.compose.ui.unit.Dp,
-    pad: androidx.compose.ui.unit.Dp,
     compact: Boolean,
 ) {
+    val shape = RoundedCornerShape(6.dp)
+    val edge = when {
+        isBright -> MMColors.Primary
+        isProcessing -> MMColors.SemanticWarning
+        else -> Color.Black.copy(alpha = 0.28f)
+    }
+    val label = when {
+        isProcessing -> "FILE"
+        isBright -> "PDF"
+        else -> "FILE"
+    }
     Box(
         modifier
             .size(width, height)
-            .background(MMColors.PaperSurface.copy(if (isBright) 0.98f else 0.9f), RoundedCornerShape(radius))
-            .padding(pad),
+            .clip(shape)
+            .background(MMColors.PaperSurface.copy(if (isBright) 1f else 0.78f))
+            .border(0.5.dp, Color.Black.copy(alpha = 0.12f), shape),
     ) {
-        Column(Modifier.size(width - pad * 2, height - pad * 2)) {
-            Box(
-                Modifier
-                    .width(if (compact) 28.dp else 36.dp)
-                    .height(if (compact) 4.dp else 5.dp)
-                    .background(
-                        if (isBright) MMColors.Primary.copy(0.85f) else MMColors.SemanticWarning.copy(0.75f),
-                        RoundedCornerShape(2.dp),
-                    ),
+        Box(
+            Modifier
+                .align(Alignment.CenterStart)
+                .width(3.dp)
+                .fillMaxHeight()
+                .background(edge),
+        )
+        Column(Modifier.fillMaxSize().padding(if (compact) 8.dp else 12.dp)) {
+            Text(
+                "MM",
+                fontFamily = FontFamily.Monospace,
+                fontSize = if (compact) 11.sp else 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.Black.copy(alpha = 0.72f),
             )
-            Spacer(Modifier.height(if (compact) 5.dp else 6.dp))
-            repeat(if (compact) 2 else 3) {
-                Box(
-                    Modifier
-                        .padding(bottom = if (compact) 3.dp else 4.dp)
-                        .width(if (compact) 32.dp else if (it == 0) 44.dp else 40.dp)
-                        .height(if (compact) 3.dp else 4.dp)
-                        .background(Color.Black.copy(0.08f), RoundedCornerShape(2.dp)),
-                )
-            }
+            Spacer(Modifier.height(if (compact) 5.dp else 7.dp))
+            Rule(if (compact) 28.dp else 44.dp, isProcessing)
+            Spacer(Modifier.height(if (compact) 4.dp else 5.dp))
+            Rule(if (compact) 34.dp else 52.dp, isProcessing)
+            Spacer(Modifier.height(if (compact) 4.dp else 5.dp))
+            Rule(if (compact) 22.dp else 36.dp, isProcessing)
             Spacer(Modifier.weight(1f))
             Text(
-                "PDF",
-                color = when {
-                    compact -> MMColors.TextMuted
-                    isBright -> MMColors.PrimaryPressed
-                    else -> Color.Black.copy(0.55f)
-                },
-                fontSize = if (compact) 9.sp else 10.sp,
-                fontWeight = FontWeight.Bold,
+                label,
+                fontSize = if (compact) 9.sp else 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.6.sp,
+                color = Color.Black.copy(alpha = 0.55f),
             )
         }
     }
+}
+
+@Composable
+private fun Rule(width: androidx.compose.ui.unit.Dp, isProcessing: Boolean) {
+    Box(
+        Modifier
+            .width(width)
+            .height(2.dp)
+            .background(
+                Color.Black.copy(alpha = if (isProcessing) 0.18f else 0.28f),
+                RoundedCornerShape(1.dp),
+            ),
+    )
 }

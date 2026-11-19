@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import Supabase
+import PostgREST
 
 struct MoveOutChecklistRow: Codable, Identifiable {
     var id: UUID?
@@ -45,7 +45,7 @@ struct MoveOutChecklistRow: Codable, Identifiable {
 struct ChecklistRepository {
 
     func fetchChecklist(propertyId: UUID, userId: UUID) async throws -> MoveOutChecklistRow? {
-        let rows: [MoveOutChecklistRow] = try await supabase
+        let rows: [MoveOutChecklistRow] = try await dataAPI
             .from("move_out_checklists")
             .select()
             .eq("property_id", value: propertyId)
@@ -58,7 +58,7 @@ struct ChecklistRepository {
     }
 
     func upsertChecklist(_ row: MoveOutChecklistRow) async throws {
-        try await supabase
+        try await dataAPI
             .from("move_out_checklists")
             .upsert(row, onConflict: "property_id,user_id")
             .execute()

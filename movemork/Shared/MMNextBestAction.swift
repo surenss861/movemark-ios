@@ -26,7 +26,7 @@ enum MMNextBestAction: Equatable {
     var title: String {
         switch self {
         case .createVault: return "Create vault"
-        case .continueProof: return "Finish move-in proof"
+        case .continueProof: return "Continue move-in proof"
         case .addPhotos: return "Add photos"
         case .saveProof: return "Save proof"
         case .addDocs: return "Add docs"
@@ -61,6 +61,15 @@ enum MMNextBestActionMapper {
         case .reviewVault:
             return .openVault
         }
+    }
+
+    /// Names the room when the next step is a capture ("Capture Living Room");
+    /// falls back to the generic action title otherwise.
+    static func primaryTitle(for propertyNextAction: PropertyStore.PropertyNextAction) -> String {
+        if case .captureRoom(_, let roomName) = propertyNextAction {
+            return "Capture \(roomName)"
+        }
+        return from(propertyNextAction: propertyNextAction).title
     }
 
     static func featuredVaultCTA(

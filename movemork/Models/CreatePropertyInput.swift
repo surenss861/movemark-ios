@@ -19,10 +19,10 @@ struct CreatePropertyInput {
     var postalCode: String
     var country: String
     var moveInDate: Date
-    /// Lease start (often same as move-in). Stored as lease_start.
-    var leaseStartDate: Date
-    /// Lease end. Stored as lease_end.
-    var leaseEndDate: Date
+    /// Lease start (often same as move-in). Stored as lease_start; nil when no lease was entered.
+    var leaseStartDate: Date?
+    /// Lease end. Stored as lease_end; nil when no lease was entered.
+    var leaseEndDate: Date?
     /// Optional landlord / property manager name.
     var landlordName: String
     var landlordEmail: String
@@ -44,6 +44,14 @@ struct CreatePropertyInput {
         let a = addressLine1.trimmingCharacters(in: .whitespacesAndNewlines)
         if a.isEmpty { return "Enter the property address." }
         if titleValue.isEmpty { return "Enter a property name or address." }
-        return nil
+        return leaseDatesError
+    }
+
+    /// The lease can't end before it starts (compared by day).
+    var leaseDatesError: String? {
+        guard let start = leaseStartDate, let end = leaseEndDate else { return nil }
+        let calendar = Calendar.current
+        return calendar.startOfDay(for: end) < calendar.startOfDay(for: start)
+            ? "The lease end date can’t be before the lease start date." : nil
     }
 }
