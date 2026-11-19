@@ -71,7 +71,7 @@ struct AuthContainerView: View {
 
     private var headerSubtitle: String {
         if confirmationEmail != nil { return "One more step to finish your vault." }
-        if resetSentTo != nil { return "Open the link on this iPhone." }
+        if resetSentTo != nil { return "Open the link on this \(MMDeviceNoun.current)." }
         switch mode {
         case .signIn: return "Continue your proof vault."
         case .signUp: return "Your rental proof stays tied to your account."
