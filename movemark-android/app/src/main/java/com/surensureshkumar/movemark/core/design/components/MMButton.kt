@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.surensureshkumar.movemark.core.design.MMColors
 import com.surensureshkumar.movemark.core.design.MMSpacing
 
-enum class MMButtonStyle { Primary, Secondary }
+enum class MMButtonStyle { Primary, Secondary, Action }
 
 @Composable
 fun MMButton(
@@ -66,6 +66,28 @@ fun MMButton(
                 )
             } else {
                 Text(text)
+            }
+        }
+        MMButtonStyle.Action -> Button(
+            onClick = onClick,
+            enabled = enabled && !loading,
+            interactionSource = interactionSource,
+            modifier = scaledModifier,
+            shape = shape,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MMColors.ActionPrimary,
+                contentColor = MMColors.OnActionPrimary,
+                disabledContainerColor = MMColors.ActionPrimary.copy(alpha = 0.4f),
+            ),
+        ) {
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.height(22.dp),
+                    color = MMColors.OnActionPrimary,
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                Text(text, color = MMColors.OnActionPrimary)
             }
         }
         MMButtonStyle.Secondary -> OutlinedButton(

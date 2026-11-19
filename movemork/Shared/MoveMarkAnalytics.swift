@@ -14,6 +14,10 @@ enum MoveMarkAnalytics {
     enum Event: String {
         case appOpened = "app_opened"
         case onboardingStarted = "onboarding_started"
+        /// Welcome: the lime "Start move-in proof" action.
+        case welcomeStartProofTapped = "welcome_start_proof_tapped"
+        /// Welcome: "I already have a vault" (opens sign in).
+        case welcomeSignInTapped = "welcome_sign_in_tapped"
         case rentalMomentSelected = "rental_moment_selected"
         case proofVaultCreated = "proof_vault_created"
         case roomStarted = "room_started"

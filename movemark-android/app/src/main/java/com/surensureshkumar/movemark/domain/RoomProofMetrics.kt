@@ -9,8 +9,18 @@ object RoomProofMetrics {
         ProofPhase.MoveOut -> room.moveOutEvidence
     }
 
+    /** True photo total: loaded entries plus the server's count of what isn't loaded yet. */
     fun photoCount(room: RoomRecord, phase: ProofPhase = ProofPhase.MoveIn): Int =
-        evidenceFor(room, phase).sumOf { it.photoCount }
+        room.totals(phase == ProofPhase.MoveOut).photos
+
+    fun issueTagCount(room: RoomRecord, phase: ProofPhase = ProofPhase.MoveIn): Int =
+        room.totals(phase == ProofPhase.MoveOut).issueTags
+
+    fun lastProofAt(property: PropertyRecord): String? =
+        property.rooms
+            .flatMap { it.moveInEvidence + it.moveOutEvidence }
+            .mapNotNull { it.createdAt }
+            .maxOrNull()
 
     fun moveInPhotoCount(room: RoomRecord): Int = photoCount(room, ProofPhase.MoveIn)
 
@@ -25,6 +35,13 @@ object RoomProofMetrics {
 
     fun documentedCount(property: PropertyRecord, phase: ProofPhase = ProofPhase.MoveIn): Int =
         property.rooms.count { isDocumented(it, phase) }
+
+    /**
+     * First run (the "Start with one room" picker) is done once this device finished it, or once the vault already
+     * holds move-in proof — e.g. an existing account signing in on a new phone.
+     */
+    fun isFirstRunComplete(localFlag: Boolean, property: PropertyRecord?): Boolean =
+        localFlag || (property != null && moveInDocumentedCount(property) > 0)
 
     fun moveInDocumentedCount(property: PropertyRecord): Int = documentedCount(property, ProofPhase.MoveIn)
 

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ cloud backup and device transfer. Pending evidence photos (filesDir/PendingEvidence) are excluded:
+  they are large originals that would exceed Auto Backup's 25 MB quota (which stops backup entirely) and they
+  belong on the server, where a save puts them. The signed-in session is Keystore-encrypted and can't be
+  restored on another device either, so it is excluded too.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="PendingEvidence/" />
+        <exclude domain="sharedpref" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="PendingEvidence/" />
+        <exclude domain="sharedpref" path="." />
+    </device-transfer>
+</data-extraction-rules>

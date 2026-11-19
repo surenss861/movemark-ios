@@ -40,9 +40,9 @@ jobs:
         run: |
           cat > local.properties <<EOF
           sdk.dir=$ANDROID_SDK_ROOT
-          SUPABASE_URL=https://example.supabase.co
-          SUPABASE_ANON_KEY=ci_placeholder_anon_key
-          MOVE_MARK_API_BASE_URL=https://movemark-api-py-production.up.railway.app
+          NEON_AUTH_URL=https://ci.invalid/neondb/auth
+          NEON_DATA_API_URL=https://ci.invalid/neondb/rest/v1
+          MOVEMARK_API_BASE_URL=https://ci.invalid
           BILLING_MODE=mock
           EOF
 
@@ -55,5 +55,6 @@ jobs:
       - name: Assemble debug
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: Bundle release
-        run: ./gradlew bundleRelease --no-daemon
+      # Release packaging needs the Play upload key (never in CI); compile the release variant instead.
+      - name: Compile release
+        run: ./gradlew compileReleaseKotlin --no-daemon

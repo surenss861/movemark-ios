@@ -1,3 +1,10 @@
+/**
+ * @file Android color tokens — near-neutral surfaces; green is a signal, not a surface
+ * @domain design-system
+ * @status stable
+ * @see [[VISUAL_STANDARD]] — material and color rules
+ * @see [[MoveMarkTheme.swift]] — iOS reference tokens
+ */
 package com.surensureshkumar.movemark.core.design
 
 import androidx.compose.ui.graphics.Color
@@ -8,15 +15,26 @@ object MMColors {
     val Surface = Color(0xFF10231B)
     val Card = Color(0xFF10231B)
     val CardRaised = Color(0xFF13291F)
+    /** Near-neutral plate. Green is a signal, not a surface. */
+    val SurfaceRaised = Color(0xFF121815)
+    val SurfaceInteractive = Color(0xFF171D1A)
     val EvidenceCard = Color(0xFF151716)
     val EvidenceCardRaised = Color(0xFF1A1C1B)
     val TabBarFill = Color(0xF008130F)
     val Primary = Color(0xFF21B866)
+
+    /**
+     * The primary action, matching iOS's lime (MMInk.lime / onLime). Used through MMButtonStyle.Action; Welcome adopts
+     * it first. The app-wide move is a later token change; green stays for genuine success and saved states.
+     */
+    val ActionPrimary = Color(0xFFCAE36C)
+    val OnActionPrimary = Color(0xFF111608)
     val PrimaryPressed = Color(0xFF18A957)
     val TextPrimary = Color(0xFFF2F8F1)
     val TextSecondary = Color(0xFFA8B8AD)
     val TextMuted = Color(0xFF6F8376)
     val SemanticWarning = Color(0xFFD89A1E)
+    val SemanticInfo = Color(0xFF80BAE2)
     val SemanticDanger = Color(0xFFEF5B5B)
     val CardStroke = Color.White.copy(alpha = 0.08f)
     val FieldFill = Color(0xFF0E1E17)

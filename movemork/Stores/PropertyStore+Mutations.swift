@@ -9,15 +9,14 @@ import Foundation
 import os
 import UIKit
 
-/// Unified Logging for room proof uploads (visible in Console.app / `log stream` for TestFlight builds).
-private let inspectionPhotoPipelineLog = Logger(
-    subsystem: Bundle.main.bundleIdentifier ?? "movemork",
-    category: "InspectionPhotoPipeline"
-)
-
 private let maintenancePhotoPipelineLog = Logger(
     subsystem: Bundle.main.bundleIdentifier ?? "movemork",
     category: "MaintenancePhotoPipeline"
+)
+
+private let propertyCreateLog = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "movemork",
+    category: "PropertyCreate"
 )
 
 extension PropertyStore {
@@ -45,95 +44,9 @@ extension PropertyStore {
         var hadAnyFailure: Bool { failedCount > 0 }
     }
 
-    /// Uploads each JPEG and inserts `evidence_files`; continues on per-photo failure. Orphan storage is removed when insert fails after upload.
-    private func saveInspectionPhotos(
-        photos: [Data],
-        userId: UUID,
-        propertyId: UUID,
-        roomId: UUID,
-        inspectionItemId: UUID,
-        folder: String
-    ) async -> PhotoPipelineResult {
-        var savedPhotos: [EvidencePhoto] = []
-        savedPhotos.reserveCapacity(photos.count)
-        var failedCount = 0
-        var insertFailedAfterUploadCount = 0
-        inspectionPhotoPipelineLog.info(
-            "Pipeline start property=\(propertyId.uuidString, privacy: .public) room=\(roomId.uuidString, privacy: .public) item=\(inspectionItemId.uuidString, privacy: .public) folder=\(folder, privacy: .public) photoCount=\(photos.count)"
-        )
-        for (index, photoData) in photos.enumerated() {
-            let path = "\(userId)/\(propertyId)/\(folder)/\(roomId)/\(UUID()).jpg"
-            inspectionPhotoPipelineLog.debug(
-                "Photo \(index + 1)/\(photos.count) bytes=\(photoData.count) path=\(path, privacy: .public)"
-            )
-            do {
-                _ = try await inspectionRepo.uploadPhoto(data: photoData, path: path)
-                inspectionPhotoPipelineLog.debug("uploadPhoto OK path=\(path, privacy: .public)")
-            } catch {
-                failedCount += 1
-                inspectionPhotoPipelineLog.error(
-                    "uploadPhoto FAILED path=\(path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
-                )
-                #if DEBUG
-                print("MoveMark: uploadPhoto failed", path, error)
-                #endif
-                continue
-            }
-
-            // Thumbnail upload is best-effort: the full-size photo above already saved, so a thumbnail
-            // failure just means this photo falls back to `filePath` in grids (same as pre-existing rows).
-            var thumbnailPath: String?
-            if let thumbData = MMImageThumbnail.make(from: photoData) {
-                let thumbPath = MMImageThumbnail.thumbnailPath(for: path)
-                do {
-                    _ = try await inspectionRepo.uploadPhoto(data: thumbData, path: thumbPath)
-                    thumbnailPath = thumbPath
-                } catch {
-                    inspectionPhotoPipelineLog.error(
-                        "thumbnail uploadPhoto FAILED path=\(thumbPath, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
-                    )
-                }
-            }
-
-            do {
-                let fileId = try await inspectionRepo.insertEvidenceFile(
-                    propertyId: propertyId,
-                    inspectionItemId: inspectionItemId,
-                    maintenanceIssueId: nil,
-                    filePath: path,
-                    thumbnailPath: thumbnailPath,
-                    fileType: "image",
-                    capturedAt: Date()
-                )
-                savedPhotos.append(EvidencePhoto(id: fileId, filePath: path, thumbnailPath: thumbnailPath))
-                inspectionPhotoPipelineLog.debug(
-                    "insertEvidenceFile OK fileId=\(fileId.uuidString, privacy: .public) path=\(path, privacy: .public)"
-                )
-            } catch {
-                failedCount += 1
-                insertFailedAfterUploadCount += 1
-                await inspectionRepo.removeOrphanInspectionUpload(path: path)
-                inspectionPhotoPipelineLog.error(
-                    "insertEvidenceFile FAILED path=\(path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
-                )
-                #if DEBUG
-                print("MoveMark: insertEvidenceFile failed after upload", path, error)
-                #endif
-            }
-        }
-        inspectionPhotoPipelineLog.info(
-            "Pipeline end item=\(inspectionItemId.uuidString, privacy: .public) savedCount=\(savedPhotos.count) failedAttempts=\(failedCount) insertFailAfterUpload=\(insertFailedAfterUploadCount)"
-        )
-        return PhotoPipelineResult(
-            savedPhotos: savedPhotos,
-            failedCount: failedCount,
-            insertFailedAfterUploadCount: insertFailedAfterUploadCount
-        )
-    }
-
-    /// Uploads maintenance JPEGs to `maintenance-media` and inserts `evidence_files` with `maintenance_issue_id`. Mirrors ``saveInspectionPhotos`` orphan cleanup.
+    /// Uploads maintenance JPEGs to `maintenance-media` and inserts `evidence_files` with `maintenance_issue_id`. Abandons the upload when the insert fails.
     private func saveMaintenancePhotos(
-        photos: [Data],
+        photos: [MMEvidenceSource],
         userId: UUID,
         propertyId: UUID,
         issueId: UUID
@@ -145,37 +58,22 @@ extension PropertyStore {
         maintenancePhotoPipelineLog.info(
             "Pipeline start property=\(propertyId.uuidString, privacy: .public) issue=\(issueId.uuidString, privacy: .public) photoCount=\(photos.count)"
         )
-        for (index, photoData) in photos.enumerated() {
-            let path = "\(userId)/\(propertyId)/\(issueId)/\(UUID()).jpg"
-            maintenancePhotoPipelineLog.debug(
-                "Photo \(index + 1)/\(photos.count) bytes=\(photoData.count) path=\(path, privacy: .public)"
-            )
+        for (index, source) in photos.enumerated() {
+            maintenancePhotoPipelineLog.debug("Photo \(index + 1)/\(photos.count) source=\(source.mimeType, privacy: .public) bytes=\(source.data.count)")
+            // Immutable source + working derivative + thumbnail (best-effort), verified and finalized.
+            let upload: MoveMarkUpload
             do {
-                _ = try await maintenanceRepo.uploadAttachment(data: photoData, path: path)
-                maintenancePhotoPipelineLog.debug("uploadAttachment OK path=\(path, privacy: .public)")
+                upload = try await maintenanceRepo.uploadAttachment(source, propertyId: propertyId, issueId: issueId)
+                maintenancePhotoPipelineLog.debug("uploadAttachment OK path=\(upload.path, privacy: .public)")
             } catch {
                 failedCount += 1
                 maintenancePhotoPipelineLog.error(
-                    "uploadAttachment FAILED path=\(path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                    "uploadAttachment FAILED error=\(error.localizedDescription, privacy: .public)"
                 )
                 #if DEBUG
-                print("MoveMark: maintenance uploadAttachment failed", path, error)
+                print("MoveMark: maintenance uploadAttachment failed", error)
                 #endif
                 continue
-            }
-
-            // Thumbnail upload is best-effort; a failure here just means this photo falls back to `filePath` in grids.
-            var thumbnailPath: String?
-            if let thumbData = MMImageThumbnail.make(from: photoData) {
-                let thumbPath = MMImageThumbnail.thumbnailPath(for: path)
-                do {
-                    _ = try await maintenanceRepo.uploadAttachment(data: thumbData, path: thumbPath)
-                    thumbnailPath = thumbPath
-                } catch {
-                    maintenancePhotoPipelineLog.error(
-                        "thumbnail uploadAttachment FAILED path=\(thumbPath, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
-                    )
-                }
             }
 
             do {
@@ -183,24 +81,25 @@ extension PropertyStore {
                     propertyId: propertyId,
                     inspectionItemId: nil,
                     maintenanceIssueId: issueId,
-                    filePath: path,
-                    thumbnailPath: thumbnailPath,
+                    filePath: upload.path,
+                    thumbnailPath: upload.thumbnailPath,
+                    sourcePath: upload.sourcePath,
                     fileType: "image",
-                    capturedAt: Date()
+                    capturedAt: upload.capturedAt ?? Date()
                 )
-                savedPhotos.append(EvidencePhoto(id: fileId, filePath: path, thumbnailPath: thumbnailPath))
+                savedPhotos.append(EvidencePhoto(id: fileId, filePath: upload.path, thumbnailPath: upload.thumbnailPath))
                 maintenancePhotoPipelineLog.debug(
-                    "insertEvidenceFile OK fileId=\(fileId.uuidString, privacy: .public) path=\(path, privacy: .public)"
+                    "insertEvidenceFile OK fileId=\(fileId.uuidString, privacy: .public) path=\(upload.path, privacy: .public)"
                 )
             } catch {
                 failedCount += 1
                 insertFailedAfterUploadCount += 1
-                await maintenanceRepo.removeOrphanUploadedAttachment(path: path)
+                await maintenanceRepo.abandonUpload(upload)
                 maintenancePhotoPipelineLog.error(
-                    "insertEvidenceFile FAILED path=\(path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                    "insertEvidenceFile FAILED path=\(upload.path, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
                 )
                 #if DEBUG
-                print("MoveMark: maintenance insertEvidenceFile failed after upload", path, error)
+                print("MoveMark: maintenance insertEvidenceFile failed after upload", upload.path, error)
                 #endif
             }
         }
@@ -243,8 +142,8 @@ extension PropertyStore {
 
     private func buildPropertyRow(id: UUID, input: CreatePropertyInput, userId: UUID, createdAt: String?) -> PropertyRow {
         let dbDate = Self.dbDateFormatter
-        let deposit = Double(input.depositAmount.trimmingCharacters(in: .whitespacesAndNewlines)).map { $0 >= 0 ? $0 : nil } ?? nil
-        let rent = Double(input.rentAmount.trimmingCharacters(in: .whitespacesAndNewlines)).map { $0 >= 0 ? $0 : nil } ?? nil
+        let deposit = Self.parseAmount(input.depositAmount).map { $0 >= 0 ? $0 : nil } ?? nil
+        let rent = Self.parseAmount(input.rentAmount).map { $0 >= 0 ? $0 : nil } ?? nil
         let countryVal = input.country.trimmingCharacters(in: .whitespacesAndNewlines)
         return PropertyRow(
             id: id,
@@ -252,8 +151,9 @@ extension PropertyStore {
             title: input.titleValue,
             addressLine1: input.addressLine1.trimmingCharacters(in: .whitespacesAndNewlines),
             addressLine2: input.unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : input.unit.trimmingCharacters(in: .whitespacesAndNewlines),
-            city: input.city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Unknown" : input.city.trimmingCharacters(in: .whitespacesAndNewlines),
-            provinceState: input.region.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Unknown" : input.region.trimmingCharacters(in: .whitespacesAndNewlines),
+            // Blank stays blank (the columns are NOT NULL, not non-empty): no "Unknown" placeholder.
+            city: input.city.trimmingCharacters(in: .whitespacesAndNewlines),
+            provinceState: input.region.trimmingCharacters(in: .whitespacesAndNewlines),
             postalCode: input.postalCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "00000" : input.postalCode.trimmingCharacters(in: .whitespacesAndNewlines),
             country: countryVal.isEmpty ? "CA" : countryVal,
             landlordName: input.landlordName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : input.landlordName.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -262,10 +162,28 @@ extension PropertyStore {
             depositAmount: deposit,
             rentAmount: rent,
             moveInDate: dbDate.string(from: input.moveInDate),
-            leaseStart: dbDate.string(from: input.leaseStartDate),
-            leaseEnd: dbDate.string(from: input.leaseEndDate),
+            leaseStart: input.leaseStartDate.map { dbDate.string(from: $0) },
+            leaseEnd: input.leaseEndDate.map { dbDate.string(from: $0) },
             createdAt: createdAt
         )
+    }
+
+    /// Deposit / rent as typed: "1500.50", "1,500.50" or "1500,50" (comma-decimal locales). Nil when it isn't a number.
+    static func parseAmount(_ raw: String) -> Double? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "$", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let plain = Double(trimmed) { return plain }
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.locale = .current
+        if let localized = formatter.number(from: trimmed) { return localized.doubleValue }
+        // A comma decimal typed under a dot-decimal locale (or vice versa): one separator, read as the decimal.
+        if trimmed.filter({ $0 == "," }).count == 1, !trimmed.contains(".") {
+            return Double(trimmed.replacingOccurrences(of: ",", with: "."))
+        }
+        return nil
     }
 
     /// Creates a property from the locked input contract, inserts default rooms, then refreshes store.
@@ -279,7 +197,19 @@ extension PropertyStore {
         let row = buildPropertyRow(id: UUID(), input: input, userId: userId, createdAt: nil)
 
         let created = try await propertyRepo.createProperty(row)
-        try await propertyRepo.insertDefaultRooms(propertyId: created.id, userId: userId)
+        // The rental exists from here on: failing now would invite a second (duplicate) create. Default rooms
+        // are best-effort — retry once, then carry on; rooms can be added from the rental.
+        do {
+            try await propertyRepo.insertDefaultRooms(propertyId: created.id, userId: userId)
+        } catch {
+            do {
+                try await propertyRepo.insertDefaultRooms(propertyId: created.id, userId: userId)
+            } catch {
+                propertyCreateLog.error(
+                    "Default rooms not inserted for property=\(created.id.uuidString, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                )
+            }
+        }
         activePropertyId = created.id
         UserDefaults.standard.set(created.id.uuidString, forKey: Self.persistedActivePropertyIdKey(userId: userId))
         await fetchAll(userId: userId)
@@ -315,165 +245,38 @@ extension PropertyStore {
         await fetchAll(userId: userId)
     }
 
-    func addEvidence(to roomID: UUID, evidence: EvidenceRecord, photos: [Data], propertyId: UUID, userId: UUID) async throws -> PropertyMutationOutcome {
-        let inspectionId = try await inspectionRepo.upsertInspection(
-            propertyId: propertyId,
-            userId: userId,
-            type: "move_in"
-        )
-
-        let conditionInt: Int
-        switch evidence.condition {
-        case .excellent: conditionInt = 5
-        case .good: conditionInt = 4
-        case .fair: conditionInt = 3
-        case .belowFair: conditionInt = 2
-        case .poor: conditionInt = 1
-        }
-
-        let itemId = try await inspectionRepo.insertInspectionItem(
-            inspectionId: inspectionId,
-            roomId: roomID,
-            notes: "\(evidence.title)\n\(evidence.notes)",
-            conditionRating: conditionInt
-        )
-
-        let pipeline = await saveInspectionPhotos(
-            photos: photos,
-            userId: userId,
-            propertyId: propertyId,
-            roomId: roomID,
-            inspectionItemId: itemId,
-            folder: "move-in"
-        )
-
-        guard pipeline.hasAnySuccess else {
-            inspectionPhotoPipelineLog.warning(
-                "Zero evidence_files linked — deleting inspection_item=\(itemId.uuidString, privacy: .public) room=\(roomID.uuidString, privacy: .public) property=\(propertyId.uuidString, privacy: .public) moveIn insertFailAfterUpload=\(pipeline.insertFailedAfterUploadCount)"
-            )
-            try? await inspectionRepo.deleteInspectionItem(id: itemId)
-            throw pipeline.insertFailedAfterUploadCount > 0
-                ? ProofSaveZeroLinksError.moveInDatabase
-                : ProofSaveZeroLinksError.moveInStorage
-        }
-
-        await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
-
-        // Tags are optional metadata; RLS/network failure here must not surface as “save failed” after item+photos persisted.
-        var tagInsertFailed = false
-        if !evidence.issueTags.isEmpty {
-            do {
-                try await inspectionRepo.insertItemTags(inspectionItemId: itemId, tagNames: evidence.issueTags)
-            } catch {
-                tagInsertFailed = true
-                #if DEBUG
-                print("MoveMark: insertItemTags failed after move-in save (evidence already stored):", error)
-                #endif
+    /// Brings the screen's copy of the property up to date after ``PendingEvidenceSync`` sent a room's
+    /// photos: the new entry (or the added photos) appear at once, then the property is re-read.
+    func applyEvidenceSync(_ result: PendingEvidenceSyncResult, key: PendingEvidenceKey, evidence: EvidenceRecord?,
+                           userId: UUID) async -> PropertyMutationOutcome {
+        var outcome = PropertyMutationOutcome(hydrationRefreshFailed: false, tagInsertFailed: result.tagsFailed,
+                                              entryId: result.entryId, photoResult: result.photoResult)
+        let confirmed = result.saved.count + result.alreadySaved
+        guard let entryId = result.entryId, confirmed > 0 else { return outcome }
+        let isMoveOut = key.stage == .moveOut
+        await MoveMarkSignedURLCache.shared.invalidateKeys(containing: key.propertyId.uuidString)
+        let priorTotal: Int = {
+            guard let room = currentProperty?.rooms.first(where: { $0.id == key.roomId }) else { return 0 }
+            return (isMoveOut ? room.moveOutEvidence : room.evidence).first(where: { $0.id == entryId })?.photoCount ?? 0
+        }()
+        if key.appendTo != nil || priorTotal > 0 {
+            applyOptimisticAppendPhotos(entryId: entryId, roomId: key.roomId, addedCount: result.saved.count,
+                                        propertyId: key.propertyId)
+        } else if let evidence {
+            if isMoveOut {
+                applyOptimisticMoveOutEvidence(roomID: key.roomId, itemId: entryId, evidence: evidence,
+                                               savedPhotos: result.saved, propertyId: key.propertyId)
+            } else {
+                applyOptimisticMoveInEvidence(roomID: key.roomId, itemId: entryId, evidence: evidence,
+                                              savedPhotos: result.saved, propertyId: key.propertyId)
             }
         }
-
-        applyOptimisticMoveInEvidence(
-            roomID: roomID,
-            itemId: itemId,
-            evidence: evidence,
-            savedPhotos: pipeline.savedPhotos,
-            propertyId: propertyId
-        )
         let ok = await refreshActivePropertyHydration(userId: userId)
-        reconcileInspectionEvidencePhotos(
-            itemId: itemId,
-            roomID: roomID,
-            propertyId: propertyId,
-            isMoveOut: false,
-            fallbackPhotos: pipeline.savedPhotos,
-            minimumPhotoCount: pipeline.savedPhotos.count
-        )
-        #if DEBUG
-        if pipeline.hadAnyFailure {
-            print("MoveMark: addEvidence partially succeeded — some photos failed, but proof was saved.")
-        }
-        #endif
-        return PropertyMutationOutcome(hydrationRefreshFailed: !ok, tagInsertFailed: tagInsertFailed)
-    }
-
-    func addMoveOutEvidence(to roomID: UUID, evidence: EvidenceRecord, photos: [Data], propertyId: UUID, userId: UUID) async throws -> PropertyMutationOutcome {
-        let inspectionId = try await inspectionRepo.upsertInspection(
-            propertyId: propertyId,
-            userId: userId,
-            type: "move_out"
-        )
-
-        let conditionInt: Int
-        switch evidence.condition {
-        case .excellent: conditionInt = 5
-        case .good: conditionInt = 4
-        case .fair: conditionInt = 3
-        case .belowFair: conditionInt = 2
-        case .poor: conditionInt = 1
-        }
-
-        let itemId = try await inspectionRepo.insertInspectionItem(
-            inspectionId: inspectionId,
-            roomId: roomID,
-            notes: "\(evidence.title)\n\(evidence.notes)",
-            conditionRating: conditionInt
-        )
-
-        let pipeline = await saveInspectionPhotos(
-            photos: photos,
-            userId: userId,
-            propertyId: propertyId,
-            roomId: roomID,
-            inspectionItemId: itemId,
-            folder: "move-out"
-        )
-
-        guard pipeline.hasAnySuccess else {
-            inspectionPhotoPipelineLog.warning(
-                "Zero evidence_files linked — deleting inspection_item=\(itemId.uuidString, privacy: .public) room=\(roomID.uuidString, privacy: .public) property=\(propertyId.uuidString, privacy: .public) moveOut insertFailAfterUpload=\(pipeline.insertFailedAfterUploadCount)"
-            )
-            try? await inspectionRepo.deleteInspectionItem(id: itemId)
-            throw pipeline.insertFailedAfterUploadCount > 0
-                ? ProofSaveZeroLinksError.moveOutDatabase
-                : ProofSaveZeroLinksError.moveOutStorage
-        }
-
-        await MoveMarkSignedURLCache.shared.invalidateKeys(containing: propertyId.uuidString)
-
-        var tagInsertFailed = false
-        if !evidence.issueTags.isEmpty {
-            do {
-                try await inspectionRepo.insertItemTags(inspectionItemId: itemId, tagNames: evidence.issueTags)
-            } catch {
-                tagInsertFailed = true
-                #if DEBUG
-                print("MoveMark: insertItemTags failed after move-out save (evidence already stored):", error)
-                #endif
-            }
-        }
-
-        applyOptimisticMoveOutEvidence(
-            roomID: roomID,
-            itemId: itemId,
-            evidence: evidence,
-            savedPhotos: pipeline.savedPhotos,
-            propertyId: propertyId
-        )
-        let ok = await refreshActivePropertyHydration(userId: userId)
-        reconcileInspectionEvidencePhotos(
-            itemId: itemId,
-            roomID: roomID,
-            propertyId: propertyId,
-            isMoveOut: true,
-            fallbackPhotos: pipeline.savedPhotos,
-            minimumPhotoCount: pipeline.savedPhotos.count
-        )
-        #if DEBUG
-        if pipeline.hadAnyFailure {
-            print("MoveMark: addMoveOutEvidence partially succeeded — some photos failed, but proof was saved.")
-        }
-        #endif
-        return PropertyMutationOutcome(hydrationRefreshFailed: !ok, tagInsertFailed: tagInsertFailed)
+        reconcileInspectionEvidencePhotos(itemId: entryId, roomID: key.roomId, propertyId: key.propertyId,
+                                          isMoveOut: isMoveOut, fallbackPhotos: result.saved,
+                                          minimumPhotoCount: priorTotal + result.saved.count)
+        outcome.hydrationRefreshFailed = !ok
+        return outcome
     }
 
     func deleteEvidence(entryId: UUID, propertyId: UUID, userId: UUID) async throws -> PropertyMutationOutcome {
@@ -503,44 +306,9 @@ extension PropertyStore {
         return PropertyMutationOutcome(hydrationRefreshFailed: !ok)
     }
 
-    func appendPhotosToEvidence(entryId: UUID, roomId: UUID, photos: [Data], propertyId: UUID, userId: UUID, isMoveOut: Bool) async throws -> PropertyMutationOutcome {
-        let priorTotal: Int = {
-            guard let prop = currentProperty, prop.id == propertyId,
-                  let room = prop.rooms.first(where: { $0.id == roomId }) else { return 0 }
-            let list = isMoveOut ? room.moveOutEvidence : room.evidence
-            return list.first(where: { $0.id == entryId })?.photoCount ?? 0
-        }()
-        let expectedTotal = priorTotal + photos.count
-
-        let addedPhotos = try await inspectionRepo.appendPhotosToInspectionItem(
-            inspectionItemId: entryId,
-            roomId: roomId,
-            propertyId: propertyId,
-            userId: userId,
-            isMoveOut: isMoveOut,
-            photos: photos
-        )
-        applyOptimisticAppendPhotos(
-            entryId: entryId,
-            roomId: roomId,
-            addedCount: photos.count,
-            propertyId: propertyId
-        )
-        let ok = await refreshActivePropertyHydration(userId: userId)
-        reconcileInspectionEvidencePhotos(
-            itemId: entryId,
-            roomID: roomId,
-            propertyId: propertyId,
-            isMoveOut: isMoveOut,
-            fallbackPhotos: addedPhotos,
-            minimumPhotoCount: expectedTotal
-        )
-        return PropertyMutationOutcome(hydrationRefreshFailed: !ok)
-    }
-
     @discardableResult
-    func addMaintenance(_ record: MaintenanceRecord, photos: [Data], propertyId: UUID, userId: UUID) async throws -> MaintenanceSubmitOutcome {
-        let now = ISO8601DateFormatter().string(from: record.createdAt)
+    func addMaintenance(_ record: MaintenanceRecord, photos: [MMEvidenceSource], propertyId: UUID, userId: UUID) async throws -> MaintenanceSubmitOutcome {
+        let now = MMCaseDate.dayString(record.createdAt)  // `date` columns: the renter's local calendar day
         let row = MaintenanceIssueRow(
             id: record.id,
             propertyId: propertyId,
@@ -580,7 +348,7 @@ extension PropertyStore {
         let hadPartialPhotoLoss = !photos.isEmpty && pipeline.hadAnyFailure && pipeline.hasAnySuccess
 
         if activePropertyId == propertyId {
-            let created = ISO8601DateFormatter().date(from: inserted.dateReported ?? inserted.dateDiscovered ?? "") ?? Date()
+            let created = MMCaseDate.parse(inserted.dateReported ?? inserted.dateDiscovered)?.date ?? record.createdAt
             let newEntry = MaintenanceRecord(
                 id: inserted.id,
                 title: inserted.title,
@@ -608,13 +376,7 @@ extension PropertyStore {
         guard activePropertyId == propertyId else { return true }
         do {
             let rows = try await maintenanceRepo.fetchIssues(propertyId: propertyId)
-            let evidenceFiles = try await inspectionRepo.fetchEvidenceFiles(propertyId: propertyId)
-            var photoCountByIssue: [UUID: Int] = [:]
-            for file in evidenceFiles {
-                if let mid = file.maintenanceIssueId {
-                    photoCountByIssue[mid, default: 0] += 1
-                }
-            }
+            let photoCountByIssue = try await inspectionRepo.maintenancePhotoCounts(propertyId: propertyId)
             maintenanceLog = rows.map { row in
                 MaintenanceRecord(
                     id: row.id,
@@ -622,7 +384,7 @@ extension PropertyStore {
                     category: row.category ?? "General",
                     details: row.description ?? "",
                     status: row.status == "resolved" ? .resolved : (row.status == "follow_up" ? .followUp : .open),
-                    createdAt: ISO8601DateFormatter().date(from: row.dateReported ?? row.dateDiscovered ?? "") ?? Date(),
+                    createdAt: MMCaseDate.parse(row.dateReported ?? row.dateDiscovered)?.date ?? Date(),
                     landlordResponse: row.landlordResponse ?? "",
                     photoCount: photoCountByIssue[row.id] ?? 0
                 )
