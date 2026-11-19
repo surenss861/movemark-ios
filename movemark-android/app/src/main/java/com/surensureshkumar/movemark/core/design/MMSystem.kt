@@ -94,9 +94,12 @@ import com.surensureshkumar.movemark.R
 
 /** Colour tokens of the final system (iOS `MMInk`). */
 object MMInk {
-    val Hero = Color(0xFF161817)            // header / evidence dark
-    val HeroSecondary = Color.White.copy(alpha = 0.62f)
-    val Track = Color.White.copy(alpha = 0.16f)
+    // Headers are light (owner, 2026-11-18): the header surface is the page itself. The names stay so every caller
+    // follows; text "on the hero" is ink, secondary is the accessible grey, the progress track a light grey.
+    val Hero = Color(0xFFF8F8F8)
+    val HeroText = Color(0xFF141415)
+    val HeroSecondary = Color(0xFF6D6E6F)
+    val Track = Color(0xFFE4E4E2)
     val Sheet = Color(0xFFF8F8F8)           // working surface
     val Card = Color.White
     val CardStroke = Color(0xFFECECEC)
@@ -177,7 +180,7 @@ fun MMWordmark(modifier: Modifier = Modifier, size: Float = 17f) {
             contentDescription = null,
             modifier = Modifier.size((size * 0.86f).dp),
         )
-        Text("MoveMark", style = mmFont(size, FontWeight.SemiBold), color = Color.White.copy(alpha = 0.85f))
+        Text("MoveMark", style = mmFont(size, FontWeight.SemiBold), color = MMInk.HeroText)
     }
 }
 
@@ -204,7 +207,7 @@ fun MMScreen(
     headerAccessory: (@Composable ColumnScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    MMLightSystemBars()
+    MMLightSystemBars(lightNavigationBar = true, lightStatusBar = true)
     Box(
         modifier
             .fillMaxSize()
@@ -262,7 +265,7 @@ fun MMHeader(
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) {
                 IconButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp)) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MMInk.HeroText)
                 }
             }
             if (showsWordmark) {
@@ -283,7 +286,7 @@ fun MMHeader(
             Text(
                 title,
                 style = mmFont(27f, FontWeight.SemiBold),
-                color = Color.White,
+                color = MMInk.HeroText,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
@@ -358,7 +361,7 @@ fun MMHeaderProofProgress(
         verticalArrangement = Arrangement.spacedBy(9.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = mmFont(12.5f, FontWeight.Medium), color = Color.White, modifier = Modifier.weight(1f))
+            Text(label, style = mmFont(12.5f, FontWeight.Medium), color = MMInk.HeroText, modifier = Modifier.weight(1f))
             if (total > 0) {
                 Text("${kotlin.math.round(fraction * 100).toInt()}%", style = mmFont(12.5f, FontWeight.Medium), color = MMInk.HeroSecondary)
             }
@@ -376,7 +379,7 @@ fun MMHeaderProofProgress(
                         .fillMaxWidth(fraction.coerceIn(0.02f, 1f))
                         .height(4.dp)
                         .clip(CircleShape)
-                        .background(MMInk.LimeMark),
+                        .background(MMInk.Lime),
                 )
             }
         }

@@ -15,33 +15,30 @@ import androidx.compose.ui.graphics.Color
  * names lose the legacy green without a per-screen port; new and ported screens use MMInk directly.
  */
 object MMColors {
-    val AppBackground = Color(0xFF161817)        // = MMInk.Hero (was legacy green #07120E)
-    val AppBackgroundRaised = Color(0xFF1B1D1C)
-    val Surface = Color(0xFF202221)
-    val Card = Color(0xFF202221)
-    val CardRaised = Color(0xFF262827)
-    /** Near-neutral plate. Green is a signal, not a surface. */
-    val SurfaceRaised = Color(0xFF121815)
-    val SurfaceInteractive = Color(0xFF171D1A)
-    val EvidenceCard = Color(0xFF151716)
-    val EvidenceCardRaised = Color(0xFF1A1C1B)
-    val TabBarFill = Color(0xF0161817)
-    val Primary = Color(0xFFCAE36C)              // = MMInk.Lime (was emerald #21B866)
-
-    /**
-     * The primary action, matching iOS's lime (MMInk.lime / onLime). Used through MMButtonStyle.Action; Welcome adopts
-     * it first. The app-wide move is a later token change; green stays for genuine success and saved states.
-     */
+    // ONE light system (owner, 2026-11-18): every legacy dark token now resolves to the light palette, so screens
+    // still drawn with these names turn light without a per-screen port. The only dark surface left in the app is the
+    // full-screen photo viewer backdrop (MMInk.Evidence).
+    val AppBackground = Color(0xFFF8F8F8)        // = MMInk.Sheet
+    val AppBackgroundRaised = Color(0xFFFFFFFF)
+    val Surface = Color(0xFFFFFFFF)
+    val Card = Color(0xFFFFFFFF)
+    val CardRaised = Color(0xFFFFFFFF)
+    val SurfaceRaised = Color(0xFFFFFFFF)
+    val SurfaceInteractive = Color(0xFFF3F3F2)   // = MMInk.Field
+    val EvidenceCard = Color(0xFFFFFFFF)
+    val EvidenceCardRaised = Color(0xFFFFFFFF)
+    val TabBarFill = Color(0xF0161817)           // the floating dock stays the dark pill
+    val Primary = Color(0xFFCAE36C)              // = MMInk.Lime: primary buttons and progress only
     val ActionPrimary = Color(0xFFCAE36C)
     val OnActionPrimary = Color(0xFF111608)
     val PrimaryPressed = Color(0xFFB5CE58)
-    val TextPrimary = Color(0xFFF2F8F1)
-    val TextSecondary = Color(0xFFB4B5B6)        // neutral (was green-tinted #A8B8AD)
-    val TextMuted = Color(0xFF999A9B)            // neutral, 6.3:1 on AppBackground, 5.7:1 on Card
-    val SemanticWarning = Color(0xFFD89A1E)
-    val SemanticInfo = Color(0xFF80BAE2)
-    val SemanticDanger = Color(0xFFEF5B5B)
-    val CardStroke = Color.White.copy(alpha = 0.08f)
-    val FieldFill = Color(0xFF1C1E1D)
+    val TextPrimary = Color(0xFF141415)          // = MMInk.Text
+    val TextSecondary = Color(0xFF6D6E6F)        // = MMInk.Secondary (AA on off-white)
+    val TextMuted = Color(0xFF6D6E6F)
+    val SemanticWarning = Color(0xFF8F6112)      // warning text on light (unslop audit pair)
+    val SemanticInfo = Color(0xFF2F6F9F)
+    val SemanticDanger = Color(0xFFC63E34)       // = MMInk.Danger
+    val CardStroke = Color(0xFFECECEC)           // = MMInk.CardStroke
+    val FieldFill = Color(0xFFF3F3F2)            // = MMInk.Field
     val PaperSurface = Color(0xFFF2F2F0)         // = MMInk.Paper
 }

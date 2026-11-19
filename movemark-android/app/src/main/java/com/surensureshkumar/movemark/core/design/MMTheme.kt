@@ -4,19 +4,34 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 
-private val MoveMarkColorScheme = darkColorScheme(
-    primary = MMColors.Primary,
-    onPrimary = MMColors.OnActionPrimary,
-    background = MMColors.AppBackground,
-    onBackground = MMColors.TextPrimary,
-    surface = MMColors.Surface,
-    onSurface = MMColors.TextPrimary,
-    error = MMColors.SemanticDanger,
+/** One light scheme: native dialogs, menus, sheets and pickers come out white with ink text (owner, 2026-11-18). */
+private val MoveMarkColorScheme = lightColorScheme(
+    primary = MMInk.Text,
+    onPrimary = Color.White,
+    primaryContainer = MMInk.Lime,
+    onPrimaryContainer = MMInk.OnLime,
+    secondary = MMInk.Text,
+    onSecondary = Color.White,
+    background = MMInk.Sheet,
+    onBackground = MMInk.Text,
+    surface = MMInk.Card,
+    onSurface = MMInk.Text,
+    surfaceVariant = MMInk.Field,
+    onSurfaceVariant = MMInk.Secondary,
+    surfaceContainer = MMInk.Card,
+    surfaceContainerHigh = MMInk.Card,
+    surfaceContainerHighest = MMInk.Card,
+    surfaceContainerLow = MMInk.Card,
+    surfaceContainerLowest = MMInk.Card,
+    outline = MMInk.CardStroke,
+    outlineVariant = MMInk.Separator,
+    error = MMInk.Danger,
+    onError = Color.White,
 )
 
 object MMSpacing {
