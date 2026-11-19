@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.MoveMark" parent="android:Theme.Material.NoActionBar">
-        <item name="android:statusBarColor">#FF161817</item>
-        <item name="android:navigationBarColor">#FF161817</item>
-        <item name="android:windowBackground">#FF161817</item>
+    <style name="Theme.MoveMark" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#FFF8F8F8</item>
+        <item name="android:navigationBarColor">#FFF8F8F8</item>
+        <item name="android:windowBackground">#FFF8F8F8</item>
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>

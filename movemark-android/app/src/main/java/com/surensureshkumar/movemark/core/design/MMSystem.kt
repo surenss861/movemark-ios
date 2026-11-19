@@ -151,17 +151,13 @@ val MMEyebrowStyle: TextStyle get() = mmFont(11f, FontWeight.SemiBold, tracking 
 fun MMLightSystemBars(lightNavigationBar: Boolean = true, lightStatusBar: Boolean = true) {
     val view = LocalView.current
     if (view.isInEditMode) return
-    DisposableEffect(lightNavigationBar, lightStatusBar) {
-        val window = (view.context as? Activity)?.window
-        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
-        val prevNav = controller?.isAppearanceLightNavigationBars
-        val prevStatus = controller?.isAppearanceLightStatusBars
-        controller?.isAppearanceLightNavigationBars = lightNavigationBar
-        controller?.isAppearanceLightStatusBars = lightStatusBar
-        onDispose {
-            prevNav?.let { controller.isAppearanceLightNavigationBars = it }
-            prevStatus?.let { controller.isAppearanceLightStatusBars = it }
-        }
+    // Sets, never restores: screens swap during navigation, and restoring the leaving screen's previous value after
+    // the entering screen set its own put the dark-theme white icons back on light screens.
+    androidx.compose.runtime.SideEffect {
+        val window = (view.context as? Activity)?.window ?: return@SideEffect
+        val controller = WindowCompat.getInsetsController(window, view)
+        controller.isAppearanceLightNavigationBars = lightNavigationBar
+        controller.isAppearanceLightStatusBars = lightStatusBar
     }
 }
 

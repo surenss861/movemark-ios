@@ -28,12 +28,11 @@ class MainActivity : ComponentActivity() {
         }
         val wasSocialReturn = SocialBrowserSession.offer(intent?.data)
         if (savedInstanceState == null && !wasSocialReturn) PasswordResetLink.offer(intent?.dataString)
-        // System bars follow the app's surfaces, not the phone's theme: MoveMark has one dark theme, and everything
-        // under the bars is dark, so the icons are light even on a light-mode phone. A future light screen must set
-        // its own appearance (WindowCompat.getInsetsController) and restore it on leaving.
+        // One light system (owner, 2026-11-18): every screen is light, so the bar icons are dark everywhere. The only
+        // dark surface, the full-screen photo viewer, is its own window and sets its own bars.
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
         )
         setContent {
             MMTheme {
