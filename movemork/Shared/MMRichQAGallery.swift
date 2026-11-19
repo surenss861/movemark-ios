@@ -25,6 +25,12 @@ struct MMRichQAGallery: View {
         } else if screen == "tabs" {
             // Root-tab switching over fixture pages in the production container (MMRootTabQAShell).
             MMRootTabQAShell()
+        } else if screen == "evidence-retry" {
+            // The production room screen with a partial save waiting for its retry (MMEvidenceRetryQAFixture).
+            MMEvidenceRetryQAScreen()
+        } else if screen.hasPrefix("receipt-") {
+            // The saved-proof receipt (MMReceiptQAFixture).
+            MMReceiptQAScreen(screen: screen)
         } else if screen.hasPrefix("room-") {
             RoomQAScreen(screen: screen)
         } else if screen.hasPrefix("proof-") {

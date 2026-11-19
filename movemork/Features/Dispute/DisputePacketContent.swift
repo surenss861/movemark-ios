@@ -254,7 +254,7 @@ struct DisputePacketContent: View {
                     submitLabel: .done, onSubmit: { focusedField = nil })
                 .autocorrectionDisabled()
                 .focused($focusedField, equals: .amount)
-            Text("Kept on this iPhone for your reference. It is not added to the generated packet.")
+            Text("Kept on this \(MMDeviceNoun.current) for your reference. It is not added to the generated packet.")
                 .mmFont(13)
                 .foregroundStyle(MMInk.secondary)
                 .fixedSize(horizontal: false, vertical: true)

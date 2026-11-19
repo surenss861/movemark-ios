@@ -65,7 +65,7 @@ extension EvidenceCaptureView {
         }
     }
 
-    static let keepFailedMessage = "Couldn’t keep that photo on this iPhone. Free up some space and try again."
+    static var keepFailedMessage: String { "Couldn’t keep that photo on this \(MMDeviceNoun.current). Free up some space and try again." }
 
     /// A camera shot: kept only once it is written to this iPhone.
     func admitCapture(_ capture: MMCameraCapture) async -> Bool {
@@ -113,6 +113,14 @@ extension EvidenceCaptureView {
     /// Brings back what an earlier visit left on this iPhone, then checks it against the server: photos an
     /// interrupted save had in fact saved leave the phone, an Add photos set reopens its sheet.
     func restorePendingCaptures() async {
+        #if DEBUG
+        // `-MMRichQA evidence-retry`: the fixture's partial save arrives like a restored one.
+        if let seed = MMEvidenceRetryQAFixture.seed {
+            MMEvidenceRetryQAFixture.seed = nil
+            pendingRetry = seed
+            return
+        }
+        #endif
         guard let key = pendingKey, restoredKey != key else { return }
         restoredKey = key
         guard loadedSources.isEmpty, pendingRetry == nil, !isUploading else { return }

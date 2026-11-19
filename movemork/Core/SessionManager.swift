@@ -193,6 +193,10 @@ final class SessionManager {
         if SocialSignInConfig.mode == .live { print("[social-qa] signed in user=\(user.id.uuidString.lowercased())") }
         #endif
 
+        // Where the renter lands comes from definitive answers only (``LaunchGate``): a failed read is unknown,
+        // and unknown never sends anyone into onboarding. Onboarding *writes* (it overwrites full_name), so
+        // guessing wrong there damages an existing account, while opening the app self-corrects on a retry.
+        var profile = LaunchGate.Profile.unknown
         do {
             try await ensureProfileExists(user)
 
@@ -206,20 +210,42 @@ final class SessionManager {
                 .execute()
                 .value
 
-            if let profile = profiles.first {
-                firstName = profile.fullName ?? ""
-                await enter(profile.onboardingCompletedAt != nil ? .signedIn : .needsOnboarding)
+            if let row = profiles.first {
+                firstName = row.fullName ?? ""
+                profile = row.onboardingCompletedAt != nil ? .onboarded : .notOnboarded
             } else {
-                // Definitively no profile row — a genuinely new account.
                 firstName = ""
-                await enter(.needsOnboarding)
+                profile = .missing
             }
         } catch {
-            // Indeterminate: the profile could not be read. Stay signed in and let the property layer
-            // offer a retry. Preferring `.signedIn` over `.needsOnboarding` is deliberate — onboarding
-            // *writes* (it overwrites full_name), so guessing wrong there damages an existing account,
-            // while guessing wrong here self-corrects on the next launch.
-            await enter(.signedIn)
+            profile = .unknown
+        }
+
+        // "Not onboarded" is believed only with a definitive "no rental": a renter whose onboarding write was
+        // lost (offline on the first receipt) still has their rental and must not see first run again.
+        let rentals: LaunchGate.Rentals = (profile == .notOnboarded || profile == .missing)
+            ? await rentalsAnswer(userId: user.id)
+            : .unknown
+        if LaunchGate.shouldBackfillOnboarding(profile: profile, rentals: rentals) {
+            Task { try? await recordOnboardingCompleted() }
+        }
+        await enter(LaunchGate.sessionPhase(profile: profile, rentals: rentals))
+    }
+
+    /// Whether the account has any rental: a definitive yes/no, or unknown when the read failed.
+    private func rentalsAnswer(userId: UUID) async -> LaunchGate.Rentals {
+        struct Row: Decodable { let id: UUID }
+        do {
+            let rows: [Row] = try await dataAPI
+                .from("properties")
+                .select("id")
+                .eq("user_id", value: userId)
+                .limit(1)
+                .execute()
+                .value
+            return rows.isEmpty ? .none : .some
+        } catch {
+            return .unknown
         }
     }
 
@@ -251,11 +277,16 @@ final class SessionManager {
         var attempt = 0
         while true {
             do {
-                let status: LegalStatus = try await dataAPI.rpc("get_legal_status", params: [String: String]()).execute().value
+                let status: LegalStatus = try await LegalTransientAuthRetry.run {
+                    try await dataAPI.rpc("get_legal_status", params: [String: String]()).execute().value
+                }
                 return .success(status)
             } catch {
                 let failure = LegalStatusFailure.classify(error)
-                guard failure == .unavailable, attempt < retries else { return .failure(failure) }
+                // A LEGAL_NOT_AUTHENTICATED that survived its one retry isn't retried again here.
+                guard failure == .unavailable, attempt < retries, !LegalTransientAuthRetry.isTransient(error) else {
+                    return .failure(failure)
+                }
                 attempt += 1
                 try? await Task.sleep(for: .seconds(1))
             }
@@ -295,11 +326,21 @@ final class SessionManager {
             let status: LegalStatus
             switch call {
             case .withoutAge(let params):
-                status = try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+                status = try await LegalTransientAuthRetry.run {
+                    try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+                }
             case .withAge(let params):
-                status = try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+                status = try await LegalTransientAuthRetry.run {
+                    try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+                }
             case .withAgeBand(let params):
-                status = try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+                status = try await LegalTransientAuthRetry.run {
+                    try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+                }
+            case .withResidence(let params):
+                status = try await LegalTransientAuthRetry.run {
+                    try await dataAPI.rpc("accept_legal_documents", params: params).execute().value
+                }
             case .updateRequired:
                 return "Update MoveMark from the App Store to continue."
             }
@@ -314,7 +355,9 @@ final class SessionManager {
             return nil
         } catch {
             let text = String(describing: error)
-            let ageChanged = text.contains("LEGAL_AGE_ATTESTATION")
+            // The app never sends a Quebec "Yes"; if the server says so anyway, show the same answer as the screen.
+            if text.contains("LEGAL_REGION_NOT_AVAILABLE") { return LegalUnavailable.quebec.message }
+            let ageChanged = text.contains("LEGAL_AGE_ATTESTATION") || text.contains("LEGAL_REGION_REQUIRED")
             if ageChanged || text.contains("LEGAL_VERSION_NOT_ACTIVE"),
                case .success(let status) = await fetchLegalStatus(retries: 0) {
                 legalStatus = status

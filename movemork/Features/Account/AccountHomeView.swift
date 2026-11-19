@@ -53,7 +53,7 @@ struct AccountHomeView: View {
         static let card = Color.white
         static let cardStroke = Color(red: 0.925, green: 0.925, blue: 0.925)     // #ECECEC
         static let text = Color(red: 0.078, green: 0.078, blue: 0.082)           // #141415
-        static let secondary = Color(red: 0.494, green: 0.498, blue: 0.502)      // #7E7F80
+        static let secondary = MMInk.secondary                                   // shared token, #6D6E6F (AA)
         static let separator = Color(red: 0.918, green: 0.918, blue: 0.922)      // #EAEAEB
         static let limeMark = Color(red: 0.757, green: 0.914, blue: 0.298)       // #C1E94C
         static let danger = Color(red: 0.776, green: 0.243, blue: 0.204)
@@ -320,7 +320,7 @@ struct DeleteAccountContent: View {
                     .mmFont(26, .semibold)
                     .foregroundStyle(Ink.text)
                     .accessibilityAddTraits(.isHeader)
-                Text("This deletes your MoveMark account, proof vaults, reports, photos and stored evidence. Unused Report Pack credits are also removed. Encrypted backup copies last longer. It cannot be undone.")
+                Text("This deletes your MoveMark account, proof vaults, reports, photos and stored evidence. Encrypted backup copies last longer. It cannot be undone.")
                     .mmFont(16)
                     .foregroundStyle(Ink.text)
                     .fixedSize(horizontal: false, vertical: true)

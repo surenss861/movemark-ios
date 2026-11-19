@@ -175,15 +175,69 @@ import UniformTypeIdentifiers
 
 struct LegalAgeRangeTests {
     @Test func rangesMapToWhatTheServerRecords() {
-        #expect(LegalAgeChoice.under13.band(livesInQuebec: nil) == nil)
-        #expect(LegalAgeChoice.thirteen.band(livesInQuebec: nil) == nil)    // Quebec question unanswered
-        #expect(LegalAgeChoice.thirteen.band(livesInQuebec: true) == nil)   // 13 in Quebec: Phase 2
+        #expect(LegalAgeChoice.under13.band(livesInQuebec: false) == nil)
         #expect(LegalAgeChoice.thirteen.band(livesInQuebec: false) == .teen)
-        #expect(LegalAgeChoice.fourteenToSeventeen.band(livesInQuebec: nil) == .teen)
-        #expect(LegalAgeChoice.adult.band(livesInQuebec: nil) == .adult)
-        #expect(LegalAgeChoice.under13.isUnavailable(livesInQuebec: nil))
-        #expect(LegalAgeChoice.thirteen.isUnavailable(livesInQuebec: true))
+        #expect(LegalAgeChoice.fourteenToSeventeen.band(livesInQuebec: false) == .teen)
+        #expect(LegalAgeChoice.adult.band(livesInQuebec: false) == .adult)
+        #expect(LegalAgeChoice.under13.isUnavailable(livesInQuebec: false))
         #expect(!LegalAgeChoice.thirteen.isUnavailable(livesInQuebec: false))
+    }
+
+    /// Quebec isn't served yet: "Yes" stops every age, and nothing is recorded until "No" is answered.
+    @Test(arguments: LegalAgeChoice.allCases)
+    func aQuebecYesStopsEveryAgeAndAnUnansweredQuebecQuestionRecordsNothing(choice: LegalAgeChoice) {
+        #expect(choice.band(livesInQuebec: true) == nil)
+        #expect(choice.band(livesInQuebec: nil) == nil)
+        #expect(choice.isUnavailable(livesInQuebec: true))
+        #expect(LegalUnavailable.reason(choice: choice, livesInQuebec: true) == .quebec)
+    }
+
+    @Test func theUnavailableReasonsAndWords() {
+        #expect(LegalUnavailable.reason(choice: nil, livesInQuebec: true) == .quebec)   // no age asked after "Yes"
+        #expect(LegalUnavailable.reason(choice: .under13, livesInQuebec: false) == .age)
+        #expect(LegalUnavailable.reason(choice: .under13, livesInQuebec: nil) == .age)
+        #expect(LegalUnavailable.reason(choice: .adult, livesInQuebec: false) == nil)
+        #expect(LegalUnavailable.reason(choice: nil, livesInQuebec: nil) == nil)
+        #expect(LegalUnavailable.quebec.message == "MoveMark isn’t available in Quebec yet. We’re preparing French-language support. Your account hasn’t been set up. You can delete it below.")
+        #expect(!LegalUnavailable.quebec.message.contains("remove"))   // clean-up not approved: no promise of removal
+        #expect(LegalAcceptanceScreen.quebecSubscriptionNote == "If you subscribed, cancel in Settings › Apple Account › Subscriptions.")
+        #expect(!LegalUnavailable.quebec.message.lowercased().contains("change"))
+    }
+
+    @Test func bandsV2SendsTheSixArgumentCallWithANoToQuebec() throws {
+        let s = try status(#"{"enforced":false,"acceptance_required":true,"blocked":false,"age_requirement":"bands_v2","age_category":null,\#(docs)}"#)
+        #expect(s.age == .ageRangeQuebec)
+        #expect(s.age?.isRangeQuestion == true)
+        #expect(LegalAcceptanceCall.make(for: s, method: .email, band: nil) == nil)  // Quebec "Yes" or no eligible range: nothing sent
+        #expect(LegalAcceptanceCall.make(for: s, method: .apple, band: .adult) == .withResidence(
+            LegalAcceptanceWithResidenceParams(p_method: "apple", p_terms_version: "t1", p_privacy_notice_version: "p1",
+                                               p_age_attestation: "bands_v2", p_age_band: "18_plus", p_lives_in_quebec: false)))
+        let body = try JSONEncoder().encode(LegalAcceptanceWithResidenceParams(p_method: "e", p_terms_version: "t", p_privacy_notice_version: "p",
+                                                                               p_age_attestation: "bands_v2", p_age_band: "13_17", p_lives_in_quebec: false))
+        let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        #expect(json.keys.sorted() == ["p_age_attestation", "p_age_band", "p_lives_in_quebec", "p_method", "p_privacy_notice_version", "p_terms_version"])
+        #expect(json["p_lives_in_quebec"] as? Bool == false)
+    }
+
+    /// RC3 and older don't know 'bands_v2' and say "Update MoveMark"; this build knows it. A newer unknown code still
+    /// means update.
+    @Test func aCodeNewerThanBandsV2StillMeansUpdate() throws {
+        let s = try status(#"{"enforced":false,"acceptance_required":true,"blocked":false,"age_requirement":"bands_v3","age_category":null,\#(docs)}"#)
+        #expect(s.age == nil)
+        #expect(LegalAcceptanceCall.make(for: s, method: .email, band: .adult) == .updateRequired)
+    }
+
+    @MainActor
+    @Test func theQuebecScreenWontContinueAndOffersDeletion() {
+        let yes = LegalAcceptanceScreen(termsURL: nil, privacyURL: nil, age: .ageRangeQuebec, livesInQuebec: true, ageChoice: .adult)
+        #expect(!yes.canContinue)
+        #expect(yes.unavailable == .quebec)
+        #expect(yes.chosenBand == nil)
+        let no = LegalAcceptanceScreen(termsURL: nil, privacyURL: nil, age: .ageRangeQuebec, livesInQuebec: false, ageChoice: .thirteen)
+        #expect(no.unavailable == nil)
+        #expect(no.chosenBand == .teen)  // 13 outside Quebec: the teen range, as before
+        let single = LegalAcceptanceScreen(termsURL: nil, privacyURL: nil, age: .thirteenQuebecFourteen, livesInQuebec: true)
+        #expect(single.unavailable == nil)  // the legacy single box has no Quebec question
     }
 
     private func status(_ json: String) throws -> LegalStatus { try JSONDecoder().decode(LegalStatus.self, from: Data(json.utf8)) }

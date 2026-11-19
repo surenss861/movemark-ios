@@ -35,7 +35,6 @@ struct ProPaywallView: View {
     /// Store product IDs — must match RevenueCat package products (App Store: monthly/yearly_subscription; Test Store mirror: testmonthly/testyearly).
     private static let monthlyProductIDs = ["monthly_subscription", "testmonthly"]
     private static let yearlyProductIDs = ["yearly_subscription", "testyearly"]
-    private static let reportPackProductIDs = ["report_pack", "movemark_report_pack", "test_report_pack"]
 
     @Environment(SessionManager.self) private var sessionManager
 
@@ -70,8 +69,9 @@ struct ProPaywallView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     header
 
-                    // Came for one report: the Report Pack is the first answer, before the Pro story.
-                    if reason == .reportPack {
+                    // Came for one report: the Report Pack is the first answer, before the Pro story. With no Report
+                    // Pack on sale the section is left out entirely (no label, no "unavailable" line).
+                    if reason == .reportPack, showsReportPackSection {
                         reportPackSection
                             .padding(.top, 26)
                     }
@@ -82,7 +82,7 @@ struct ProPaywallView: View {
                     truthLines
                         .padding(.top, 4)
 
-                    if reason.prefersReportPackFirst, reason != .reportPack {
+                    if reason.prefersReportPackFirst, reason != .reportPack, showsReportPackSection {
                         reportPackSection
                             .padding(.top, 30)
                     }
@@ -210,7 +210,7 @@ struct ProPaywallView: View {
         case .unlimitedExports: "You’ve used your free move-in report."
         case .disputePacket: "The evidence packet is part of Pro."
         case .moveOutExport: "The move-out report is part of Pro."
-        case .reportPack: nil   // the Report Pack row right below says it
+        case .reportPack: nil   // the Report Pack row right below says it (no row, no claim: the header carries it)
         case .account: nil      // opened from Account: nothing was blocked
         }
     }
@@ -283,7 +283,7 @@ struct ProPaywallView: View {
     // MARK: - Purchase
 
     private var planGroupTitle: String {
-        reason == .reportPack ? "Or choose Pro" : "Choose your plan"
+        reason == .reportPack && showsReportPackSection ? "Or choose Pro" : "Choose your plan"
     }
 
     /// One lime action, the Apple line, then the quiet ways out. Pinned so the purchase is always in reach.
@@ -554,9 +554,12 @@ struct ProPaywallView: View {
     }
 
     private static func isReportPackProduct(_ productID: String) -> Bool {
-        reportPackProductIDs.contains(productID)
-            || productID.localizedCaseInsensitiveContains("report_pack")
+        SubscriptionManager.isReportPackProduct(productID)
     }
+
+    /// The Report Pack section shows only when the offering sells one: App Review must never see an
+    /// "unavailable" purchase.
+    private var showsReportPackSection: Bool { !reportPackPackages.isEmpty }
 
     /// One report, no subscription — offered first when the renter only needs a single move-in report.
     private var reportPackSection: some View {
@@ -609,15 +612,6 @@ struct ProPaywallView: View {
                     .mmFont(12.5)
                     .foregroundStyle(MMInk.heroSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-            } else {
-                #if DEBUG
-                MMEvidenceNotice(
-                    message: "Report Pack unavailable. Add product IDs report_pack / movemark_report_pack in RevenueCat to enable one-time purchase here. Pro still unlocks unlimited reports.",
-                    tone: .info
-                )
-                #else
-                MMEvidenceNotice(message: "Report Pack isn’t available right now. Pro still unlocks unlimited reports.", tone: .info)
-                #endif
             }
         }
     }
@@ -820,7 +814,7 @@ struct ProPaywallView: View {
             } else if let err = subscriptionManager.lastRestoreErrorMessage {
                 restoreOutcomeMessage = err
             } else {
-                restoreOutcomeMessage = "No active subscription or Report Pack was found for this Apple ID."
+                restoreOutcomeMessage = subscriptionManager.restoreFoundNothingMessage
             }
         }
     }

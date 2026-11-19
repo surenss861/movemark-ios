@@ -20,7 +20,7 @@ enum MMInk {
     static let card = Color.white
     static let cardStroke = Color(red: 0.925, green: 0.925, blue: 0.925)      // #ECECEC
     static let text = Color(red: 0.078, green: 0.078, blue: 0.082)            // #141415
-    static let secondary = Color(red: 0.494, green: 0.498, blue: 0.502)       // #7E7F80
+    static let secondary = Color(red: 0.4275, green: 0.4314, blue: 0.4353)      // #6D6E6F (WCAG AA: 5.1:1 on white)
     static let separator = Color(red: 0.918, green: 0.918, blue: 0.922)       // #EAEAEB
     static let field = Color(red: 0.953, green: 0.953, blue: 0.949)           // #F3F3F2 input fill
     static let lime = Color(red: 0.792, green: 0.890, blue: 0.424)            // #CAE36C the one action

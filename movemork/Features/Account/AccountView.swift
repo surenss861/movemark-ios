@@ -70,8 +70,8 @@ struct AccountView: View {
             }
             .confirmationDialog(
                 unsavedPhotoCount == 1
-                    ? "1 photo hasn’t been saved yet. Signing out removes it from this iPhone."
-                    : "\(unsavedPhotoCount) photos haven’t been saved yet. Signing out removes them from this iPhone.",
+                    ? "1 photo hasn’t been saved yet. Signing out removes it from this \(MMDeviceNoun.current)."
+                    : "\(unsavedPhotoCount) photos haven’t been saved yet. Signing out removes them from this \(MMDeviceNoun.current).",
                 isPresented: $confirmSignOut,
                 titleVisibility: .visible
             ) {
@@ -160,7 +160,7 @@ struct AccountView: View {
             } else if let err = subscriptionManager.lastRestoreErrorMessage {
                 restoreFeedback = .init(message: err, isError: true)
             } else {
-                restoreFeedback = .init(message: "No active MoveMark subscription or Report Pack was found for this Apple ID.")
+                restoreFeedback = .init(message: subscriptionManager.restoreFoundNothingMessage)
             }
         }
     }

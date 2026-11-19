@@ -255,6 +255,14 @@ struct InspectionRepository {
 
     @discardableResult
     func insertEvidenceFile(id: UUID = UUID(), propertyId: UUID, inspectionItemId: UUID?, maintenanceIssueId: UUID?, filePath: String, thumbnailPath: String? = nil, sourcePath: String? = nil, fileType: String, capturedAt: Date) async throws -> UUID {
+        try await insertEvidenceFileRow(id: id, propertyId: propertyId, inspectionItemId: inspectionItemId,
+                                        maintenanceIssueId: maintenanceIssueId, filePath: filePath,
+                                        thumbnailPath: thumbnailPath, sourcePath: sourcePath, fileType: fileType,
+                                        capturedAt: capturedAt).id
+    }
+
+    /// Inserts the row and returns it as the database stored it (including its server-set `created_at`).
+    func insertEvidenceFileRow(id: UUID = UUID(), propertyId: UUID, inspectionItemId: UUID?, maintenanceIssueId: UUID?, filePath: String, thumbnailPath: String? = nil, sourcePath: String? = nil, fileType: String, capturedAt: Date) async throws -> EvidenceFileRow {
         let row = EvidenceFileRow(
             id: id,
             propertyId: propertyId,
@@ -274,7 +282,7 @@ struct InspectionRepository {
             .single()
             .execute()
             .value
-        return inserted.id
+        return inserted
     }
 
     /// The newest photo of each maintenance issue of a property (paths only), for the log's case thumbnails.

@@ -139,6 +139,29 @@ final class SheetsPaywallSnapshotTests: XCTestCase {
         assertScreen(paywall(.reportPack, reportPack: true), devices: devices, inNavigation: false)
     }
 
+    /// No Report Pack on sale (today's App Store Connect / RevenueCat): the section is gone entirely, label
+    /// included, with no "unavailable" line; the Pro plans follow under "Choose your plan".
+    func testPaywallReportPackReasonWithoutPack() {
+        assertScreen(paywall(.reportPack), devices: devices, inNavigation: false)
+    }
+
+    func testPaywallUnlimitedExportsWithoutPack() {
+        assertScreen(paywall(.unlimitedExports), devices: devices, inNavigation: false)
+    }
+
+    /// Restore that found nothing names the Report Pack only when the offering sells one.
+    func testRestoreFoundNothingMessageFollowsTheOffering() {
+        let proOnly = subscriptions(plans: true)
+        XCTAssertFalse(proOnly.offersReportPack)
+        XCTAssertEqual(proOnly.restoreFoundNothingMessage, "No active MoveMark subscription was found for this Apple ID.")
+        XCTAssertFalse(SubscriptionManager().offersReportPack)   // offerings not loaded
+
+        let withPack = subscriptions(plans: true, reportPack: true)
+        XCTAssertTrue(withPack.offersReportPack)
+        XCTAssertEqual(withPack.restoreFoundNothingMessage,
+                       "No active MoveMark subscription or Report Pack was found for this Apple ID.")
+    }
+
     func testPaywallReportPackSuccess() {
         assertScreen(paywall(.reportPack, reportPack: true, success: true, successReportPack: true), inNavigation: false)
     }

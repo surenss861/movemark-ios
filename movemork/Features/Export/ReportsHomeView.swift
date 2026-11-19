@@ -98,7 +98,7 @@ struct ReportsHomeView: View {
         static let card = Color.white
         static let cardStroke = Color(red: 0.925, green: 0.925, blue: 0.925)     // #ECECEC
         static let text = Color(red: 0.078, green: 0.078, blue: 0.082)           // #141415
-        static let secondary = Color(red: 0.494, green: 0.498, blue: 0.502)      // #7E7F80
+        static let secondary = MMInk.secondary                                   // shared token, #6D6E6F (AA)
         static let separator = Color(red: 0.918, green: 0.918, blue: 0.922)      // #EAEAEB
         static let lime = Color(red: 0.792, green: 0.890, blue: 0.424)           // #CAE36C
         static let limeMark = Color(red: 0.757, green: 0.914, blue: 0.298)       // #C1E94C

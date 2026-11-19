@@ -159,12 +159,14 @@ final class VisualSnapshotTests: XCTestCase {
 
     // MARK: Saved proof receipt (after every room save)
 
-    private func receiptScreen(photos: Int, pending: Int = 0, issues: Int = 0, next: String = "Continue to next room") -> UIViewController {
+    private func receiptScreen(photos: Int, pending: Int = 0, issues: Int = 0, next: String = "Continue to next room",
+                               savedAtFromServer: Bool = true) -> UIViewController {
         let living = Bundle(for: VisualSnapshotTests.self).url(forResource: "snap-living", withExtension: "jpg")
         let savedAt = Calendar(identifier: .gregorian).date(from: DateComponents(
             timeZone: TimeZone(identifier: "America/Toronto"), year: 2026, month: 10, day: 24, hour: 15, minute: 18))!
         let model = ProofSavedReceiptModel(roomName: "Living Room", photoCount: photos, pendingCount: pending,
-                                           issueCount: issues, savedAt: savedAt, imageURL: living, primaryActionLabel: next)
+                                           issueCount: issues, savedAt: savedAt, savedAtFromServer: savedAtFromServer,
+                                           imageURL: living, primaryActionLabel: next)
         let controller = host(ProofSavedReceiptView(model: model, onPrimary: {}, onSecondary: {},
                                                     onAddMorePhotos: pending > 0 ? nil : {}))
         // Let the photo load in a window before the snapshot.
@@ -193,6 +195,11 @@ final class VisualSnapshotTests: XCTestCase {
 
     func testReceiptAllRoomsComplete() {
         assertSnapshot(of: receiptScreen(photos: 4, next: "View move-in report"), as: Self.strategy(Self.pro), named: "pro")
+    }
+
+    /// No server created_at came back: the time reads "Confirmed … on this device", never as the server's record.
+    func testReceiptDeviceTimeFallback() {
+        assertSnapshot(of: receiptScreen(photos: 4, issues: 1, savedAtFromServer: false), as: Self.strategy(Self.pro), named: "pro")
     }
 
     func testReceiptLargestText() {

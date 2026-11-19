@@ -2,7 +2,7 @@
 //  LegalAcceptanceUITests.swift
 //  movemorkUITests
 //
-//  @file The agreement screen's rule, on the DEBUG fixture (`-MMRichQA legal`): nothing happens until the box is ticked.
+//  @file The agreement screen's rule, on the DEBUG fixture (`-MMRichQA legal`): nothing happens until both boxes are ticked.
 //        The record itself is covered by the server tests.
 //  @domain onboarding-auth
 //  @status wip
@@ -25,6 +25,12 @@ final class LegalAcceptanceUITests: XCTestCase {
         XCTAssertEqual(agree.value as? String, "Not checked")
         XCTAssertTrue(app.links["Terms of Service"].exists || app.buttons["Terms of Service"].exists)
         XCTAssertTrue(app.links["Privacy Policy"].exists || app.buttons["Privacy Policy"].exists)
+
+        // The age statement is its own required box (since RC2); tick it so the terms box decides the rest.
+        let ageBox = app.buttons["legal.age"]
+        XCTAssertTrue(ageBox.exists)
+        ageBox.tap()
+        XCTAssertFalse(proceed.isEnabled, "the age box alone isn't enough")
 
         agree.tap()
         XCTAssertTrue(proceed.isEnabled)
