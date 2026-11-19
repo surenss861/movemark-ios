@@ -255,6 +255,8 @@ enum MoveMarkFlowMessage {
 
     static func authOperationFailed(_ error: Error) -> String {
         if let auth = error as? NeonAuthError, let message = auth.errorDescription { return message }
+        // The form's own checks (empty email, short password, passwords that differ) already say what to fix.
+        if let local = error as? SessionManager.AuthError, let message = local.errorDescription { return message }
         if error is URLError { return "No connection. Check your internet and try again." }
         let raw = error.localizedDescription.lowercased()
         if raw.contains("invalid login") || raw.contains("invalid credentials") || raw.contains("invalid email or password") {
